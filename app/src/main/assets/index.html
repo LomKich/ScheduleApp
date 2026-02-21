@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Расписание">
+<title>Расписание колледжа</title>
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0d0d;--surface:#161616;--surface2:#1f1f1f;--surface3:#2a2a2a;
+  --accent:#e87722;--accent2:#c45f0a;--text:#f0ede8;--muted:#6b6762;
+  --success:#4a9e5c;--danger:#c94f4f;--r:16px;--rb:10px;
+  --safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geologica',sans-serif;overflow:hidden}
+
+.screen{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  padding-top:var(--safe-top);padding-bottom:var(--safe-bot);overflow:hidden;
+  opacity:0;pointer-events:none;transform:translateY(20px);
+  transition:opacity .3s cubic-bezier(.4,0,.2,1),transform .3s cubic-bezier(.4,0,.2,1)
+}
+.screen.active{opacity:1;pointer-events:all;transform:none}
+.screen.exit-left{opacity:0;transform:translateX(-32px);transition:opacity .22s,transform .22s}
+.screen.exit-right{opacity:0;transform:translateX(32px);transition:opacity .22s,transform .22s}
+
+.body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 18px}
+.body::-webkit-scrollbar{display:none}
+
+.hdr{
+  padding:14px 18px 12px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;
+  background:var(--surface)
+}
+.hdr-back{
+  background:var(--surface2);border:none;color:var(--accent);
+  width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;flex-shrink:0
+}
+.hdr-title{font-size:16px;font-weight:700;flex:1;letter-spacing:-.01em}
+.hdr-sub{font-size:11px;color:var(--muted);margin-top:2px;font-weight:400}
+
+.home-hero{
+  padding:44px 20px 28px;text-align:center;position:relative
+}
+.home-hero::before{
+  content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:240px;height:240px;border-radius:50%;
+  background:radial-gradient(circle,color-mix(in srgb,var(--accent) 12%,transparent) 0%,transparent 70%);
+  pointer-events:none
+}
+.hero-title{font-size:38px;font-weight:800;color:var(--accent);letter-spacing:-.03em;line-height:1.1;
+  text-shadow:0 0 20px color-mix(in srgb,var(--accent) 55%,transparent),
+              0 0 60px color-mix(in srgb,var(--accent) 22%,transparent),
+              0 0 120px color-mix(in srgb,var(--accent) 10%,transparent)}
+
+.section-label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px;margin-top:2px}
+
+.inp{
+  width:100%;background:var(--surface2);border:1.5px solid var(--surface3);
+  border-radius:var(--rb);color:var(--text);font-family:inherit;
+  font-size:14px;padding:13px 14px;outline:none;
+  transition:border-color .18s,box-shadow .18s
+}
+.inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.inp::placeholder{color:var(--muted)}
+
+.btn{
+  width:100%;border:none;border-radius:var(--rb);font-family:inherit;
+  font-size:14px;font-weight:700;padding:15px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  position:relative;overflow:hidden;letter-spacing:.01em;
+  transition:transform .12s,box-shadow .12s
+}
+.btn:active{transform:scale(.97)}
+.btn-accent{background:var(--accent);color:#fff;box-shadow:0 4px 20px color-mix(in srgb,var(--accent) 35%,transparent)}
+.btn-accent:active{box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 22%,transparent)}
+.btn-accent2{background:var(--accent2);color:#fff;box-shadow:0 4px 20px color-mix(in srgb,var(--accent2) 30%,transparent)}
+.btn-surface{background:var(--surface2);color:var(--text)}
+.btn-surface3{background:var(--surface3);color:var(--accent)}
+.btn-success{background:var(--success);color:#fff;box-shadow:0 4px 16px rgba(74,158,92,.25)}
+.btn-danger{background:var(--danger);color:#fff;box-shadow:0 4px 16px rgba(201,79,79,.25)}
+
+.ripple{
+  position:absolute;border-radius:50%;
+  background:rgba(255,255,255,.2);
+  transform:scale(0);animation:ripple-anim .55s ease-out forwards;
+  pointer-events:none
+}
+@keyframes ripple-anim{to{transform:scale(4);opacity:0}}
+[data-theme="bw"] .btn-accent,[data-theme="bw"] .btn-accent2,
+[data-theme="win11"] .btn-accent,[data-theme="win11"] .btn-accent2,
+[data-theme="amoled"] .btn-accent,[data-theme="amoled"] .btn-accent2,
+[data-theme="pixel"] .btn-accent,[data-theme="pixel"] .btn-accent2,
+[data-theme="aero"] .btn-accent,[data-theme="aero"] .btn-accent2{color:#000}
+
+.status{font-size:12px;color:var(--muted);text-align:center;min-height:18px;line-height:18px}
+.progress{height:2px;background:var(--surface3);border-radius:1px;overflow:hidden;margin:6px 0}
+.progress-bar{height:100%;background:var(--accent);width:0;border-radius:1px;transition:width .35s cubic-bezier(.4,0,.2,1)}
+.sep{height:1px;background:rgba(255,255,255,.06);margin:14px 0}
+
+.list{display:flex;flex-direction:column;gap:7px}
+.list-item{
+  background:var(--surface2);border-radius:var(--rb);padding:14px 16px;
+  cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+  font-size:14px;position:relative;overflow:hidden;
+  border:1.5px solid transparent;
+  transition:border-color .15s,background .15s
+}
+.list-item:active{background:var(--surface3)}
+.list-item.selected{
+  background:color-mix(in srgb,var(--accent) 15%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 70%,transparent);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 40%,transparent),
+             0 0 18px color-mix(in srgb,var(--accent) 45%,transparent),
+             0 0 50px color-mix(in srgb,var(--accent) 20%,transparent)
+}
+.list-item.selected .item-name{
+  color:var(--accent);
+  text-shadow:0 0 8px color-mix(in srgb,var(--accent) 90%,transparent),
+              0 0 20px color-mix(in srgb,var(--accent) 60%,transparent),
+              0 0 50px color-mix(in srgb,var(--accent) 30%,transparent)
+}
+.list-item .item-name{font-weight:600;flex:1;line-height:1.3}
+.list-item .item-sub{font-size:11px;color:var(--muted);margin-top:2px;font-weight:400}
+.list-item .item-arrow{color:var(--muted);font-size:18px;margin-left:8px;flex-shrink:0}
+
+.search-wrap{position:relative}
+.search-wrap .inp{padding-left:40px}
+.search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px;pointer-events:none}
+
+.sched-header{
+  padding:16px 18px 14px;background:var(--surface);
+  border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0
+}
+.sched-group{font-size:24px;font-weight:800;color:var(--accent);letter-spacing:-.02em}
+.sched-date{font-size:11px;color:var(--muted);margin-top:3px}
+
+.pair-card{
+  background:var(--surface2);border-radius:var(--r);
+  margin-bottom:9px;overflow:hidden;
+  border:1.5px solid var(--surface3);
+  border-left:3px solid var(--surface3)
+}
+.pair-card.has-subject{border-left-color:var(--accent2)}
+.pair-card.is-now{border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.pair-card.is-next{border-left-color:var(--success)}
+
+.pair-top{display:flex;align-items:flex-start;padding:13px 14px 8px;gap:10px}
+.pair-num{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--muted);min-width:26px;text-transform:uppercase;padding-top:2px;flex-shrink:0}
+.pair-subject-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.pair-subject{font-size:14px;font-weight:700;line-height:1.35;word-break:break-word;letter-spacing:-.01em}
+.pair-subject.empty{color:var(--muted);font-weight:400;font-style:italic}
+.pair-remain{font-size:11px;color:var(--muted);flex-shrink:0;padding-top:3px;font-family:'JetBrains Mono',monospace;white-space:nowrap}
+
+.now-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--accent);color:#fff;
+  font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;
+  letter-spacing:.04em;text-transform:uppercase;align-self:flex-start
+}
+.next-badge{background:var(--success)}
+
+.pair-times{padding:0 14px 12px 50px;display:flex;flex-direction:column;gap:5px}
+.pair-time-row{display:flex;align-items:center;gap:8px}
+.pair-time-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--text)}
+.pair-time-tag{font-size:9px;font-weight:700;color:var(--muted);background:var(--surface3);padding:2px 6px;border-radius:4px;letter-spacing:.08em;text-transform:uppercase}
+.pair-details{padding:0 14px 12px 50px;font-size:12.5px;color:var(--muted);line-height:1.55}
+
+.last-group-btn{
+  background:var(--surface2);border:1.5px solid var(--surface3);border-radius:var(--rb);
+  color:var(--accent);font-family:inherit;font-size:14px;font-weight:700;
+  padding:15px;width:100%;cursor:pointer;text-align:center;
+  position:relative;overflow:hidden;
+  transition:transform .12s,border-color .15s
+}
+.last-group-btn:active{transform:scale(.97)}
+
+.toast{
+  position:fixed;bottom:calc(24px + var(--safe-bot));
+  left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--surface3);color:var(--text);font-size:13px;font-weight:500;
+  padding:10px 20px;border-radius:100px;white-space:nowrap;
+  border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 32px rgba(0,0,0,.4);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;
+  opacity:0;z-index:999;max-width:88vw;overflow:hidden;text-overflow:ellipsis
+}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
+.bell-day{font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.15em;text-transform:uppercase;margin:18px 0 8px}
+.bell-card{background:var(--surface2);border-radius:var(--rb);padding:13px;margin-bottom:7px;display:flex;align-items:flex-start;gap:14px;border:1.5px solid var(--surface3)}
+.bell-num{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);min-width:26px;padding-top:2px}
+.bell-slots{display:flex;flex-direction:column;gap:7px;flex:1}
+.bell-slot{display:flex;align-items:center;gap:10px}
+.bell-slot-time{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--text)}
+.bell-slot-tag{font-size:9px;font-weight:700;color:var(--muted);background:var(--surface3);padding:2px 6px;border-radius:4px;letter-spacing:.08em;text-transform:uppercase}
+
+.bottom-nav{display:flex;border-top:1px solid rgba(255,255,255,.06);flex-shrink:0;padding-bottom:var(--safe-bot);background:var(--surface)}
+.nav-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  padding:10px 0;cursor:pointer;color:var(--muted);
+  transition:color .18s;font-size:10px;font-weight:600;gap:3px;
+  background:none;border:none;font-family:inherit;
+  position:relative;overflow:hidden;letter-spacing:.02em
+}
+.nav-item .nav-icon{font-size:20px;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+.nav-item.active{color:var(--accent)}
+.nav-item.active .nav-icon{transform:scale(1.15)}
+
+.toggle-switch{width:44px;height:26px;border-radius:100px;background:var(--surface3);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.toggle-switch.on{background:var(--accent)}
+.toggle-switch::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.toggle-switch.on::after{left:21px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface2);border-radius:var(--rb);margin-bottom:8px;font-size:14px;font-weight:500;border:1.5px solid var(--surface3)}
+.settings-row-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+.theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.theme-card{background:var(--surface2);border-radius:var(--rb);padding:12px;cursor:pointer;border:2px solid var(--surface3);transition:border-color .18s,transform .12s;font-size:12px;font-weight:600;position:relative;overflow:hidden}
+.theme-card:active{transform:scale(.97)}
+.theme-card.selected{border-color:var(--accent)}
+.theme-swatch{display:flex;gap:4px;margin-bottom:8px}
+.swatch{width:18px;height:18px;border-radius:50%}
+
+/* DNS карточки */
+.dns-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.dns-card{background:var(--surface2);border-radius:var(--rb);padding:12px 14px;cursor:pointer;border:2px solid var(--surface3);transition:border-color .18s,transform .12s;position:relative;overflow:hidden}
+.dns-card:active{transform:scale(.97)}
+.dns-card.selected{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.dns-card-ico{font-size:22px;margin-bottom:6px}
+.dns-card-name{font-size:13px;font-weight:700;line-height:1.2}
+.dns-card-addr{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:3px}
+
+/* DPI стратегии */
+.dpi-list{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.dpi-item{
+  background:var(--surface2);border-radius:var(--rb);padding:13px 16px;
+  cursor:pointer;display:flex;align-items:center;gap:12px;
+  border:1.5px solid var(--surface3);position:relative;overflow:hidden;
+  transition:border-color .15s,background .15s
+}
+.dpi-item:active{background:var(--surface3)}
+.dpi-item.selected{
+  background:color-mix(in srgb,var(--accent) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 70%,transparent)
+}
+.dpi-item.selected .dpi-name{color:var(--accent)}
+.dpi-badge{font-size:10px;font-weight:700;background:var(--surface3);color:var(--muted);padding:3px 7px;border-radius:6px;font-family:'JetBrains Mono',monospace;white-space:nowrap;flex-shrink:0}
+.dpi-item.selected .dpi-badge{background:color-mix(in srgb,var(--accent) 25%,transparent);color:var(--accent)}
+.dpi-name{font-size:13px;font-weight:600;flex:1}
+.dpi-desc{font-size:11px;color:var(--muted);margin-top:2px}
+.dpi-check{font-size:16px;flex-shrink:0;opacity:0;transition:opacity .15s}
+.dpi-item.selected .dpi-check{opacity:1}
+
+/* VPN кнопка статус */
+.vpn-status-card{
+  background:var(--surface2);border-radius:var(--rb);padding:16px;
+  border:1.5px solid var(--surface3);margin-bottom:8px;
+  display:flex;align-items:center;gap:14px
+}
+.vpn-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+.vpn-dot.on{background:var(--success);box-shadow:0 0 8px var(--success)}
+.vpn-info{flex:1}
+.vpn-info-title{font-size:14px;font-weight:700}
+.vpn-info-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+.hidden{display:none!important}
+.mt8{margin-top:8px}.mt16{margin-top:16px}
+</style>
+</head>
+<body>
+
+<!-- ГЛАВНАЯ -->
+<div class="screen active" id="s-home">
+  <div class="body">
+    <div class="home-hero">
+      <div class="hero-title">колледж<br>расписание</div>
+    </div>
+    <div id="last-group-wrap" class="hidden">
+      <div class="section-label">Быстрый запуск</div>
+      <button class="last-group-btn" id="last-group-btn" onclick="jumpToLastGroup()"></button>
+      <div style="height:14px"></div>
+    </div>
+    <div class="status" id="home-status"></div>
+    <div class="progress"><div class="progress-bar" id="home-bar"></div></div>
+    <div id="file-section" class="hidden">
+      <div class="section-label">Файл расписания</div>
+      <div class="list" id="file-list"></div>
+      <div style="height:14px"></div>
+      <button class="btn btn-accent" onclick="goToGroups()">Выбрать группу →</button>
+    </div>
+    <div id="no-url-hint" class="hidden" style="text-align:center;padding:48px 0">
+      <div style="font-size:38px;margin-bottom:12px">⚙️</div>
+      <div style="color:var(--muted);font-size:14px;line-height:1.6">Укажи ссылку на Яндекс Диск<br>в <b style="color:var(--accent)">Настройках</b></div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <button class="nav-item active" id="nav-home" onclick="goHome()">
+      <span class="nav-icon">🏠</span><span>Главная</span></button>
+    <button class="nav-item" id="nav-bells" onclick="navTo('s-bells','nav-bells')">
+      <span class="nav-icon">🔔</span><span>Звонки</span></button>
+    <button class="nav-item" id="nav-settings" onclick="navTo('s-settings','nav-settings')">
+      <span class="nav-icon">⚙️</span><span>Настройки</span></button>
+  </div>
+</div>
+
+<!-- ГРУППЫ -->
+<div class="screen" id="s-groups">
+  <div class="hdr">
+    <button class="hdr-back" onclick="goHome()">‹</button>
+    <div><div class="hdr-title" id="groups-title">Выбор группы</div>
+    <div class="hdr-sub" id="groups-sub"></div></div>
+  </div>
+  <div style="padding:12px 18px 0;flex-shrink:0">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="inp" id="group-search" placeholder="Найти группу..." oninput="filterGroups(this.value)">
+    </div>
+    <div class="status mt8" id="groups-status"></div>
+    <div class="progress"><div class="progress-bar" id="groups-bar"></div></div>
+  </div>
+  <div class="body" style="padding-top:10px"><div class="list" id="group-list"></div></div>
+</div>
+
+<!-- РАСПИСАНИЕ -->
+<div class="screen" id="s-schedule">
+  <div class="sched-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="hdr-back" onclick="showScreen('s-groups','back')">‹</button>
+      <div><div class="sched-group" id="sched-group-name"></div>
+      <div class="sched-date" id="sched-date"></div></div>
+    </div>
+  </div>
+  <div class="body" id="sched-body"></div>
+</div>
+
+<!-- ЗВОНКИ -->
+<div class="screen" id="s-bells">
+  <div class="hdr">
+    <button class="hdr-back" onclick="goHome()">‹</button>
+    <div class="hdr-title">Расписание звонков</div>
+  </div>
+  <div class="body" id="bells-body"></div>
+</div>
+
+<!-- НАСТРОЙКИ -->
+<div class="screen" id="s-settings">
+  <div class="hdr">
+    <button class="hdr-back" onclick="goHome()">‹</button>
+    <div class="hdr-title">Настройки</div>
+  </div>
+  <div class="body">
+
+    <!-- Яндекс Диск -->
+    <div class="section-label">Яндекс Диск</div>
+    <input class="inp" id="url-input" type="url"
+           placeholder="https://disk.yandex.ru/d/..."
+           autocomplete="off" autocorrect="off" autocapitalize="off">
+    <div style="height:8px"></div>
+    <button class="btn btn-accent2" onclick="saveUrlAndLoad()">⬇ Обновить файлы</button>
+    <div style="height:6px"></div>
+    <div class="status" id="proxy-status" style="text-align:left;font-size:11px"></div>
+    <div class="sep"></div>
+
+    <!-- Свой прокси -->
+    <div class="section-label">Прокси-сервер</div>
+    <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px">
+      <div style="width:100%">
+        <div style="font-weight:600;font-size:14px">URL прокси</div>
+        <div class="settings-row-sub">Адрес прокси для доступа к API Яндекс</div>
+      </div>
+      <input class="inp" id="proxy-input" placeholder="https://your-proxy.workers.dev/proxy/"
+             autocomplete="off" autocorrect="off" autocapitalize="off" style="margin:0">
+      <button class="btn btn-surface3" style="width:100%" onclick="saveProxy()">Сохранить прокси</button>
+    </div>
+    <div class="sep"></div>
+
+    <!-- DNS -->
+    <div class="section-label">DNS / Обход блокировок</div>
+    <!-- VPN статус — только в Android приложении -->
+    <div id="vpn-block" class="hidden">
+      <div class="vpn-status-card">
+        <div class="vpn-dot" id="vpn-dot"></div>
+        <div class="vpn-info">
+          <div class="vpn-info-title" id="vpn-title">VPN обход выключен</div>
+          <div class="vpn-info-sub" id="vpn-sub">DNS и DPI обход неактивны</div>
+        </div>
+      </div>
+      <button class="btn btn-success" id="vpn-btn" onclick="toggleVpn()">Включить VPN обход</button>
+      <div style="height:10px"></div>
+    </div>
+    <div class="section-label" style="margin-top:4px">Провайдер DNS</div>
+    <div class="dns-grid" id="dns-grid"></div>
+    <div id="custom-dns-wrap" class="hidden mt8">
+      <input class="inp" id="custom-dns-input" placeholder="https://your-doh.server/dns-query"
+             autocomplete="off" autocorrect="off" autocapitalize="off">
+      <div style="height:8px"></div>
+      <button class="btn btn-surface3" onclick="saveCustomDns()">Применить DNS</button>
+    </div>
+    <div class="sep"></div>
+
+    <!-- DPI стратегии -->
+    <div class="section-label">Стратегия обхода DPI</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Разные провайдеры блокируют по-разному. Попробуй несколько вариантов, если один не работает.
+    </div>
+    <div class="dpi-list" id="dpi-list"></div>
+    <div class="sep"></div>
+
+    <!-- Тема -->
+    <div class="section-label">Тема оформления</div>
+    <div class="theme-grid" id="theme-grid"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══ RIPPLE ══
+document.addEventListener('click',function(e){
+  const el=e.target.closest('.btn,.hdr-back,.last-group-btn,.nav-item,.theme-card,.list-item,.dns-card,.dpi-item');
+  if(!el)return;
+  const r=document.createElement('span');
+  r.className='ripple';
+  const rect=el.getBoundingClientRect();
+  const size=Math.max(rect.width,rect.height)*2;
+  r.style.cssText=`width:${size}px;height:${size}px;left:${e.clientX-rect.left-size/2}px;top:${e.clientY-rect.top-size/2}px`;
+  el.appendChild(r);
+  setTimeout(()=>r.remove(),560);
+});
+
+// ══ ТЕМЫ ══
+const THEMES={
+  'bw':    {name:'Ч/Б',      vars:{'--bg':'#000','--surface':'#111','--surface2':'#1c1c1c','--surface3':'#2a2a2a','--accent':'#ffffff','--accent2':'#cccccc','--text':'#ffffff','--muted':'#666666'},sw:['#000','#fff','#888']},
+  'orange':{name:'Колледж', vars:{'--bg':'#0d0d0d','--surface':'#161616','--surface2':'#1f1f1f','--surface3':'#2a2a2a','--accent':'#e87722','--accent2':'#c45f0a','--text':'#f0ede8','--muted':'#6b6762'},sw:['#0d0d0d','#e87722','#c45f0a']},
+  'win11': {name:'Win 11',  vars:{'--bg':'#1a1a1a','--surface':'#222','--surface2':'#2d2d2d','--surface3':'#383838','--accent':'#60cdff','--accent2':'#0067c0','--text':'#fff','--muted':'#888'},sw:['#1a1a1a','#60cdff','#0067c0']},
+  'amoled':{name:'AMOLED',  vars:{'--bg':'#000','--surface':'#080808','--surface2':'#111','--surface3':'#1a1a1a','--accent':'#00e5ff','--accent2':'#00acc1','--text':'#fff','--muted':'#505050'},sw:['#000','#00e5ff','#00acc1']},
+  'light': {name:'Светлая', vars:{'--bg':'#f4f4f4','--surface':'#fff','--surface2':'#ebebeb','--surface3':'#d8d8d8','--accent':'#e87722','--accent2':'#c45f0a','--text':'#111','--muted':'#888'},sw:['#f4f4f4','#e87722','#c45f0a']},
+  'pixel': {name:'Material',vars:{'--bg':'#191c1e','--surface':'#22272a','--surface2':'#2c3237','--surface3':'#373d44','--accent':'#7fcfff','--accent2':'#2f71d4','--text':'#e3e5e8','--muted':'#8e9099'},sw:['#191c1e','#7fcfff','#2f71d4']},
+  'aero':  {name:'Aero',    vars:{'--bg':'#152030','--surface':'#1a2d44','--surface2':'#1f3755','--surface3':'#274466','--accent':'#7fd7ff','--accent2':'#00a8e8','--text':'#e8f4ff','--muted':'#7a9ab8'},sw:['#152030','#7fd7ff','#00a8e8']},
+};
+
+// ══ DNS провайдеры ══
+const DNS_PROVIDERS={
+  'system': {name:'Системный',  addr:'по умолчанию', ico:'🌐', doh:''},
+  'cf':     {name:'Cloudflare', addr:'1.1.1.1',       ico:'🟠', doh:'https://1.1.1.1/dns-query'},
+  'google': {name:'Google',     addr:'8.8.8.8',       ico:'🔵', doh:'https://8.8.8.8/dns-query'},
+  'adguard':{name:'AdGuard',    addr:'94.140.14.14',  ico:'🟢', doh:'https://dns.adguard.com/dns-query'},
+  'yandex': {name:'Яндекс',     addr:'77.88.8.8',     ico:'🔴', doh:'https://common.dot.dns.yandex.net/dns-query'},
+  'custom': {name:'Свой...',    addr:'DoH URL',       ico:'⚙️', doh:'custom'},
+};
+
+// ══ DPI стратегии ══
+const DPI_STRATEGIES=[
+  {id:'general',      name:'Основной',            badge:'MAIN',       desc:'multisplit + fake QUIC. Подходит большинству провайдеров'},
+  {id:'alt',          name:'ALT 1 — Fake TLS',    badge:'ALT 1',      desc:'fake + fakedsplit с TLS fooling'},
+  {id:'alt2',         name:'ALT 2',               badge:'ALT 2',      desc:'Вариация с изменёнными параметрами сплита'},
+  {id:'alt3',         name:'ALT 3',               badge:'ALT 3',      desc:'Дополнительный вариант для сложных блокировок'},
+  {id:'alt4',         name:'ALT 4',               badge:'ALT 4',      desc:''},
+  {id:'alt5',         name:'ALT 5',               badge:'ALT 5',      desc:''},
+  {id:'alt6',         name:'ALT 6',               badge:'ALT 6',      desc:''},
+  {id:'alt7',         name:'ALT 7',               badge:'ALT 7',      desc:''},
+  {id:'alt8',         name:'ALT 8',               badge:'ALT 8',      desc:''},
+  {id:'alt9',         name:'ALT 9',               badge:'ALT 9',      desc:''},
+  {id:'alt10',        name:'ALT 10',              badge:'ALT 10',     desc:''},
+  {id:'alt11',        name:'ALT 11',              badge:'ALT 11',     desc:''},
+  {id:'fakeTls',      name:'Fake TLS Auto',       badge:'TLS AUTO',   desc:'Автоматическое определение TLS fingerprint'},
+  {id:'fakeTlsAlt',   name:'Fake TLS Auto ALT',   badge:'TLS ALT',    desc:''},
+  {id:'fakeTlsAlt2',  name:'Fake TLS Auto ALT 2', badge:'TLS ALT 2',  desc:''},
+  {id:'fakeTlsAlt3',  name:'Fake TLS Auto ALT 3', badge:'TLS ALT 3',  desc:''},
+  {id:'simpleFake',   name:'Simple Fake',         badge:'SIMPLE',     desc:'Простой метод. Попробуй если другие не работают'},
+  {id:'simpleFakeAlt',name:'Simple Fake ALT',     badge:'S.ALT',      desc:''},
+  {id:'simpleFakeAlt2',name:'Simple Fake ALT 2',  badge:'S.ALT 2',    desc:''},
+];
+
+// ══ ЗВОНКИ ══
+const BELL_MON={'I':['09:00','09:45','09:50','10:35'],'II':['10:45','11:30','11:35','12:20'],'III':['12:50','13:35','13:40','14:25'],'IV':['14:35','15:35',null,null],'V':['15:45','16:45',null,null],'VI':['16:55','17:55',null,null]};
+const BELL_TUE={'I':['08:30','09:15','09:20','10:05'],'II':['10:15','11:00','11:05','11:50'],'III':['12:20','13:05','13:10','13:55'],'IV':['14:05','15:05',null,null],'V':['15:15','16:15',null,null],'VI':['16:25','17:25',null,null]};
+
+// ══ OLE2 ПАРСЕР ══
+function u32(buf,off){return new DataView(buf instanceof Uint8Array?buf.buffer:buf,buf instanceof Uint8Array?buf.byteOffset:0).getUint32(off,true)}
+function u16(buf,off){return new DataView(buf instanceof Uint8Array?buf.buffer:buf,buf instanceof Uint8Array?buf.byteOffset:0).getUint16(off,true)}
+function ole2Text(ab){
+  const sig=[0xD0,0xCF,0x11,0xE0,0xA1,0xB1,0x1A,0xE1];
+  if(ab.byteLength<512)return'';
+  const arr=new Uint8Array(ab);
+  for(let i=0;i<8;i++)if(arr[i]!==sig[i])return'';
+  const ss=Math.pow(2,u16(ab,30));
+  const difat=[];
+  for(let i=0;i<Math.min(109,u32(ab,44));i++){const v=u32(ab,76+i*4);if(v>=0xFFFFFFFC)break;difat.push(v);}
+  const fat=[];
+  for(const sn of difat){const off=512+sn*ss;for(let i=0;i<ss/4;i++){const p=off+i*4;if(p+4<=ab.byteLength)fat.push(u32(ab,p));}}
+  function rd(sec,maxSz){
+    const chunks=[];let total=0;const vis=new Set();
+    while(sec!==0xFFFFFFFE&&sec!==0xFFFFFFFF&&!vis.has(sec)){
+      vis.add(sec);const off=512+sec*ss;if(off>=ab.byteLength)break;
+      const len=Math.min(ss,ab.byteLength-off);chunks.push(new Uint8Array(ab,off,len));total+=len;
+      if(maxSz&&total>=maxSz)break;if(sec>=fat.length)break;sec=fat[sec];
+    }
+    const out=new Uint8Array(maxSz?Math.min(total,maxSz):total);let pos=0;
+    for(const c of chunks){const take=Math.min(c.length,out.length-pos);out.set(c.slice(0,take),pos);pos+=take;if(pos>=out.length)break;}
+    return out;
+  }
+  const dd=rd(u32(ab,48));
+  let ws=0,wz=0;
+  for(let i=0;i<Math.floor(dd.length/128);i++){
+    const e=dd.slice(i*128,(i+1)*128);if(e.length<128)break;
+    const nl=e[64]|e[65]<<8;
+    const nm=nl>=2?new TextDecoder('utf-16le').decode(e.slice(0,nl-2)):'';
+    if(nm==='WordDocument'){const dv=new DataView(dd.buffer,dd.byteOffset+i*128);ws=dv.getUint32(116,true);wz=dv.getUint32(120,true);break;}
+  }
+  if(!wz)return'';
+  const wsd=rd(ws,wz);if(wsd.length<32)return'';
+  const dv=new DataView(wsd.buffer,wsd.byteOffset);
+  const fc=dv.getUint32(24,true),cc=dv.getUint32(28,true);
+  if(fc>=wsd.length)return'';
+  return new TextDecoder('utf-16le').decode(wsd.slice(fc,fc+cc*2));
+}
+function getCells(ab){const t=ole2Text(ab);if(!t)return[];return t.split('\x07').map(c=>c.replace(/\r/g,'\n').trim());}
+const GRP=/^[А-ЯЁA-Z0-9]{1,5}[\-]?\d[\-]\d{2}$/u;
+const ROM=/^(I{1,3}V?|VI{0,3}|IV)$/;
+const HDR=/Расписание занятий/i;
+function norm(s){return s.trim().toUpperCase().replace(/[\s\-\.]/g,'')}
+function detectGroups(ab){
+  const seen={};
+  for(const c of getCells(ab)){const t=c.trim();if(GRP.test(t)){const k=norm(t);if(!seen[k])seen[k]=t;}}
+  return Object.values(seen).sort();
+}
+function parseDoc(ab,group){
+  const cells=getCells(ab),tn=norm(group),labels=[];
+  cells.forEach((c,i)=>{if(HDR.test(c))labels.push(i);});
+  if(!labels.length)return{sched:[],hdr:''};
+  labels.push(cells.length);
+  for(let bi=0;bi<labels.length-1;bi++){
+    let li=labels[bi],nx=labels[bi+1],gs=li+1;
+    while(gs<nx&&!GRP.test(cells[gs]))gs++;
+    if(gs>=nx)continue;
+    let ge=gs;while(ge<nx&&GRP.test(cells[ge]))ge++;
+    const fi=[...Array(ge-gs).keys()].map(j=>gs+j).find(i=>norm(cells[i])===tn);
+    if(fi===undefined)continue;
+    const off=fi-li;
+    const hdr=cells[li].split('\n').find(l=>HDR.test(l))?.trim()||'';
+    const sched=[],seen=new Set();
+    for(let ri=ge;ri<nx;ri++){
+      const c=cells[ri];
+      if(ROM.test(c)&&!seen.has(c)){seen.add(c);const li2=ri+off;sched.push([c,li2<cells.length?cells[li2].trim():''|'']);}
+    }
+    return{sched,hdr};
+  }
+  return{sched:[],hdr:''};
+}
+
+// ══ СОСТОЯНИЕ ══
+const DEFAULT_URL='https://disk.yandex.ru/d/mjhoc7kysmQEuQ';
+const S={
+  url:DEFAULT_URL,files:[],selectedFile:null,lastGroup:'',
+  theme:'orange',dns:'system',customDns:'',dpi:'general',
+  customProxy:''
+};
+const FILE_CACHE={};
+let allGroups=[];
+
+const _mem={};
+const stor={
+  get(k){try{return localStorage.getItem(k);}catch(e){return _mem[k]||null;}},
+  set(k,v){try{localStorage.setItem(k,v);}catch(e){_mem[k]=v;}}
+};
+function loadLocal(){
+  try{
+    const d=JSON.parse(stor.get('sched')||'{}');
+    S.lastGroup=d.group||'';
+    S.theme=d.theme||'orange';
+    S.url=d.url||DEFAULT_URL;
+    S.dns=d.dns||'system';
+    S.customDns=d.customDns||'';
+    S.dpi=d.dpi||'general';
+    S.customProxy=d.customProxy||'';
+    const inp=document.getElementById('url-input');
+    if(inp)inp.value=S.url;
+    const pi=document.getElementById('proxy-input');
+    if(pi)pi.value=S.customProxy;
+    const ci=document.getElementById('custom-dns-input');
+    if(ci)ci.value=S.customDns;
+  }catch(e){}
+}
+function saveLocal(){
+  stor.set('sched',JSON.stringify({
+    group:S.lastGroup,theme:S.theme,url:S.url,
+    dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy
+  }));
+}
+
+// ══ ПРОКСИ ══
+let proxyFound=false;
+function getProxies(){
+  const list=['/proxy/'];
+  if(S.customProxy)list.unshift(S.customProxy.endsWith('/')?S.customProxy:S.customProxy+'/');
+  return list;
+}
+function saveProxy(){
+  const v=document.getElementById('proxy-input')?.value.trim()||'';
+  S.customProxy=v;saveLocal();
+  proxyFound=false; // сбросить кэш
+  toast(v?'Прокси сохранён':'Прокси сброшен');
+}
+async function yadGet(path,params){
+  const qs=new URLSearchParams(params).toString();
+  const raw=`https://cloud-api.yandex.net${path}?${qs}`;
+  async function tryProxy(p){
+    const url=p+encodeURIComponent(raw);
+    const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+  for(const p of getProxies()){
+    try{const d=await tryProxy(p);
+      document.getElementById('proxy-status').textContent='✅ Прокси: '+p;
+      return d;}catch(e){continue;}
+  }
+  throw new Error('Нет подключения к API Яндекс');
+}
+async function yadDownload(rawUrl){
+  for(const p of getProxies()){
+    try{
+      const url=p+encodeURIComponent(rawUrl);
+      const r=await fetch(url,{signal:AbortSignal.timeout(60000)});
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      return r.arrayBuffer();
+    }catch(e){continue;}
+  }
+  throw new Error('Не удалось скачать файл');
+}
+
+// ══ ТЕМЫ ══
+function applyTheme(key){
+  const t=THEMES[key]||THEMES['orange'];
+  Object.entries(t.vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
+  document.documentElement.setAttribute('data-theme',key);
+  S.theme=key;saveLocal();renderThemeGrid();
+}
+function renderThemeGrid(){
+  const g=document.getElementById('theme-grid');g.innerHTML='';
+  Object.entries(THEMES).forEach(([key,t])=>{
+    const c=document.createElement('div');c.className='theme-card'+(S.theme===key?' selected':'');
+    c.innerHTML=`<div class="theme-swatch">${t.sw.map(cl=>`<div class="swatch" style="background:${cl}"></div>`).join('')}</div><div>${t.name}</div>`;
+    c.onclick=()=>applyTheme(key);g.appendChild(c);
+  });
+}
+
+// ══ DNS ══
+function selectDns(key){
+  S.dns=key;saveLocal();
+  renderDnsGrid();
+  const customWrap=document.getElementById('custom-dns-wrap');
+  customWrap.classList.toggle('hidden',key!=='custom');
+  // Уведомить Android нативно
+  if(window.Android?.setDns){
+    const doh=key==='custom'?S.customDns:(DNS_PROVIDERS[key]?.doh||'');
+    window.Android.setDns(key,doh);
+  }
+  if(key!=='custom')toast('DNS: '+DNS_PROVIDERS[key]?.name);
+}
+function saveCustomDns(){
+  const v=document.getElementById('custom-dns-input')?.value.trim()||'';
+  S.customDns=v;saveLocal();
+  if(window.Android?.setDns)window.Android.setDns('custom',v);
+  toast('Свой DNS сохранён');
+}
+function renderDnsGrid(){
+  const g=document.getElementById('dns-grid');g.innerHTML='';
+  Object.entries(DNS_PROVIDERS).forEach(([key,d])=>{
+    const c=document.createElement('div');c.className='dns-card'+(S.dns===key?' selected':'');
+    c.innerHTML=`<div class="dns-card-ico">${d.ico}</div><div class="dns-card-name">${d.name}</div><div class="dns-card-addr">${d.addr}</div>`;
+    c.onclick=()=>selectDns(key);g.appendChild(c);
+  });
+}
+
+// ══ DPI стратегии ══
+function selectDpi(id){
+  S.dpi=id;saveLocal();renderDpiList();
+  if(window.Android?.setDpiStrategy)window.Android.setDpiStrategy(id);
+  const s=DPI_STRATEGIES.find(x=>x.id===id);
+  toast('Стратегия: '+s?.name);
+}
+function renderDpiList(){
+  const list=document.getElementById('dpi-list');list.innerHTML='';
+  DPI_STRATEGIES.forEach(s=>{
+    const item=document.createElement('div');
+    item.className='dpi-item'+(S.dpi===s.id?' selected':'');
+    item.innerHTML=`
+      <span class="dpi-badge">${s.badge}</span>
+      <div style="flex:1;min-width:0">
+        <div class="dpi-name">${s.name}</div>
+        ${s.desc?`<div class="dpi-desc">${s.desc}</div>`:''}
+      </div>
+      <span class="dpi-check">✓</span>`;
+    item.onclick=()=>selectDpi(s.id);
+    list.appendChild(item);
+  });
+}
+
+// ══ VPN (Android) ══
+let vpnActive=false;
+function toggleVpn(){
+  if(!window.Android?.toggleVpn){toast('Только в приложении');return;}
+  window.Android.toggleVpn();
+}
+// Вызывается из Android нативно
+function onVpnStateChanged(active,statusText){
+  vpnActive=active;
+  const dot=document.getElementById('vpn-dot');
+  const title=document.getElementById('vpn-title');
+  const sub=document.getElementById('vpn-sub');
+  const btn=document.getElementById('vpn-btn');
+  if(dot)dot.classList.toggle('on',active);
+  if(title)title.textContent=active?'VPN обход активен':'VPN обход выключен';
+  if(sub)sub.textContent=statusText||(active?'DNS и DPI обход работают':'DNS и DPI обход неактивны');
+  if(btn){
+    btn.className='btn '+(active?'btn-danger':'btn-success');
+    btn.textContent=active?'Отключить VPN обход':'Включить VPN обход';
+  }
+}
+
+// ══ НАВИГАЦИЯ ══
+let cur='s-home';
+function showScreen(id,dir='forward'){
+  if(id===cur)return;
+  const prev=document.getElementById(cur),next=document.getElementById(id);
+  prev.classList.add(dir==='back'?'exit-right':'exit-left');prev.classList.remove('active');
+  setTimeout(()=>prev.classList.remove('exit-left','exit-right'),300);
+  next.classList.add('active');cur=id;
+}
+function goHome(){showScreen('s-home','back');updateNavActive('nav-home');updateLastGroupBtn();}
+function navTo(id,navId){showScreen(id);updateNavActive(navId);}
+function updateNavActive(aid){['nav-home','nav-bells','nav-settings'].forEach(id=>document.getElementById(id)?.classList.toggle('active',id===aid));}
+
+// ══ ПОСЛЕДНЯЯ ГРУППА ══
+function updateLastGroupBtn(){
+  const wrap=document.getElementById('last-group-wrap'),btn=document.getElementById('last-group-btn');
+  if(S.lastGroup){btn.textContent='▶ '+S.lastGroup;wrap.classList.remove('hidden');}
+  else wrap.classList.add('hidden');
+}
+async function jumpToLastGroup(){
+  if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
+  await loadSchedule(S.lastGroup);
+}
+
+// ══ ЗАГРУЗКА ══
+function saveUrlAndLoad(){
+  const inp=document.getElementById('url-input');
+  const url=inp?inp.value.trim():'';
+  if(!url){toast('Введи ссылку');return;}
+  S.url=url;saveLocal();goHome();loadFiles();
+}
+async function loadFiles(){
+  if(!S.url){document.getElementById('no-url-hint').classList.remove('hidden');return;}
+  document.getElementById('no-url-hint').classList.add('hidden');
+  setStatus('home-status','Загружаю...');setBar('home-bar',30);
+  try{
+    const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
+    S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&/\.(doc|docx)$/i.test(i.name))
+      .map(i=>({name:i.name,path:i.path||'',size:i.size||0}));
+    setBar('home-bar',100);setStatus('home-status',`Найдено: ${S.files.length} файлов`);
+    setTimeout(()=>setBar('home-bar',0),800);renderFileList();
+  }catch(e){setBar('home-bar',0);setStatus('home-status','❌ '+e.message);}
+}
+function renderFileList(){
+  const list=document.getElementById('file-list');list.innerHTML='';
+  S.files.forEach(f=>{
+    const item=document.createElement('div');
+    item.className='list-item'+(S.selectedFile?.name===f.name?' selected':'');
+    item.innerHTML=`<span class="item-name">${f.name}</span>`;
+    item.onclick=()=>{S.selectedFile=f;renderFileList();toast('Выбран: '+f.name);};
+    list.appendChild(item);
+  });
+  document.getElementById('file-section').classList.remove('hidden');
+}
+
+async function getFileBuf(){
+  const key=S.selectedFile.path||S.selectedFile.name;
+  if(FILE_CACHE[key])return FILE_CACHE[key];
+  const dl=await yadGet('/v1/disk/public/resources/download',{public_key:S.url,path:S.selectedFile.path});
+  const buf=await yadDownload(dl.href);
+  FILE_CACHE[key]=buf;return buf;
+}
+
+// ══ ГРУППЫ ══
+async function goToGroups(){
+  if(!S.selectedFile){toast('Сначала выбери файл');return;}
+  showScreen('s-groups');
+  document.getElementById('groups-title').textContent=S.selectedFile.name;
+  document.getElementById('group-search').value='';
+  document.getElementById('group-list').innerHTML='';
+  setStatus('groups-status','Скачиваю...');setBar('groups-bar',20);
+  try{
+    const buf=await getFileBuf();
+    allGroups=detectGroups(buf);
+    setBar('groups-bar',100);setStatus('groups-status',`${allGroups.length} групп`);
+    setTimeout(()=>setBar('groups-bar',0),800);
+    renderGroupList(allGroups);
+  }catch(e){setBar('groups-bar',0);setStatus('groups-status','❌ '+e.message);}
+}
+function renderGroupList(groups){
+  const list=document.getElementById('group-list');list.innerHTML='';
+  groups.forEach(g=>{
+    const item=document.createElement('div');
+    item.className='list-item'+(S.lastGroup===g?' selected':'');
+    item.innerHTML=`<span class="item-name">${g}</span>`;
+    item.onclick=()=>loadSchedule(g);list.appendChild(item);
+  });
+}
+function filterGroups(q){
+  const f=q.trim().toUpperCase();
+  renderGroupList(f?allGroups.filter(g=>g.toUpperCase().includes(f)):allGroups);
+}
+
+// ══ РАСПИСАНИЕ ══
+async function loadSchedule(group){
+  if(!S.selectedFile){toast('Выбери файл');return;}
+  showScreen('s-schedule');
+  S.lastGroup=group;saveLocal();updateLastGroupBtn();
+  document.getElementById('sched-group-name').textContent=group;
+  document.getElementById('sched-date').textContent='';
+  document.getElementById('sched-body').innerHTML='<div style="text-align:center;padding:50px;color:var(--muted)">Обрабатываю...</div>';
+  try{
+    const buf=await getFileBuf();
+    const{sched,hdr}=parseDoc(buf,group);
+    if(!sched.length)throw new Error(`Группа "${group}" не найдена`);
+    renderSchedule(group,hdr,sched,S.selectedFile.name);
+  }catch(e){
+    document.getElementById('sched-body').innerHTML=`<div style="text-align:center;padding:50px;color:var(--danger)">❌ ${e.message}</div>`;
+  }
+}
+function renderSchedule(group,hdr,sched,filename){
+  document.getElementById('sched-group-name').textContent=group;
+  document.getElementById('sched-date').textContent=hdr.replace('Расписание занятий на ','').trim()||'';
+  const isMon=filename.toUpperCase().includes('ПОНЕДЕЛЬНИК');
+  const bell=isMon?BELL_MON:BELL_TUE;
+  const now=new Date(),nowMin=now.getHours()*60+now.getMinutes();
+  const body=document.getElementById('sched-body');body.innerHTML='';
+  for(const[roman,lesson]of sched){
+    const b=bell[roman];
+    let isNow=false,isNext=false;
+    if(b&&b[0]){
+      const[sh,sm]=b[0].split(':').map(Number);
+      const endS=b[3]||b[1];
+      const[eh,em]=endS.split(':').map(Number);
+      const startMin=sh*60+sm,endMin=eh*60+em;
+      isNow=nowMin>=startMin&&nowMin<=endMin;
+      if(!isNow){const diff=startMin-nowMin;isNext=diff>0&&diff<=30;}
+    }
+    const lines=lesson?lesson.split('\n').map(l=>l.trim()).filter(Boolean):[];
+    const isEmpty=!lines.length;
+    const card=document.createElement('div');
+    card.className='pair-card'+(isEmpty?'':' has-subject')+(isNow?' is-now':isNext?' is-next':'');
+    let badge='',remain='';
+    if(isNow){
+      badge='<span class="now-badge">● сейчас</span>';
+      if(b&&b[1]){const endS=b[3]||b[1];const[eh,em]=endS.split(':').map(Number);const diff=(eh*60+em)-nowMin;remain=`<div class="pair-remain">${diff<=0?'заканч.':diff+' мин'}</div>`;}
+    }else if(isNext){badge='<span class="now-badge next-badge">◎ скоро</span>';}
+    let timesHtml='';
+    if(b){
+      const[s1,e1,s2,e2]=b;
+      timesHtml=`<div class="pair-times"><div class="pair-time-row"><span class="pair-time-val">${s1} – ${e1}</span><span class="pair-time-tag">${s2?'1 урок':'60 мин'}</span></div>${s2?`<div class="pair-time-row"><span class="pair-time-val">${s2} – ${e2}</span><span class="pair-time-tag">2 урок</span></div>`:''}</div>`;
+    }
+    card.innerHTML=`<div class="pair-top"><div class="pair-num">${roman}</div><div class="pair-subject-wrap"><div class="pair-subject${isEmpty?' empty':''}">${isEmpty?'Окно':lines[0]}</div>${badge}</div>${remain}</div>${timesHtml}${lines.length>1?`<div class="pair-details">${lines.slice(1).join('<br>')}</div>`:''}`;
+    body.appendChild(card);
+  }
+}
+
+// ══ ЗВОНКИ ══
+function renderBells(){
+  const body=document.getElementById('bells-body');
+  const day=(title,bell)=>{
+    let h=`<div class="bell-day">${title}</div>`;
+    Object.entries(bell).forEach(([num,[s1,e1,s2,e2]])=>{
+      h+=`<div class="bell-card"><div class="bell-num">${num}</div><div class="bell-slots"><div class="bell-slot"><span class="bell-slot-time">${s1} – ${e1}</span><span class="bell-slot-tag">${s2?'1 урок':'60 мин'}</span></div>${s2?`<div class="bell-slot"><span class="bell-slot-time">${s2} – ${e2}</span><span class="bell-slot-tag">2 урок</span></div>`:''}</div></div>`;
+    });
+    return h;
+  };
+  body.innerHTML=day('Понедельник',BELL_MON)+day('Вторник – Пятница',BELL_TUE);
+}
+
+// ══ УТИЛИТЫ ══
+function setStatus(id,t){const el=document.getElementById(id);if(el)el.textContent=t;}
+function setBar(id,v){const el=document.getElementById(id);if(el)el.style.width=v+'%';}
+let _tt;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),2500);}
+
+// ══ INIT ══
+loadLocal();
+applyTheme(S.theme);
+renderBells();
+renderDnsGrid();
+renderDpiList();
+updateLastGroupBtn();
+document.getElementById('url-input').value=S.url;
+document.getElementById('proxy-input').value=S.customProxy;
+document.getElementById('custom-dns-input').value=S.customDns;
+document.getElementById('custom-dns-wrap').classList.toggle('hidden',S.dns!=='custom');
+
+// Android WebView — показать VPN блок
+if(window.Android){
+  document.getElementById('vpn-block').classList.remove('hidden');
+  if(window.Android.getVpnState){
+    const st=window.Android.getVpnState();
+    if(st)onVpnStateChanged(st.active,st.text);
+  }
+}
+
+loadFiles();
+</script>
+</body>
+</html>
