@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.net.VpnService;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.util.Base64;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
@@ -24,6 +25,13 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
 
@@ -314,6 +322,94 @@ public class MainActivity extends Activity {
                     .setPositiveButton("OK", null)
                     .show()
             );
+        }
+
+        /**
+         * Нативный HTTP GET без CORS — возвращает JSON: {ok, status, body, error?}
+         */
+        @JavascriptInterface
+        public String nativeFetch(String urlStr) {
+            log.i(TAG, "nativeFetch: " + urlStr);
+            try {
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp/1.0");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setInstanceFollowRedirects(true);
+                int status = conn.getResponseCode();
+                InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] tmp = new byte[8192];
+                int n;
+                while ((n = is.read(tmp)) != -1) baos.write(tmp, 0, n);
+                is.close();
+                conn.disconnect();
+                String body = baos.toString(StandardCharsets.UTF_8.name());
+                JSONObject res = new JSONObject();
+                res.put("ok", status >= 200 && status < 300);
+                res.put("status", status);
+                res.put("body", body);
+                return res.toString();
+            } catch (Exception e) {
+                log.e(TAG, "nativeFetch error: " + e.getMessage());
+                try {
+                    JSONObject err = new JSONObject();
+                    err.put("ok", false);
+                    err.put("status", 0);
+                    err.put("body", "");
+                    err.put("error", e.getMessage());
+                    return err.toString();
+                } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
+            }
+        }
+
+        /**
+         * Нативное скачивание файла без CORS — возвращает JSON: {ok, base64, error?}
+         * base64 — содержимое файла в Base64, декодируется в JS в ArrayBuffer.
+         */
+        @JavascriptInterface
+        public String nativeDownloadBase64(String urlStr) {
+            log.i(TAG, "nativeDownloadBase64: " + urlStr);
+            try {
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(30000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp/1.0");
+                conn.setInstanceFollowRedirects(true);
+                int status = conn.getResponseCode();
+                if (status < 200 || status >= 300) {
+                    conn.disconnect();
+                    JSONObject err = new JSONObject();
+                    err.put("ok", false);
+                    err.put("error", "HTTP " + status);
+                    return err.toString();
+                }
+                InputStream is = conn.getInputStream();
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] tmp = new byte[16384];
+                int n;
+                while ((n = is.read(tmp)) != -1) baos.write(tmp, 0, n);
+                is.close();
+                conn.disconnect();
+                String b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+                JSONObject res = new JSONObject();
+                res.put("ok", true);
+                res.put("base64", b64);
+                return res.toString();
+            } catch (Exception e) {
+                log.e(TAG, "nativeDownloadBase64 error: " + e.getMessage());
+                try {
+                    JSONObject err = new JSONObject();
+                    err.put("ok", false);
+                    err.put("error", e.getMessage());
+                    return err.toString();
+                } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
+            }
         }
     }
 }

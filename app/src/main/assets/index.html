@@ -953,9 +953,50 @@ async function testCurrentProxy() {
   }
   if (btn) { btn.disabled = false; btn.textContent = '🔌 Проверить подключение'; }
 }
+// ══ НАТИВНАЯ ЗАГРУЗКА (Android Java, без CORS) ══
+// Если запущено в Android-приложении — используем нативные методы.
+// Иначе (браузер/тест) — fallback на CORS-прокси.
+
+async function nativeGet(url) {
+  // Запускаем синхронный @JavascriptInterface через Promise + setTimeout
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      try {
+        const resStr = window.Android.nativeFetch(url);
+        const res = JSON.parse(resStr);
+        if (!res.ok) reject(new Error('HTTP ' + (res.status || 0) + (res.error ? ' — ' + res.error : '')));
+        else resolve(JSON.parse(res.body));
+      } catch(e) { reject(e); }
+    }, 0);
+  });
+}
+
+async function nativeDownloadBuf(url) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      try {
+        const resStr = window.Android.nativeDownloadBase64(url);
+        const res = JSON.parse(resStr);
+        if (!res.ok) reject(new Error(res.error || 'Ошибка скачивания'));
+        else resolve(base64ToArrayBuffer(res.base64));
+      } catch(e) { reject(e); }
+    }, 0);
+  });
+}
+
 async function yadGet(path, params) {
   const qs = new URLSearchParams(params).toString();
   const raw = `https://cloud-api.yandex.net${path}?${qs}`;
+
+  if (window.Android && window.Android.nativeFetch) {
+    // Нативный путь — без CORS
+    const data = await nativeGet(raw);
+    const el = document.getElementById('proxy-status');
+    if (el) el.textContent = '✅ Прямое подключение';
+    return data;
+  }
+
+  // Fallback: CORS-прокси (браузер/дебаг)
   const {url: pBase, format} = getActiveProxy();
   if (!pBase) throw new Error('Прокси не настроен. Выбери прокси в настройках.');
   const proxyUrl = buildProxyUrl(pBase, format, raw);
@@ -965,49 +1006,41 @@ async function yadGet(path, params) {
   if (el) el.textContent = '✅ ' + (PROXY_PROVIDERS[S.proxyProvider]?.name || S.proxyProvider);
   return r.json();
 }
-async function yadDownload(rawUrl, filename) {
-  const {url: pBase, format, provider} = getActiveProxy();
-  if (!pBase) throw new Error('Прокси не настроен. Открой Настройки → Прокси');
 
-  // AllOrigins: use /get?url= which returns base64 — надёжнее для бинарных файлов
-  if (provider === 'allorigins') {
-    return await yadDownloadAllOrigins(rawUrl);
+async function yadDownload(rawUrl, filename) {
+  if (window.Android && window.Android.nativeDownloadBase64) {
+    // Нативный путь — без CORS, надёжно
+    return await nativeDownloadBuf(rawUrl);
   }
 
-  // Все остальные прокси — прямой fetch
+  // Fallback: CORS-прокси
+  const {url: pBase, format, provider} = getActiveProxy();
+  if (!pBase) throw new Error('Прокси не настроен. Открой Настройки → Прокси');
+  if (provider === 'allorigins') return await yadDownloadAllOrigins(rawUrl);
   const proxyUrl = buildProxyUrl(pBase, format, rawUrl);
   try {
     const r = await fetch(proxyUrl, {signal: AbortSignal.timeout(30000)});
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const ct = r.headers.get('content-type') || '';
-    // Если вернулся HTML — значит прокси вернул ошибку
-    if (ct.includes('text/html') && !filename?.toLowerCase().endsWith('.html')) {
+    if (ct.includes('text/html') && !filename?.toLowerCase().endsWith('.html'))
       throw new Error('Прокси вернул HTML вместо файла');
-    }
     return r.arrayBuffer();
   } catch(e) {
-    // Fallback: попробуем через AllOrigins
     try { return await yadDownloadAllOrigins(rawUrl); }
     catch(e2) { throw new Error('Не удалось скачать файл: ' + e.message); }
   }
 }
 
 async function yadDownloadAllOrigins(rawUrl) {
-  // AllOrigins /get возвращает { contents: "base64ortext", status: {...} }
   const aoUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(rawUrl);
   const r = await fetch(aoUrl, {signal: AbortSignal.timeout(45000)});
   if (!r.ok) throw new Error('AllOrigins HTTP ' + r.status);
   const data = await r.json();
   if (!data.contents) throw new Error('AllOrigins вернул пустой ответ');
-  // contents может быть строкой (для бинарных AllOrigins кодирует в base64 с data: prefix)
   const contents = data.contents;
-  if (typeof contents === 'string' && contents.startsWith('data:')) {
-    const b64 = contents.split(',')[1];
-    return base64ToArrayBuffer(b64);
-  }
-  // Иначе — текстовый ответ, пробуем как есть
-  const enc = new TextEncoder();
-  return enc.encode(contents).buffer;
+  if (typeof contents === 'string' && contents.startsWith('data:'))
+    return base64ToArrayBuffer(contents.split(',')[1]);
+  return new TextEncoder().encode(contents).buffer;
 }
 
 function base64ToArrayBuffer(b64) {
