@@ -272,25 +272,26 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .hidden{display:none!important}
 .mt8{margin-top:8px}.mt16{margin-top:16px}
 
-/* Прокси карточки */
-.proxy-grid{display:flex;flex-direction:column;gap:7px}
-.proxy-card{background:var(--surface2);border-radius:var(--rb);padding:13px 16px;
-  cursor:pointer;display:flex;align-items:center;gap:12px;
-  border:1.5px solid var(--surface3);position:relative;overflow:hidden;
+/* Прокси список (экран) */
+.proxy-list{display:flex;flex-direction:column;gap:7px}
+.proxy-card{background:var(--surface2);border-radius:var(--rb);padding:14px 16px;
+  cursor:pointer;display:flex;align-items:flex-start;gap:13px;
+  border:1.5px solid var(--surface3);
   transition:border-color .15s,background .15s}
 .proxy-card:active{background:var(--surface3)}
 .proxy-card.selected{background:color-mix(in srgb,var(--accent) 12%,transparent);
-  border-color:color-mix(in srgb,var(--accent) 70%,transparent)}
+  border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
 .proxy-card.selected .proxy-name{color:var(--accent)}
-.proxy-ico{font-size:20px;flex-shrink:0;width:28px;text-align:center}
-.proxy-name{font-size:13px;font-weight:700;flex:1}
+.proxy-ico{font-size:22px;flex-shrink:0;margin-top:1px}
+.proxy-name{font-size:13px;font-weight:700}
 .proxy-addr{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:2px}
+.proxy-desc{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
 .proxy-tag{font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;
-  letter-spacing:.06em;text-transform:uppercase;flex-shrink:0}
+  letter-spacing:.06em;text-transform:uppercase;margin-left:6px;vertical-align:middle}
 .tag-free{background:color-mix(in srgb,var(--success) 20%,transparent);color:var(--success)}
 .tag-own{background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent)}
 .tag-limit{background:color-mix(in srgb,#f0c040 15%,transparent);color:#f0c040}
-.proxy-check{font-size:16px;flex-shrink:0;opacity:0;transition:opacity .15s;color:var(--accent)}
+.proxy-check{font-size:18px;flex-shrink:0;opacity:0;margin-top:2px;margin-left:auto;color:var(--accent);transition:opacity .15s}
 .proxy-card.selected .proxy-check{opacity:1}
 
 /* DPI тест бейджи */
@@ -421,15 +422,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 
     <!-- Прокси-сервер -->
     <div class="section-label">Прокси-сервер</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">
-      Нужен для доступа к API Яндекс Диска. Выбери готовый или укажи свой.
-    </div>
-    <div class="proxy-grid" id="proxy-grid"></div>
-    <div id="custom-proxy-wrap" class="hidden mt8">
-      <input class="inp" id="proxy-input" placeholder="https://your-proxy.workers.dev/proxy/"
-             autocomplete="off" autocorrect="off" autocapitalize="off">
-      <div style="height:8px"></div>
-      <button class="btn btn-surface3" onclick="saveCustomProxy()">Сохранить прокси</button>
+    <div id="proxy-current-row" class="list-item" onclick="showScreen('s-proxy')" style="margin-bottom:8px">
+      <div>
+        <div class="item-name" id="proxy-current-name">AllOrigins</div>
+        <div class="item-sub" id="proxy-current-sub">api.allorigins.win • Нажми для выбора</div>
+      </div>
+      <span class="item-arrow">›</span>
     </div>
     <div class="sep"></div>
 
@@ -514,6 +512,41 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   </div>
 </div>
 
+
+<!-- ПРОКСИ (отдельный экран) -->
+<div class="screen" id="s-proxy">
+  <div class="hdr">
+    <button class="hdr-back" onclick="showScreen('s-settings','back')">‹</button>
+    <div>
+      <div class="hdr-title">Прокси-сервер</div>
+      <div class="hdr-sub">Нужен для доступа к Яндекс Диску</div>
+    </div>
+  </div>
+  <div class="body" style="padding-top:10px">
+    <div class="section-label">Выбери прокси</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+      Без прокси приложение не может обращаться к API Яндекс Диска (CORS). Рекомендуем AllOrigins — он работает сразу без настройки.
+    </div>
+    <div class="proxy-list" id="proxy-list-screen"></div>
+    <div id="custom-proxy-screen-wrap" class="hidden" style="margin-top:12px">
+      <div class="section-label">Адрес своего прокси</div>
+      <input class="inp" id="proxy-input-screen" placeholder="https://your-proxy.workers.dev/proxy/"
+             autocomplete="off" autocorrect="off" autocapitalize="off">
+      <div style="height:8px"></div>
+      <button class="btn btn-accent2" onclick="saveCustomProxyFromScreen()">💾 Сохранить</button>
+      <div style="height:12px"></div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.6">
+        <b style="color:var(--accent)">Cloudflare Worker:</b> самый надёжный вариант.<br>
+        Деплой бесплатно за 5 минут — файл <b>proxy-worker/README.md</b>
+      </div>
+    </div>
+    <div class="sep"></div>
+    <div class="section-label">Проверка</div>
+    <button class="btn btn-surface" onclick="testCurrentProxy()" id="proxy-test-btn">🔌 Проверить подключение</button>
+    <div class="status" id="proxy-test-status" style="text-align:left;margin-top:8px"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -553,29 +586,59 @@ const DNS_PROVIDERS={
 
 // ══ ПРОКСИ провайдеры ══
 // format:
-//   'append_encoded' → proxy_url + encodeURIComponent(target)   (для своего Worker)
-//   'append_raw'     → proxy_url + target                       (для corsproxy.io)
-//   'query_url'      → proxy_url + '?url=' + encodeURIComponent(target)
+//   'append_encoded' → proxy_url + encodeURIComponent(target)
+//   'append_raw'     → proxy_url + target (URL не кодируется)
+//   'query_url'      → proxy_url + encodeURIComponent(target) (то же что append_encoded, другой ключ)
 const PROXY_PROVIDERS = {
-  'corsproxy': {
-    name: 'corsproxy.io',
-    addr: 'corsproxy.io',
-    ico: '🌐',
-    tag: 'tag-free',
-    tagText: 'бесплатно',
-    desc: 'Публичный CORS-прокси. Лимит: 100 req/мин',
-    url: 'https://corsproxy.io/?',
-    format: 'append_raw',
-  },
   'allorigins': {
     name: 'AllOrigins',
     addr: 'api.allorigins.win',
     ico: '🔓',
     tag: 'tag-free',
     tagText: 'бесплатно',
-    desc: 'Публичный прокси, возможны задержки',
+    desc: 'Стабильный публичный прокси. Бинарные файлы через base64.',
     url: 'https://api.allorigins.win/raw?url=',
     format: 'query_url',
+  },
+  'corsproxy': {
+    name: 'corsproxy.io',
+    addr: 'corsproxy.io',
+    ico: '🌐',
+    tag: 'tag-free',
+    tagText: 'бесплатно',
+    desc: 'Быстрый. Может требовать ожидания при лимите.',
+    url: 'https://corsproxy.io/?url=',
+    format: 'query_url',
+  },
+  'codetabs': {
+    name: 'CodeTabs',
+    addr: 'api.codetabs.com',
+    ico: '📦',
+    tag: 'tag-free',
+    tagText: 'бесплатно',
+    desc: 'Без авторизации, поддерживает бинарные файлы.',
+    url: 'https://api.codetabs.com/v1/proxy?quest=',
+    format: 'append_raw',
+  },
+  'thingproxy': {
+    name: 'ThingProxy',
+    addr: 'thingproxy.freeboard.io',
+    ico: '🔁',
+    tag: 'tag-free',
+    tagText: 'бесплатно',
+    desc: 'Простой CORS-прокси без ограничений по типу.',
+    url: 'https://thingproxy.freeboard.io/fetch/',
+    format: 'append_raw',
+  },
+  'corsanywhere': {
+    name: 'CORS Anywhere',
+    addr: 'cors-anywhere.herokuapp.com',
+    ico: '🌍',
+    tag: 'tag-limit',
+    tagText: 'нужен запрос',
+    desc: 'Нужно открыть сайт и нажать Request Access.',
+    url: 'https://cors-anywhere.herokuapp.com/',
+    format: 'append_raw',
   },
   'cf_worker': {
     name: 'Cloudflare Worker',
@@ -583,45 +646,89 @@ const PROXY_PROVIDERS = {
     ico: '☁️',
     tag: 'tag-own',
     tagText: 'свой',
-    desc: 'Надёжнее всего. Деплой за 5 мин, бесплатно',
+    desc: 'Самый надёжный. Деплой за 5 мин, 100k/день бесплатно.',
     url: '',
     format: 'append_encoded',
   },
   'custom': {
-    name: 'Свой прокси',
-    addr: 'любой URL',
+    name: 'Свой URL',
+    addr: 'любой адрес',
     ico: '⚙️',
     tag: 'tag-own',
     tagText: 'свой',
-    desc: 'Введи URL вручную',
+    desc: 'Введи адрес своего прокси вручную.',
     url: '',
     format: 'append_encoded',
   },
 };
 
-// ══ DPI стратегии ══
-const DPI_STRATEGIES=[
-  {id:'general',      name:'Основной',            badge:'MAIN',       desc:'multisplit + fake QUIC. Подходит большинству провайдеров'},
-  {id:'alt',          name:'ALT 1 — Fake TLS',    badge:'ALT 1',      desc:'fake + fakedsplit с TLS fooling'},
-  {id:'alt2',         name:'ALT 2',               badge:'ALT 2',      desc:'Вариация с изменёнными параметрами сплита'},
-  {id:'alt3',         name:'ALT 3',               badge:'ALT 3',      desc:'Дополнительный вариант для сложных блокировок'},
-  {id:'alt4',         name:'ALT 4',               badge:'ALT 4',      desc:''},
-  {id:'alt5',         name:'ALT 5',               badge:'ALT 5',      desc:''},
-  {id:'alt6',         name:'ALT 6',               badge:'ALT 6',      desc:''},
-  {id:'alt7',         name:'ALT 7',               badge:'ALT 7',      desc:''},
-  {id:'alt8',         name:'ALT 8',               badge:'ALT 8',      desc:''},
-  {id:'alt9',         name:'ALT 9',               badge:'ALT 9',      desc:''},
-  {id:'alt10',        name:'ALT 10',              badge:'ALT 10',     desc:''},
-  {id:'alt11',        name:'ALT 11',              badge:'ALT 11',     desc:''},
-  {id:'fakeTls',      name:'Fake TLS Auto',       badge:'TLS AUTO',   desc:'Автоматическое определение TLS fingerprint'},
-  {id:'fakeTlsAlt',   name:'Fake TLS Auto ALT',   badge:'TLS ALT',    desc:''},
-  {id:'fakeTlsAlt2',  name:'Fake TLS Auto ALT 2', badge:'TLS ALT 2',  desc:''},
-  {id:'fakeTlsAlt3',  name:'Fake TLS Auto ALT 3', badge:'TLS ALT 3',  desc:''},
-  {id:'simpleFake',   name:'Simple Fake',         badge:'SIMPLE',     desc:'Простой метод. Попробуй если другие не работают'},
-  {id:'simpleFakeAlt',name:'Simple Fake ALT',     badge:'S.ALT',      desc:''},
-  {id:'simpleFakeAlt2',name:'Simple Fake ALT 2',  badge:'S.ALT 2',    desc:''},
+// ══ DPI стратегии (на основе ByeByeDPI) ══
+// cmd — аргументы для ciadpi, передаются в DnsVpnService
+// {sni} заменяется на www.iana.org
+const DPI_STRATEGIES = [
+  {id:'auto',       badge:'AUTO',   name:'Авто (рекомендуется)', cmd:'-Ku -a1 -An -o1 -At,r,s -d1',
+    desc:'Базовые настройки ByeByeDPI. Попробуй первым.'},
+  {id:'preset1',    badge:'P-1',    name:'Preset 1 — multisplit',
+    cmd:'-f-200 -Qr -s3:5+sm -a1 -As -d1 -s4+sm -s8+sh -f-300 -d6+sh -a1 -At,r,s -o2 -f-30 -As -r5 -Mh -r6+sh -f-250 -s2:7+s -s3:6+sm -a1 -At,r,s -s3:5+sm -s6+s -s7:9+s -q30+sm -a1',
+    desc:'Многосегментное разделение. Хорош для многих провайдеров.'},
+  {id:'preset2',    badge:'P-2',    name:'Preset 2 — disorder split',
+    cmd:'-d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -r1+s -S -a1 -As -d1 -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -S -a1',
+    desc:'Чередование disorder и split по позициям.'},
+  {id:'preset3',    badge:'P-3',    name:'Preset 3 — OOB + mixedcase',
+    cmd:'-q2 -s2 -s3+s -r3 -s4 -r4 -s5+s -r5+s -s6 -s7+s -r8 -s9+s -Qr -Mh,d,r -a1 -At,r -s2+s -r2 -d2 -s3 -r3 -r4 -s4 -d5+s -r5 -d6 -s7+s -d7 -a1',
+    desc:'OOB с перемешиванием регистра и разделением.'},
+  {id:'preset4',    badge:'P-4',    name:'Preset 4 — S+disorder combo',
+    cmd:'-o1 -d1 -a1 -At,r,s -s1 -d1 -s5+s -s10+s -s15+s -s20+s -r1+s -S -a1 -As -s1 -d1 -s5+s -s10+s -s15+s -s20+s -S -a1',
+    desc:'Комбинация OOB и disorder со множеством позиций.'},
+  {id:'preset5',    badge:'P-5',    name:'Preset 5 — Fake TLS + split',
+    cmd:'-n www.iana.org -Qr -f-204 -s1:5+sm -a1 -As -d1 -s3+s -s5+s -q7 -a1 -As -o2 -f-43 -a1 -As -r5 -Mh -s1:5+s -s3:7+sm -a1',
+    desc:'Поддельный TLS пакет + многосегментное разделение.'},
+  {id:'preset6',    badge:'P-6',    name:'Preset 6 — Fake TLS variant',
+    cmd:'-n www.iana.org -Qr -f-205 -a1 -As -s1:3+sm -a1 -As -s5:8+sm -a1 -As -d3 -q7 -o2 -f-43 -f-85 -f-165 -r5 -Mh -a1',
+    desc:'Другой вариант fake TLS с разными смещениями.'},
+  {id:'preset7',    badge:'P-7',    name:'Preset 7 — big split+fake',
+    cmd:'-d1+s -s50+s -a1 -As -f20 -r2+s -a1 -At -d2 -s1+s -s5+s -s10+s -s15+s -s25+s -s35+s -s50+s -s60+s -a1',
+    desc:'Крупные сегменты разделения + fake пакеты.'},
+  {id:'preset8',    badge:'P-8',    name:'Preset 8 — SNI fake + S chain',
+    cmd:'-o1 -a1 -At,r,s -f-1 -a1 -At,r,s -d1:11+sm -S -a1 -At,r,s -n www.iana.org -Qr -f1 -d1:11+sm -s1:11+sm -S -a1',
+    desc:'Цепочка SNI-fake и многосегментного S.'},
+  {id:'preset9',    badge:'P-9',    name:'Preset 9 — SACK drop',
+    cmd:'-d1 -s1 -q1 -Y -a1 -Ar -s5 -o1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1',
+    desc:'Отключение SACK + disorder по всем позициям.'},
+  {id:'preset10',   badge:'P-10',   name:'Preset 10 — Fake+TLSrec+Mh',
+    cmd:'-f1+nme -t6 -a1 -As -n www.iana.org -Qr -s1:6+sm -a1 -As -s5:12+sm -a1 -As -d3 -q7 -r6 -Mh -a1',
+    desc:'Fake с TLS-record split и смешанным регистром.'},
+  {id:'preset11',   badge:'P-11',   name:'Preset 11 — OOB SACK chain A',
+    cmd:'-s1 -o1 -a1 -Y -Ar -s5 -o1+s -a1 -At -f-1 -r1+s -a1 -As -s1 -o1+s -s-1 -a1',
+    desc:'Цепочка OOB с SACK drop.'},
+  {id:'preset12',   badge:'P-12',   name:'Preset 12 — OOB SACK chain B',
+    cmd:'-s1 -d1 -a1 -Y -Ar -d5 -o1+s -a1 -At -f-1 -r1+s -a1 -As -d1 -o1+s -s-1 -a1',
+    desc:'Вариант цепочки OOB+SACK с disorder.'},
+  {id:'preset13',   badge:'P-13',   name:'Preset 13 — light disorder',
+    cmd:'-d1 -s1+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -a1',
+    desc:'Лёгкий disorder по нарастающим позициям.'},
+  {id:'preset14',   badge:'P-14',   name:'Preset 14 — minimal OOB',
+    cmd:'-s1 -q1 -a1 -Y -Ar -a1 -s5 -o2 -At -f-1 -r1+s -a1 -As -s1 -o1+s -s-1 -a1',
+    desc:'Минимальный OOB с SACK drop.'},
+  {id:'preset19',   badge:'P-19',   name:'Preset 19 — triple OOB',
+    cmd:'-o1 -a1 -At,r,s -f-1 -a1 -Ar,s -o1 -a1 -At -r1+s -f-1 -t6 -a1',
+    desc:'Тройная цепочка OOB разными методами.'},
+  {id:'split_basic',badge:'SPLIT',  name:'Split — базовый',
+    cmd:'-s1 -a1 -An',
+    desc:'Простое разделение первого байта TLS ClientHello.'},
+  {id:'disorder',   badge:'DIS',    name:'Disorder — базовый',
+    cmd:'-d1 -a1 -An',
+    desc:'Disorder первого байта TLS.'},
+  {id:'fake',       badge:'FAKE',   name:'Fake — базовый',
+    cmd:'-f-1 -t5 -n www.iana.org -a1 -An',
+    desc:'Поддельный TLS пакет с фиктивным SNI.'},
+  {id:'oob',        badge:'OOB',    name:'OOB — базовый',
+    cmd:'-o1 -a1 -An',
+    desc:'Out-of-band данные в первой позиции.'},
+  {id:'disoob',     badge:'DOOB',   name:'DisOOB — базовый',
+    cmd:'-q1 -a1 -An',
+    desc:'Комбинация disorder+OOB.'},
 ];
-
 // ══ ЗВОНКИ ══
 const BELL_MON={'I':['09:00','09:45','09:50','10:35'],'II':['10:45','11:30','11:35','12:20'],'III':['12:50','13:35','13:40','14:25'],'IV':['14:35','15:35',null,null],'V':['15:45','16:45',null,null],'VI':['16:55','17:55',null,null]};
 const BELL_TUE={'I':['08:30','09:15','09:20','10:05'],'II':['10:15','11:00','11:05','11:50'],'III':['12:20','13:05','13:10','13:55'],'IV':['14:05','15:05',null,null],'V':['15:15','16:15',null,null],'VI':['16:25','17:25',null,null]};
@@ -704,7 +811,7 @@ const DEFAULT_URL='https://disk.yandex.ru/d/mjhoc7kysmQEuQ';
 const S={
   url:DEFAULT_URL,files:[],selectedFile:null,lastGroup:'',
   theme:'orange',dns:'system',customDns:'',dpi:'general',
-  customProxy:'',proxyProvider:'corsproxy'
+  customProxy:'',proxyProvider:'allorigins'
 };
 const FILE_CACHE={};
 let allGroups=[];
@@ -742,72 +849,110 @@ function saveLocal(){
 
 // ══ ПРОКСИ ══
 function buildProxyUrl(proxyBaseUrl, format, targetUrl) {
-  if (format === 'append_raw')   return proxyBaseUrl + targetUrl;
-  if (format === 'query_url')    return proxyBaseUrl + encodeURIComponent(targetUrl);
-  /* append_encoded default */   return proxyBaseUrl + encodeURIComponent(targetUrl);
+  if (format === 'append_raw') return proxyBaseUrl + targetUrl;
+  // query_url and append_encoded both encode
+  return proxyBaseUrl + encodeURIComponent(targetUrl);
 }
 
 function getActiveProxy() {
-  const p = PROXY_PROVIDERS[S.proxyProvider] || PROXY_PROVIDERS['corsproxy'];
+  const key = S.proxyProvider || 'allorigins';
+  const p = PROXY_PROVIDERS[key] || PROXY_PROVIDERS['allorigins'];
   let url = p.url;
-  // Для cf_worker / custom — используем сохранённый customProxy
-  if (S.proxyProvider === 'cf_worker' || S.proxyProvider === 'custom') {
-    url = S.customProxy ? (S.customProxy.endsWith('/') ? S.customProxy : S.customProxy+'/') : '';
+  if (key === 'cf_worker' || key === 'custom') {
+    url = S.customProxy ? (S.customProxy.endsWith('/') ? S.customProxy : S.customProxy + '/') : '';
   }
-  return { url, format: p.format || 'append_encoded' };
+  return { url, format: p.format || 'query_url', provider: key };
 }
 
-function renderProxyGrid() {
-  const g = document.getElementById('proxy-grid'); if(!g) return;
-  g.innerHTML = '';
+function renderProxyList() {
+  const list = document.getElementById('proxy-list-screen'); if (!list) return;
+  list.innerHTML = '';
   Object.entries(PROXY_PROVIDERS).forEach(([key, p]) => {
     const sel = S.proxyProvider === key;
     const card = document.createElement('div');
     card.className = 'proxy-card' + (sel ? ' selected' : '');
-    card.innerHTML = `
-      <div class="proxy-ico">${p.ico}</div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:7px">
-          <div class="proxy-name">${p.name}</div>
-          <span class="proxy-tag ${p.tag}">${p.tagText}</span>
-        </div>
-        <div class="proxy-addr">${p.addr}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px;line-height:1.4">${p.desc}</div>
-      </div>
-      <span class="proxy-check">✓</span>`;
+    card.innerHTML =
+      '<div class="proxy-ico">' + p.ico + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center">' +
+          '<div class="proxy-name">' + p.name + '</div>' +
+          '<span class="proxy-tag ' + p.tag + '">' + p.tagText + '</span>' +
+        '</div>' +
+        '<div class="proxy-addr">' + p.addr + '</div>' +
+        '<div class="proxy-desc">' + p.desc + '</div>' +
+      '</div>' +
+      '<div class="proxy-check">✓</div>';
     card.onclick = () => selectProxy(key);
-    g.appendChild(card);
+    list.appendChild(card);
   });
-  // custom URL input visibility
-  const needInput = S.proxyProvider === 'cf_worker' || S.proxyProvider === 'custom';
-  document.getElementById('custom-proxy-wrap')?.classList.toggle('hidden', !needInput);
+  // Show/hide custom input
+  const needInput = (S.proxyProvider === 'cf_worker' || S.proxyProvider === 'custom');
+  const wrap = document.getElementById('custom-proxy-screen-wrap');
+  if (wrap) wrap.classList.toggle('hidden', !needInput);
+  const inp = document.getElementById('proxy-input-screen');
+  if (inp) inp.value = S.customProxy || '';
+}
+
+function updateProxyCurrentRow() {
+  const p = PROXY_PROVIDERS[S.proxyProvider] || PROXY_PROVIDERS['allorigins'];
+  const nameEl = document.getElementById('proxy-current-name');
+  const subEl  = document.getElementById('proxy-current-sub');
+  if (nameEl) nameEl.textContent = p.name;
+  if (subEl)  subEl.textContent  = p.addr + ' • ' + p.tagText;
+  const statusEl = document.getElementById('proxy-status');
+  if (statusEl) statusEl.textContent = '';
 }
 
 function selectProxy(key) {
-  S.proxyProvider = key;
-  saveLocal();
-  renderProxyGrid();
-  const p = PROXY_PROVIDERS[key];
-  if (key !== 'cf_worker' && key !== 'custom') {
-    toast('Прокси: ' + p.name);
-    // Immediately retry loading if home screen is showing error
-    const err = document.getElementById('home-error-hint');
-    if (err && !err.classList.contains('hidden')) loadFiles();
+  S.proxyProvider = key; saveLocal();
+  renderProxyList();
+  updateProxyCurrentRow();
+  toast('Прокси: ' + (PROXY_PROVIDERS[key]?.name || key));
+  // Если на главной была ошибка — перезапустить загрузку
+  const err = document.getElementById('home-error-hint');
+  if (err && !err.classList.contains('hidden') && key !== 'cf_worker' && key !== 'custom') {
+    loadFiles();
   }
 }
 
-function saveCustomProxy() {
-  const v = document.getElementById('proxy-input')?.value.trim() || '';
+function saveCustomProxyFromScreen() {
+  const v = (document.getElementById('proxy-input-screen')?.value || '').trim();
   S.customProxy = v; saveLocal();
-  renderProxyGrid();
-  toast(v ? 'Прокси сохранён' : 'Прокси сброшен');
+  if (document.getElementById('proxy-input')) document.getElementById('proxy-input').value = v;
+  toast(v ? 'Прокси сохранён' : 'Адрес прокси очищен');
+  updateProxyCurrentRow();
   if (v) {
     const err = document.getElementById('home-error-hint');
     if (err && !err.classList.contains('hidden')) loadFiles();
   }
 }
-// legacy compat
-function saveProxy() { saveCustomProxy(); }
+
+// legacy, keep for backward compat
+function saveProxy() { saveCustomProxyFromScreen(); }
+function saveCustomProxy() { saveCustomProxyFromScreen(); }
+function renderProxyGrid() { renderProxyList(); }
+
+async function testCurrentProxy() {
+  const btn = document.getElementById('proxy-test-btn');
+  const status = document.getElementById('proxy-test-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Проверяю...'; }
+  if (status) status.textContent = '';
+  try {
+    const {url: pBase, format, provider} = getActiveProxy();
+    if (!pBase) throw new Error('Прокси не настроен');
+    const testUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources?public_key=test&limit=1';
+    const proxyUrl = buildProxyUrl(pBase, format, testUrl);
+    const r = await fetch(proxyUrl, {signal: AbortSignal.timeout(10000)});
+    // 404 from Yandex is fine — means proxy works
+    const ok = r.status < 500;
+    if (status) status.textContent = ok
+      ? '✅ Прокси работает! HTTP ' + r.status
+      : '❌ Ошибка: HTTP ' + r.status;
+  } catch(e) {
+    if (status) status.textContent = '❌ ' + e.message;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🔌 Проверить подключение'; }
+}
 async function yadGet(path, params) {
   const qs = new URLSearchParams(params).toString();
   const raw = `https://cloud-api.yandex.net${path}?${qs}`;
@@ -820,13 +965,56 @@ async function yadGet(path, params) {
   if (el) el.textContent = '✅ ' + (PROXY_PROVIDERS[S.proxyProvider]?.name || S.proxyProvider);
   return r.json();
 }
-async function yadDownload(rawUrl) {
-  const {url: pBase, format} = getActiveProxy();
-  if (!pBase) throw new Error('Прокси не настроен');
+async function yadDownload(rawUrl, filename) {
+  const {url: pBase, format, provider} = getActiveProxy();
+  if (!pBase) throw new Error('Прокси не настроен. Открой Настройки → Прокси');
+
+  // AllOrigins: use /get?url= which returns base64 — надёжнее для бинарных файлов
+  if (provider === 'allorigins') {
+    return await yadDownloadAllOrigins(rawUrl);
+  }
+
+  // Все остальные прокси — прямой fetch
   const proxyUrl = buildProxyUrl(pBase, format, rawUrl);
-  const r = await fetch(proxyUrl, {signal: AbortSignal.timeout(60000)});
-  if (!r.ok) throw new Error(`Не удалось скачать: HTTP ${r.status}`);
-  return r.arrayBuffer();
+  try {
+    const r = await fetch(proxyUrl, {signal: AbortSignal.timeout(30000)});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const ct = r.headers.get('content-type') || '';
+    // Если вернулся HTML — значит прокси вернул ошибку
+    if (ct.includes('text/html') && !filename?.toLowerCase().endsWith('.html')) {
+      throw new Error('Прокси вернул HTML вместо файла');
+    }
+    return r.arrayBuffer();
+  } catch(e) {
+    // Fallback: попробуем через AllOrigins
+    try { return await yadDownloadAllOrigins(rawUrl); }
+    catch(e2) { throw new Error('Не удалось скачать файл: ' + e.message); }
+  }
+}
+
+async function yadDownloadAllOrigins(rawUrl) {
+  // AllOrigins /get возвращает { contents: "base64ortext", status: {...} }
+  const aoUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(rawUrl);
+  const r = await fetch(aoUrl, {signal: AbortSignal.timeout(45000)});
+  if (!r.ok) throw new Error('AllOrigins HTTP ' + r.status);
+  const data = await r.json();
+  if (!data.contents) throw new Error('AllOrigins вернул пустой ответ');
+  // contents может быть строкой (для бинарных AllOrigins кодирует в base64 с data: prefix)
+  const contents = data.contents;
+  if (typeof contents === 'string' && contents.startsWith('data:')) {
+    const b64 = contents.split(',')[1];
+    return base64ToArrayBuffer(b64);
+  }
+  // Иначе — текстовый ответ, пробуем как есть
+  const enc = new TextEncoder();
+  return enc.encode(contents).buffer;
+}
+
+function base64ToArrayBuffer(b64) {
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
 }
 
 // ══ ТЕМЫ ══
@@ -994,7 +1182,7 @@ async function loadFiles(){
   try{
     const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
     S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&/\.(doc|docx)$/i.test(i.name))
-      .map(i=>({name:i.name,path:i.path||'',size:i.size||0}));
+      .map(i=>({name:i.name,path:i.path||('/'+i.name),size:i.size||0,resourceId:i.resource_id||''}));
     setBar('home-bar',100);setStatus('home-status',`Найдено: ${S.files.length} файлов`);
     setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
     renderFileList();
@@ -1032,8 +1220,10 @@ function renderFileList(){
 async function getFileBuf(){
   const key=S.selectedFile.path||S.selectedFile.name;
   if(FILE_CACHE[key])return FILE_CACHE[key];
-  const dl=await yadGet('/v1/disk/public/resources/download',{public_key:S.url,path:S.selectedFile.path});
-  const buf=await yadDownload(dl.href);
+  const filePath=S.selectedFile.path||('/'+S.selectedFile.name);
+  const dl=await yadGet('/v1/disk/public/resources/download',{public_key:S.url,path:filePath});
+  if(!dl||!dl.href) throw new Error('Яндекс не вернул ссылку на файл. Путь: '+filePath);
+  const buf=await yadDownload(dl.href, S.selectedFile.name);
   FILE_CACHE[key]=buf;return buf;
 }
 
@@ -1273,12 +1463,13 @@ setTimeout(function(){
 renderBells();
 renderDnsGrid();
 renderDpiList();
-renderProxyGrid();
+renderProxyList();
+updateProxyCurrentRow();
 updateLastGroupBtn();
 updateNavActive('nav-home');
 updateDpiCurrentRow();
 document.getElementById('url-input').value=S.url;
-const _pi=document.getElementById('proxy-input');if(_pi)_pi.value=S.customProxy;
+// proxy input handled by renderProxyList()
 document.getElementById('custom-dns-input').value=S.customDns;
 document.getElementById('custom-dns-wrap').classList.toggle('hidden',S.dns!=='custom');
 
