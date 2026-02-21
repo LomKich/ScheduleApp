@@ -437,43 +437,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     </div>
     <div class="sep"></div>
 
-    <!-- Иконка приложения -->
-    <div class="section-label">Иконка приложения</div>
-    <div class="icon-picker" id="icon-picker">
-      <button class="icon-btn" id="icon-btn-dark"    onclick="pickIcon('dark')"   title="Тёмная">
-        <span class="icon-preview" style="background:#0D0D0D">
-          <img src="" id="icon-img-dark" style="width:100%;height:100%;border-radius:inherit">
-        </span>
-        <span class="icon-label">Тёмная</span>
-        <span class="icon-check" id="icon-chk-dark">✓</span>
-      </button>
-      <button class="icon-btn" id="icon-btn-orange"  onclick="pickIcon('orange')" title="Оранжевая">
-        <span class="icon-preview" style="background:#E87722">
-          <img src="" id="icon-img-orange" style="width:100%;height:100%;border-radius:inherit">
-        </span>
-        <span class="icon-label">Оранжевая</span>
-        <span class="icon-check" id="icon-chk-orange">✓</span>
-      </button>
-      <button class="icon-btn" id="icon-btn-amoled"  onclick="pickIcon('amoled')" title="AMOLED">
-        <span class="icon-preview" style="background:#000;border:1px solid #333">
-          <img src="" id="icon-img-amoled" style="width:100%;height:100%;border-radius:inherit">
-        </span>
-        <span class="icon-label">AMOLED</span>
-        <span class="icon-check" id="icon-chk-amoled">✓</span>
-      </button>
-      <button class="icon-btn" id="icon-btn-samek"   onclick="pickIcon('samek')"  title="СаМеК">
-        <span class="icon-preview" style="background:#10388A">
-          <img src="" id="icon-img-samek" style="width:100%;height:100%;border-radius:inherit">
-        </span>
-        <span class="icon-label">СаМеК</span>
-        <span class="icon-check" id="icon-chk-samek">✓</span>
-      </button>
-    </div>
-    <div id="icon-note" style="font-size:11px;color:var(--muted);margin-top:6px;margin-bottom:4px;display:none">
-      ✓ Смена иконки применится через несколько секунд
-    </div>
-    <div class="sep"></div>
-
     <!-- Прокси-сервер -->
     <div class="section-label">Прокси-сервер</div>
     <div id="proxy-current-row" class="list-item" onclick="showScreen('s-proxy')" style="margin-bottom:8px">
@@ -613,6 +576,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   </div>
   <div class="body">
     <div class="theme-grid" id="theme-grid-screen"></div>
+
+    <!-- Выбор иконки приложения -->
+    <div id="icon-picker-section">
+      <div class="section-label" style="margin-top:16px;margin-bottom:8px">Иконка приложения</div>
+      <div class="theme-grid" id="icon-grid-screen"></div>
+      <div id="icon-note" style="font-size:11px;color:var(--muted);margin-top:8px;display:none">
+        ✓ Смена иконки применится через несколько секунд
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1128,10 +1100,10 @@ function base64ToArrayBuffer(b64) {
 
 // ══ ИКОНКА ПРИЛОЖЕНИЯ ══
 const ICON_VARIANTS = {
-  dark:   {label:'Тёмная',   bg:'#0D0D0D'},
-  orange: {label:'Оранжевая',bg:'#E87722'},
-  amoled: {label:'AMOLED',   bg:'#000000'},
-  samek:  {label:'СаМеК',    bg:'#10388A'},
+  dark:   {label:'Тёмная',    ico:'⬛', bg:'#0D0D0D', dot:['#0D0D0D','#e0dbd5','#a09890']},
+  orange: {label:'Оранжевая', ico:'🟠', bg:'#E87722', dot:['#0d0d0d','#E87722','#c45f0a']},
+  amoled: {label:'AMOLED',    ico:'⚫', bg:'#000000', dot:['#000','#00e5ff','#333']},
+  samek:  {label:'СаМеК',     ico:'🔵', bg:'#10388A', dot:['#10388A','#4a7fd4','#061e55']},
 };
 
 function pickIcon(key) {
@@ -1141,34 +1113,43 @@ function pickIcon(key) {
   }
   S.appIcon = key;
   saveLocal();
-  updateIconPicker();
+  renderIconGrid();
   window.Android.setAppIcon(key);
   const note = document.getElementById('icon-note');
   if (note) { note.style.display = 'block'; setTimeout(()=>note.style.display='none', 4000); }
 }
 
-function updateIconPicker() {
+function renderIconGrid() {
+  const g = document.getElementById('icon-grid-screen');
+  if (!g) return;
   const cur = S.appIcon || 'dark';
-  Object.keys(ICON_VARIANTS).forEach(k => {
-    const btn = document.getElementById('icon-btn-' + k);
-    if (btn) btn.classList.toggle('selected', k === cur);
+  // Показываем/скрываем секцию иконок — только в Android-приложении
+  const sec = document.getElementById('icon-picker-section');
+  if (sec) sec.style.display = window.Android ? '' : 'none';
+  g.innerHTML = '';
+  Object.entries(ICON_VARIANTS).forEach(([key, t]) => {
+    const c = document.createElement('div');
+    c.className = 'theme-card' + (cur === key ? ' selected' : '');
+    c.innerHTML = `
+      <div class="theme-swatch">${t.dot.map(cl=>`<div class="swatch" style="background:${cl}"></div>`).join('')}</div>
+      <div style="flex:1;min-width:0">
+        <div class="theme-name" style="font-size:13px;font-weight:700">${t.ico} ${t.label}</div>
+      </div>
+      <span class="theme-check">✓</span>`;
+    c.onclick = () => pickIcon(key);
+    g.appendChild(c);
   });
 }
 
-function initIconPicker() {
-  // Показываем пикер только в Android-приложении
-  const picker = document.getElementById('icon-picker');
-  if (!picker) return;
-  if (!window.Android) { picker.closest && picker.closest('.sep') && (picker.style.display='none'); return; }
-  updateIconPicker();
-}
+function updateIconPicker() { renderIconGrid(); }
+function initIconPicker() { renderIconGrid(); }
 
 // ══ ТЕМЫ ══
 function applyTheme(key){
   const t=THEMES[key]||THEMES['orange'];
   Object.entries(t.vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
   document.documentElement.setAttribute('data-theme',key);
-  S.theme=key;saveLocal();renderThemeGrid();updateThemeCurrentRow();
+  S.theme=key;saveLocal();renderThemeGrid();renderIconGrid();updateThemeCurrentRow();
 }
 function renderThemeGrid(){
   ['theme-grid-screen'].forEach(gid => {
@@ -1324,6 +1305,8 @@ function showScreen(id,dir='forward'){
   prev.classList.add(dir==='back'?'exit-right':'exit-left');prev.classList.remove('active');
   setTimeout(()=>prev.classList.remove('exit-left','exit-right'),250);
   next.classList.add('active');cur=id;
+  // При открытии экрана тем — рендерим темы и иконки
+  if(id==='s-themes'){renderThemeGrid();renderIconGrid();}
 }
 function goHome(){
   showScreen('s-home','back');

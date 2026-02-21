@@ -94,18 +94,28 @@ public class MainActivity extends Activity {
 
     @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
+        // Аппаратное ускорение
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
         ws.setAllowFileAccess(true);
         ws.setAllowContentAccess(true);
-        ws.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // Агрессивное кэширование — страница грузится из кэша, обновляется только при изменениях
+        ws.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         // Отключаем pinch-to-zoom
         ws.setSupportZoom(false);
         ws.setBuiltInZoomControls(false);
         ws.setDisplayZoomControls(false);
-        log.i(TAG, "WebSettings: JS=on DomStorage=on FileAccess=on MixedContent=ALWAYS_ALLOW");
+        // Фиксируем зум на 100% — без этого бывает лишний пересчёт
+        ws.setTextZoom(100);
+        // Включаем базу данных для офлайн-кэша
+        ws.setDatabaseEnabled(true);
+        // Геолокация не нужна — отключаем
+        ws.setGeolocationEnabled(false);
+        log.i(TAG, "WebSettings: JS=on DomStorage=on FileAccess=on MixedContent=ALWAYS_ALLOW Hardware=on Cache=CACHE_ELSE_NETWORK");
 
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
         log.i(TAG, "JavascriptInterface 'Android' зарегистрирован");
