@@ -101,6 +101,10 @@ public class MainActivity extends Activity {
         ws.setAllowContentAccess(true);
         ws.setCacheMode(WebSettings.LOAD_DEFAULT);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // Отключаем pinch-to-zoom
+        ws.setSupportZoom(false);
+        ws.setBuiltInZoomControls(false);
+        ws.setDisplayZoomControls(false);
         log.i(TAG, "WebSettings: JS=on DomStorage=on FileAccess=on MixedContent=ALWAYS_ALLOW");
 
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
