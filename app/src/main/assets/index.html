@@ -272,6 +272,27 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .hidden{display:none!important}
 .mt8{margin-top:8px}.mt16{margin-top:16px}
 
+/* Прокси карточки */
+.proxy-grid{display:flex;flex-direction:column;gap:7px}
+.proxy-card{background:var(--surface2);border-radius:var(--rb);padding:13px 16px;
+  cursor:pointer;display:flex;align-items:center;gap:12px;
+  border:1.5px solid var(--surface3);position:relative;overflow:hidden;
+  transition:border-color .15s,background .15s}
+.proxy-card:active{background:var(--surface3)}
+.proxy-card.selected{background:color-mix(in srgb,var(--accent) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 70%,transparent)}
+.proxy-card.selected .proxy-name{color:var(--accent)}
+.proxy-ico{font-size:20px;flex-shrink:0;width:28px;text-align:center}
+.proxy-name{font-size:13px;font-weight:700;flex:1}
+.proxy-addr{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:2px}
+.proxy-tag{font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;
+  letter-spacing:.06em;text-transform:uppercase;flex-shrink:0}
+.tag-free{background:color-mix(in srgb,var(--success) 20%,transparent);color:var(--success)}
+.tag-own{background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent)}
+.tag-limit{background:color-mix(in srgb,#f0c040 15%,transparent);color:#f0c040}
+.proxy-check{font-size:16px;flex-shrink:0;opacity:0;transition:opacity .15s;color:var(--accent)}
+.proxy-card.selected .proxy-check{opacity:1}
+
 /* DPI тест бейджи */
 .test-badge{
   display:inline-flex;align-items:center;gap:4px;
@@ -398,19 +419,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div class="theme-grid" id="theme-grid"></div>
     <div class="sep"></div>
 
-    <!-- Свой прокси -->
+    <!-- Прокси-сервер -->
     <div class="section-label">Прокси-сервер</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:var(--rb);padding:10px 12px">
-      ⚠️ <b style="color:var(--accent)">Прокси обязателен</b> — без него приложение не может обращаться к API Яндекс Диска из-за CORS ограничений Android WebView.
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Нужен для доступа к API Яндекс Диска. Выбери готовый или укажи свой.
     </div>
-    <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px">
-      <div style="width:100%">
-        <div style="font-weight:600;font-size:14px">URL прокси</div>
-        <div class="settings-row-sub">Например: https://your-proxy.workers.dev/proxy/</div>
-      </div>
+    <div class="proxy-grid" id="proxy-grid"></div>
+    <div id="custom-proxy-wrap" class="hidden mt8">
       <input class="inp" id="proxy-input" placeholder="https://your-proxy.workers.dev/proxy/"
-             autocomplete="off" autocorrect="off" autocapitalize="off" style="margin:0">
-      <button class="btn btn-surface3" style="width:100%" onclick="saveProxy()">Сохранить прокси</button>
+             autocomplete="off" autocorrect="off" autocapitalize="off">
+      <div style="height:8px"></div>
+      <button class="btn btn-surface3" onclick="saveCustomProxy()">Сохранить прокси</button>
     </div>
     <div class="sep"></div>
 
@@ -440,24 +459,58 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 
     <!-- DPI стратегии -->
     <div class="section-label">Стратегия обхода DPI</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">
-      Разные провайдеры блокируют по-разному. Нажми «Тест всех» — стратегии проверятся по очереди, в списке останутся только рабочие.
+    <div id="dpi-current-row" class="list-item" onclick="showScreen('s-dpi')" style="margin-bottom:8px">
+      <div>
+        <div class="item-name" id="dpi-current-name">Основной</div>
+        <div class="item-sub" id="dpi-current-badge">MAIN • Нажми для выбора</div>
+      </div>
+      <span class="item-arrow">›</span>
     </div>
-    <button class="btn btn-accent2" id="dpi-test-btn" onclick="testAllDpi()" style="margin-bottom:10px">
-      <span id="dpi-test-icon">🧪</span> Протестировать все стратегии
-    </button>
-    <div id="dpi-test-block" style="display:none;margin-bottom:10px">
-      <div class="progress" style="margin-bottom:6px"><div class="progress-bar" id="dpi-test-bar"></div></div>
-      <div class="status" id="dpi-test-status" style="text-align:left"></div>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap" id="dpi-result-badges"></div>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <div class="section-label" style="margin:0" id="dpi-list-label">Все стратегии</div>
-      <button id="dpi-show-all-btn" onclick="showAllDpi()" style="display:none;background:none;border:none;color:var(--accent);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;padding:4px 8px">Показать все</button>
-    </div>
-    <div class="dpi-list" id="dpi-list"></div>
     <div class="sep"></div>
 
+    <!-- Диагностика -->
+    <div class="section-label">Диагностика</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">
+      Если что-то не работает — логи помогут найти причину.<br>
+      Файл: <span style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px">Download/ScheduleApp_logs.txt</span>
+    </div>
+    <button class="btn btn-surface" onclick="if(window.Android&&window.Android.showLogPath){window.Android.showLogPath();}else{alert('Лог: Download/ScheduleApp_logs.txt');}">
+      📋 Где лог-файл?
+    </button>
+    <div style="height:8px"></div>
+    <button class="btn btn-surface" onclick="var ok=window.Android&&window.Android.logMsg;if(ok){window.Android.logMsg('INFO','Ручная проверка логгера '+new Date().toISOString());toast('Строка записана в лог');}else{toast('Android bridge не найден');}">
+      🔬 Записать тест в лог
+    </button>
+    <div style="height:24px"></div>
+  </div>
+</div>
+
+
+<!-- DPI СТРАТЕГИИ (отдельный экран) -->
+<div class="screen" id="s-dpi">
+  <div class="hdr">
+    <button class="hdr-back" onclick="showScreen('s-settings','back')">‹</button>
+    <div>
+      <div class="hdr-title">Стратегия DPI</div>
+      <div class="hdr-sub" id="dpi-screen-sub">Выбери метод обхода блокировок</div>
+    </div>
+  </div>
+  <div style="padding:12px 18px 0;flex-shrink:0">
+    <button class="btn btn-accent2" id="dpi-test-btn2" onclick="testAllDpi()" style="margin-bottom:10px">
+      <span id="dpi-test-icon2">🧪</span> Протестировать все
+    </button>
+    <div id="dpi-test-block2" style="display:none;margin-bottom:10px">
+      <div class="progress" style="margin-bottom:6px"><div class="progress-bar" id="dpi-test-bar2"></div></div>
+      <div class="status" id="dpi-test-status2" style="text-align:left"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" id="dpi-result-badges2"></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="section-label" style="margin:0" id="dpi-screen-label">Все стратегии</div>
+      <button id="dpi-show-all-btn2" onclick="showAllDpi()" style="display:none;background:none;border:none;color:var(--accent);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;padding:4px 8px">Показать все</button>
+    </div>
+  </div>
+  <div class="body" style="padding-top:6px">
+    <div class="dpi-list" id="dpi-list-screen"></div>
   </div>
 </div>
 
@@ -496,6 +549,54 @@ const DNS_PROVIDERS={
   'adguard':{name:'AdGuard',    addr:'94.140.14.14',  ico:'🟢', doh:'https://dns.adguard.com/dns-query'},
   'yandex': {name:'Яндекс',     addr:'77.88.8.8',     ico:'🔴', doh:'https://common.dot.dns.yandex.net/dns-query'},
   'custom': {name:'Свой...',    addr:'DoH URL',       ico:'⚙️', doh:'custom'},
+};
+
+// ══ ПРОКСИ провайдеры ══
+// format:
+//   'append_encoded' → proxy_url + encodeURIComponent(target)   (для своего Worker)
+//   'append_raw'     → proxy_url + target                       (для corsproxy.io)
+//   'query_url'      → proxy_url + '?url=' + encodeURIComponent(target)
+const PROXY_PROVIDERS = {
+  'corsproxy': {
+    name: 'corsproxy.io',
+    addr: 'corsproxy.io',
+    ico: '🌐',
+    tag: 'tag-free',
+    tagText: 'бесплатно',
+    desc: 'Публичный CORS-прокси. Лимит: 100 req/мин',
+    url: 'https://corsproxy.io/?',
+    format: 'append_raw',
+  },
+  'allorigins': {
+    name: 'AllOrigins',
+    addr: 'api.allorigins.win',
+    ico: '🔓',
+    tag: 'tag-free',
+    tagText: 'бесплатно',
+    desc: 'Публичный прокси, возможны задержки',
+    url: 'https://api.allorigins.win/raw?url=',
+    format: 'query_url',
+  },
+  'cf_worker': {
+    name: 'Cloudflare Worker',
+    addr: 'your-proxy.workers.dev',
+    ico: '☁️',
+    tag: 'tag-own',
+    tagText: 'свой',
+    desc: 'Надёжнее всего. Деплой за 5 мин, бесплатно',
+    url: '',
+    format: 'append_encoded',
+  },
+  'custom': {
+    name: 'Свой прокси',
+    addr: 'любой URL',
+    ico: '⚙️',
+    tag: 'tag-own',
+    tagText: 'свой',
+    desc: 'Введи URL вручную',
+    url: '',
+    format: 'append_encoded',
+  },
 };
 
 // ══ DPI стратегии ══
@@ -603,11 +704,10 @@ const DEFAULT_URL='https://disk.yandex.ru/d/mjhoc7kysmQEuQ';
 const S={
   url:DEFAULT_URL,files:[],selectedFile:null,lastGroup:'',
   theme:'orange',dns:'system',customDns:'',dpi:'general',
-  customProxy:''
+  customProxy:'',proxyProvider:'corsproxy'
 };
 const FILE_CACHE={};
 let allGroups=[];
-let dpiWorkingIds=null; // null = не тестировалось, array = результаты
 
 const _mem={};
 const stor={
@@ -624,6 +724,7 @@ function loadLocal(){
     S.customDns=d.customDns||'';
     S.dpi=d.dpi||'general';
     S.customProxy=d.customProxy||'';
+    S.proxyProvider=d.proxyProvider||'corsproxy';
     const inp=document.getElementById('url-input');
     if(inp)inp.value=S.url;
     const pi=document.getElementById('proxy-input');
@@ -635,49 +736,97 @@ function loadLocal(){
 function saveLocal(){
   stor.set('sched',JSON.stringify({
     group:S.lastGroup,theme:S.theme,url:S.url,
-    dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy
+    dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy,proxyProvider:S.proxyProvider
   }));
 }
 
 // ══ ПРОКСИ ══
-let proxyFound=false;
-function getProxies(){
-  const list=['/proxy/'];
-  if(S.customProxy)list.unshift(S.customProxy.endsWith('/')?S.customProxy:S.customProxy+'/');
-  return list;
+function buildProxyUrl(proxyBaseUrl, format, targetUrl) {
+  if (format === 'append_raw')   return proxyBaseUrl + targetUrl;
+  if (format === 'query_url')    return proxyBaseUrl + encodeURIComponent(targetUrl);
+  /* append_encoded default */   return proxyBaseUrl + encodeURIComponent(targetUrl);
 }
-function saveProxy(){
-  const v=document.getElementById('proxy-input')?.value.trim()||'';
-  S.customProxy=v;saveLocal();
-  proxyFound=false; // сбросить кэш
-  toast(v?'Прокси сохранён':'Прокси сброшен');
+
+function getActiveProxy() {
+  const p = PROXY_PROVIDERS[S.proxyProvider] || PROXY_PROVIDERS['corsproxy'];
+  let url = p.url;
+  // Для cf_worker / custom — используем сохранённый customProxy
+  if (S.proxyProvider === 'cf_worker' || S.proxyProvider === 'custom') {
+    url = S.customProxy ? (S.customProxy.endsWith('/') ? S.customProxy : S.customProxy+'/') : '';
+  }
+  return { url, format: p.format || 'append_encoded' };
 }
-async function yadGet(path,params){
-  const qs=new URLSearchParams(params).toString();
-  const raw=`https://cloud-api.yandex.net${path}?${qs}`;
-  async function tryProxy(p){
-    const url=p+encodeURIComponent(raw);
-    const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    return r.json();
-  }
-  for(const p of getProxies()){
-    try{const d=await tryProxy(p);
-      document.getElementById('proxy-status').textContent='✅ Прокси: '+p;
-      return d;}catch(e){continue;}
-  }
-  throw new Error('Нет подключения к API Яндекс');
+
+function renderProxyGrid() {
+  const g = document.getElementById('proxy-grid'); if(!g) return;
+  g.innerHTML = '';
+  Object.entries(PROXY_PROVIDERS).forEach(([key, p]) => {
+    const sel = S.proxyProvider === key;
+    const card = document.createElement('div');
+    card.className = 'proxy-card' + (sel ? ' selected' : '');
+    card.innerHTML = `
+      <div class="proxy-ico">${p.ico}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:7px">
+          <div class="proxy-name">${p.name}</div>
+          <span class="proxy-tag ${p.tag}">${p.tagText}</span>
+        </div>
+        <div class="proxy-addr">${p.addr}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;line-height:1.4">${p.desc}</div>
+      </div>
+      <span class="proxy-check">✓</span>`;
+    card.onclick = () => selectProxy(key);
+    g.appendChild(card);
+  });
+  // custom URL input visibility
+  const needInput = S.proxyProvider === 'cf_worker' || S.proxyProvider === 'custom';
+  document.getElementById('custom-proxy-wrap')?.classList.toggle('hidden', !needInput);
 }
-async function yadDownload(rawUrl){
-  for(const p of getProxies()){
-    try{
-      const url=p+encodeURIComponent(rawUrl);
-      const r=await fetch(url,{signal:AbortSignal.timeout(60000)});
-      if(!r.ok)throw new Error(`HTTP ${r.status}`);
-      return r.arrayBuffer();
-    }catch(e){continue;}
+
+function selectProxy(key) {
+  S.proxyProvider = key;
+  saveLocal();
+  renderProxyGrid();
+  const p = PROXY_PROVIDERS[key];
+  if (key !== 'cf_worker' && key !== 'custom') {
+    toast('Прокси: ' + p.name);
+    // Immediately retry loading if home screen is showing error
+    const err = document.getElementById('home-error-hint');
+    if (err && !err.classList.contains('hidden')) loadFiles();
   }
-  throw new Error('Не удалось скачать файл');
+}
+
+function saveCustomProxy() {
+  const v = document.getElementById('proxy-input')?.value.trim() || '';
+  S.customProxy = v; saveLocal();
+  renderProxyGrid();
+  toast(v ? 'Прокси сохранён' : 'Прокси сброшен');
+  if (v) {
+    const err = document.getElementById('home-error-hint');
+    if (err && !err.classList.contains('hidden')) loadFiles();
+  }
+}
+// legacy compat
+function saveProxy() { saveCustomProxy(); }
+async function yadGet(path, params) {
+  const qs = new URLSearchParams(params).toString();
+  const raw = `https://cloud-api.yandex.net${path}?${qs}`;
+  const {url: pBase, format} = getActiveProxy();
+  if (!pBase) throw new Error('Прокси не настроен. Выбери прокси в настройках.');
+  const proxyUrl = buildProxyUrl(pBase, format, raw);
+  const r = await fetch(proxyUrl, {signal: AbortSignal.timeout(15000)});
+  if (!r.ok) throw new Error(`Прокси вернул HTTP ${r.status}`);
+  const el = document.getElementById('proxy-status');
+  if (el) el.textContent = '✅ ' + (PROXY_PROVIDERS[S.proxyProvider]?.name || S.proxyProvider);
+  return r.json();
+}
+async function yadDownload(rawUrl) {
+  const {url: pBase, format} = getActiveProxy();
+  if (!pBase) throw new Error('Прокси не настроен');
+  const proxyUrl = buildProxyUrl(pBase, format, rawUrl);
+  const r = await fetch(proxyUrl, {signal: AbortSignal.timeout(60000)});
+  if (!r.ok) throw new Error(`Не удалось скачать: HTTP ${r.status}`);
+  return r.arrayBuffer();
 }
 
 // ══ ТЕМЫ ══
@@ -725,33 +874,48 @@ function renderDnsGrid(){
 }
 
 // ══ DPI стратегии ══
-function selectDpi(id){
-  S.dpi=id;saveLocal();renderDpiList();
-  if(window.Android?.setDpiStrategy)window.Android.setDpiStrategy(id);
-  const s=DPI_STRATEGIES.find(x=>x.id===id);
-  toast('Стратегия: '+s?.name);
+function selectDpi(id) {
+  S.dpi = id; saveLocal();
+  renderDpiList();
+  updateDpiCurrentRow();
+  if (window.Android?.setDpiStrategy) window.Android.setDpiStrategy(id);
+  const s = DPI_STRATEGIES.find(x => x.id === id);
+  toast('Стратегия: ' + s?.name);
 }
-function renderDpiList(){
-  const list=document.getElementById('dpi-list');list.innerHTML='';
-  // Если есть результаты теста — показываем только рабочие
-  const toShow = dpiWorkingIds
-    ? DPI_STRATEGIES.filter(s=>dpiWorkingIds.includes(s.id))
-    : DPI_STRATEGIES;
-  toShow.forEach(s=>{
-    const isWorking=dpiWorkingIds&&dpiWorkingIds.includes(s.id);
-    const item=document.createElement('div');
-    item.className='dpi-item'+(S.dpi===s.id?' selected':'')+(isWorking?' works':'');
-    const workMark=isWorking?'<span style="font-size:11px;color:var(--success);flex-shrink:0">✅</span>':'';
-    item.innerHTML=`
-      <span class="dpi-badge">${s.badge}</span>
-      <div style="flex:1;min-width:0">
-        <div class="dpi-name">${s.name}</div>
-        ${s.desc?`<div class="dpi-desc">${s.desc}</div>`:''}
-      </div>
-      ${workMark}
-      <span class="dpi-check">✓</span>`;
-    item.onclick=()=>selectDpi(s.id);
-    list.appendChild(item);
+
+function updateDpiCurrentRow() {
+  const s = DPI_STRATEGIES.find(x => x.id === S.dpi);
+  const nameEl = document.getElementById('dpi-current-name');
+  const badgeEl = document.getElementById('dpi-current-badge');
+  if (nameEl) nameEl.textContent = s ? s.name : S.dpi;
+  if (badgeEl) badgeEl.textContent = (s ? s.badge : '') + (dpiWorkingIds ? ' • ✅ проверено' : ' • Нажми для выбора');
+  const row = document.getElementById('dpi-current-row');
+  if (row) row.classList.toggle('selected', true);
+}
+
+function renderDpiList() {
+  // Рисуем в обе точки: экран DPI + (если есть) inline список
+  ['dpi-list-screen'].forEach(listId => {
+    const list = document.getElementById(listId); if (!list) return;
+    list.innerHTML = '';
+    const toShow = dpiWorkingIds
+      ? DPI_STRATEGIES.filter(s => dpiWorkingIds.includes(s.id))
+      : DPI_STRATEGIES;
+    toShow.forEach(s => {
+      const isWorking = dpiWorkingIds && dpiWorkingIds.includes(s.id);
+      const item = document.createElement('div');
+      item.className = 'dpi-item' + (S.dpi === s.id ? ' selected' : '') + (isWorking ? ' works' : '');
+      item.innerHTML = `
+        <span class="dpi-badge">${s.badge}</span>
+        <div style="flex:1;min-width:0">
+          <div class="dpi-name">${s.name}</div>
+          ${s.desc ? `<div class="dpi-desc">${s.desc}</div>` : ''}
+        </div>
+        ${isWorking ? '<span style="font-size:12px;color:var(--success);flex-shrink:0">✅</span>' : ''}
+        <span class="dpi-check">✓</span>`;
+      item.onclick = () => selectDpi(s.id);
+      list.appendChild(item);
+    });
   });
 }
 
@@ -850,7 +1014,7 @@ function showHomeState(type,msg){
     document.getElementById('no-url-hint').classList.remove('hidden');
   } else if(type==='error'){
     const el=document.getElementById('home-error-hint');
-    if(el){el.querySelector('.error-msg').textContent=msg||'Ошибка подключения';el.classList.remove('hidden');}
+    if(el){const em=el.querySelector('.error-msg');if(em)em.textContent=msg||'Ошибка подключения';el.classList.remove('hidden');}
   }
 }
 function renderFileList(){
@@ -1002,20 +1166,20 @@ async function testAllDpi() {
   if (dpiTestActive) return;
   dpiTestActive = true;
 
-  const btn = document.getElementById('dpi-test-btn');
-  const block = document.getElementById('dpi-test-block');
-  const bar = document.getElementById('dpi-test-bar');
-  const status = document.getElementById('dpi-test-status');
-  const badges = document.getElementById('dpi-result-badges');
-  const showAllBtn = document.getElementById('dpi-show-all-btn');
-  const label = document.getElementById('dpi-list-label');
+  // Используем элементы экрана DPI
+  const btn     = document.getElementById('dpi-test-btn2');
+  const block   = document.getElementById('dpi-test-block2');
+  const bar     = document.getElementById('dpi-test-bar2');
+  const status  = document.getElementById('dpi-test-status2');
+  const badges  = document.getElementById('dpi-result-badges2');
+  const showAllBtn = document.getElementById('dpi-show-all-btn2');
+  const label   = document.getElementById('dpi-screen-label');
 
-  btn.disabled = true;
-  btn.innerHTML = '<span id="dpi-test-icon">⏳</span> Тестирование...';
-  block.style.display = 'block';
-  badges.innerHTML = '';
-  showAllBtn.style.display = 'none';
-  bar.style.width = '0%';
+  if(btn) { btn.disabled = true; btn.innerHTML = '⏳ Тестирование...'; }
+  if(block) block.style.display = 'block';
+  if(badges) badges.innerHTML = '';
+  if(showAllBtn) showAllBtn.style.display = 'none';
+  if(bar) bar.style.width = '0%';
 
   const working = [];
   const total = DPI_STRATEGIES.length;
@@ -1023,15 +1187,15 @@ async function testAllDpi() {
   for (let i = 0; i < total; i++) {
     const strat = DPI_STRATEGIES[i];
     const pct = Math.round(((i) / total) * 100);
-    bar.style.width = pct + '%';
-    status.textContent = `Тестирую ${i + 1}/${total}: ${strat.name}...`;
+    if(bar) bar.style.width = pct + '%';
+    if(status) status.textContent = `Тестирую ${i + 1}/${total}: ${strat.name}...`;
 
     // Создать бейдж "в процессе"
     const badge = document.createElement('span');
     badge.className = 'test-badge testing';
     badge.id = 'tbadge-' + strat.id;
     badge.textContent = strat.badge;
-    badges.appendChild(badge);
+    if(badges) badges.appendChild(badge);
 
     // Применить стратегию через Android
     if (window.Android?.setDpiStrategy) {
@@ -1061,7 +1225,7 @@ async function testAllDpi() {
   dpiWorkingIds = working;
 
   if (working.length > 0) {
-    status.textContent = `✅ Работает: ${working.length} из ${total} стратегий`;
+    if(status) status.textContent = `✅ Работает: ${working.length} из ${total} стратегий`;
     // Если текущая выбранная стратегия не рабочая — переключить на первую рабочую
     if (!working.includes(S.dpi)) {
       selectDpi(working[0]);
@@ -1069,39 +1233,52 @@ async function testAllDpi() {
       // Восстановить текущую
       if (window.Android?.setDpiStrategy) window.Android.setDpiStrategy(S.dpi);
     }
-    label.textContent = 'Рабочие стратегии (' + working.length + ')';
-    showAllBtn.style.display = 'block';
+    if(label) label.textContent = 'Рабочие стратегии (' + working.length + ')';
+    if(showAllBtn) showAllBtn.style.display = 'block';
   } else {
-    status.textContent = '⚠️ Не удалось определить рабочие стратегии';
+    if(status) status.textContent = '⚠️ Не удалось определить рабочие стратегии';
     dpiWorkingIds = null;
   }
 
   renderDpiList();
-  btn.disabled = false;
-  btn.innerHTML = '<span>🔄</span> Повторить тест';
+  updateDpiCurrentRow();
+  if(btn) { btn.disabled = false; btn.innerHTML = '🔄 Повторить тест'; }
   dpiTestActive = false;
-  setTimeout(() => { bar.style.width = '0%'; }, 1500);
+  setTimeout(() => { if(bar) bar.style.width = '0%'; }, 1500);
 }
 
 function showAllDpi() {
   dpiWorkingIds = null;
-  const label = document.getElementById('dpi-list-label');
-  const showAllBtn = document.getElementById('dpi-show-all-btn');
-  if (label) label.textContent = 'Все стратегии';
-  if (showAllBtn) showAllBtn.style.display = 'none';
+  const label2 = document.getElementById('dpi-screen-label');
+  const btn2   = document.getElementById('dpi-show-all-btn2');
+  if (label2) label2.textContent = 'Все стратегии';
+  if (btn2)   btn2.style.display = 'none';
   renderDpiList();
+  updateDpiCurrentRow();
   toast('Показаны все стратегии');
 }
 
 // ══ INIT ══
 loadLocal();
 applyTheme(S.theme);
+// Логируем инициализацию
+setTimeout(function(){
+  if(window.Android&&window.Android.logMsg){
+    window.Android.logMsg('INFO','index.html: JS инициализация началась');
+    window.Android.logMsg('INFO','index.html: тема='+S.theme+' dns='+S.dns+' dpi='+S.dpi+' url='+S.url.substring(0,40));
+    window.Android.logMsg('INFO','index.html: Android bridge = '+(window.Android?'доступен':'НЕ ДОСТУПЕН'));
+    window.Android.logMsg('INFO','index.html: localStorage = '+(function(){try{localStorage.setItem('t','1');localStorage.removeItem('t');return 'работает';}catch(e){return 'НЕДОСТУПЕН: '+e.message;}})());
+  }
+}, 300);
 renderBells();
 renderDnsGrid();
 renderDpiList();
+renderProxyGrid();
 updateLastGroupBtn();
+updateNavActive('nav-home');
+updateDpiCurrentRow();
 document.getElementById('url-input').value=S.url;
-document.getElementById('proxy-input').value=S.customProxy;
+const _pi=document.getElementById('proxy-input');if(_pi)_pi.value=S.customProxy;
 document.getElementById('custom-dns-input').value=S.customDns;
 document.getElementById('custom-dns-wrap').classList.toggle('hidden',S.dns!=='custom');
 
