@@ -1212,7 +1212,7 @@ function onVpnStateChanged(active,statusText){
 let cur='s-home';
 const SCREEN_PARENTS = {
   's-groups':   {parent:'s-home',    nav:'nav-home'},
-  's-schedule': {parent:'s-home',    nav:'nav-home'},
+  's-schedule': {parent:'s-groups',  nav:null},
   's-bells':    {parent:'s-home',    nav:'nav-bells'},
   's-settings': {parent:'s-home',    nav:'nav-home'},
   's-dpi':      {parent:'s-settings',nav:null},
@@ -1223,12 +1223,16 @@ const SCREEN_PARENTS = {
 function nativeBack(){
   const info = SCREEN_PARENTS[cur];
   if(info){
-    showScreen(info.parent,'back');
-    if(info.nav) updateNavActive(info.nav);
-    if(info.parent==='s-home') updateLastGroupBtn();
-    return true; // перехватили
+    if(info.parent==='s-home'){
+      // Используем полный goHome() — он обновляет nav, кнопку группы и перезапускает загрузку если нужно
+      goHome();
+    } else {
+      showScreen(info.parent,'back');
+      if(info.nav) updateNavActive(info.nav);
+    }
+    return true; // перехватили навигацию
   }
-  return false; // на главном — разрешить выход
+  return false; // уже на главном — разрешить выход из приложения
 }
 function showScreen(id,dir='forward'){
   if(id===cur)return;
