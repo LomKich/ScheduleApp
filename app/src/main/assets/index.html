@@ -271,6 +271,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 
 .hidden{display:none!important}
 .mt8{margin-top:8px}.mt16{margin-top:16px}
+
+/* DPI тест бейджи */
+.test-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;
+  font-family:'JetBrains Mono',monospace;letter-spacing:.04em
+}
+.test-badge.ok{background:color-mix(in srgb,var(--success) 20%,transparent);color:var(--success);border:1px solid color-mix(in srgb,var(--success) 40%,transparent)}
+.test-badge.fail{background:color-mix(in srgb,var(--danger) 15%,transparent);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent)}
+.test-badge.testing{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.dpi-item.works{border-color:color-mix(in srgb,var(--success) 50%,transparent)}
+.dpi-item.works .dpi-badge{background:color-mix(in srgb,var(--success) 20%,transparent);color:var(--success)}
+.dpi-item.no-works{opacity:.4}
 </style>
 </head>
 <body>
@@ -367,6 +381,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div class="status" id="proxy-status" style="text-align:left;font-size:11px"></div>
     <div class="sep"></div>
 
+    <!-- Тема оформления -->
+    <div class="section-label">Тема оформления</div>
+    <div class="theme-grid" id="theme-grid"></div>
+    <div class="sep"></div>
+
     <!-- Свой прокси -->
     <div class="section-label">Прокси-сервер</div>
     <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px">
@@ -407,14 +426,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <!-- DPI стратегии -->
     <div class="section-label">Стратегия обхода DPI</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">
-      Разные провайдеры блокируют по-разному. Попробуй несколько вариантов, если один не работает.
+      Разные провайдеры блокируют по-разному. Нажми «Тест всех» — стратегии проверятся по очереди, в списке останутся только рабочие.
+    </div>
+    <button class="btn btn-accent2" id="dpi-test-btn" onclick="testAllDpi()" style="margin-bottom:10px">
+      <span id="dpi-test-icon">🧪</span> Протестировать все стратегии
+    </button>
+    <div id="dpi-test-block" style="display:none;margin-bottom:10px">
+      <div class="progress" style="margin-bottom:6px"><div class="progress-bar" id="dpi-test-bar"></div></div>
+      <div class="status" id="dpi-test-status" style="text-align:left"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap" id="dpi-result-badges"></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="section-label" style="margin:0" id="dpi-list-label">Все стратегии</div>
+      <button id="dpi-show-all-btn" onclick="showAllDpi()" style="display:none;background:none;border:none;color:var(--accent);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;padding:4px 8px">Показать все</button>
     </div>
     <div class="dpi-list" id="dpi-list"></div>
     <div class="sep"></div>
 
-    <!-- Тема -->
-    <div class="section-label">Тема оформления</div>
-    <div class="theme-grid" id="theme-grid"></div>
   </div>
 </div>
 
@@ -564,6 +592,7 @@ const S={
 };
 const FILE_CACHE={};
 let allGroups=[];
+let dpiWorkingIds=null; // null = не тестировалось, array = результаты
 
 const _mem={};
 const stor={
@@ -689,15 +718,22 @@ function selectDpi(id){
 }
 function renderDpiList(){
   const list=document.getElementById('dpi-list');list.innerHTML='';
-  DPI_STRATEGIES.forEach(s=>{
+  // Если есть результаты теста — показываем только рабочие
+  const toShow = dpiWorkingIds
+    ? DPI_STRATEGIES.filter(s=>dpiWorkingIds.includes(s.id))
+    : DPI_STRATEGIES;
+  toShow.forEach(s=>{
+    const isWorking=dpiWorkingIds&&dpiWorkingIds.includes(s.id);
     const item=document.createElement('div');
-    item.className='dpi-item'+(S.dpi===s.id?' selected':'');
+    item.className='dpi-item'+(S.dpi===s.id?' selected':'')+(isWorking?' works':'');
+    const workMark=isWorking?'<span style="font-size:11px;color:var(--success);flex-shrink:0">✅</span>':'';
     item.innerHTML=`
       <span class="dpi-badge">${s.badge}</span>
       <div style="flex:1;min-width:0">
         <div class="dpi-name">${s.name}</div>
         ${s.desc?`<div class="dpi-desc">${s.desc}</div>`:''}
       </div>
+      ${workMark}
       <span class="dpi-check">✓</span>`;
     item.onclick=()=>selectDpi(s.id);
     list.appendChild(item);
@@ -891,6 +927,123 @@ function setStatus(id,t){const el=document.getElementById(id);if(el)el.textConte
 function setBar(id,v){const el=document.getElementById(id);if(el)el.style.width=v+'%';}
 let _tt;
 function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),2500);}
+
+// ══ DPI ТЕСТИРОВАНИЕ ══
+const TEST_URLS = [
+  'https://1.1.1.1/cdn-cgi/trace',
+  'https://www.google.com/generate_204',
+  'https://connectivitycheck.gstatic.com/generate_204'
+];
+let dpiTestActive = false;
+let dpiWorkingIds = null; // null = не тестировалось, [] = результаты теста
+
+async function testUrl(timeout = 4000) {
+  for (const url of TEST_URLS) {
+    try {
+      const r = await Promise.race([
+        fetch(url, { method: 'HEAD', cache: 'no-store', mode: 'no-cors' }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeout))
+      ]);
+      return true;
+    } catch (e) { continue; }
+  }
+  return false;
+}
+
+async function testAllDpi() {
+  if (dpiTestActive) return;
+  dpiTestActive = true;
+
+  const btn = document.getElementById('dpi-test-btn');
+  const block = document.getElementById('dpi-test-block');
+  const bar = document.getElementById('dpi-test-bar');
+  const status = document.getElementById('dpi-test-status');
+  const badges = document.getElementById('dpi-result-badges');
+  const showAllBtn = document.getElementById('dpi-show-all-btn');
+  const label = document.getElementById('dpi-list-label');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span id="dpi-test-icon">⏳</span> Тестирование...';
+  block.style.display = 'block';
+  badges.innerHTML = '';
+  showAllBtn.style.display = 'none';
+  bar.style.width = '0%';
+
+  const working = [];
+  const total = DPI_STRATEGIES.length;
+
+  for (let i = 0; i < total; i++) {
+    const strat = DPI_STRATEGIES[i];
+    const pct = Math.round(((i) / total) * 100);
+    bar.style.width = pct + '%';
+    status.textContent = `Тестирую ${i + 1}/${total}: ${strat.name}...`;
+
+    // Создать бейдж "в процессе"
+    const badge = document.createElement('span');
+    badge.className = 'test-badge testing';
+    badge.id = 'tbadge-' + strat.id;
+    badge.textContent = strat.badge;
+    badges.appendChild(badge);
+
+    // Применить стратегию через Android
+    if (window.Android?.setDpiStrategy) {
+      window.Android.setDpiStrategy(strat.id);
+      await new Promise(r => setTimeout(r, 600)); // дать время VPN применить
+    } else {
+      await new Promise(r => setTimeout(r, 150)); // без Android — просто симуляция
+    }
+
+    // Тест соединения
+    let ok;
+    if (window.Android?.setDpiStrategy) {
+      ok = await testUrl(4000);
+    } else {
+      // В браузере без Android: симулируем — помечаем "основной" и несколько alt как рабочие
+      const simulatedWorking = ['general', 'alt', 'simpleFake'];
+      ok = simulatedWorking.includes(strat.id) || Math.random() > 0.7;
+      await new Promise(r => setTimeout(r, 80));
+    }
+
+    badge.className = 'test-badge ' + (ok ? 'ok' : 'fail');
+    badge.textContent = (ok ? '✓ ' : '✗ ') + strat.badge;
+    if (ok) working.push(strat.id);
+  }
+
+  bar.style.width = '100%';
+  dpiWorkingIds = working;
+
+  if (working.length > 0) {
+    status.textContent = `✅ Работает: ${working.length} из ${total} стратегий`;
+    // Если текущая выбранная стратегия не рабочая — переключить на первую рабочую
+    if (!working.includes(S.dpi)) {
+      selectDpi(working[0]);
+    } else {
+      // Восстановить текущую
+      if (window.Android?.setDpiStrategy) window.Android.setDpiStrategy(S.dpi);
+    }
+    label.textContent = 'Рабочие стратегии (' + working.length + ')';
+    showAllBtn.style.display = 'block';
+  } else {
+    status.textContent = '⚠️ Не удалось определить рабочие стратегии';
+    dpiWorkingIds = null;
+  }
+
+  renderDpiList();
+  btn.disabled = false;
+  btn.innerHTML = '<span>🔄</span> Повторить тест';
+  dpiTestActive = false;
+  setTimeout(() => { bar.style.width = '0%'; }, 1500);
+}
+
+function showAllDpi() {
+  dpiWorkingIds = null;
+  const label = document.getElementById('dpi-list-label');
+  const showAllBtn = document.getElementById('dpi-show-all-btn');
+  if (label) label.textContent = 'Все стратегии';
+  if (showAllBtn) showAllBtn.style.display = 'none';
+  renderDpiList();
+  toast('Показаны все стратегии');
+}
 
 // ══ INIT ══
 loadLocal();
