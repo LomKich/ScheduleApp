@@ -27,11 +27,67 @@
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize">
+        </activity>
+
+        <!-- Иконка: Тёмная (по умолчанию включена) -->
+        <activity-alias
+            android:name=".IconDark"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/app_name"
+            android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- Иконка: Оранжевая -->
+        <activity-alias
+            android:name=".IconOrange"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_orange"
+            android:roundIcon="@mipmap/ic_orange_round"
+            android:label="@string/app_name"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Иконка: AMOLED -->
+        <activity-alias
+            android:name=".IconAmoled"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_amoled"
+            android:roundIcon="@mipmap/ic_amoled_round"
+            android:label="@string/app_name"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Иконка: СаМеК (синяя) -->
+        <activity-alias
+            android:name=".IconSamek"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_samek"
+            android:roundIcon="@mipmap/ic_samek_round"
+            android:label="@string/app_name"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".DnsVpnService"

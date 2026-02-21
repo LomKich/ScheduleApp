@@ -379,6 +379,40 @@ public class MainActivity extends Activity {
         }
 
         /**
+         * Переключает иконку приложения через activity-alias.
+         * icon: "dark" | "orange" | "amoled" | "samek"
+         */
+        @JavascriptInterface
+        public void setAppIcon(String icon) {
+            String pkg = getPackageName();
+            String[] allAliases = {
+                pkg + ".IconDark",
+                pkg + ".IconOrange",
+                pkg + ".IconAmoled",
+                pkg + ".IconSamek"
+            };
+            String target;
+            switch (icon) {
+                case "orange": target = pkg + ".IconOrange"; break;
+                case "amoled": target = pkg + ".IconAmoled"; break;
+                case "samek":  target = pkg + ".IconSamek";  break;
+                default:       target = pkg + ".IconDark";   break;
+            }
+            runOnUiThread(() -> {
+                for (String alias : allAliases) {
+                    int state = alias.equals(target)
+                        ? android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                        : android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+                    getPackageManager().setComponentEnabledSetting(
+                        new ComponentName(pkg, alias),
+                        state,
+                        android.content.pm.PackageManager.DONT_KILL_APP
+                    );
+                }
+            });
+        }
+
+        /**
          * Нативное скачивание файла без CORS — возвращает JSON: {ok, base64, error?}
          * base64 — содержимое файла в Base64, декодируется в JS в ArrayBuffer.
          */

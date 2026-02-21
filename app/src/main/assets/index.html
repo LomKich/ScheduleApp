@@ -229,7 +229,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .swatch{width:14px;height:14px;border-radius:50%}
 .theme-check{font-size:16px;flex-shrink:0;opacity:0;transition:opacity .15s;color:var(--accent)}
 .theme-card.selected .theme-check{opacity:1}
-
+.icon-picker{display:flex;gap:12px;padding:4px 0}
+.icon-btn{background:none;border:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;outline:none}
+.icon-preview{display:block;width:56px;height:56px;border-radius:14px;overflow:hidden;box-sizing:border-box;transition:transform .15s,box-shadow .15s}
+.icon-btn.selected .icon-preview{box-shadow:0 0 0 2.5px var(--accent);transform:scale(1.08)}
+.icon-btn:active .icon-preview{transform:scale(0.95)}
+.icon-label{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.03em}
+.icon-btn.selected .icon-label{color:var(--accent)}
+.icon-check{position:absolute;top:-4px;right:-4px;background:var(--accent);color:#fff;font-size:9px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;font-weight:700}
+.icon-btn.selected .icon-check{opacity:1}
 /* DNS карточки */
 .dns-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .dns-card{background:var(--surface2);border-radius:var(--rb);padding:12px 14px;cursor:pointer;border:2px solid var(--surface3);transition:border-color .18s,transform .12s;position:relative;overflow:hidden}
@@ -426,6 +434,43 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
         <div class="item-sub" id="theme-current-sub">Нажми для выбора</div>
       </div>
       <span class="item-arrow">›</span>
+    </div>
+    <div class="sep"></div>
+
+    <!-- Иконка приложения -->
+    <div class="section-label">Иконка приложения</div>
+    <div class="icon-picker" id="icon-picker">
+      <button class="icon-btn" id="icon-btn-dark"    onclick="pickIcon('dark')"   title="Тёмная">
+        <span class="icon-preview" style="background:#0D0D0D">
+          <img src="" id="icon-img-dark" style="width:100%;height:100%;border-radius:inherit">
+        </span>
+        <span class="icon-label">Тёмная</span>
+        <span class="icon-check" id="icon-chk-dark">✓</span>
+      </button>
+      <button class="icon-btn" id="icon-btn-orange"  onclick="pickIcon('orange')" title="Оранжевая">
+        <span class="icon-preview" style="background:#E87722">
+          <img src="" id="icon-img-orange" style="width:100%;height:100%;border-radius:inherit">
+        </span>
+        <span class="icon-label">Оранжевая</span>
+        <span class="icon-check" id="icon-chk-orange">✓</span>
+      </button>
+      <button class="icon-btn" id="icon-btn-amoled"  onclick="pickIcon('amoled')" title="AMOLED">
+        <span class="icon-preview" style="background:#000;border:1px solid #333">
+          <img src="" id="icon-img-amoled" style="width:100%;height:100%;border-radius:inherit">
+        </span>
+        <span class="icon-label">AMOLED</span>
+        <span class="icon-check" id="icon-chk-amoled">✓</span>
+      </button>
+      <button class="icon-btn" id="icon-btn-samek"   onclick="pickIcon('samek')"  title="СаМеК">
+        <span class="icon-preview" style="background:#10388A">
+          <img src="" id="icon-img-samek" style="width:100%;height:100%;border-radius:inherit">
+        </span>
+        <span class="icon-label">СаМеК</span>
+        <span class="icon-check" id="icon-chk-samek">✓</span>
+      </button>
+    </div>
+    <div id="icon-note" style="font-size:11px;color:var(--muted);margin-top:6px;margin-bottom:4px;display:none">
+      ✓ Смена иконки применится через несколько секунд
     </div>
     <div class="sep"></div>
 
@@ -861,6 +906,7 @@ function loadLocal(){
     S.dpi=d.dpi||'general';
     S.customProxy=d.customProxy||'';
     S.proxyProvider=d.proxyProvider||'corsproxy';
+    S.appIcon=d.appIcon||'dark';
     const inp=document.getElementById('url-input');
     if(inp)inp.value=S.url;
     const pi=document.getElementById('proxy-input');
@@ -872,7 +918,8 @@ function loadLocal(){
 function saveLocal(){
   stor.set('sched',JSON.stringify({
     group:S.lastGroup,theme:S.theme,url:S.url,
-    dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy,proxyProvider:S.proxyProvider
+    dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy,proxyProvider:S.proxyProvider,
+    appIcon:S.appIcon
   }));
 }
 
@@ -1077,6 +1124,43 @@ function base64ToArrayBuffer(b64) {
   const buf = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
   return buf.buffer;
+}
+
+// ══ ИКОНКА ПРИЛОЖЕНИЯ ══
+const ICON_VARIANTS = {
+  dark:   {label:'Тёмная',   bg:'#0D0D0D'},
+  orange: {label:'Оранжевая',bg:'#E87722'},
+  amoled: {label:'AMOLED',   bg:'#000000'},
+  samek:  {label:'СаМеК',    bg:'#10388A'},
+};
+
+function pickIcon(key) {
+  if (!window.Android || !window.Android.setAppIcon) {
+    toast('Смена иконки доступна только в приложении');
+    return;
+  }
+  S.appIcon = key;
+  saveLocal();
+  updateIconPicker();
+  window.Android.setAppIcon(key);
+  const note = document.getElementById('icon-note');
+  if (note) { note.style.display = 'block'; setTimeout(()=>note.style.display='none', 4000); }
+}
+
+function updateIconPicker() {
+  const cur = S.appIcon || 'dark';
+  Object.keys(ICON_VARIANTS).forEach(k => {
+    const btn = document.getElementById('icon-btn-' + k);
+    if (btn) btn.classList.toggle('selected', k === cur);
+  });
+}
+
+function initIconPicker() {
+  // Показываем пикер только в Android-приложении
+  const picker = document.getElementById('icon-picker');
+  if (!picker) return;
+  if (!window.Android) { picker.closest && picker.closest('.sep') && (picker.style.display='none'); return; }
+  updateIconPicker();
 }
 
 // ══ ТЕМЫ ══
@@ -1574,6 +1658,7 @@ updateLastGroupBtn();
 updateNavActive('nav-home');
 updateDpiCurrentRow();
 updateThemeCurrentRow();
+initIconPicker();
 document.getElementById('url-input').value=S.url;
 // proxy input handled by renderProxyList()
 document.getElementById('custom-dns-input').value=S.customDns;
