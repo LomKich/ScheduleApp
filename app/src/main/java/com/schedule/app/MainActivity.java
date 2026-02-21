@@ -219,8 +219,16 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
+        // Спрашиваем JS: можно ли перейти назад внутри приложения
+        webView.evaluateJavascript(
+            "(function(){ return typeof nativeBack==='function' ? (nativeBack() ? 'handled' : 'exit') : 'exit'; })()",
+            result -> {
+                if (!"\"handled\"".equals(result)) {
+                    // JS сказал 'exit' — мы на главном экране, закрываем приложение
+                    finish();
+                }
+            }
+        );
     }
 
     @Override protected void onPause()   { super.onPause();   log.i(TAG, "onPause"); }

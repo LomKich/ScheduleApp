@@ -23,7 +23,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   position:absolute;inset:0;display:flex;flex-direction:column;
   padding-top:var(--safe-top);padding-bottom:var(--safe-bot);overflow:hidden;
   opacity:0;pointer-events:none;transform:translateY(20px);
-  transition:opacity .3s cubic-bezier(.4,0,.2,1),transform .3s cubic-bezier(.4,0,.2,1)
+  transition:opacity .22s cubic-bezier(.4,0,.2,1),transform .22s cubic-bezier(.4,0,.2,1)
 }
 .screen.active{opacity:1;pointer-events:all;transform:none}
 .screen.exit-left{opacity:0;transform:translateX(-32px);transition:opacity .22s,transform .22s}
@@ -420,7 +420,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 
     <!-- Тема оформления -->
     <div class="section-label">Тема оформления</div>
-    <div class="theme-grid" id="theme-grid"></div>
+    <div id="theme-current-row" class="list-item" onclick="showScreen('s-themes')" style="margin-bottom:8px">
+      <div>
+        <div class="item-name" id="theme-current-name">Колледж</div>
+        <div class="item-sub" id="theme-current-sub">Нажми для выбора</div>
+      </div>
+      <span class="item-arrow">›</span>
+    </div>
     <div class="sep"></div>
 
     <!-- Прокси-сервер -->
@@ -550,12 +556,27 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   </div>
 </div>
 
+
+<!-- ВЫБОР ТЕМЫ -->
+<div class="screen" id="s-themes">
+  <div class="hdr">
+    <button class="hdr-back" onclick="showScreen('s-settings','back')">‹</button>
+    <div>
+      <div class="hdr-title">Тема оформления</div>
+      <div class="hdr-sub" id="theme-screen-sub">Выбери цветовую схему</div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="theme-grid" id="theme-grid-screen"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 // ══ RIPPLE ══
 document.addEventListener('click',function(e){
-  const el=e.target.closest('.btn,.hdr-back,.last-group-btn,.nav-item,.theme-card,.list-item,.dns-card,.dpi-item');
+  const el=e.target.closest('.btn,.hdr-back,.last-group-btn,.nav-item,.theme-card,.list-item,.dns-card,.dpi-item,.theme-card');
   if(!el)return;
   const r=document.createElement('span');
   r.className='ripple';
@@ -1063,20 +1084,30 @@ function applyTheme(key){
   const t=THEMES[key]||THEMES['orange'];
   Object.entries(t.vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
   document.documentElement.setAttribute('data-theme',key);
-  S.theme=key;saveLocal();renderThemeGrid();
+  S.theme=key;saveLocal();renderThemeGrid();updateThemeCurrentRow();
 }
 function renderThemeGrid(){
-  const g=document.getElementById('theme-grid');g.innerHTML='';
-  Object.entries(THEMES).forEach(([key,t])=>{
-    const c=document.createElement('div');c.className='theme-card'+(S.theme===key?' selected':'');
-    c.innerHTML=`
-      <div class="theme-swatch">${t.sw.map(cl=>`<div class="swatch" style="background:${cl}"></div>`).join('')}</div>
-      <div style="flex:1;min-width:0">
-        <div class="theme-name" style="font-size:13px;font-weight:700">${t.ico||''} ${t.name}</div>
-      </div>
-      <span class="theme-check">✓</span>`;
-    c.onclick=()=>applyTheme(key);g.appendChild(c);
+  ['theme-grid-screen'].forEach(gid => {
+    const g=document.getElementById(gid); if(!g) return;
+    g.innerHTML='';
+    Object.entries(THEMES).forEach(([key,t])=>{
+      const c=document.createElement('div');c.className='theme-card'+(S.theme===key?' selected':'');
+      c.innerHTML=`
+        <div class="theme-swatch">${t.sw.map(cl=>`<div class="swatch" style="background:${cl}"></div>`).join('')}</div>
+        <div style="flex:1;min-width:0">
+          <div class="theme-name" style="font-size:13px;font-weight:700">${t.ico||''} ${t.name}</div>
+        </div>
+        <span class="theme-check">✓</span>`;
+      c.onclick=()=>applyTheme(key); g.appendChild(c);
+    });
   });
+}
+function updateThemeCurrentRow(){
+  const t=THEMES[S.theme];
+  const nameEl=document.getElementById('theme-current-name');
+  const subEl=document.getElementById('theme-current-sub');
+  if(nameEl) nameEl.textContent=(t?.ico||'')+' '+(t?.name||S.theme);
+  if(subEl)  subEl.textContent='Нажми для выбора';
 }
 
 // ══ DNS ══
@@ -1112,6 +1143,7 @@ function selectDpi(id) {
   S.dpi = id; saveLocal();
   renderDpiList();
   updateDpiCurrentRow();
+updateThemeCurrentRow();
   if (window.Android?.setDpiStrategy) window.Android.setDpiStrategy(id);
   const s = DPI_STRATEGIES.find(x => x.id === id);
   toast('Стратегия: ' + s?.name);
@@ -1176,12 +1208,33 @@ function onVpnStateChanged(active,statusText){
 }
 
 // ══ НАВИГАЦИЯ ══
+// История экранов для кнопки "Назад"
 let cur='s-home';
+const SCREEN_PARENTS = {
+  's-groups':   {parent:'s-home',    nav:'nav-home'},
+  's-schedule': {parent:'s-home',    nav:'nav-home'},
+  's-bells':    {parent:'s-home',    nav:'nav-bells'},
+  's-settings': {parent:'s-home',    nav:'nav-home'},
+  's-dpi':      {parent:'s-settings',nav:null},
+  's-proxy':    {parent:'s-settings',nav:null},
+  's-themes':   {parent:'s-settings',nav:null},
+};
+// Вызывается из Android (кнопка Back на телефоне)
+function nativeBack(){
+  const info = SCREEN_PARENTS[cur];
+  if(info){
+    showScreen(info.parent,'back');
+    if(info.nav) updateNavActive(info.nav);
+    if(info.parent==='s-home') updateLastGroupBtn();
+    return true; // перехватили
+  }
+  return false; // на главном — разрешить выход
+}
 function showScreen(id,dir='forward'){
   if(id===cur)return;
   const prev=document.getElementById(cur),next=document.getElementById(id);
   prev.classList.add(dir==='back'?'exit-right':'exit-left');prev.classList.remove('active');
-  setTimeout(()=>prev.classList.remove('exit-left','exit-right'),300);
+  setTimeout(()=>prev.classList.remove('exit-left','exit-right'),250);
   next.classList.add('active');cur=id;
 }
 function goHome(){
@@ -1478,6 +1531,7 @@ async function testAllDpi() {
 
   renderDpiList();
   updateDpiCurrentRow();
+updateThemeCurrentRow();
   if(btn) { btn.disabled = false; btn.innerHTML = '🔄 Повторить тест'; }
   dpiTestActive = false;
   setTimeout(() => { if(bar) bar.style.width = '0%'; }, 1500);
@@ -1491,6 +1545,7 @@ function showAllDpi() {
   if (btn2)   btn2.style.display = 'none';
   renderDpiList();
   updateDpiCurrentRow();
+updateThemeCurrentRow();
   toast('Показаны все стратегии');
 }
 
@@ -1514,6 +1569,7 @@ updateProxyCurrentRow();
 updateLastGroupBtn();
 updateNavActive('nav-home');
 updateDpiCurrentRow();
+updateThemeCurrentRow();
 document.getElementById('url-input').value=S.url;
 // proxy input handled by renderProxyList()
 document.getElementById('custom-dns-input').value=S.customDns;
