@@ -581,9 +581,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div id="icon-picker-section">
       <div class="section-label" style="margin-top:16px;margin-bottom:8px">Иконка приложения</div>
       <div class="theme-grid" id="icon-grid-screen"></div>
-      <div id="icon-note" style="font-size:11px;color:var(--muted);margin-top:8px;display:none">
-        ✓ Смена иконки применится через несколько секунд
-      </div>
     </div>
   </div>
 </div>
@@ -878,7 +875,7 @@ function loadLocal(){
     S.dpi=d.dpi||'general';
     S.customProxy=d.customProxy||'';
     S.proxyProvider=d.proxyProvider||'corsproxy';
-    S.appIcon=d.appIcon||'dark';
+    S.appIcon=d.appIcon||'orange';
     const inp=document.getElementById('url-input');
     if(inp)inp.value=S.url;
     const pi=document.getElementById('proxy-input');
@@ -1100,7 +1097,6 @@ function base64ToArrayBuffer(b64) {
 
 // ══ ИКОНКА ПРИЛОЖЕНИЯ ══
 const ICON_VARIANTS = {
-  dark:   {label:'Тёмная',    ico:'⬛', bg:'#0D0D0D', dot:['#0D0D0D','#e0dbd5','#a09890']},
   orange: {label:'Оранжевая', ico:'🟠', bg:'#E87722', dot:['#0d0d0d','#E87722','#c45f0a']},
   amoled: {label:'AMOLED',    ico:'⚫', bg:'#000000', dot:['#000','#00e5ff','#333']},
   samek:  {label:'СаМеК',     ico:'🔵', bg:'#10388A', dot:['#10388A','#4a7fd4','#061e55']},
@@ -1111,18 +1107,17 @@ function pickIcon(key) {
     toast('Смена иконки доступна только в приложении');
     return;
   }
+  // Сохраняем выбор и обновляем UI — диалог подтверждения покажет Java
   S.appIcon = key;
   saveLocal();
   renderIconGrid();
   window.Android.setAppIcon(key);
-  const note = document.getElementById('icon-note');
-  if (note) { note.style.display = 'block'; setTimeout(()=>note.style.display='none', 4000); }
 }
 
 function renderIconGrid() {
   const g = document.getElementById('icon-grid-screen');
   if (!g) return;
-  const cur = S.appIcon || 'dark';
+  const cur = S.appIcon || 'orange';
   // Показываем/скрываем секцию иконок — только в Android-приложении
   const sec = document.getElementById('icon-picker-section');
   if (sec) sec.style.display = window.Android ? '' : 'none';

@@ -29,7 +29,7 @@
             android:windowSoftInputMode="adjustResize">
         </activity>
 
-        <!-- Иконка: Тёмная (по умолчанию включена) -->
+        <!-- Иконка: Тёмная -->
         <activity-alias
             android:name=".IconDark"
             android:targetActivity=".MainActivity"
@@ -37,14 +37,14 @@
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
             android:label="@string/app_name"
-            android:enabled="true">
+            android:enabled="false">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
 
-        <!-- Иконка: Оранжевая -->
+        <!-- Иконка: Оранжевая (по умолчанию включена) -->
         <activity-alias
             android:name=".IconOrange"
             android:targetActivity=".MainActivity"
@@ -52,7 +52,7 @@
             android:icon="@mipmap/ic_orange"
             android:roundIcon="@mipmap/ic_orange_round"
             android:label="@string/app_name"
-            android:enabled="false">
+            android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

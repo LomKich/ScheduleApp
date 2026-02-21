@@ -391,34 +391,56 @@ public class MainActivity extends Activity {
         /**
          * Переключает иконку приложения через activity-alias.
          * icon: "dark" | "orange" | "amoled" | "samek"
+         * Показывает диалог-предупреждение, т.к. Android вынужден
+         * закрыть приложение при смене активного alias'а.
          */
         @JavascriptInterface
         public void setAppIcon(String icon) {
-            String pkg = getPackageName();
-            String[] allAliases = {
+            final String pkg = getPackageName();
+            final String[] allAliases = {
                 pkg + ".IconDark",
                 pkg + ".IconOrange",
                 pkg + ".IconAmoled",
                 pkg + ".IconSamek"
             };
-            String target;
+            final String target;
             switch (icon) {
-                case "orange": target = pkg + ".IconOrange"; break;
+                case "dark":   target = pkg + ".IconDark";   break;
                 case "amoled": target = pkg + ".IconAmoled"; break;
                 case "samek":  target = pkg + ".IconSamek";  break;
-                default:       target = pkg + ".IconDark";   break;
+                default:       target = pkg + ".IconOrange"; break;
             }
+
             runOnUiThread(() -> {
-                for (String alias : allAliases) {
-                    int state = alias.equals(target)
-                        ? android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                        : android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
-                    getPackageManager().setComponentEnabledSetting(
-                        new ComponentName(pkg, alias),
-                        state,
-                        android.content.pm.PackageManager.DONT_KILL_APP
-                    );
-                }
+                new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("Сменить иконку?")
+                    .setMessage("После смены иконки приложение закроется — это стандартное поведение Android. " +
+                                "Ярлык на главном экране нужно будет добавить заново.\n\n" +
+                                "Продолжить?")
+                    .setPositiveButton("Сменить", (d, w) -> {
+                        // Сначала включаем новый alias
+                        getPackageManager().setComponentEnabledSetting(
+                            new ComponentName(pkg, target),
+                            android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                            android.content.pm.PackageManager.DONT_KILL_APP
+                        );
+                        // Отключаем остальные с небольшой задержкой
+                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                            for (String alias : allAliases) {
+                                if (!alias.equals(target)) {
+                                    getPackageManager().setComponentEnabledSetting(
+                                        new ComponentName(pkg, alias),
+                                        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                                        android.content.pm.PackageManager.DONT_KILL_APP
+                                    );
+                                }
+                            }
+                            // Корректно завершаем приложение сами — иначе Android сделает это грубо
+                            finishAffinity();
+                        }, 500);
+                    })
+                    .setNegativeButton("Отмена", null)
+                    .show();
             });
         }
 
