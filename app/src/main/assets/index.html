@@ -308,9 +308,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
       <div style="height:14px"></div>
       <button class="btn btn-accent" onclick="goToGroups()">Выбрать группу →</button>
     </div>
-    <div id="no-url-hint" class="hidden" style="text-align:center;padding:48px 0">
+    <div id="no-url-hint" class="hidden" style="text-align:center;padding:48px 20px">
       <div style="font-size:38px;margin-bottom:12px">⚙️</div>
-      <div style="color:var(--muted);font-size:14px;line-height:1.6">Укажи ссылку на Яндекс Диск<br>в <b style="color:var(--accent)">Настройках</b></div>
+      <div style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:20px">Укажи ссылку на Яндекс Диск<br>в <b style="color:var(--accent)">Настройках</b></div>
+      <button class="btn btn-accent" onclick="navTo('s-settings','nav-settings')">Открыть настройки →</button>
+    </div>
+    <div id="home-error-hint" class="hidden" style="text-align:center;padding:36px 20px">
+      <div style="font-size:36px;margin-bottom:10px">🔌</div>
+      <div style="color:var(--text);font-size:15px;font-weight:700;margin-bottom:6px">Не удалось загрузить файлы</div>
+      <div class="error-msg" style="color:var(--muted);font-size:12px;line-height:1.6;margin-bottom:6px;word-break:break-word"></div>
+      <div style="color:var(--muted);font-size:12px;line-height:1.6;margin-bottom:20px">
+        Укажи <b style="color:var(--accent)">URL прокси</b> в настройках.<br>
+        Без прокси приложение не может<br>обратиться к API Яндекс Диска.
+      </div>
+      <button class="btn btn-accent" onclick="navTo('s-settings','nav-settings')" style="margin-bottom:10px">Настроить прокси →</button>
+      <button class="btn btn-surface" onclick="loadFiles()">🔄 Повторить</button>
     </div>
   </div>
   <div class="bottom-nav">
@@ -388,10 +400,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 
     <!-- Свой прокси -->
     <div class="section-label">Прокси-сервер</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:var(--rb);padding:10px 12px">
+      ⚠️ <b style="color:var(--accent)">Прокси обязателен</b> — без него приложение не может обращаться к API Яндекс Диска из-за CORS ограничений Android WebView.
+    </div>
     <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px">
       <div style="width:100%">
         <div style="font-weight:600;font-size:14px">URL прокси</div>
-        <div class="settings-row-sub">Адрес прокси для доступа к API Яндекс</div>
+        <div class="settings-row-sub">Например: https://your-proxy.workers.dev/proxy/</div>
       </div>
       <input class="inp" id="proxy-input" placeholder="https://your-proxy.workers.dev/proxy/"
              autocomplete="off" autocorrect="off" autocapitalize="off" style="margin:0">
@@ -771,7 +786,18 @@ function showScreen(id,dir='forward'){
   setTimeout(()=>prev.classList.remove('exit-left','exit-right'),300);
   next.classList.add('active');cur=id;
 }
-function goHome(){showScreen('s-home','back');updateNavActive('nav-home');updateLastGroupBtn();}
+function goHome(){
+  showScreen('s-home','back');
+  updateNavActive('nav-home');
+  updateLastGroupBtn();
+  // Если файлы не загружены и нет ошибки — перезапустить загрузку
+  const fs=document.getElementById('file-section');
+  const err=document.getElementById('home-error-hint');
+  const noUrl=document.getElementById('no-url-hint');
+  if(fs.classList.contains('hidden')&&err.classList.contains('hidden')&&noUrl.classList.contains('hidden')){
+    loadFiles();
+  }
+}
 function navTo(id,navId){showScreen(id);updateNavActive(navId);}
 function updateNavActive(aid){['nav-home','nav-bells','nav-settings'].forEach(id=>document.getElementById(id)?.classList.toggle('active',id===aid));}
 
@@ -791,19 +817,41 @@ function saveUrlAndLoad(){
   const inp=document.getElementById('url-input');
   const url=inp?inp.value.trim():'';
   if(!url){toast('Введи ссылку');return;}
-  S.url=url;saveLocal();goHome();loadFiles();
+  S.url=url;saveLocal();
+  hideHomeHints();
+  document.getElementById('file-section').classList.add('hidden');
+  goHome();
+  loadFiles();
 }
 async function loadFiles(){
-  if(!S.url){document.getElementById('no-url-hint').classList.remove('hidden');return;}
-  document.getElementById('no-url-hint').classList.add('hidden');
-  setStatus('home-status','Загружаю...');setBar('home-bar',30);
+  if(!S.url){showHomeState('no-url');return;}
+  hideHomeHints();
+  setStatus('home-status','Загружаю файлы...');setBar('home-bar',30);
   try{
     const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
     S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&/\.(doc|docx)$/i.test(i.name))
       .map(i=>({name:i.name,path:i.path||'',size:i.size||0}));
     setBar('home-bar',100);setStatus('home-status',`Найдено: ${S.files.length} файлов`);
-    setTimeout(()=>setBar('home-bar',0),800);renderFileList();
-  }catch(e){setBar('home-bar',0);setStatus('home-status','❌ '+e.message);}
+    setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
+    renderFileList();
+  }catch(e){
+    setBar('home-bar',0);
+    setStatus('home-status','');
+    showHomeState('error',e.message);
+  }
+}
+function hideHomeHints(){
+  ['no-url-hint','home-error-hint'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+}
+function showHomeState(type,msg){
+  hideHomeHints();
+  document.getElementById('file-section').classList.add('hidden');
+  if(type==='no-url'){
+    document.getElementById('no-url-hint').classList.remove('hidden');
+  } else if(type==='error'){
+    const el=document.getElementById('home-error-hint');
+    if(el){el.querySelector('.error-msg').textContent=msg||'Ошибка подключения';el.classList.remove('hidden');}
+  }
 }
 function renderFileList(){
   const list=document.getElementById('file-list');list.innerHTML='';
