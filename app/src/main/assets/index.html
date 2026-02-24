@@ -242,6 +242,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .hidden{display:none!important}
 .mt8{margin-top:8px}.mt16{margin-top:16px}
 
+/* ── Difficulty Picker ── */
+.diff-picker{display:flex;gap:7px;margin:6px 0 10px}
+.diff-btn{flex:1;border:1.5px solid var(--surface3);border-radius:var(--rb);background:var(--surface2);color:var(--muted);font-family:inherit;font-size:12px;font-weight:700;padding:8px 4px;cursor:pointer;text-align:center;transition:all .15s;letter-spacing:.02em}
+.diff-btn.active{background:color-mix(in srgb,var(--accent) 20%,transparent);border-color:var(--accent);color:var(--accent)}
+.diff-btn:active{transform:scale(.95)}
+
 /* ── Liquid Glass Theme ── */
 [data-theme="glass"] {
   --glass-blur: blur(18px) saturate(180%);
@@ -651,7 +657,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div onclick="eggTap()" style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:2px 0">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">1.9.0 — Android</div>
+        <div class="item-sub" id="app-version-str">2.0.0 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -726,7 +732,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
         <div class="egg-card-body">
           <div class="egg-card-name">Тетрис</div>
           <div class="egg-card-desc">Укладывай фигуры, не заполняй экран</div>
-          <div class="egg-card-badge egg-card-new">v1.9.0 ✦ НОВАЯ</div>
+          <div class="egg-card-badge">v1.9.0 • кнопки / свайп</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('dino')">
+        <div class="egg-card-icon">🦕</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Динозаврик</div>
+          <div class="egg-card-desc">Прыгай через кактусы, не умри</div>
+          <div class="egg-card-badge egg-card-new">v2.0.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('blockblast')">
+        <div class="egg-card-icon">🟦</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Block Blast</div>
+          <div class="egg-card-desc">Перетаскивай блоки, заполняй линии</div>
+          <div class="egg-card-badge egg-card-new">v2.0.0 ✦ НОВАЯ</div>
         </div>
         <div class="egg-card-arrow">›</div>
       </div>
@@ -736,6 +760,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   <!-- Змейка -->
   <div id="egg-snake" class="egg-game" style="display:none">
     <div class="egg-game-title">🐍 Змейка</div>
+    <div class="diff-picker">
+      <button class="diff-btn" onclick="snakeDifficulty='easy';updateDiffBtns('snake');snakeRestart()">🐢 Легко</button>
+      <button class="diff-btn active" onclick="snakeDifficulty='normal';updateDiffBtns('snake');snakeRestart()">⚡ Нормально</button>
+      <button class="diff-btn" onclick="snakeDifficulty='hard';updateDiffBtns('snake');snakeRestart()">💀 Хардкор</button>
+    </div>
     <div class="egg-score" id="snake-score-label">Счёт: 0 • Рекорд: 0</div>
     <canvas id="snake-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
     <div class="snake-dpad">
@@ -768,6 +797,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   <!-- Пинг-понг -->
   <div id="egg-pong" class="egg-game" style="display:none">
     <div class="egg-game-title">🏓 Пинг-понг</div>
+    <div class="diff-picker">
+      <button class="diff-btn" onclick="pongDifficulty='easy';updateDiffBtns('pong');pongRestart()">🐢 Легко</button>
+      <button class="diff-btn active" onclick="pongDifficulty='normal';updateDiffBtns('pong');pongRestart()">⚡ Нормально</button>
+      <button class="diff-btn" onclick="pongDifficulty='hard';updateDiffBtns('pong');pongRestart()">💀 Хардкор</button>
+    </div>
     <div class="egg-score" id="pong-score-label">Счёт: 0 • Рекорд: 0</div>
     <canvas id="pong-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="pongRestart()">🔄 Заново</button>
@@ -776,6 +810,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   <!-- Тетрис -->
   <div id="egg-tetris" class="egg-game" style="display:none">
     <div class="egg-game-title">🧱 Тетрис</div>
+    <div class="diff-picker">
+      <button class="diff-btn" onclick="tetDifficulty='easy';updateDiffBtns('tetris');tetRestart()">🐢 Легко</button>
+      <button class="diff-btn active" onclick="tetDifficulty='normal';updateDiffBtns('tetris');tetRestart()">⚡ Нормально</button>
+      <button class="diff-btn" onclick="tetDifficulty='hard';updateDiffBtns('tetris');tetRestart()">💀 Хардкор</button>
+    </div>
     <div class="egg-score" id="tet-score-label">Счёт: 0 • Рекорд: 0 • Уровень: 1</div>
     <canvas id="tet-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
     <div class="tet-controls">
@@ -785,6 +824,34 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
       <button class="tet-btn tet-btn-wide" ontouchstart="tetDrop()" onclick="tetDrop()">⬇</button>
     </div>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tetRestart()">🔄 Заново</button>
+  </div>
+
+  <!-- Дино -->
+  <div id="egg-dino" class="egg-game" style="display:none">
+    <div class="egg-game-title">🦕 Динозаврик</div>
+    <div class="diff-picker">
+      <button class="diff-btn" onclick="dinoDifficulty='easy';updateDiffBtns('dino');dinoRestart()">🐢 Легко</button>
+      <button class="diff-btn active" onclick="dinoDifficulty='normal';updateDiffBtns('dino');dinoRestart()">⚡ Нормально</button>
+      <button class="diff-btn" onclick="dinoDifficulty='hard';updateDiffBtns('dino');dinoRestart()">💀 Хардкор</button>
+    </div>
+    <div class="egg-score" id="dino-score-label">Счёт: 0 • Рекорд: 0</div>
+    <canvas id="dino-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="dinoRestart()">🔄 Заново</button>
+  </div>
+
+  <!-- BlockBlast -->
+  <div id="egg-blockblast" class="egg-game" style="display:none">
+    <div class="egg-game-title">🟦 Block Blast</div>
+    <div class="diff-picker">
+      <button class="diff-btn" onclick="bbDifficulty='easy';updateDiffBtns('blockblast')">🐢 Легко</button>
+      <button class="diff-btn active" onclick="bbDifficulty='normal';updateDiffBtns('blockblast')">⚡ Нормально</button>
+      <button class="diff-btn" onclick="bbDifficulty='hard';updateDiffBtns('blockblast')">💀 Хардкор</button>
+    </div>
+    <div class="egg-score" id="bb-score-label">Счёт: 0 • Рекорд: 0</div>
+    <div id="bb-board-wrap" style="margin-top:10px;display:flex;justify-content:center"></div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px">Перетаскивай фигуры на поле</div>
+    <div id="bb-pieces-wrap" style="display:flex;gap:10px;justify-content:center;margin-top:8px;min-height:80px"></div>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bbRestart()">🔄 Заново</button>
   </div>
 
 </div>
@@ -1930,7 +1997,8 @@ document.getElementById('url-input').value=S.url;
 loadFiles();
 
 // ══ OTA обновление ══
-const APP_VERSION = '1.9.0';
+// ⚠️ CLAUDE: при каждом изменении кода — обновляй эту версию!
+const APP_VERSION = '2.0.0';
 
 // Показываем текущую версию в настройках
 (function(){
@@ -2044,9 +2112,23 @@ async function checkOtaUpdate(silent) {
 
     async function ghFetch(url) {
       if (window.Android && window.Android.nativeFetch) {
-        const res = JSON.parse(window.Android.nativeFetch(url));
-        if (!res.ok) { const err = new Error(res.error || 'HTTP ' + res.status); err.status = res.status; throw err; }
-        return JSON.parse(res.body);
+        // Оборачиваем синхронный @JavascriptInterface в Promise+setTimeout
+        // чтобы не блокировать JS event loop на время HTTP запроса
+        return new Promise((resolve, reject) => {
+          setTimeout(() => {
+            try {
+              const resStr = window.Android.nativeFetch(url);
+              const res = JSON.parse(resStr);
+              if (!res.ok) {
+                const err = new Error(res.error || 'HTTP ' + res.status);
+                err.status = res.status;
+                reject(err);
+              } else {
+                resolve(JSON.parse(res.body));
+              }
+            } catch(e) { reject(e); }
+          }, 0);
+        });
       } else {
         const r = await fetch(url);
         if (!r.ok) { const err = new Error('HTTP ' + r.status); err.status = r.status; throw err; }
@@ -2150,7 +2232,7 @@ function eggClose() {
 
 function eggShowPicker() {
   eggStopAll();
-  ['egg-snake','egg-ttt','egg-pong','egg-tetris'].forEach(id => {
+  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -2166,12 +2248,34 @@ function eggStartGame(name) {
   else if (name === 'ttt')  { document.getElementById('egg-ttt').style.display = ''; tttInit(); }
   else if (name === 'pong') { document.getElementById('egg-pong').style.display = ''; pongInit(); }
   else if (name === 'tetris') { document.getElementById('egg-tetris').style.display = ''; tetInit(); }
+  else if (name === 'dino') { document.getElementById('egg-dino').style.display = ''; dinoInit(); }
+  else if (name === 'blockblast') { document.getElementById('egg-blockblast').style.display = ''; bbInit(); }
 }
 
 function eggStopAll() {
   snakeStop();
   pongStop();
   tetStop();
+  dinoStop();
+}
+
+// ── Утилита: обновить активную кнопку сложности ──
+function updateDiffBtns(game) {
+  const gameIdMap = {
+    snake: 'egg-snake', pong: 'egg-pong', tetris: 'egg-tetris',
+    dino: 'egg-dino', blockblast: 'egg-blockblast'
+  };
+  const container = document.getElementById(gameIdMap[game]);
+  if (!container) return;
+  const diffMap = {
+    snake: snakeDifficulty, pong: pongDifficulty,
+    tetris: tetDifficulty, dino: dinoDifficulty, blockblast: bbDifficulty
+  };
+  const cur = diffMap[game];
+  const order = ['easy', 'normal', 'hard'];
+  container.querySelectorAll('.diff-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', order[i] === cur);
+  });
 }
 
 function getAccent() {
@@ -2185,6 +2289,8 @@ let snakeRaf = null, snakeRunning = false, snakePaused = false;
 let snakeGrid, snakeCells, snakeDir_v, snakeNextDir, snakeFood, snakeLen;
 let snakeHi = 0, snakeSW, snakeSH, snakeCellSize;
 const SNAKE_COLS = 20, SNAKE_ROWS = 24;
+let snakeDifficulty = 'normal';
+const SNAKE_DIFF = { easy: {baseDelay:280, step:3}, normal: {baseDelay:200, step:4}, hard: {baseDelay:120, step:6} };
 
 function snakeInit() {
   const canvas = document.getElementById('snake-canvas');
@@ -2250,7 +2356,8 @@ function snakePlaceFood() {
 
 function snakeSchedule() {
   if (!snakeRunning || snakePaused) return;
-  const delay = Math.max(60, 200 - (snakeLen - 3) * 4);
+  const d = SNAKE_DIFF[snakeDifficulty] || SNAKE_DIFF.normal;
+  const delay = Math.max(60, d.baseDelay - (snakeLen - 3) * d.step);
   snakeRaf = setTimeout(() => { snakeTick(); snakeDraw(); snakeSchedule(); }, delay);
 }
 
@@ -2451,6 +2558,13 @@ function tttEndGame(msg, winner) {
 let pongRaf = null, pongRunning = false;
 let pongScore = 0, pongHi = 0;
 let pongBall, pongPad, pongW, pongH, pongSpeed, pongMissed;
+let pongDifficulty = 'normal'; // easy / normal / hard
+
+const PONG_DIFF = {
+  easy:   { initSpeed: 2.0, maxSpeed: 7,  padW: 0.38 },
+  normal: { initSpeed: 3.0, maxSpeed: 10, padW: 0.30 },
+  hard:   { initSpeed: 4.5, maxSpeed: 14, padW: 0.22 },
+};
 
 function pongInit() {
   const canvas = document.getElementById('pong-canvas');
@@ -2474,9 +2588,10 @@ function pongInit() {
 
 function pongRestart() {
   pongStop();
-  const padW = Math.round(pongW * 0.3);
+  const diff = PONG_DIFF[pongDifficulty] || PONG_DIFF.normal;
+  const padW = Math.round(pongW * diff.padW);
   pongPad = {x: pongW/2, w: padW, h: 10, y: pongH - 22};
-  pongSpeed = 4.5; pongScore = 0; pongMissed = false; pongRunning = false;
+  pongSpeed = diff.initSpeed; pongScore = 0; pongMissed = false; pongRunning = false;
   const angle = (Math.random() * 60 + 60) * (Math.PI/180) * (Math.random() > .5 ? 1 : -1);
   pongBall = {x: pongW/2, y: pongH/2, r: 8, vx: Math.cos(angle)*pongSpeed, vy: -Math.abs(Math.sin(angle)*pongSpeed)};
   pongUpdateScore();
@@ -2505,7 +2620,7 @@ function pongTick() {
     b.y = p.y - b.r;
     const hit = (b.x - p.x) / (p.w/2);
     const ba = hit * 65 * (Math.PI/180);
-    pongSpeed = Math.min(pongSpeed + 0.18, 12);
+    pongSpeed = Math.min(pongSpeed + 0.18, PONG_DIFF[pongDifficulty].maxSpeed);
     b.vx = Math.sin(ba) * pongSpeed; b.vy = -Math.cos(ba) * pongSpeed;
     pongScore++; if (pongScore > pongHi) pongHi = pongScore;
     pongUpdateScore();
@@ -2571,6 +2686,8 @@ let tetScore = 0, tetHi = 0, tetLevel = 1, tetLines = 0;
 let tetInterval = null, tetRunning = false, tetDead = false;
 let tetCellSize, tetCanvasW, tetCanvasH;
 let tetSwipeX0, tetSwipeY0, tetSwipeLastX;
+let tetDifficulty = 'normal';
+const TET_DIFF = { easy: {speedBase:600, minSpeed:150}, normal: {speedBase:500, minSpeed:80}, hard: {speedBase:300, minSpeed:50} };
 
 function tetInit() {
   const canvas = document.getElementById('tet-canvas');
@@ -2641,7 +2758,8 @@ function tetSpawn() {
 }
 
 function tetSchedule() {
-  const delay = Math.max(80, 500 - (tetLevel - 1) * 45);
+  const d = TET_DIFF[tetDifficulty] || TET_DIFF.normal;
+  const delay = Math.max(d.minSpeed, d.speedBase - (tetLevel - 1) * 45);
   tetInterval = setInterval(() => { tetGravity(); tetDraw(); }, delay);
 }
 
@@ -2763,7 +2881,7 @@ function tetDraw() {
 }
 
 function _tetDrawCell(ctx, cx, cy, color, cs) {
-  ctx.shadowColor = color; ctx.shadowBlur = 6;
+  ctx.shadowColor = color; ctx.shadowBlur = 2;
   ctx.fillStyle = color;
   if (ctx.roundRect) ctx.roundRect(cx*cs+1, cy*cs+1, cs-2, cs-2, 3);
   else ctx.rect(cx*cs+1, cy*cs+1, cs-2, cs-2);
@@ -2785,5 +2903,487 @@ function tetDrawMsg(msg) {
   ctx.fillText('Нажми «Заново» чтобы ещё раз', tetCanvasW/2, tetCanvasH/2+16);
 }
 
+// ══════════════════════════════════════════════════════════════════
+// ── 🦕 ДИНОЗАВРИК (v2.0.0) ───────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+let dinoRaf = null, dinoRunning = false;
+let dinoScore = 0, dinoHi = 0;
+let dinoW, dinoH, dinoCellH;
+let dinoDino, dinoGround, dinoObstacles, dinoCloudX, dinoFrameCount;
+let dinoDifficulty = 'normal';
 
-</script>
+const DINO_DIFF = {
+  easy:   { initSpeed: 3.5, accel: 0.0005, jumpVel: -13, gravity: 0.55 },
+  normal: { initSpeed: 5,   accel: 0.001,  jumpVel: -15, gravity: 0.65 },
+  hard:   { initSpeed: 7,   accel: 0.002,  jumpVel: -14, gravity: 0.85 },
+};
+
+function dinoInit() {
+  const canvas = document.getElementById('dino-canvas');
+  const maxW = Math.min(window.innerWidth - 64, 340);
+  canvas.width  = maxW;
+  canvas.height = Math.round(maxW * 0.35);
+  dinoW = canvas.width; dinoH = canvas.height;
+  dinoCellH = Math.round(dinoH * 0.28);
+
+  canvas.ontouchstart = e => { e.preventDefault(); dinoJump(); };
+  canvas.onclick = () => dinoJump();
+  dinoRestart();
+}
+
+function dinoRestart() {
+  dinoStop();
+  const d = DINO_DIFF[dinoDifficulty] || DINO_DIFF.normal;
+  dinoScore = 0;
+  dinoGround = dinoH - Math.round(dinoH * 0.12);
+  dinoDino = {
+    x: Math.round(dinoW * 0.12), w: Math.round(dinoH * 0.24), h: Math.round(dinoH * 0.3),
+    y: 0, vy: 0, onGround: true, legPhase: 0,
+    speed: d.initSpeed, accel: d.accel,
+    jumpVel: d.jumpVel, gravity: d.gravity
+  };
+  dinoDino.y = dinoGround - dinoDino.h;
+  dinoObstacles = [];
+  dinoCloudX = dinoW;
+  dinoFrameCount = 0;
+  dinoUpdateScore();
+  dinoRunning = true;
+  dinoLoop();
+}
+
+function dinoStop() {
+  cancelAnimationFrame(dinoRaf); dinoRaf = null;
+  dinoRunning = false;
+}
+
+function dinoJump() {
+  if (!dinoRunning) { dinoRestart(); return; }
+  if (dinoDino.onGround) {
+    dinoDino.vy = dinoDino.jumpVel;
+    dinoDino.onGround = false;
+  }
+}
+
+function dinoLoop() {
+  if (!dinoRunning) return;
+  dinoTick();
+  dinoDraw();
+  dinoRaf = requestAnimationFrame(dinoLoop);
+}
+
+function dinoTick() {
+  const d = dinoDino;
+  // Acceleration
+  d.speed = Math.min(d.speed + d.accel, 20);
+  dinoFrameCount++;
+  if (d.onGround) d.legPhase = (d.legPhase + d.speed * 0.08) % (Math.PI * 2);
+
+  // Physics
+  d.vy += d.gravity;
+  d.y  += d.vy;
+  if (d.y >= dinoGround - d.h) { d.y = dinoGround - d.h; d.vy = 0; d.onGround = true; }
+
+  // Score
+  dinoScore = Math.floor(dinoFrameCount * 0.1);
+  if (dinoScore > dinoHi) dinoHi = dinoScore;
+  dinoUpdateScore();
+
+  // Spawn obstacle
+  const lastX = dinoObstacles.length ? dinoObstacles[dinoObstacles.length - 1].x : -Infinity;
+  const minGap = Math.max(140, 280 - d.speed * 10);
+  if (lastX < dinoW - minGap || dinoObstacles.length === 0) {
+    if (Math.random() < 0.018 || dinoObstacles.length === 0) {
+      const cactH = Math.round(dinoH * (0.28 + Math.random() * 0.18));
+      const cactW = Math.round(cactH * 0.4);
+      dinoObstacles.push({ x: dinoW + 10, w: cactW, h: cactH, y: dinoGround - cactH });
+    }
+  }
+
+  // Move obstacles
+  for (const obs of dinoObstacles) obs.x -= d.speed;
+  // Remove off-screen
+  while (dinoObstacles.length && dinoObstacles[0].x + dinoObstacles[0].w < 0) dinoObstacles.shift();
+
+  // Cloud
+  dinoCloudX -= d.speed * 0.3;
+  if (dinoCloudX < -80) dinoCloudX = dinoW + 20;
+
+  // Collision
+  const pad = 3;
+  for (const obs of dinoObstacles) {
+    if (d.x + d.w - pad > obs.x + pad && d.x + pad < obs.x + obs.w - pad &&
+        d.y + d.h - pad > obs.y + pad && d.y + pad < obs.y + obs.h - pad) {
+      dinoStop();
+      dinoRunning = false;
+      dinoDraw();
+      _dinoPaintMsg('💀 Игра окончена! Тапни чтобы снова');
+      toast('🦕 Счёт: ' + dinoScore);
+      return;
+    }
+  }
+}
+
+function dinoDraw() {
+  const canvas = document.getElementById('dino-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const accent = getAccent();
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, dinoW, dinoH);
+
+  // Ground
+  ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, dinoGround + 1); ctx.lineTo(dinoW, dinoGround + 1); ctx.stroke();
+
+  // Cloud
+  ctx.fillStyle = 'rgba(255,255,255,.1)';
+  _dinoRoundRect(ctx, dinoCloudX, dinoH * 0.15, 60, 14, 7);
+  _dinoRoundRect(ctx, dinoCloudX + 15, dinoH * 0.15 - 8, 35, 18, 9);
+
+  // Score
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.font = `bold ${Math.round(dinoH*0.16)}px "JetBrains Mono",monospace`;
+  ctx.textAlign = 'right';
+  ctx.fillText(String(dinoScore).padStart(5, '0'), dinoW - 8, dinoH * 0.2);
+  ctx.textAlign = 'left';
+
+  // Obstacles (cacti)
+  for (const obs of dinoObstacles) {
+    ctx.fillStyle = '#4caf7d';
+    ctx.shadowColor = '#4caf7d'; ctx.shadowBlur = 4;
+    const armH = Math.round(obs.h * 0.35), armW = Math.round(obs.w * 0.45);
+    // Main body
+    _dinoRoundRect(ctx, obs.x + Math.round(obs.w*0.3), obs.y, Math.round(obs.w*0.4), obs.h, 2);
+    // Left arm
+    _dinoRoundRect(ctx, obs.x, obs.y + Math.round(obs.h*0.2), armW, armH, 2);
+    ctx.fillRect(obs.x, obs.y + Math.round(obs.h*0.2), Math.round(obs.w*0.35), armH * 0.4);
+    // Right arm
+    const rx = obs.x + obs.w - armW;
+    _dinoRoundRect(ctx, rx, obs.y + Math.round(obs.h*0.3), armW, armH, 2);
+    ctx.fillRect(rx + armW * 0.6, obs.y + Math.round(obs.h*0.3), Math.round(obs.w*0.35), armH * 0.4);
+    ctx.shadowBlur = 0;
+  }
+
+  // Dino body
+  const d = dinoDino;
+  ctx.fillStyle = accent; ctx.shadowColor = accent; ctx.shadowBlur = 8;
+  // Body
+  _dinoRoundRect(ctx, d.x, d.y + d.h * 0.1, d.w * 0.7, d.h * 0.6, 4);
+  // Head
+  _dinoRoundRect(ctx, d.x + d.w * 0.3, d.y, d.w * 0.65, d.h * 0.5, 5);
+  // Eye
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#111'; ctx.beginPath();
+  ctx.arc(d.x + d.w * 0.85, d.y + d.h * 0.14, d.w * 0.07, 0, Math.PI * 2); ctx.fill();
+  // Legs
+  ctx.fillStyle = accent; ctx.shadowBlur = 0;
+  const legW = d.w * 0.18, legH = d.h * 0.35;
+  const leg1Y = d.y + d.h * 0.65 + Math.sin(d.legPhase) * d.h * 0.08;
+  const leg2Y = d.y + d.h * 0.65 + Math.sin(d.legPhase + Math.PI) * d.h * 0.08;
+  ctx.fillRect(d.x + d.w * 0.18, leg1Y, legW, legH);
+  ctx.fillRect(d.x + d.w * 0.45, leg2Y, legW, legH);
+  ctx.shadowBlur = 0;
+}
+
+function _dinoRoundRect(ctx, x, y, w, h, r) {
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
+  else { ctx.fillRect(x, y, w, h); }
+}
+
+function _dinoPaintMsg(msg) {
+  const canvas = document.getElementById('dino-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, dinoH/2-26, dinoW, 52);
+  ctx.fillStyle = '#f0ede8'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(msg, dinoW/2, dinoH/2+6);
+}
+
+function dinoUpdateScore() {
+  const el = document.getElementById('dino-score-label');
+  if (el) el.textContent = 'Счёт: ' + dinoScore + ' • Рекорд: ' + dinoHi;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🟦 BLOCK BLAST (v2.0.0) ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+const BB_ROWS = 8, BB_COLS = 8;
+let bbGrid, bbScore = 0, bbHi = 0, bbPieces, bbDragging = null;
+let bbCellSize, bbDifficulty = 'normal';
+
+const BB_SHAPES = [
+  [[1,1],[1,1]],      // 2x2
+  [[1,1,1]],          // 1x3
+  [[1],[1],[1]],      // 3x1
+  [[1,1,1],[0,1,0]], // T-shape
+  [[1,0],[1,1]],     // L small
+  [[0,1],[1,1]],     // J small
+  [[1,1,0],[0,1,1]], // S
+  [[0,1,1],[1,1,0]], // Z
+  [[1,1,1,1]],       // I
+  [[1]],             // dot
+  [[1,1,1],[1,0,0]], // L
+  [[1,1,1],[0,0,1]], // J
+];
+
+const BB_COLORS = ['#e87722','#00e5ff','#a78bfa','#4caf7d','#f5c518','#c94f4f','#60cdff','#f472b6'];
+
+function bbInit() {
+  const wrap = document.getElementById('bb-board-wrap');
+  const maxW = Math.min(window.innerWidth - 64, 280);
+  bbCellSize = Math.floor(maxW / BB_COLS);
+  bbRestart();
+}
+
+function bbRestart() {
+  bbGrid = Array.from({length: BB_ROWS}, () => Array(BB_COLS).fill(null));
+  bbScore = 0;
+  bbUpdateScore();
+  bbGeneratePieces();
+  bbRenderBoard();
+}
+
+function bbRandomPiece() {
+  const shape = BB_SHAPES[Math.floor(Math.random() * BB_SHAPES.length)];
+  const color = BB_COLORS[Math.floor(Math.random() * BB_COLORS.length)];
+  return { shape, color, placed: false };
+}
+
+function bbGeneratePieces() {
+  bbPieces = [bbRandomPiece(), bbRandomPiece(), bbRandomPiece()];
+  bbRenderPieces();
+}
+
+function bbUpdateScore() {
+  const el = document.getElementById('bb-score-label');
+  if (el) el.textContent = 'Счёт: ' + bbScore + ' • Рекорд: ' + bbHi;
+}
+
+function bbRenderBoard() {
+  const wrap = document.getElementById('bb-board-wrap');
+  if (!wrap) return;
+  const cs = bbCellSize;
+  const bw = cs * BB_COLS, bh = cs * BB_ROWS;
+
+  wrap.innerHTML = '';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'bb-canvas';
+  canvas.width = bw; canvas.height = bh;
+  canvas.style.borderRadius = '12px';
+  canvas.style.border = '1.5px solid var(--surface3)';
+  wrap.appendChild(canvas);
+
+  canvas.addEventListener('dragover', e => { e.preventDefault(); bbOnDragOver(e, canvas); });
+  canvas.addEventListener('drop',     e => { e.preventDefault(); bbOnDrop(e, canvas); });
+  // Touch events for mobile drag-and-drop
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); bbOnTouchMove(e, canvas); }, {passive:false});
+  canvas.addEventListener('touchend',   e => { e.preventDefault(); bbOnTouchEnd(e, canvas); }, {passive:false});
+
+  bbDrawBoard();
+}
+
+function bbDrawBoard() {
+  const canvas = document.getElementById('bb-canvas'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cs = bbCellSize;
+  ctx.fillStyle = '#181818'; ctx.fillRect(0, 0, cs*BB_COLS, cs*BB_ROWS);
+  for (let r = 0; r < BB_ROWS; r++) for (let c = 0; c < BB_COLS; c++) {
+    const v = bbGrid[r][c];
+    if (v) {
+      ctx.fillStyle = v; ctx.shadowColor = v; ctx.shadowBlur = 4;
+      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(c*cs+1.5, r*cs+1.5, cs-3, cs-3, 3); ctx.fill(); }
+      else ctx.fillRect(c*cs+1.5, r*cs+1.5, cs-3, cs-3);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(c*cs+2.5, r*cs+2.5, cs-5, (cs-5)*0.35);
+    } else {
+      ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 0.5;
+      ctx.strokeRect(c*cs+0.5, r*cs+0.5, cs-1, cs-1);
+    }
+  }
+  // Drop preview
+  if (bbDragging && bbDragging.previewR !== undefined) {
+    const piece = bbDragging.piece;
+    const pr = bbDragging.previewR, pc = bbDragging.previewC;
+    const canPlace = bbCanPlace(piece.shape, pr, pc);
+    piece.shape.forEach((row, dr) => row.forEach((v, dc) => {
+      if (!v) return;
+      const gr = pr + dr, gc = pc + dc;
+      if (gr < 0 || gr >= BB_ROWS || gc < 0 || gc >= BB_COLS) return;
+      ctx.fillStyle = canPlace ? (piece.color + '80') : 'rgba(201,79,79,0.5)';
+      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(gc*cs+1.5, gr*cs+1.5, cs-3, cs-3, 3); ctx.fill(); }
+      else ctx.fillRect(gc*cs+1.5, gr*cs+1.5, cs-3, cs-3);
+    }));
+  }
+}
+
+// Piece mini-canvas rendering + drag setup
+function bbRenderPieces() {
+  const wrap = document.getElementById('bb-pieces-wrap'); if (!wrap) return;
+  wrap.innerHTML = '';
+  bbPieces.forEach((piece, idx) => {
+    if (piece.placed) { const ph = document.createElement('div'); ph.style.width='80px'; wrap.appendChild(ph); return; }
+    const cs = Math.floor(bbCellSize * 0.85);
+    const pw = piece.shape[0].length * cs, ph2 = piece.shape.length * cs;
+    const cv = document.createElement('canvas');
+    cv.width = pw; cv.height = ph2;
+    cv.style.cursor = 'grab';
+    cv.style.touchAction = 'none';
+    cv.style.opacity = '1';
+    cv.style.transition = 'transform .15s, opacity .15s';
+    wrap.appendChild(cv);
+    const ctx2 = cv.getContext('2d');
+    piece.shape.forEach((row, r) => row.forEach((v, c) => {
+      if (!v) return;
+      ctx2.fillStyle = piece.color; ctx2.shadowColor = piece.color; ctx2.shadowBlur = 3;
+      if (ctx2.roundRect) { ctx2.beginPath(); ctx2.roundRect(c*cs+1, r*cs+1, cs-2, cs-2, 3); ctx2.fill(); }
+      else ctx2.fillRect(c*cs+1, r*cs+1, cs-2, cs-2);
+      ctx2.shadowBlur = 0;
+      ctx2.fillStyle = 'rgba(255,255,255,.15)'; ctx2.fillRect(c*cs+2, r*cs+2, cs-4, (cs-4)*0.35);
+    }));
+
+    // Desktop drag
+    cv.setAttribute('draggable', 'true');
+    cv.addEventListener('dragstart', e => {
+      bbDragging = { piece, idx, pieceCS: cs };
+      cv.style.opacity = '0.5';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    cv.addEventListener('dragend', () => { if (cv) cv.style.opacity = '1'; bbDragging = null; bbDrawBoard(); });
+
+    // Mobile touch drag
+    let touchStartX, touchStartY;
+    cv.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      touchStartX = t.clientX; touchStartY = t.clientY;
+      bbDragging = { piece, idx, pieceCS: cs, touchX: t.clientX, touchY: t.clientY };
+      cv.style.transform = 'scale(1.1)';
+    }, {passive:false});
+  });
+}
+
+function bbGetGridCell(e, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const cs = bbCellSize;
+  const x = (e.clientX !== undefined ? e.clientX : (e.touches ? e.touches[0].clientX : 0)) - rect.left;
+  const y = (e.clientY !== undefined ? e.clientY : (e.touches ? e.touches[0].clientY : 0)) - rect.top;
+  return { r: Math.floor(y / cs), c: Math.floor(x / cs) };
+}
+
+function bbOnDragOver(e, canvas) {
+  if (!bbDragging) return;
+  const { r, c } = bbGetGridCell(e, canvas);
+  const sh = bbDragging.piece.shape;
+  const pr = r - Math.floor(sh.length / 2), pc = c - Math.floor(sh[0].length / 2);
+  bbDragging.previewR = pr; bbDragging.previewC = pc;
+  bbDrawBoard();
+}
+
+function bbOnTouchMove(e, canvas) {
+  if (!bbDragging) return;
+  const t = e.touches[0];
+  const { r, c } = bbGetGridCell({ clientX: t.clientX, clientY: t.clientY }, canvas);
+  const sh = bbDragging.piece.shape;
+  const pr = r - Math.floor(sh.length / 2), pc = c - Math.floor(sh[0].length / 2);
+  bbDragging.previewR = pr; bbDragging.previewC = pc;
+  bbDrawBoard();
+}
+
+function bbOnDrop(e, canvas) {
+  if (!bbDragging) return;
+  const { r, c } = bbGetGridCell(e, canvas);
+  bbTryPlace(r, c);
+}
+
+function bbOnTouchEnd(e, canvas) {
+  if (!bbDragging) return;
+  // Use last known position from last touchmove
+  const pr = bbDragging.previewR, pc = bbDragging.previewC;
+  if (pr !== undefined) {
+    bbTryPlaceDirect(pr, pc);
+  }
+  // Reset piece visuals
+  const wrap = document.getElementById('bb-pieces-wrap');
+  if (wrap) wrap.querySelectorAll('canvas').forEach(cv => { cv.style.transform = ''; });
+  bbDragging = null;
+  bbDrawBoard();
+}
+
+function bbTryPlace(r, c) {
+  if (!bbDragging) return;
+  const sh = bbDragging.piece.shape;
+  const pr = r - Math.floor(sh.length / 2), pc = c - Math.floor(sh[0].length / 2);
+  bbTryPlaceDirect(pr, pc);
+}
+
+function bbCanPlace(shape, pr, pc) {
+  for (let dr = 0; dr < shape.length; dr++) for (let dc = 0; dc < shape[dr].length; dc++) {
+    if (!shape[dr][dc]) continue;
+    const gr = pr + dr, gc = pc + dc;
+    if (gr < 0 || gr >= BB_ROWS || gc < 0 || gc >= BB_COLS || bbGrid[gr][gc]) return false;
+  }
+  return true;
+}
+
+function bbTryPlaceDirect(pr, pc) {
+  if (!bbDragging) return;
+  const piece = bbDragging.piece;
+  if (!bbCanPlace(piece.shape, pr, pc)) {
+    toast('❌ Не влезает!'); bbDragging = null; bbDrawBoard(); return;
+  }
+  // Place
+  piece.shape.forEach((row, dr) => row.forEach((v, dc) => {
+    if (v) bbGrid[pr + dr][pc + dc] = piece.color;
+  }));
+  bbDragging.piece.placed = true;
+  bbDragging = null;
+
+  // Count cells
+  let cells = 0; piece.shape.forEach(r => r.forEach(v => { if(v) cells++; }));
+  bbScore += cells;
+  if (bbScore > bbHi) bbHi = bbScore;
+
+  bbClearLines();
+  bbDrawBoard();
+  bbUpdateScore();
+
+  // If all placed, generate new
+  if (bbPieces.every(p => p.placed)) setTimeout(() => { bbGeneratePieces(); bbDrawBoard(); }, 300);
+  else bbRenderPieces();
+}
+
+function bbClearLines() {
+  const toClear = new Set();
+  // Check rows
+  for (let r = 0; r < BB_ROWS; r++) if (bbGrid[r].every(v => v)) {
+    for (let c = 0; c < BB_COLS; c++) toClear.add(`${r},${c}`);
+  }
+  // Check cols
+  for (let c = 0; c < BB_COLS; c++) {
+    let full = true;
+    for (let r = 0; r < BB_ROWS; r++) if (!bbGrid[r][c]) { full = false; break; }
+    if (full) for (let r = 0; r < BB_ROWS; r++) toClear.add(`${r},${c}`);
+  }
+  if (!toClear.size) return;
+  const linesCleared = toClear.size / BB_COLS || 1;
+  bbScore += toClear.size * 10;
+  if (bbScore > bbHi) bbHi = bbScore;
+
+  // Flash animation
+  const canvas = document.getElementById('bb-canvas'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let alpha = 1;
+  const flashInterval = setInterval(() => {
+    bbDrawBoard();
+    toClear.forEach(key => {
+      const [r, c] = key.split(',').map(Number);
+      ctx.fillStyle = `rgba(255,255,255,${alpha * 0.6})`;
+      ctx.fillRect(c * bbCellSize, r * bbCellSize, bbCellSize, bbCellSize);
+    });
+    alpha -= 0.2;
+    if (alpha <= 0) {
+      clearInterval(flashInterval);
+      toClear.forEach(key => { const [r, c] = key.split(',').map(Number); bbGrid[r][c] = null; });
+      bbDrawBoard();
+      bbUpdateScore();
+    }
+  }, 60);
+}</script>
