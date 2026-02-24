@@ -754,6 +754,15 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
         </div>
         <div class="egg-card-arrow">›</div>
       </div>
+      <div class="egg-card" onclick="eggStartGame('breakout')">
+        <div class="egg-card-icon">🧱</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Арканоид</div>
+          <div class="egg-card-desc">Разбивай кирпичи мячом, не урони!</div>
+          <div class="egg-card-badge egg-card-new">v2.1.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
     </div>
   </div>
 
@@ -852,6 +861,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px">Перетаскивай фигуры на поле</div>
     <div id="bb-pieces-wrap" style="display:flex;gap:10px;justify-content:center;margin-top:8px;min-height:80px"></div>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bbRestart()">🔄 Заново</button>
+  </div>
+
+  <!-- Арканоид -->
+  <div id="egg-breakout" class="egg-game" style="display:none">
+    <div class="egg-game-title">🧱 Арканоид</div>
+    <div class="diff-picker">
+      <button class="diff-btn" onclick="brDifficulty='easy';updateDiffBtns('breakout')">🐢 Легко</button>
+      <button class="diff-btn active" onclick="brDifficulty='normal';updateDiffBtns('breakout')">⚡ Нормально</button>
+      <button class="diff-btn" onclick="brDifficulty='hard';updateDiffBtns('breakout')">💀 Хардкор</button>
+    </div>
+    <div class="egg-score" id="br-score-label">Счёт: 0 • Рекорд: 0 • Жизни: ❤️❤️❤️</div>
+    <canvas id="br-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="brRestart()">🔄 Заново</button>
   </div>
 
 </div>
@@ -2232,7 +2254,7 @@ function eggClose() {
 
 function eggShowPicker() {
   eggStopAll();
-  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast'].forEach(id => {
+  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -2250,6 +2272,7 @@ function eggStartGame(name) {
   else if (name === 'tetris') { document.getElementById('egg-tetris').style.display = ''; tetInit(); }
   else if (name === 'dino') { document.getElementById('egg-dino').style.display = ''; dinoInit(); }
   else if (name === 'blockblast') { document.getElementById('egg-blockblast').style.display = ''; bbInit(); }
+  else if (name === 'breakout') { document.getElementById('egg-breakout').style.display = ''; brInit(); }
 }
 
 function eggStopAll() {
@@ -2257,19 +2280,20 @@ function eggStopAll() {
   pongStop();
   tetStop();
   dinoStop();
+  brStop();
 }
 
 // ── Утилита: обновить активную кнопку сложности ──
 function updateDiffBtns(game) {
   const gameIdMap = {
     snake: 'egg-snake', pong: 'egg-pong', tetris: 'egg-tetris',
-    dino: 'egg-dino', blockblast: 'egg-blockblast'
+    dino: 'egg-dino', blockblast: 'egg-blockblast', breakout: 'egg-breakout'
   };
   const container = document.getElementById(gameIdMap[game]);
   if (!container) return;
   const diffMap = {
     snake: snakeDifficulty, pong: pongDifficulty,
-    tetris: tetDifficulty, dino: dinoDifficulty, blockblast: bbDifficulty
+    tetris: tetDifficulty, dino: dinoDifficulty, blockblast: bbDifficulty, breakout: brDifficulty
   };
   const cur = diffMap[game];
   const order = ['easy', 'normal', 'hard'];
@@ -2559,6 +2583,7 @@ let pongRaf = null, pongRunning = false;
 let pongScore = 0, pongHi = 0;
 let pongBall, pongPad, pongW, pongH, pongSpeed, pongMissed;
 let pongDifficulty = 'normal'; // easy / normal / hard
+let pongLastTime = 0;
 
 const PONG_DIFF = {
   easy:   { initSpeed: 2.0, maxSpeed: 7,  padW: 0.38 },
@@ -2568,26 +2593,25 @@ const PONG_DIFF = {
 
 function pongInit() {
   const canvas = document.getElementById('pong-canvas');
-  const side = Math.min(window.innerWidth - 64, 320);
+  const side = Math.min(window.innerWidth - 36, 360);
   canvas.width = side;
   canvas.height = Math.round(side * 1.1);
   pongW = canvas.width; pongH = canvas.height;
   pongHi = pongHi || 0;
   pongRestart();
-  canvas.ontouchstart = canvas.ontouchmove = e => {
-    e.preventDefault();
+  const movePad = (clientX) => {
     const rect = canvas.getBoundingClientRect();
-    pongPad.x = Math.max(pongPad.w/2, Math.min(pongW - pongPad.w/2, e.touches[0].clientX - rect.left));
+    pongPad.x = Math.max(pongPad.w/2, Math.min(pongW - pongPad.w/2, clientX - rect.left));
   };
-  canvas.onmousemove = e => {
-    const rect = canvas.getBoundingClientRect();
-    pongPad.x = Math.max(pongPad.w/2, Math.min(pongW - pongPad.w/2, e.clientX - rect.left));
-  };
+  canvas.ontouchstart = e => { e.preventDefault(); movePad(e.touches[0].clientX); if (!pongRunning && !pongMissed) pongStart(); };
+  canvas.ontouchmove  = e => { e.preventDefault(); movePad(e.touches[0].clientX); };
+  canvas.onmousemove  = e => movePad(e.clientX);
   canvas.onclick = () => { if (!pongRunning && !pongMissed) pongStart(); };
 }
 
 function pongRestart() {
   pongStop();
+  pongLastTime = 0;
   const diff = PONG_DIFF[pongDifficulty] || PONG_DIFF.normal;
   const padW = Math.round(pongW * diff.padW);
   pongPad = {x: pongW/2, w: padW, h: 10, y: pongH - 22};
@@ -2603,15 +2627,17 @@ function pongStart() { if (pongRunning) return; pongRunning = true; pongLoop(); 
 
 function pongStop() { cancelAnimationFrame(pongRaf); pongRaf = null; pongRunning = false; }
 
-function pongLoop() {
+function pongLoop(ts) {
   if (!pongRunning) return;
-  pongTick(); pongDraw();
+  const dt = pongLastTime ? Math.min((ts - pongLastTime) / 16.667, 3) : 1;
+  pongLastTime = ts;
+  pongTick(dt); pongDraw();
   pongRaf = requestAnimationFrame(pongLoop);
 }
 
-function pongTick() {
+function pongTick(dt) {
   const b = pongBall, p = pongPad;
-  b.x += b.vx; b.y += b.vy;
+  b.x += b.vx * dt; b.y += b.vy * dt;
   if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx); }
   if (b.x + b.r > pongW) { b.x = pongW - b.r; b.vx = -Math.abs(b.vx); }
   if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy); }
@@ -2911,18 +2937,19 @@ let dinoScore = 0, dinoHi = 0;
 let dinoW, dinoH, dinoCellH;
 let dinoDino, dinoGround, dinoObstacles, dinoCloudX, dinoFrameCount;
 let dinoDifficulty = 'normal';
+let dinoLastTime = 0;
 
 const DINO_DIFF = {
-  easy:   { initSpeed: 3.5, accel: 0.0005, jumpVel: -13, gravity: 0.55 },
-  normal: { initSpeed: 5,   accel: 0.001,  jumpVel: -15, gravity: 0.65 },
-  hard:   { initSpeed: 7,   accel: 0.002,  jumpVel: -14, gravity: 0.85 },
+  easy:   { initSpeed: 3.5, accel: 0.008, jumpVel: -9.5, gravity: 0.55 },
+  normal: { initSpeed: 5,   accel: 0.012, jumpVel: -10,  gravity: 0.65 },
+  hard:   { initSpeed: 7,   accel: 0.018, jumpVel: -10,  gravity: 0.85 },
 };
 
 function dinoInit() {
   const canvas = document.getElementById('dino-canvas');
-  const maxW = Math.min(window.innerWidth - 64, 340);
+  const maxW = Math.min(window.innerWidth - 36, 400);
   canvas.width  = maxW;
-  canvas.height = Math.round(maxW * 0.35);
+  canvas.height = Math.round(maxW * 0.48);
   dinoW = canvas.width; dinoH = canvas.height;
   dinoCellH = Math.round(dinoH * 0.28);
 
@@ -2933,6 +2960,7 @@ function dinoInit() {
 
 function dinoRestart() {
   dinoStop();
+  dinoLastTime = 0;
   const d = DINO_DIFF[dinoDifficulty] || DINO_DIFF.normal;
   dinoScore = 0;
   dinoGround = dinoH - Math.round(dinoH * 0.12);
@@ -2964,23 +2992,25 @@ function dinoJump() {
   }
 }
 
-function dinoLoop() {
+function dinoLoop(ts) {
   if (!dinoRunning) return;
-  dinoTick();
+  const dt = dinoLastTime ? Math.min((ts - dinoLastTime) / 16.667, 3) : 1;
+  dinoLastTime = ts;
+  dinoTick(dt);
   dinoDraw();
   dinoRaf = requestAnimationFrame(dinoLoop);
 }
 
-function dinoTick() {
+function dinoTick(dt) {
   const d = dinoDino;
   // Acceleration
-  d.speed = Math.min(d.speed + d.accel, 20);
-  dinoFrameCount++;
-  if (d.onGround) d.legPhase = (d.legPhase + d.speed * 0.08) % (Math.PI * 2);
+  d.speed = Math.min(d.speed + d.accel * dt, 20);
+  dinoFrameCount += dt;
+  if (d.onGround) d.legPhase = (d.legPhase + d.speed * 0.08 * dt) % (Math.PI * 2);
 
   // Physics
-  d.vy += d.gravity;
-  d.y  += d.vy;
+  d.vy += d.gravity * dt;
+  d.y  += d.vy * dt;
   if (d.y >= dinoGround - d.h) { d.y = dinoGround - d.h; d.vy = 0; d.onGround = true; }
 
   // Score
@@ -2992,7 +3022,7 @@ function dinoTick() {
   const lastX = dinoObstacles.length ? dinoObstacles[dinoObstacles.length - 1].x : -Infinity;
   const minGap = Math.max(140, 280 - d.speed * 10);
   if (lastX < dinoW - minGap || dinoObstacles.length === 0) {
-    if (Math.random() < 0.018 || dinoObstacles.length === 0) {
+    if (Math.random() < 0.018 * dt || dinoObstacles.length === 0) {
       const cactH = Math.round(dinoH * (0.28 + Math.random() * 0.18));
       const cactW = Math.round(cactH * 0.4);
       dinoObstacles.push({ x: dinoW + 10, w: cactW, h: cactH, y: dinoGround - cactH });
@@ -3000,12 +3030,12 @@ function dinoTick() {
   }
 
   // Move obstacles
-  for (const obs of dinoObstacles) obs.x -= d.speed;
+  for (const obs of dinoObstacles) obs.x -= d.speed * dt;
   // Remove off-screen
   while (dinoObstacles.length && dinoObstacles[0].x + dinoObstacles[0].w < 0) dinoObstacles.shift();
 
   // Cloud
-  dinoCloudX -= d.speed * 0.3;
+  dinoCloudX -= d.speed * 0.3 * dt;
   if (dinoCloudX < -80) dinoCloudX = dinoW + 20;
 
   // Collision
@@ -3027,60 +3057,112 @@ function dinoDraw() {
   const canvas = document.getElementById('dino-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const accent = getAccent();
-  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, dinoW, dinoH);
+  // Google dino uses grey/white — use light grey regardless of theme
+  const DINO_COLOR = '#535353';
+  const DINO_LIGHT = '#f7f7f7';
+  // Background: white for Google style
+  ctx.fillStyle = '#f7f7f7'; ctx.fillRect(0, 0, dinoW, dinoH);
 
-  // Ground
-  ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, dinoGround + 1); ctx.lineTo(dinoW, dinoGround + 1); ctx.stroke();
-
-  // Cloud
-  ctx.fillStyle = 'rgba(255,255,255,.1)';
-  _dinoRoundRect(ctx, dinoCloudX, dinoH * 0.15, 60, 14, 7);
-  _dinoRoundRect(ctx, dinoCloudX + 15, dinoH * 0.15 - 8, 35, 18, 9);
-
-  // Score
-  ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.font = `bold ${Math.round(dinoH*0.16)}px "JetBrains Mono",monospace`;
-  ctx.textAlign = 'right';
-  ctx.fillText(String(dinoScore).padStart(5, '0'), dinoW - 8, dinoH * 0.2);
-  ctx.textAlign = 'left';
-
-  // Obstacles (cacti)
-  for (const obs of dinoObstacles) {
-    ctx.fillStyle = '#4caf7d';
-    ctx.shadowColor = '#4caf7d'; ctx.shadowBlur = 4;
-    const armH = Math.round(obs.h * 0.35), armW = Math.round(obs.w * 0.45);
-    // Main body
-    _dinoRoundRect(ctx, obs.x + Math.round(obs.w*0.3), obs.y, Math.round(obs.w*0.4), obs.h, 2);
-    // Left arm
-    _dinoRoundRect(ctx, obs.x, obs.y + Math.round(obs.h*0.2), armW, armH, 2);
-    ctx.fillRect(obs.x, obs.y + Math.round(obs.h*0.2), Math.round(obs.w*0.35), armH * 0.4);
-    // Right arm
-    const rx = obs.x + obs.w - armW;
-    _dinoRoundRect(ctx, rx, obs.y + Math.round(obs.h*0.3), armW, armH, 2);
-    ctx.fillRect(rx + armW * 0.6, obs.y + Math.round(obs.h*0.3), Math.round(obs.w*0.35), armH * 0.4);
-    ctx.shadowBlur = 0;
+  // Ground — double line like Google dino
+  ctx.fillStyle = '#535353';
+  ctx.fillRect(0, dinoGround + 1, dinoW, 2);
+  // Ground texture dots
+  for (let i = 0; i < dinoW; i += Math.round(dinoW / 14)) {
+    const h = 2 + Math.round(Math.random() * 2);
+    ctx.fillRect(i + Math.round((dinoFrameCount * 0.5) % (dinoW/14)) - dinoW/14, dinoGround + 3, 3, h);
   }
 
-  // Dino body
+  // Clouds (multiple, lighter)
+  const drawCloud = (cx, cy) => {
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(cx, cy + 6, 40, 6);
+    ctx.fillRect(cx + 6, cy + 2, 28, 4);
+    ctx.fillRect(cx + 10, cy, 18, 3);
+  };
+  drawCloud(dinoCloudX, dinoH * 0.1);
+  drawCloud((dinoCloudX + dinoW * 0.55) % (dinoW + 60) - 30, dinoH * 0.06);
+
+  // Score (top right, Google dino HI style)
+  ctx.fillStyle = '#535353';
+  ctx.font = `bold ${Math.round(dinoH*0.14)}px "JetBrains Mono",monospace`;
+  ctx.textAlign = 'right';
+  if (dinoHi > 0) {
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('HI ' + String(dinoHi).padStart(5, '0'), dinoW - 8, dinoH * 0.16);
+    ctx.fillStyle = '#535353';
+    ctx.fillText(String(dinoScore).padStart(5, '0'), dinoW - 8 - Math.round(dinoH*0.14)*6.5, dinoH * 0.16);
+  } else {
+    ctx.fillText(String(dinoScore).padStart(5, '0'), dinoW - 8, dinoH * 0.16);
+  }
+  ctx.textAlign = 'left';
+
+  // Obstacles (cacti) — Google style dark green angular
+  for (const obs of dinoObstacles) {
+    ctx.fillStyle = '#535353';
+    // Main trunk
+    const tw = Math.round(obs.w * 0.38);
+    const tx = obs.x + Math.round((obs.w - tw) / 2);
+    ctx.fillRect(tx, obs.y, tw, obs.h);
+    // Left arm
+    const armH = Math.round(obs.h * 0.38), armW = Math.round(obs.w * 0.38);
+    ctx.fillRect(obs.x, obs.y + Math.round(obs.h * 0.22), armW, armH);
+    // Left arm top
+    ctx.fillRect(obs.x, obs.y + Math.round(obs.h * 0.22) - Math.round(armH*0.4), armW, Math.round(armH*0.4));
+    // Right arm
+    const rx = obs.x + obs.w - armW;
+    ctx.fillRect(rx, obs.y + Math.round(obs.h * 0.3), armW, armH);
+    ctx.fillRect(rx + Math.round(armW*0.6), obs.y + Math.round(obs.h * 0.3) - Math.round(armH*0.4), Math.round(armW*0.4), Math.round(armH*0.4));
+  }
+
+  // ─── Google-style Dino ───
   const d = dinoDino;
-  ctx.fillStyle = accent; ctx.shadowColor = accent; ctx.shadowBlur = 8;
-  // Body
-  _dinoRoundRect(ctx, d.x, d.y + d.h * 0.1, d.w * 0.7, d.h * 0.6, 4);
+  const S = d.w / 22; // scale unit (Google dino is ~22px wide baseline)
+  const bx = d.x, by = d.y;
+
+  ctx.fillStyle = DINO_COLOR;
+
+  // Tail
+  ctx.fillRect(bx, by + d.h * 0.52, S*3, S*2.5);
+  ctx.fillRect(bx + S, by + d.h * 0.62, S*2.5, S*2);
+  ctx.fillRect(bx - S, by + d.h * 0.44, S*2, S*2);
+
+  // Main body
+  ctx.fillRect(bx + S*2, by + d.h * 0.32, d.w * 0.55, d.h * 0.52);
+
+  // Neck  
+  ctx.fillRect(bx + d.w * 0.48, by + d.h * 0.18, d.w * 0.28, d.h * 0.2);
+
   // Head
-  _dinoRoundRect(ctx, d.x + d.w * 0.3, d.y, d.w * 0.65, d.h * 0.5, 5);
+  ctx.fillRect(bx + d.w * 0.38, by, d.w * 0.58, d.h * 0.38);
+
+  // Mouth / jaw area (slightly lighter stripe)
+  ctx.fillStyle = '#666';
+  ctx.fillRect(bx + d.w * 0.55, by + d.h * 0.22, d.w * 0.38, d.h * 0.1);
+
   // Eye
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#111'; ctx.beginPath();
-  ctx.arc(d.x + d.w * 0.85, d.y + d.h * 0.14, d.w * 0.07, 0, Math.PI * 2); ctx.fill();
-  // Legs
-  ctx.fillStyle = accent; ctx.shadowBlur = 0;
-  const legW = d.w * 0.18, legH = d.h * 0.35;
-  const leg1Y = d.y + d.h * 0.65 + Math.sin(d.legPhase) * d.h * 0.08;
-  const leg2Y = d.y + d.h * 0.65 + Math.sin(d.legPhase + Math.PI) * d.h * 0.08;
-  ctx.fillRect(d.x + d.w * 0.18, leg1Y, legW, legH);
-  ctx.fillRect(d.x + d.w * 0.45, leg2Y, legW, legH);
-  ctx.shadowBlur = 0;
+  ctx.fillStyle = DINO_LIGHT;
+  ctx.fillRect(bx + d.w * 0.74, by + d.h * 0.05, S*3.5, S*3.5);
+  ctx.fillStyle = DINO_COLOR;
+  ctx.fillRect(bx + d.w * 0.78, by + d.h * 0.08, S*2, S*2);
+
+  // Legs (Google dino pixel style — two rectangles that alternate)
+  ctx.fillStyle = DINO_COLOR;
+  const legW = d.w * 0.18, legH = d.h * 0.36;
+  const lp = d.legPhase;
+  // Leg 1
+  const l1raise = d.onGround ? Math.max(0, Math.sin(lp)) * legH * 0.55 : 0;
+  ctx.fillRect(bx + d.w * 0.35, by + d.h * 0.79 + l1raise, legW, legH - l1raise);
+  // Foot 1
+  if (d.onGround) ctx.fillRect(bx + d.w * 0.35 - S, by + d.h * 0.79 + legH - S, legW + S*2, S*1.5);
+  // Leg 2
+  const l2raise = d.onGround ? Math.max(0, Math.sin(lp + Math.PI)) * legH * 0.55 : 0;
+  ctx.fillRect(bx + d.w * 0.54, by + d.h * 0.79 + l2raise, legW, legH - l2raise);
+  // Foot 2
+  if (d.onGround) ctx.fillRect(bx + d.w * 0.54 - S, by + d.h * 0.79 + legH - S, legW + S*2, S*1.5);
+
+  // Tiny arm
+  ctx.fillStyle = DINO_COLOR;
+  ctx.fillRect(bx + d.w * 0.6, by + d.h * 0.38, S*3, S*1.5);
 }
 
 function _dinoRoundRect(ctx, x, y, w, h, r) {
@@ -3218,6 +3300,10 @@ function bbDrawBoard() {
 function bbRenderPieces() {
   const wrap = document.getElementById('bb-pieces-wrap'); if (!wrap) return;
   wrap.innerHTML = '';
+  // Remove old global touch listeners
+  document.removeEventListener('touchmove', bbDocTouchMove);
+  document.removeEventListener('touchend', bbDocTouchEnd);
+
   bbPieces.forEach((piece, idx) => {
     if (piece.placed) { const ph = document.createElement('div'); ph.style.width='80px'; wrap.appendChild(ph); return; }
     const cs = Math.floor(bbCellSize * 0.85);
@@ -3242,22 +3328,63 @@ function bbRenderPieces() {
     // Desktop drag
     cv.setAttribute('draggable', 'true');
     cv.addEventListener('dragstart', e => {
-      bbDragging = { piece, idx, pieceCS: cs };
+      // Track where within piece the user grabbed (in cell units)
+      const rect = cv.getBoundingClientRect();
+      const localX = e.clientX - rect.left, localY = e.clientY - rect.top;
+      const grabCol = Math.floor(localX / cs), grabRow = Math.floor(localY / cs);
+      bbDragging = { piece, idx, pieceCS: cs, grabRow, grabCol };
       cv.style.opacity = '0.5';
       e.dataTransfer.effectAllowed = 'move';
     });
     cv.addEventListener('dragend', () => { if (cv) cv.style.opacity = '1'; bbDragging = null; bbDrawBoard(); });
 
     // Mobile touch drag
-    let touchStartX, touchStartY;
     cv.addEventListener('touchstart', e => {
       e.preventDefault();
       const t = e.touches[0];
-      touchStartX = t.clientX; touchStartY = t.clientY;
-      bbDragging = { piece, idx, pieceCS: cs, touchX: t.clientX, touchY: t.clientY };
-      cv.style.transform = 'scale(1.1)';
+      const rect = cv.getBoundingClientRect();
+      const localX = t.clientX - rect.left, localY = t.clientY - rect.top;
+      const grabCol = Math.floor(localX / cs), grabRow = Math.floor(localY / cs);
+      bbDragging = { piece, idx, pieceCS: cs, grabRow, grabCol };
+      cv.style.transform = 'scale(1.15)';
+      cv.style.opacity = '0.7';
+      // Attach global doc listeners so we track movement outside piece canvas
+      document.addEventListener('touchmove', bbDocTouchMove, {passive:false});
+      document.addEventListener('touchend', bbDocTouchEnd, {passive:false});
     }, {passive:false});
   });
+}
+
+function bbDocTouchMove(e) {
+  if (!bbDragging) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  const canvas = document.getElementById('bb-canvas');
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const cs = bbCellSize;
+  const x = t.clientX - rect.left, y = t.clientY - rect.top;
+  const touchCol = Math.floor(x / cs), touchRow = Math.floor(y / cs);
+  const pr = touchRow - (bbDragging.grabRow || 0);
+  const pc = touchCol - (bbDragging.grabCol || 0);
+  bbDragging.previewR = pr; bbDragging.previewC = pc;
+  bbDrawBoard();
+}
+
+function bbDocTouchEnd(e) {
+  if (!bbDragging) return;
+  e.preventDefault();
+  document.removeEventListener('touchmove', bbDocTouchMove);
+  document.removeEventListener('touchend', bbDocTouchEnd);
+  // Remove visual feedback from all piece canvases
+  const wrap = document.getElementById('bb-pieces-wrap');
+  if (wrap) wrap.querySelectorAll('canvas').forEach(cv => { cv.style.transform = ''; cv.style.opacity = '1'; });
+  const pr = bbDragging.previewR, pc = bbDragging.previewC;
+  if (pr !== undefined) {
+    bbTryPlaceDirect(pr, pc);
+  } else {
+    bbDragging = null; bbDrawBoard();
+  }
 }
 
 function bbGetGridCell(e, canvas) {
@@ -3271,20 +3398,18 @@ function bbGetGridCell(e, canvas) {
 function bbOnDragOver(e, canvas) {
   if (!bbDragging) return;
   const { r, c } = bbGetGridCell(e, canvas);
-  const sh = bbDragging.piece.shape;
-  const pr = r - Math.floor(sh.length / 2), pc = c - Math.floor(sh[0].length / 2);
+  const pr = r - (bbDragging.grabRow || Math.floor(bbDragging.piece.shape.length / 2));
+  const pc = c - (bbDragging.grabCol || Math.floor(bbDragging.piece.shape[0].length / 2));
   bbDragging.previewR = pr; bbDragging.previewC = pc;
   bbDrawBoard();
 }
 
 function bbOnTouchMove(e, canvas) {
-  if (!bbDragging) return;
-  const t = e.touches[0];
-  const { r, c } = bbGetGridCell({ clientX: t.clientX, clientY: t.clientY }, canvas);
-  const sh = bbDragging.piece.shape;
-  const pr = r - Math.floor(sh.length / 2), pc = c - Math.floor(sh[0].length / 2);
-  bbDragging.previewR = pr; bbDragging.previewC = pc;
-  bbDrawBoard();
+  // handled by document-level bbDocTouchMove
+}
+
+function bbOnTouchEnd(e, canvas) {
+  // handled by document-level bbDocTouchEnd
 }
 
 function bbOnDrop(e, canvas) {
@@ -3309,8 +3434,8 @@ function bbOnTouchEnd(e, canvas) {
 
 function bbTryPlace(r, c) {
   if (!bbDragging) return;
-  const sh = bbDragging.piece.shape;
-  const pr = r - Math.floor(sh.length / 2), pc = c - Math.floor(sh[0].length / 2);
+  const pr = r - (bbDragging.grabRow || Math.floor(bbDragging.piece.shape.length / 2));
+  const pc = c - (bbDragging.grabCol || Math.floor(bbDragging.piece.shape[0].length / 2));
   bbTryPlaceDirect(pr, pc);
 }
 
@@ -3386,4 +3511,191 @@ function bbClearLines() {
       bbUpdateScore();
     }
   }, 60);
-}</script>
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🧱 АРКАНОИД (v2.1.0) ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+const BR_COLS = 8, BR_BRICK_ROWS = 5;
+let brRaf = null, brRunning = false, brLastTime = 0;
+let brScore = 0, brHi = 0, brLives = 3, brDifficulty = 'normal';
+let brW, brH, brBall, brPad, brBricks, brSpeed;
+let brWaiting = true;
+
+const BR_DIFF = {
+  easy:   { speed: 4.5, padW: 0.35 },
+  normal: { speed: 5.5, padW: 0.27 },
+  hard:   { speed: 7,   padW: 0.20 },
+};
+
+const BR_BRICK_COLORS = [
+  ['#c94f4f','#c94f4f','#c94f4f','#c94f4f','#c94f4f','#c94f4f','#c94f4f','#c94f4f'],
+  ['#e87722','#e87722','#e87722','#e87722','#e87722','#e87722','#e87722','#e87722'],
+  ['#f5c518','#f5c518','#f5c518','#f5c518','#f5c518','#f5c518','#f5c518','#f5c518'],
+  ['#4caf7d','#4caf7d','#4caf7d','#4caf7d','#4caf7d','#4caf7d','#4caf7d','#4caf7d'],
+  ['#60cdff','#60cdff','#60cdff','#60cdff','#60cdff','#60cdff','#60cdff','#60cdff'],
+];
+
+function brInit() {
+  const canvas = document.getElementById('br-canvas');
+  const w = Math.min(window.innerWidth - 36, 360);
+  canvas.width = w;
+  canvas.height = Math.round(w * 1.3);
+  brW = canvas.width; brH = canvas.height;
+  const movePad = (clientX) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    brPad.x = Math.max(brPad.w/2, Math.min(brW - brPad.w/2, x));
+    if (brWaiting) brBall.x = brPad.x;
+  };
+  canvas.ontouchmove = e => { e.preventDefault(); movePad(e.touches[0].clientX); };
+  canvas.ontouchstart = e => { e.preventDefault(); movePad(e.touches[0].clientX); if (brWaiting && brRunning) brLaunch(); };
+  canvas.onmousemove = e => movePad(e.clientX);
+  canvas.onclick = () => { if (brWaiting && brRunning) brLaunch(); };
+  brRestart();
+}
+
+function brRestart() {
+  brStop();
+  brLastTime = 0;
+  brScore = 0; brLives = 3; brWaiting = true;
+  const d = BR_DIFF[brDifficulty] || BR_DIFF.normal;
+  brSpeed = d.speed;
+  const padW = Math.round(brW * d.padW);
+  brPad = { x: brW/2, w: padW, h: 10, y: brH - 28 };
+  brBall = { x: brW/2, y: brPad.y - 9, r: 7, vx: 0, vy: 0 };
+  brBricks = [];
+  const bw = Math.floor((brW - 16) / BR_COLS);
+  const bh = Math.round(bw * 0.38);
+  const startY = 30;
+  for (let row = 0; row < BR_BRICK_ROWS; row++) {
+    for (let col = 0; col < BR_COLS; col++) {
+      brBricks.push({
+        x: 8 + col * bw, y: startY + row * (bh + 4),
+        w: bw - 3, h: bh,
+        color: BR_BRICK_COLORS[row][col],
+        alive: true, hits: row < 2 ? 2 : 1
+      });
+    }
+  }
+  brUpdateScore();
+  brRunning = true;
+  brRaf = requestAnimationFrame(brLoop);
+}
+
+function brLaunch() {
+  if (!brWaiting) return;
+  brWaiting = false;
+  const angle = (Math.random() * 40 + 70) * Math.PI / 180;
+  brBall.vx = Math.cos(angle) * brSpeed * (Math.random() > 0.5 ? 1 : -1);
+  brBall.vy = -Math.abs(Math.sin(angle) * brSpeed);
+}
+
+function brStop() { cancelAnimationFrame(brRaf); brRaf = null; brRunning = false; }
+
+function brLoop(ts) {
+  if (!brRunning) return;
+  const dt = brLastTime ? Math.min((ts - brLastTime) / 16.667, 3) : 1;
+  brLastTime = ts;
+  if (!brWaiting) brTick(dt);
+  brDraw();
+  brRaf = requestAnimationFrame(brLoop);
+}
+
+function brTick(dt) {
+  const b = brBall;
+  b.x += b.vx * dt; b.y += b.vy * dt;
+  if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx); }
+  if (b.x + b.r > brW) { b.x = brW - b.r; b.vx = -Math.abs(b.vx); }
+  if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy); }
+  const pl = brPad.x - brPad.w/2, pr2 = brPad.x + brPad.w/2;
+  if (b.vy > 0 && b.y + b.r >= brPad.y && b.y + b.r <= brPad.y + brPad.h + 4
+      && b.x >= pl - b.r && b.x <= pr2 + b.r) {
+    b.y = brPad.y - b.r;
+    const hit = (b.x - brPad.x) / (brPad.w / 2);
+    const angle = hit * 65 * Math.PI / 180;
+    const spd = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+    b.vx = Math.sin(angle) * spd;
+    b.vy = -Math.cos(angle) * spd;
+  }
+  let brokeCount = 0;
+  for (const bk of brBricks) {
+    if (!bk.alive) continue;
+    if (b.x + b.r > bk.x && b.x - b.r < bk.x + bk.w &&
+        b.y + b.r > bk.y && b.y - b.r < bk.y + bk.h) {
+      bk.hits--;
+      if (bk.hits <= 0) { bk.alive = false; brokeCount++; }
+      const overlapL = (b.x + b.r) - bk.x, overlapR = (bk.x + bk.w) - (b.x - b.r);
+      const overlapT = (b.y + b.r) - bk.y, overlapB = (bk.y + bk.h) - (b.y - b.r);
+      if (Math.min(overlapL, overlapR) < Math.min(overlapT, overlapB)) b.vx = -b.vx; else b.vy = -b.vy;
+      break;
+    }
+  }
+  if (brokeCount) { brScore += brokeCount * 10; if (brScore > brHi) brHi = brScore; brUpdateScore(); }
+  if (brBricks.every(bk => !bk.alive)) {
+    brStop(); brWaiting = true;
+    setTimeout(() => { brRestart(); toast('🎉 Уровень пройден!'); }, 400);
+    return;
+  }
+  if (b.y - b.r > brH) {
+    brLives--;
+    brUpdateScore();
+    if (brLives <= 0) {
+      brStop(); brRunning = false;
+      brDraw(); brDrawMsg('💀 Игра окончена! Тапни чтобы снова');
+      toast('🧱 Счёт: ' + brScore); return;
+    }
+    brWaiting = true;
+    b.x = brPad.x; b.y = brPad.y - b.r - 2; b.vx = 0; b.vy = 0;
+    toast('❤️ Осталось жизней: ' + brLives);
+  }
+}
+
+function brDraw() {
+  const canvas = document.getElementById('br-canvas'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const accent = getAccent();
+  ctx.fillStyle = '#0d0d0d'; ctx.fillRect(0, 0, brW, brH);
+  for (const bk of brBricks) {
+    if (!bk.alive) continue;
+    ctx.globalAlpha = bk.hits > 1 ? 1 : 0.82;
+    ctx.fillStyle = bk.color; ctx.shadowColor = bk.color; ctx.shadowBlur = bk.hits > 1 ? 8 : 3;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bk.x, bk.y, bk.w, bk.h, 3); ctx.fill(); }
+    else ctx.fillRect(bk.x, bk.y, bk.w, bk.h);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillRect(bk.x + 2, bk.y + 2, bk.w - 4, Math.floor((bk.h - 4) * 0.4));
+    ctx.globalAlpha = 1;
+  }
+  const grad = ctx.createLinearGradient(brPad.x - brPad.w/2, 0, brPad.x + brPad.w/2, 0);
+  grad.addColorStop(0, 'rgba(255,255,255,.15)'); grad.addColorStop(.5, accent); grad.addColorStop(1, 'rgba(255,255,255,.15)');
+  ctx.fillStyle = grad; ctx.shadowColor = accent; ctx.shadowBlur = 10;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(brPad.x - brPad.w/2, brPad.y, brPad.w, brPad.h, 6); ctx.fill(); }
+  else ctx.fillRect(brPad.x - brPad.w/2, brPad.y, brPad.w, brPad.h);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fff'; ctx.shadowColor = accent; ctx.shadowBlur = 12;
+  ctx.beginPath(); ctx.arc(brBall.x, brBall.y, brBall.r, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  if (brWaiting && brRunning) {
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, brH/2 - 20, brW, 40);
+    ctx.fillStyle = '#f0ede8'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Тапни для запуска 🏓', brW/2, brH/2 + 6); ctx.textAlign = 'left';
+  }
+}
+
+function brDrawMsg(msg) {
+  const canvas = document.getElementById('br-canvas'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, brH/2-30, brW, 60);
+  ctx.fillStyle = '#f0ede8'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(msg, brW/2, brH/2 + 6); ctx.textAlign = 'left';
+  canvas.ontouchstart = () => brRestart();
+  canvas.onclick = () => brRestart();
+}
+
+function brUpdateScore() {
+  const el = document.getElementById('br-score-label'); if (!el) return;
+  const hearts = '❤️'.repeat(Math.max(0,brLives)) + '🖤'.repeat(Math.max(0, 3 - brLives));
+  el.textContent = 'Счёт: ' + brScore + ' • Рекорд: ' + brHi + ' • ' + hearts;
+}
+</script>
