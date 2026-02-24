@@ -239,88 +239,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .icon-btn.selected .icon-label{color:var(--accent)}
 .icon-check{position:absolute;top:-4px;right:-4px;background:var(--accent);color:#fff;font-size:9px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;font-weight:700}
 .icon-btn.selected .icon-check{opacity:1}
-/* DNS карточки */
-.dns-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-.dns-card{background:var(--surface2);border-radius:var(--rb);padding:12px 14px;cursor:pointer;border:2px solid var(--surface3);transition:border-color .18s,transform .12s;position:relative;overflow:hidden}
-.dns-card:active{transform:scale(.97)}
-.dns-card.selected{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
-.dns-card-ico{font-size:22px;margin-bottom:6px}
-.dns-card-name{font-size:13px;font-weight:700;line-height:1.2}
-.dns-card-addr{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:3px}
-
-/* DPI стратегии */
-.dpi-list{display:flex;flex-direction:column;gap:7px;margin-top:8px}
-.dpi-item{
-  background:var(--surface2);border-radius:var(--rb);padding:13px 16px;
-  cursor:pointer;display:flex;align-items:center;gap:12px;
-  border:1.5px solid var(--surface3);position:relative;overflow:hidden;
-  transition:border-color .15s,background .15s
-}
-.dpi-item:active{background:var(--surface3)}
-.dpi-item.selected{
-  background:color-mix(in srgb,var(--accent) 12%,transparent);
-  border-color:color-mix(in srgb,var(--accent) 70%,transparent)
-}
-.dpi-item.selected .dpi-name{color:var(--accent)}
-.dpi-badge{font-size:10px;font-weight:700;background:var(--surface3);color:var(--muted);padding:3px 7px;border-radius:6px;font-family:'JetBrains Mono',monospace;white-space:nowrap;flex-shrink:0}
-.dpi-item.selected .dpi-badge{background:color-mix(in srgb,var(--accent) 25%,transparent);color:var(--accent)}
-.dpi-name{font-size:13px;font-weight:600;flex:1}
-.dpi-desc{font-size:11px;color:var(--muted);margin-top:2px}
-.dpi-check{font-size:16px;flex-shrink:0;opacity:0;transition:opacity .15s}
-.dpi-item.selected .dpi-check{opacity:1}
-
-/* VPN кнопка статус */
-.vpn-status-card{
-  background:var(--surface2);border-radius:var(--rb);padding:16px;
-  border:1.5px solid var(--surface3);margin-bottom:8px;
-  display:flex;align-items:center;gap:14px
-}
-.vpn-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
-.vpn-dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent)}
-.vpn-info{flex:1}
-.vpn-info-title{font-size:14px;font-weight:700}
-.vpn-info-sub{font-size:11px;color:var(--muted);margin-top:2px}
-
 .hidden{display:none!important}
 .mt8{margin-top:8px}.mt16{margin-top:16px}
 
-/* Прокси список (экран) */
-.proxy-list{display:flex;flex-direction:column;gap:7px}
-.proxy-card{background:var(--surface2);border-radius:var(--rb);padding:14px 16px;
-  cursor:pointer;display:flex;align-items:flex-start;gap:13px;
-  border:1.5px solid var(--surface3);
-  transition:border-color .15s,background .15s}
-.proxy-card:active{background:var(--surface3)}
-.proxy-card.selected{background:color-mix(in srgb,var(--accent) 12%,transparent);
-  border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
-.proxy-card.selected .proxy-name{color:var(--accent)}
-.proxy-ico{font-size:22px;flex-shrink:0;margin-top:1px}
-.proxy-name{font-size:13px;font-weight:700}
-.proxy-addr{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:2px}
-.proxy-desc{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
-.proxy-tag{font-size:9px;font-weight:700;padding:2px 7px;border-radius:6px;
-  letter-spacing:.06em;text-transform:uppercase;margin-left:6px;vertical-align:middle}
-.tag-free{background:color-mix(in srgb,var(--success) 20%,transparent);color:var(--success)}
-.tag-own{background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent)}
-.tag-limit{background:color-mix(in srgb,#f0c040 15%,transparent);color:#f0c040}
-.proxy-check{font-size:18px;flex-shrink:0;opacity:0;margin-top:2px;margin-left:auto;color:var(--accent);transition:opacity .15s}
-.proxy-card.selected .proxy-check{opacity:1}
-
-/* DPI тест бейджи */
-.test-badge{
-  display:inline-flex;align-items:center;gap:4px;
-  font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;
-  font-family:'JetBrains Mono',monospace;letter-spacing:.04em
-}
-.test-badge.ok{background:color-mix(in srgb,var(--success) 20%,transparent);color:var(--success);border:1px solid color-mix(in srgb,var(--success) 40%,transparent)}
-.test-badge.fail{background:color-mix(in srgb,var(--danger) 15%,transparent);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent)}
-.test-badge.testing{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);animation:pulse .8s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-.dpi-item.works{border-color:color-mix(in srgb,var(--success) 50%,transparent)}
-.dpi-item.works .dpi-badge{background:color-mix(in srgb,var(--success) 20%,transparent);color:var(--success)}
-.dpi-item.no-works{opacity:.4}
-
-/* ── Easter Egg ── */
+/* ── Easter Egg (overlay) ── */
 .egg-overlay{
   position:fixed;inset:0;z-index:2000;
   background:#0d0d0d;
@@ -342,30 +264,22 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   background:linear-gradient(135deg,var(--accent),#ff4e00);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent
 }
-.egg-sub{font-size:13px;color:var(--muted);text-align:center;margin-bottom:32px;line-height:1.6}
-.egg-snake{
-  width:min(320px,90vw);height:min(320px,90vw);
-  background:var(--surface);border-radius:16px;
-  border:1.5px solid var(--surface3);
-  display:flex;align-items:center;justify-content:center;
-  position:relative;overflow:hidden
+.egg-sub{font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px;line-height:1.6}
+.egg-score{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent);margin-top:14px;letter-spacing:.05em}
+
+/* ── Крестики-нолики ── */
+.ttt-board{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:min(288px,85vw);margin:0 0 4px}
+.ttt-cell{
+  aspect-ratio:1;background:var(--surface2);border:1.5px solid var(--surface3);
+  border-radius:14px;display:flex;align-items:center;justify-content:center;
+  font-size:42px;cursor:pointer;user-select:none;
+  transition:background .12s,transform .12s,border-color .12s
 }
-.snake-canvas{display:block;border-radius:14px}
-.egg-controls{
-  display:grid;grid-template-columns:repeat(3,52px);gap:8px;margin-top:20px
-}
-.egg-btn{
-  width:52px;height:52px;border-radius:12px;
-  background:var(--surface2);border:1.5px solid var(--surface3);
-  color:var(--text);font-size:22px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:background .1s,transform .1s;user-select:none
-}
-.egg-btn:active{background:var(--surface3);transform:scale(.93)}
-.egg-score{
-  font-family:'JetBrains Mono',monospace;font-size:13px;
-  color:var(--accent);margin-top:14px;letter-spacing:.05em
-}
+.ttt-cell:active{transform:scale(.92)}
+.ttt-cell.x{color:var(--accent);text-shadow:0 0 12px color-mix(in srgb,var(--accent) 70%,transparent)}
+.ttt-cell.o{color:var(--muted)}
+.ttt-cell.win{background:color-mix(in srgb,var(--accent) 20%,transparent);border-color:var(--accent)}
+.ttt-status{font-size:13px;color:var(--muted);text-align:center;min-height:20px;margin-top:8px}
 
 /* ── OTA Update Modal ── */
 .ota-overlay{
@@ -454,10 +368,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
       <div style="color:var(--text);font-size:15px;font-weight:700;margin-bottom:6px">Не удалось загрузить файлы</div>
       <div class="error-msg" style="color:var(--muted);font-size:12px;line-height:1.6;margin-bottom:6px;word-break:break-word"></div>
       <div style="color:var(--muted);font-size:12px;line-height:1.6;margin-bottom:20px">
-        Укажи <b style="color:var(--accent)">URL прокси</b> в настройках.<br>
-        Без прокси приложение не может<br>обратиться к API Яндекс Диска.
+        Проверь подключение к интернету и повтори попытку.
       </div>
-      <button class="btn btn-accent" onclick="navTo('s-settings','nav-settings')" style="margin-bottom:10px">Настроить прокси →</button>
       <button class="btn btn-surface" onclick="loadFiles()">🔄 Повторить</button>
     </div>
   </div>
@@ -540,52 +452,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     </div>
     <div class="sep"></div>
 
-    <!-- Прокси-сервер -->
-    <div class="section-label">Прокси-сервер</div>
-    <div id="proxy-current-row" class="list-item" onclick="showScreen('s-proxy')" style="margin-bottom:8px">
-      <div>
-        <div class="item-name" id="proxy-current-name">AllOrigins</div>
-        <div class="item-sub" id="proxy-current-sub">api.allorigins.win • Нажми для выбора</div>
-      </div>
-      <span class="item-arrow">›</span>
-    </div>
-    <div class="sep"></div>
-
-    <!-- DNS -->
-    <div class="section-label">DNS / Обход блокировок</div>
-    <!-- VPN статус — только в Android приложении -->
-    <div id="vpn-block" class="hidden">
-      <div class="vpn-status-card">
-        <div class="vpn-dot" id="vpn-dot"></div>
-        <div class="vpn-info">
-          <div class="vpn-info-title" id="vpn-title">VPN обход выключен</div>
-          <div class="vpn-info-sub" id="vpn-sub">DNS и DPI обход неактивны</div>
-        </div>
-      </div>
-      <button class="btn btn-accent" id="vpn-btn" onclick="toggleVpn()">Включить VPN обход</button>
-      <div style="height:10px"></div>
-    </div>
-    <div class="section-label" style="margin-top:4px">Провайдер DNS</div>
-    <div class="dns-grid" id="dns-grid"></div>
-    <div id="custom-dns-wrap" class="hidden mt8">
-      <input class="inp" id="custom-dns-input" placeholder="https://your-doh.server/dns-query"
-             autocomplete="off" autocorrect="off" autocapitalize="off">
-      <div style="height:8px"></div>
-      <button class="btn btn-surface3" onclick="saveCustomDns()">Применить DNS</button>
-    </div>
-    <div class="sep"></div>
-
-    <!-- DPI стратегии -->
-    <div class="section-label">Стратегия обхода DPI</div>
-    <div id="dpi-current-row" class="list-item" onclick="showScreen('s-dpi')" style="margin-bottom:8px">
-      <div>
-        <div class="item-name" id="dpi-current-name">Основной</div>
-        <div class="item-sub" id="dpi-current-badge">MAIN • Нажми для выбора</div>
-      </div>
-      <span class="item-arrow">›</span>
-    </div>
-    <div class="sep"></div>
-
     <!-- Диагностика -->
     <div class="section-label">Диагностика</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">
@@ -616,70 +482,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 </div>
 
 
-<!-- DPI СТРАТЕГИИ (отдельный экран) -->
-<div class="screen" id="s-dpi">
-  <div class="hdr">
-    <button class="hdr-back" onclick="showScreen('s-settings','back')">‹</button>
-    <div>
-      <div class="hdr-title">Стратегия DPI</div>
-      <div class="hdr-sub" id="dpi-screen-sub">Выбери метод обхода блокировок</div>
-    </div>
-  </div>
-  <div style="padding:12px 18px 0;flex-shrink:0">
-    <button class="btn btn-accent2" id="dpi-test-btn2" onclick="testAllDpi()" style="margin-bottom:10px">
-      <span id="dpi-test-icon2">🧪</span> Протестировать все
-    </button>
-    <div id="dpi-test-block2" style="display:none;margin-bottom:10px">
-      <div class="progress" style="margin-bottom:6px"><div class="progress-bar" id="dpi-test-bar2"></div></div>
-      <div class="status" id="dpi-test-status2" style="text-align:left"></div>
-      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" id="dpi-result-badges2"></div>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <div class="section-label" style="margin:0" id="dpi-screen-label">Все стратегии</div>
-      <button id="dpi-show-all-btn2" onclick="showAllDpi()" style="display:none;background:none;border:none;color:var(--accent);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;padding:4px 8px">Показать все</button>
-    </div>
-  </div>
-  <div class="body" style="padding-top:6px">
-    <div class="dpi-list" id="dpi-list-screen"></div>
-  </div>
-</div>
-
-
-<!-- ПРОКСИ (отдельный экран) -->
-<div class="screen" id="s-proxy">
-  <div class="hdr">
-    <button class="hdr-back" onclick="showScreen('s-settings','back')">‹</button>
-    <div>
-      <div class="hdr-title">Прокси-сервер</div>
-      <div class="hdr-sub">Нужен для доступа к Яндекс Диску</div>
-    </div>
-  </div>
-  <div class="body" style="padding-top:10px">
-    <div class="section-label">Выбери прокси</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
-      Без прокси приложение не может обращаться к API Яндекс Диска (CORS). Рекомендуем AllOrigins — он работает сразу без настройки.
-    </div>
-    <div class="proxy-list" id="proxy-list-screen"></div>
-    <div id="custom-proxy-screen-wrap" class="hidden" style="margin-top:12px">
-      <div class="section-label">Адрес своего прокси</div>
-      <input class="inp" id="proxy-input-screen" placeholder="https://your-proxy.workers.dev/proxy/"
-             autocomplete="off" autocorrect="off" autocapitalize="off">
-      <div style="height:8px"></div>
-      <button class="btn btn-accent2" onclick="saveCustomProxyFromScreen()">💾 Сохранить</button>
-      <div style="height:12px"></div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.6">
-        <b style="color:var(--accent)">Cloudflare Worker:</b> самый надёжный вариант.<br>
-        Деплой бесплатно за 5 минут — файл <b>proxy-worker/README.md</b>
-      </div>
-    </div>
-    <div class="sep"></div>
-    <div class="section-label">Проверка</div>
-    <button class="btn btn-surface" onclick="testCurrentProxy()" id="proxy-test-btn">🔌 Проверить подключение</button>
-    <div class="status" id="proxy-test-status" style="text-align:left;margin-top:8px"></div>
-  </div>
-</div>
-
-
 <!-- ВЫБОР ТЕМЫ -->
 <div class="screen" id="s-themes">
   <div class="hdr">
@@ -702,30 +504,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 
 <div class="toast" id="toast"></div>
 
-<!-- ══ Модальное окно обновления (в стиле приложения) ══ -->
-<div class="ota-overlay" id="ota-overlay" onclick="otaOverlayClose(event)">
-
-<!-- ══ Секретная пасхалка — змейка (5 тапов по версии) ══ -->
+<!-- ══ Секретная пасхалка — крестики-нолики (5 тапов по версии) ══ -->
 <div class="egg-overlay" id="egg-overlay">
   <button class="egg-close" onclick="eggClose()">×</button>
-  <div class="egg-title">🐍 Секретный режим</div>
-  <div class="egg-sub">Ты нашёл пасхалку!<br>Сыграй в змейку пока ждёшь пары</div>
-  <div class="egg-snake">
-    <canvas class="snake-canvas" id="snake-canvas" width="300" height="300"></canvas>
-  </div>
-  <div class="egg-controls">
-    <div></div>
-    <button class="egg-btn" onclick="snakeDir(0,-1)">▲</button>
-    <div></div>
-    <button class="egg-btn" onclick="snakeDir(-1,0)">◀</button>
-    <button class="egg-btn" onclick="snakeRestart()">⟳</button>
-    <button class="egg-btn" onclick="snakeDir(1,0)">▶</button>
-    <div></div>
-    <button class="egg-btn" onclick="snakeDir(0,1)">▼</button>
-    <div></div>
-  </div>
-  <div class="egg-score" id="egg-score">Счёт: 0 • Рекорд: 0</div>
+  <div class="egg-title">❌⭕ Секретный режим</div>
+  <div class="egg-sub">Ты нашёл пасхалку!<br>Сыграй против ИИ пока ждёшь пары</div>
+  <div class="ttt-board" id="ttt-board"></div>
+  <div class="ttt-status" id="ttt-status">Твой ход ❌</div>
+  <div class="egg-score" id="egg-score">Ты: 0 — ИИ: 0 — Ничья: 0</div>
+  <button class="btn btn-surface3" style="width:auto;padding:10px 24px;margin-top:8px;font-size:13px" onclick="tttRestart()">🔄 Новая игра</button>
 </div>
+
+<!-- ══ Модальное окно обновления (в стиле приложения) ══ -->
+<div class="ota-overlay" id="ota-overlay" onclick="otaOverlayClose(event)">
   <div class="ota-sheet" id="ota-sheet">
     <div class="ota-handle"></div>
     <div class="ota-icon">⬆️</div>
@@ -1447,8 +1238,6 @@ const SCREEN_PARENTS = {
   's-schedule': {parent:'s-home',    nav:'nav-home'}, // всегда на главную
   's-bells':    {parent:'s-home',    nav:'nav-bells'},
   's-settings': {parent:'s-home',    nav:'nav-home'},
-  's-dpi':      {parent:'s-settings',nav:null},
-  's-proxy':    {parent:'s-settings',nav:null},
   's-themes':   {parent:'s-settings',nav:null},
 };
 
@@ -1823,33 +1612,16 @@ setTimeout(function(){
   }
 }, 300);
 renderBells();
-renderDnsGrid();
-renderDpiList();
-renderProxyList();
-updateProxyCurrentRow();
 updateLastGroupBtn();
 updateNavActive('nav-home');
-updateDpiCurrentRow();
 updateThemeCurrentRow();
 initIconPicker();
 document.getElementById('url-input').value=S.url;
-// proxy input handled by renderProxyList()
-document.getElementById('custom-dns-input').value=S.customDns;
-document.getElementById('custom-dns-wrap').classList.toggle('hidden',S.dns!=='custom');
-
-// Android WebView — показать VPN блок
-if(window.Android){
-  document.getElementById('vpn-block').classList.remove('hidden');
-  if(window.Android.getVpnState){
-    const st=window.Android.getVpnState();
-    if(st)onVpnStateChanged(st.active,st.text);
-  }
-}
 
 loadFiles();
 
 // ══ OTA обновление ══
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 
 // Показываем текущую версию в настройках
 (function(){
@@ -2032,9 +1804,9 @@ function clearCacheAndReload() {
 // ║                                                                              ║
 // ║  ИСТОРИЯ ПАСХАЛОК (не повторяй!):                                            ║
 // ║  • v1.6.0 — Змейка (Snake). Управление: стрелки или свайп.                  ║
+// ║  • v1.7.0 — Крестики-нолики против ИИ (minimax). Touch/click.               ║
 // ║                                                                              ║
 // ║  ИДЕИ ДЛЯ СЛЕДУЮЩИХ ПАСХАЛОК:                                               ║
-// ║  • Крестики-нолики против ИИ                                                 ║
 // ║  • Пинг-понг (одиночный — отбивать мяч)                                     ║
 // ║  • Тетрис                                                                    ║
 // ║  • Игра "Угадай число"                                                       ║
@@ -2052,7 +1824,7 @@ function clearCacheAndReload() {
 // ║  4. Добавь версию в ИСТОРИЮ выше перед тем как запушить                     ║
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 
-// ══ ПАСХАЛКА v1.6.0: Змейка (Snake) ══
+// ══ ПАСХАЛКА v1.7.0: Крестики-нолики против ИИ (minimax) ══
 // Активация: 5 быстрых тапов по строке "Версия" в Настройках
 let _eggTaps = 0, _eggTimer = null;
 
@@ -2070,143 +1842,131 @@ function eggTap() {
 
 function eggOpen() {
   document.getElementById('egg-overlay').classList.add('show');
-  snakeInit();
+  tttRestart();
 }
 
 function eggClose() {
   document.getElementById('egg-overlay').classList.remove('show');
-  snakeStop();
 }
 
-// ── Змейка ──────────────────────────────────────────────────
-const CELL = 15;
-const COLS = 20;
-const ROWS = 20;
+// ── Крестики-нолики ──────────────────────────────────────────────────────────
+let tttBoard = [], tttGameOver = false;
+let tttScores = {x: 0, o: 0, d: 0};
+const TTT_WIN_LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
-let snake, dir, nextDir, food, score, hiScore, snakeLoop, snakeAlive;
-
-function snakeInit() {
-  const canvas = document.getElementById('snake-canvas');
-  canvas.width  = COLS * CELL;
-  canvas.height = ROWS * CELL;
-  hiScore = hiScore || 0;
-  snakeRestart();
-
-  let tx, ty;
-  canvas.ontouchstart = e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; e.preventDefault(); };
-  canvas.ontouchmove  = e => e.preventDefault();
-  canvas.ontouchend   = e => {
-    const dx = e.changedTouches[0].clientX - tx;
-    const dy = e.changedTouches[0].clientY - ty;
-    if (Math.abs(dx) > Math.abs(dy)) snakeDir(dx > 0 ? 1 : -1, 0);
-    else snakeDir(0, dy > 0 ? 1 : -1);
-  };
+function tttRestart() {
+  tttBoard = Array(9).fill(null);
+  tttGameOver = false;
+  tttRender();
+  tttSetStatus('Твой ход ❌');
 }
 
-function snakeRestart() {
-  snakeStop();
-  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
-  dir = {x:1, y:0};
-  nextDir = {x:1, y:0};
-  score = 0;
-  snakeAlive = true;
-  placeFood();
-  updateEggScore();
-  snakeDraw();
-  snakeLoop = setInterval(snakeTick, 130);
-}
-
-function snakeStop() {
-  clearInterval(snakeLoop);
-  snakeLoop = null;
-}
-
-function snakeDir(x, y) {
-  if (x !== 0 && dir.x === -x) return;
-  if (y !== 0 && dir.y === -y) return;
-  nextDir = {x, y};
-}
-
-function placeFood() {
-  let pos;
-  do {
-    pos = {x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)};
-  } while (snake.some(s => s.x===pos.x && s.y===pos.y));
-  food = pos;
-}
-
-function snakeTick() {
-  if (!snakeAlive) return;
-  dir = nextDir;
-  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
-
-  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { snakeDie(); return; }
-  if (snake.some(s => s.x===head.x && s.y===head.y)) { snakeDie(); return; }
-
-  snake.unshift(head);
-  if (head.x === food.x && head.y === food.y) {
-    score++;
-    if (score > hiScore) hiScore = score;
-    updateEggScore();
-    placeFood();
-  } else {
-    snake.pop();
-  }
-  snakeDraw();
-}
-
-function snakeDie() {
-  snakeAlive = false;
-  clearInterval(snakeLoop);
-  const canvas = document.getElementById('snake-canvas');
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(201,79,79,0.22)';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle = '#f0ede8';
-  ctx.font = 'bold 17px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('💀 Игра окончена', canvas.width/2, canvas.height/2 - 10);
-  ctx.font = '12px monospace';
-  ctx.fillStyle = '#e87722';
-  ctx.fillText('Тапни ⟳ для новой игры', canvas.width/2, canvas.height/2 + 16);
-}
-
-function snakeDraw() {
-  const canvas = document.getElementById('snake-canvas');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-
-  ctx.fillStyle = '#161616';
-  ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-  ctx.lineWidth = 0.5;
-  for (let x=0;x<COLS;x++){ctx.beginPath();ctx.moveTo(x*CELL,0);ctx.lineTo(x*CELL,H);ctx.stroke();}
-  for (let y=0;y<ROWS;y++){ctx.beginPath();ctx.moveTo(0,y*CELL);ctx.lineTo(W,y*CELL);ctx.stroke();}
-
-  ctx.fillStyle = '#e87722';
-  ctx.shadowColor = '#e87722';
-  ctx.shadowBlur = 10;
-  ctx.beginPath();
-  ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL/2-2, 0, Math.PI*2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  snake.forEach((seg, i) => {
-    const ratio = 1 - i/(snake.length+8);
-    ctx.fillStyle = i===0
-      ? '#e87722'
-      : `rgba(${Math.round(232*ratio)},${Math.round(119*ratio)},${Math.round(34*ratio)},${0.4+0.6*ratio})`;
-    const pad = i===0 ? 1 : 2;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(seg.x*CELL+pad, seg.y*CELL+pad, CELL-pad*2, CELL-pad*2, i===0?4:3);
-    else ctx.rect(seg.x*CELL+pad, seg.y*CELL+pad, CELL-pad*2, CELL-pad*2);
-    ctx.fill();
+function tttRender() {
+  const board = document.getElementById('ttt-board');
+  if (!board) return;
+  board.innerHTML = '';
+  tttBoard.forEach((val, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'ttt-cell' + (val ? ' ' + val.toLowerCase() : '');
+    cell.textContent = val === 'X' ? '❌' : val === 'O' ? '⭕' : '';
+    if (!val && !tttGameOver) cell.onclick = () => tttMove(i);
+    board.appendChild(cell);
   });
+  // Подсветить выигрышную линию
+  const winner = tttCheckWinner(tttBoard);
+  if (winner && winner !== 'draw') {
+    const line = TTT_WIN_LINES.find(l => tttBoard[l[0]] === winner && tttBoard[l[1]] === winner && tttBoard[l[2]] === winner);
+    if (line) {
+      const cells = board.querySelectorAll('.ttt-cell');
+      line.forEach(i => cells[i].classList.add('win'));
+    }
+  }
 }
 
-function updateEggScore() {
+function tttSetStatus(text) {
+  const el = document.getElementById('ttt-status');
+  if (el) el.textContent = text;
+}
+
+function tttUpdateScore() {
   const el = document.getElementById('egg-score');
-  if (el) el.textContent = 'Счёт: '+(score||0)+' • Рекорд: '+(hiScore||0);
+  if (el) el.textContent = `Ты: ${tttScores.x} — ИИ: ${tttScores.o} — Ничья: ${tttScores.d}`;
+}
+
+function tttMove(i) {
+  if (tttBoard[i] || tttGameOver) return;
+  tttBoard[i] = 'X';
+  tttRender();
+  const result = tttCheckWinner(tttBoard);
+  if (result) { tttEndGame(result); return; }
+  tttSetStatus('ИИ думает...');
+  // Небольшая задержка чтобы UI обновился перед вычислением
+  setTimeout(() => {
+    const aiMove = tttBestMove(tttBoard);
+    if (aiMove !== -1) {
+      tttBoard[aiMove] = 'O';
+      tttRender();
+      const res2 = tttCheckWinner(tttBoard);
+      if (res2) { tttEndGame(res2); return; }
+      tttSetStatus('Твой ход ❌');
+    }
+  }, 200);
+}
+
+function tttEndGame(result) {
+  tttGameOver = true;
+  if (result === 'X') {
+    tttScores.x++;
+    tttSetStatus('🎉 Ты выиграл!');
+    toast('🎉 Победа!');
+  } else if (result === 'O') {
+    tttScores.o++;
+    tttSetStatus('🤖 ИИ выиграл');
+    toast('🤖 ИИ победил');
+  } else {
+    tttScores.d++;
+    tttSetStatus('🤝 Ничья!');
+  }
+  tttUpdateScore();
+}
+
+function tttCheckWinner(board) {
+  for (const [a,b,c] of TTT_WIN_LINES) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) return board[a];
+  }
+  if (board.every(v => v !== null)) return 'draw';
+  return null;
+}
+
+// Minimax — ИИ всегда играет оптимально
+function tttMinimax(board, isMaximizing) {
+  const winner = tttCheckWinner(board);
+  if (winner === 'O') return 10;
+  if (winner === 'X') return -10;
+  if (winner === 'draw') return 0;
+  let best = isMaximizing ? -Infinity : Infinity;
+  for (let i = 0; i < 9; i++) {
+    if (!board[i]) {
+      board[i] = isMaximizing ? 'O' : 'X';
+      const score = tttMinimax(board, !isMaximizing);
+      board[i] = null;
+      best = isMaximizing ? Math.max(best, score) : Math.min(best, score);
+    }
+  }
+  return best;
+}
+
+function tttBestMove(board) {
+  let bestScore = -Infinity, bestMove = -1;
+  for (let i = 0; i < 9; i++) {
+    if (!board[i]) {
+      board[i] = 'O';
+      const score = tttMinimax(board, false);
+      board[i] = null;
+      if (score > bestScore) { bestScore = score; bestMove = i; }
+    }
+  }
+  return bestMove;
 }
 
 </script>
