@@ -489,5 +489,65 @@ public class MainActivity extends Activity {
                 } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
             }
         }
+
+        /**
+         * OTA: открыть URL в браузере (для скачивания APK обновления)
+         */
+        @JavascriptInterface
+        public void openUrl(String urlStr) {
+            log.i(TAG, "openUrl: " + urlStr);
+            runOnUiThread(() -> {
+                try {
+                    android.content.Intent intent = new android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(urlStr)
+                    );
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                } catch (Exception e) {
+                    log.e(TAG, "openUrl error: " + e.getMessage());
+                }
+            });
+        }
+
+        /**
+         * OTA: диалог с предложением обновить приложение
+         */
+        @JavascriptInterface
+        public void showUpdateDialog(String version, String apkUrl, String notes) {
+            log.i(TAG, "showUpdateDialog v" + version);
+            runOnUiThread(() ->
+                new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("Доступно обновление " + version)
+                    .setMessage("Что нового:\n" + notes + "\n\nСкачать и установить?")
+                    .setPositiveButton("Скачать", (d, w) -> {
+                        try {
+                            android.content.Intent intent = new android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(apkUrl)
+                            );
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(intent);
+                        } catch (Exception e) {
+                            log.e(TAG, "Download APK error: " + e.getMessage());
+                        }
+                    })
+                    .setNegativeButton("Позже", null)
+                    .show()
+            );
+        }
+
+        /**
+         * OTA: очистить кэш WebView
+         */
+        @JavascriptInterface
+        public void clearWebViewCache() {
+            log.i(TAG, "clearWebViewCache");
+            runOnUiThread(() -> {
+                webView.clearCache(true);
+                webView.clearHistory();
+            });
+        }
+
     }
 }

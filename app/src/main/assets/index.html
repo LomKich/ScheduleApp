@@ -497,6 +497,18 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <button class="btn btn-surface" onclick="var ok=window.Android&&window.Android.logMsg;if(ok){window.Android.logMsg('INFO','Ручная проверка логгера '+new Date().toISOString());toast('Строка записана в лог');}else{toast('Android bridge не найден');}">
       🔬 Записать тест в лог
     </button>
+    <div class="sep"></div>
+
+    <!-- Приложение / OTA -->
+    <div class="section-label">Приложение</div>
+    <div class="list-item" style="cursor:default;margin-bottom:8px">
+      <div>
+        <div class="item-name">Версия</div>
+        <div class="item-sub" id="app-version-str">1.4.0 — Android</div>
+      </div>
+      <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
+    </div>
+    <button class="btn btn-surface" onclick="clearCacheAndReload()" style="margin-bottom:4px">🧹 Очистить кэш и перезагрузить</button>
     <div style="height:24px"></div>
   </div>
 </div>
@@ -1676,6 +1688,75 @@ if(window.Android){
 }
 
 loadFiles();
+
+// ── OTA обновление ──
+const APP_VERSION = '1.4.0';
+
+// Показываем текущую версию при инициализации
+(function(){
+  const el = document.getElementById('app-version-str');
+  if (el) el.textContent = APP_VERSION + ' — Android';
+})();
+
+// GitHub Releases API — проверяем последний релиз
+async function checkOtaUpdate() {
+  const btn = document.querySelector('[onclick="checkOtaUpdate()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    // Прямой запрос через Android bridge (нет CORS проблем)
+    const apiUrl = 'https://api.github.com/repos/marnik240808/ScheduleApp/releases/latest';
+    let data;
+    if (window.Android && window.Android.nativeFetch) {
+      const res = JSON.parse(window.Android.nativeFetch(apiUrl));
+      if (!res.ok) throw new Error(res.error || 'HTTP ' + res.status);
+      data = JSON.parse(res.body);
+    } else {
+      const r = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      data = await r.json();
+    }
+    const latestTag = (data.tag_name || '').replace(/^v/, '');
+    const apkAsset = (data.assets || []).find(a => a.name && a.name.endsWith('.apk'));
+    if (!latestTag) throw new Error('Не удалось определить версию');
+    if (latestTag === APP_VERSION) {
+      toast('✅ Установлена актуальная версия ' + APP_VERSION);
+    } else {
+      // Есть новая версия
+      if (window.Android && window.Android.openUrl && apkAsset) {
+        showUpdateDialog(latestTag, apkAsset.browser_download_url, data.body || '');
+      } else {
+        toast('🆕 Доступна версия ' + latestTag + ' — обнови через GitHub');
+      }
+    }
+  } catch(e) {
+    toast('❌ Ошибка проверки: ' + e.message);
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🔄 Проверить'; }
+}
+
+function showUpdateDialog(version, apkUrl, notes) {
+  const short = notes.length > 200 ? notes.slice(0, 200) + '...' : notes;
+  if (typeof Android !== 'undefined' && Android.showUpdateDialog) {
+    Android.showUpdateDialog(version, apkUrl, short);
+  } else {
+    // Fallback — открываем браузер на страницу релиза
+    const msg = 'Доступна версия ' + version + '.\n\n' + (short || 'Нет описания');
+    toast('🆕 ' + msg.slice(0, 80));
+  }
+}
+
+function clearCacheAndReload() {
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch(e) {}
+  if (window.Android && window.Android.clearWebViewCache) {
+    window.Android.clearWebViewCache();
+  }
+  setTimeout(() => location.reload(true), 200);
+}
+
+
 </script>
 </body>
 </html>
