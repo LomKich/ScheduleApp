@@ -10,25 +10,18 @@ android {
         applicationId "com.schedule.app"
         minSdk 23
         targetSdk 34
-        versionCode 6
-        versionName "1.6.0"
+        versionCode 7
+        versionName "1.7.0"
     }
 
     signingConfigs {
         release {
             // Ключи берём из переменных окружения (задаются в GitHub Actions через Secrets)
             // При локальной сборке используй: ./gradlew assembleRelease -PKEYSTORE_PATH=... и т.д.
-            def keystorePath = System.getenv("KEYSTORE_PATH") ?: project.findProperty("KEYSTORE_PATH") ?: ""
-            def keystorePass = System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD") ?: ""
-            def keyPass      = System.getenv("KEY_PASSWORD") ?: project.findProperty("KEY_PASSWORD") ?: ""
-            def keyAliasVal  = System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") ?: "schedule"
-
-            if (keystorePath) {
-                storeFile     file(keystorePath)
-                storePassword keystorePass
-                keyAlias      keyAliasVal
-                keyPassword   keyPass
-            }
+            storeFile     (System.getenv("KEYSTORE_PATH")     ?: project.findProperty("KEYSTORE_PATH"))     ? file(System.getenv("KEYSTORE_PATH") ?: project.findProperty("KEYSTORE_PATH")) : null
+            storePassword (System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD") ?: "")
+            keyAlias      (System.getenv("KEY_ALIAS")         ?: project.findProperty("KEY_ALIAS")         ?: "schedule")
+            keyPassword   (System.getenv("KEY_PASSWORD")      ?: project.findProperty("KEY_PASSWORD")      ?: "")
         }
     }
 
