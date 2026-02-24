@@ -410,13 +410,21 @@ public class MainActivity extends Activity {
                 pkg + ".IconDark",
                 pkg + ".IconOrange",
                 pkg + ".IconAmoled",
-                pkg + ".IconSamek"
+                pkg + ".IconSamek",
+                pkg + ".IconPurple",
+                pkg + ".IconForest",
+                pkg + ".IconGold",
+                pkg + ".IconGlass"
             };
             final String target;
             switch (icon) {
                 case "dark":   target = pkg + ".IconDark";   break;
                 case "amoled": target = pkg + ".IconAmoled"; break;
                 case "samek":  target = pkg + ".IconSamek";  break;
+                case "purple": target = pkg + ".IconPurple"; break;
+                case "forest": target = pkg + ".IconForest"; break;
+                case "gold":   target = pkg + ".IconGold";   break;
+                case "glass":  target = pkg + ".IconGlass";  break;
                 default:       target = pkg + ".IconOrange"; break;
             }
 

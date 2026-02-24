@@ -90,6 +90,66 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- Иконка: Фиолетовая -->
+        <activity-alias
+            android:name=".IconPurple"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_purple"
+            android:roundIcon="@mipmap/ic_purple_round"
+            android:label="@string/app_name"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Иконка: Лес -->
+        <activity-alias
+            android:name=".IconForest"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_forest"
+            android:roundIcon="@mipmap/ic_forest_round"
+            android:label="@string/app_name"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Иконка: Золото -->
+        <activity-alias
+            android:name=".IconGold"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_gold"
+            android:roundIcon="@mipmap/ic_gold_round"
+            android:label="@string/app_name"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Иконка: Стекло -->
+        <activity-alias
+            android:name=".IconGlass"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_glass"
+            android:roundIcon="@mipmap/ic_glass_round"
+            android:label="@string/app_name"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <service
             android:name=".DnsVpnService"
             android:exported="true"
