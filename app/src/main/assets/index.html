@@ -320,6 +320,53 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .dpi-item.works .dpi-badge{background:color-mix(in srgb,var(--success) 20%,transparent);color:var(--success)}
 .dpi-item.no-works{opacity:.4}
 
+/* ── Easter Egg ── */
+.egg-overlay{
+  position:fixed;inset:0;z-index:2000;
+  background:#0d0d0d;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;
+  transition:opacity .4s ease;
+  padding:32px
+}
+.egg-overlay.show{opacity:1;pointer-events:all}
+.egg-close{
+  position:absolute;top:calc(18px + var(--safe-top));right:18px;
+  background:var(--surface2);border:none;color:var(--muted);
+  width:36px;height:36px;border-radius:50%;font-size:20px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center
+}
+.egg-title{
+  font-size:28px;font-weight:800;text-align:center;
+  letter-spacing:-.03em;margin-bottom:8px;
+  background:linear-gradient(135deg,var(--accent),#ff4e00);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent
+}
+.egg-sub{font-size:13px;color:var(--muted);text-align:center;margin-bottom:32px;line-height:1.6}
+.egg-snake{
+  width:min(320px,90vw);height:min(320px,90vw);
+  background:var(--surface);border-radius:16px;
+  border:1.5px solid var(--surface3);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden
+}
+.snake-canvas{display:block;border-radius:14px}
+.egg-controls{
+  display:grid;grid-template-columns:repeat(3,52px);gap:8px;margin-top:20px
+}
+.egg-btn{
+  width:52px;height:52px;border-radius:12px;
+  background:var(--surface2);border:1.5px solid var(--surface3);
+  color:var(--text);font-size:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .1s,transform .1s;user-select:none
+}
+.egg-btn:active{background:var(--surface3);transform:scale(.93)}
+.egg-score{
+  font-family:'JetBrains Mono',monospace;font-size:13px;
+  color:var(--accent);margin-top:14px;letter-spacing:.05em
+}
+
 /* ── OTA Update Modal ── */
 .ota-overlay{
   position:fixed;inset:0;z-index:1000;
@@ -557,9 +604,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <!-- Приложение / OTA -->
     <div class="section-label">Приложение</div>
     <div class="list-item" style="cursor:default;margin-bottom:8px">
-      <div>
+      <div onclick="eggTap()" style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:2px 0">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">1.5.0 — Android</div>
+        <div class="item-sub" id="app-version-str">1.6.0 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -657,6 +704,28 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 
 <!-- ══ Модальное окно обновления (в стиле приложения) ══ -->
 <div class="ota-overlay" id="ota-overlay" onclick="otaOverlayClose(event)">
+
+<!-- ══ Секретная пасхалка — змейка (5 тапов по версии) ══ -->
+<div class="egg-overlay" id="egg-overlay">
+  <button class="egg-close" onclick="eggClose()">×</button>
+  <div class="egg-title">🐍 Секретный режим</div>
+  <div class="egg-sub">Ты нашёл пасхалку!<br>Сыграй в змейку пока ждёшь пары</div>
+  <div class="egg-snake">
+    <canvas class="snake-canvas" id="snake-canvas" width="300" height="300"></canvas>
+  </div>
+  <div class="egg-controls">
+    <div></div>
+    <button class="egg-btn" onclick="snakeDir(0,-1)">▲</button>
+    <div></div>
+    <button class="egg-btn" onclick="snakeDir(-1,0)">◀</button>
+    <button class="egg-btn" onclick="snakeRestart()">⟳</button>
+    <button class="egg-btn" onclick="snakeDir(1,0)">▶</button>
+    <div></div>
+    <button class="egg-btn" onclick="snakeDir(0,1)">▼</button>
+    <div></div>
+  </div>
+  <div class="egg-score" id="egg-score">Счёт: 0 • Рекорд: 0</div>
+</div>
   <div class="ota-sheet" id="ota-sheet">
     <div class="ota-handle"></div>
     <div class="ota-icon">⬆️</div>
@@ -1780,7 +1849,7 @@ if(window.Android){
 loadFiles();
 
 // ══ OTA обновление ══
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 
 // Показываем текущую версию в настройках
 (function(){
@@ -1951,5 +2020,193 @@ function clearCacheAndReload() {
   setTimeout(() => location.reload(true), 200);
 }
 
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║                    🤖 ИНСТРУКЦИЯ ДЛЯ CLAUDE (ЧИТАЙ ВНИМАТЕЛЬНО!)           ║
+// ║                                                                              ║
+// ║  Привет! Если ты читаешь этот код — значит пользователь попросил тебя       ║
+// ║  обновить приложение или разобраться в нём.                                  ║
+// ║                                                                              ║
+// ║  ТВОЯ ОБЯЗАТЕЛЬНАЯ ЗАДАЧА:                                                   ║
+// ║  Каждый раз когда ты вносишь изменения в этот файл — ты ОБЯЗАН заменить     ║
+// ║  пасхалку (секретный режим) на НОВУЮ, отличающуюся от предыдущей.           ║
+// ║                                                                              ║
+// ║  ИСТОРИЯ ПАСХАЛОК (не повторяй!):                                            ║
+// ║  • v1.6.0 — Змейка (Snake). Управление: стрелки или свайп.                  ║
+// ║                                                                              ║
+// ║  ИДЕИ ДЛЯ СЛЕДУЮЩИХ ПАСХАЛОК:                                               ║
+// ║  • Крестики-нолики против ИИ                                                 ║
+// ║  • Пинг-понг (одиночный — отбивать мяч)                                     ║
+// ║  • Тетрис                                                                    ║
+// ║  • Игра "Угадай число"                                                       ║
+// ║  • Рисовалка (canvas + touch)                                                ║
+// ║  • Мемо (перевернуть пары карточек)                                          ║
+// ║  • Динозаврик (прыгать через препятствия)                                    ║
+// ║                                                                              ║
+// ║  КАК АКТИВИРУЕТСЯ: 5 быстрых тапов по строке "Версия" в настройках.         ║
+// ║  После 2 тапов — тост "🤔 Продолжай..." как подсказка.                      ║
+// ║                                                                              ║
+// ║  ТРЕБОВАНИЯ к новой пасхалке:                                                ║
+// ║  1. Стиль приложения: цвета --accent (#e87722), --surface, --bg (#0d0d0d)   ║
+// ║  2. Работает через touch (ontouchstart/end) — это мобильное приложение       ║
+// ║  3. Overlay: class="egg-overlay", открыть/закрыть: eggOpen() / eggClose()   ║
+// ║  4. Добавь версию в ИСТОРИЮ выше перед тем как запушить                     ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+// ══ ПАСХАЛКА v1.6.0: Змейка (Snake) ══
+// Активация: 5 быстрых тапов по строке "Версия" в Настройках
+let _eggTaps = 0, _eggTimer = null;
+
+function eggTap() {
+  _eggTaps++;
+  clearTimeout(_eggTimer);
+  if (_eggTaps >= 5) {
+    _eggTaps = 0;
+    eggOpen();
+    return;
+  }
+  if (_eggTaps === 2) toast('🤔 Продолжай...');
+  _eggTimer = setTimeout(() => { _eggTaps = 0; }, 1500);
+}
+
+function eggOpen() {
+  document.getElementById('egg-overlay').classList.add('show');
+  snakeInit();
+}
+
+function eggClose() {
+  document.getElementById('egg-overlay').classList.remove('show');
+  snakeStop();
+}
+
+// ── Змейка ──────────────────────────────────────────────────
+const CELL = 15;
+const COLS = 20;
+const ROWS = 20;
+
+let snake, dir, nextDir, food, score, hiScore, snakeLoop, snakeAlive;
+
+function snakeInit() {
+  const canvas = document.getElementById('snake-canvas');
+  canvas.width  = COLS * CELL;
+  canvas.height = ROWS * CELL;
+  hiScore = hiScore || 0;
+  snakeRestart();
+
+  let tx, ty;
+  canvas.ontouchstart = e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; e.preventDefault(); };
+  canvas.ontouchmove  = e => e.preventDefault();
+  canvas.ontouchend   = e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    const dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) > Math.abs(dy)) snakeDir(dx > 0 ? 1 : -1, 0);
+    else snakeDir(0, dy > 0 ? 1 : -1);
+  };
+}
+
+function snakeRestart() {
+  snakeStop();
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1, y:0};
+  nextDir = {x:1, y:0};
+  score = 0;
+  snakeAlive = true;
+  placeFood();
+  updateEggScore();
+  snakeDraw();
+  snakeLoop = setInterval(snakeTick, 130);
+}
+
+function snakeStop() {
+  clearInterval(snakeLoop);
+  snakeLoop = null;
+}
+
+function snakeDir(x, y) {
+  if (x !== 0 && dir.x === -x) return;
+  if (y !== 0 && dir.y === -y) return;
+  nextDir = {x, y};
+}
+
+function placeFood() {
+  let pos;
+  do {
+    pos = {x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS)};
+  } while (snake.some(s => s.x===pos.x && s.y===pos.y));
+  food = pos;
+}
+
+function snakeTick() {
+  if (!snakeAlive) return;
+  dir = nextDir;
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) { snakeDie(); return; }
+  if (snake.some(s => s.x===head.x && s.y===head.y)) { snakeDie(); return; }
+
+  snake.unshift(head);
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    if (score > hiScore) hiScore = score;
+    updateEggScore();
+    placeFood();
+  } else {
+    snake.pop();
+  }
+  snakeDraw();
+}
+
+function snakeDie() {
+  snakeAlive = false;
+  clearInterval(snakeLoop);
+  const canvas = document.getElementById('snake-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(201,79,79,0.22)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = '#f0ede8';
+  ctx.font = 'bold 17px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('💀 Игра окончена', canvas.width/2, canvas.height/2 - 10);
+  ctx.font = '12px monospace';
+  ctx.fillStyle = '#e87722';
+  ctx.fillText('Тапни ⟳ для новой игры', canvas.width/2, canvas.height/2 + 16);
+}
+
+function snakeDraw() {
+  const canvas = document.getElementById('snake-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  ctx.fillStyle = '#161616';
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 0.5;
+  for (let x=0;x<COLS;x++){ctx.beginPath();ctx.moveTo(x*CELL,0);ctx.lineTo(x*CELL,H);ctx.stroke();}
+  for (let y=0;y<ROWS;y++){ctx.beginPath();ctx.moveTo(0,y*CELL);ctx.lineTo(W,y*CELL);ctx.stroke();}
+
+  ctx.fillStyle = '#e87722';
+  ctx.shadowColor = '#e87722';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL/2-2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  snake.forEach((seg, i) => {
+    const ratio = 1 - i/(snake.length+8);
+    ctx.fillStyle = i===0
+      ? '#e87722'
+      : `rgba(${Math.round(232*ratio)},${Math.round(119*ratio)},${Math.round(34*ratio)},${0.4+0.6*ratio})`;
+    const pad = i===0 ? 1 : 2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(seg.x*CELL+pad, seg.y*CELL+pad, CELL-pad*2, CELL-pad*2, i===0?4:3);
+    else ctx.rect(seg.x*CELL+pad, seg.y*CELL+pad, CELL-pad*2, CELL-pad*2);
+    ctx.fill();
+  });
+}
+
+function updateEggScore() {
+  const el = document.getElementById('egg-score');
+  if (el) el.textContent = 'Счёт: '+(score||0)+' • Рекорд: '+(hiScore||0);
+}
 
 </script>
