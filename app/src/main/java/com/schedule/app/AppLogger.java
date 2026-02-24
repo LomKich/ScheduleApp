@@ -37,7 +37,12 @@ public class AppLogger {
 
     private AppLogger(Context ctx) {
         this.ctx = ctx.getApplicationContext();
-        initFile();
+        try {
+            initFile();
+        } catch (Exception e) {
+            // Ни при каких обстоятельствах логгер не должен крашить приложение
+            Log.e(TAG, "Logger init failed, will use logcat only: " + e.getMessage());
+        }
         writeRaw("════════════════════════════════════════");
         writeRaw("  ScheduleApp — сессия начата");
         writeRaw("  Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
@@ -63,34 +68,70 @@ public class AppLogger {
     private void initMediaStore() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
 
-        // Ищем существующий файл
-        android.database.Cursor cursor = ctx.getContentResolver().query(
-            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-            new String[]{MediaStore.MediaColumns._ID, MediaStore.MediaColumns.SIZE},
-            MediaStore.MediaColumns.DISPLAY_NAME + "=?",
-            new String[]{FILE_NAME},
-            null
-        );
-        if (cursor != null && cursor.moveToFirst()) {
-            long id = cursor.getLong(0);
-            long size = cursor.getLong(1);
-            mediaUri = Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
-            cursor.close();
-            // Если файл слишком большой — удаляем и создаём заново
-            if (size > MAX_SIZE) {
-                ctx.getContentResolver().delete(mediaUri, null, null);
-                mediaUri = null;
+        // Шаг 1: ищем существующий файл в MediaStore
+        android.database.Cursor cursor = null;
+        try {
+            cursor = ctx.getContentResolver().query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                new String[]{MediaStore.MediaColumns._ID, MediaStore.MediaColumns.SIZE},
+                MediaStore.MediaColumns.DISPLAY_NAME + "=?",
+                new String[]{FILE_NAME},
+                null
+            );
+            if (cursor != null && cursor.moveToFirst()) {
+                long id   = cursor.getLong(0);
+                long size = cursor.getLong(1);
+                Uri found = Uri.withAppendedPath(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
+                if (size > MAX_SIZE) {
+                    // Файл слишком большой — удаляем, создадим ниже заново
+                    ctx.getContentResolver().delete(found, null, null);
+                } else {
+                    mediaUri = found; // переиспользуем существующий
+                }
             }
-        } else {
+        } catch (Exception e) {
+            Log.w(TAG, "MediaStore query failed: " + e.getMessage());
+        } finally {
             if (cursor != null) cursor.close();
         }
 
+        // Шаг 2: если нет рабочего URI — создаём новый файл
         if (mediaUri == null) {
-            ContentValues cv = new ContentValues();
-            cv.put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME);
-            cv.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
-            cv.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-            mediaUri = ctx.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+            try {
+                ContentValues cv = new ContentValues();
+                cv.put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME);
+                cv.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                cv.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                mediaUri = ctx.getContentResolver()
+                    .insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+            } catch (Exception e) {
+                // IllegalStateException: "Failed to build unique file" — файл с таким именем
+                // уже существует физически на диске, но MediaStore его не видит (рассинхрон).
+                // Это главная причина краша. Решение: откатываемся на внутреннее хранилище.
+                Log.w(TAG, "MediaStore insert failed, falling back to internal storage: " + e.getMessage());
+                mediaUri = null;
+                initInternalFallback();
+            }
+        }
+    }
+
+    /**
+     * Запасной вариант: пишем лог во внутреннее хранилище приложения (getFilesDir).
+     * Не требует никаких разрешений, никогда не падает.
+     */
+    private void initInternalFallback() {
+        try {
+            File dir = ctx.getFilesDir();
+            if (!dir.exists()) dir.mkdirs();
+            legacyFile = new File(dir, FILE_NAME);
+            if (legacyFile.exists() && legacyFile.length() > MAX_SIZE) {
+                legacyFile.delete();
+            }
+            Log.i(TAG, "Logger: using internal fallback at " + legacyFile.getAbsolutePath());
+        } catch (Exception e) {
+            Log.e(TAG, "Logger: all storage options failed: " + e.getMessage());
+            // legacyFile остаётся null — writeRaw() просто пропустит запись, без краша
         }
     }
 
