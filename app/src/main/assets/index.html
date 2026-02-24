@@ -32,6 +32,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 
 .body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 18px}
 .body::-webkit-scrollbar{display:none}
+*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+*{scrollbar-width:none!important}
 
 .hdr{
   padding:14px 18px 12px;display:flex;align-items:center;gap:12px;
@@ -759,7 +761,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
         <div class="egg-card-body">
           <div class="egg-card-name">Арканоид</div>
           <div class="egg-card-desc">Разбивай кирпичи мячом, не урони!</div>
-          <div class="egg-card-badge egg-card-new">v2.1.0 ✦ НОВАЯ</div>
+          <div class="egg-card-badge egg-card-new">v2.1.0 ✦</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('bubbles')">
+        <div class="egg-card-icon">🫧</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Пузыри</div>
+          <div class="egg-card-desc">Лопай пузыри до того, как они исчезнут!</div>
+          <div class="egg-card-badge egg-card-new">v2.2.0 ✦ НОВАЯ</div>
         </div>
         <div class="egg-card-arrow">›</div>
       </div>
@@ -859,7 +870,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div class="egg-score" id="bb-score-label">Счёт: 0 • Рекорд: 0</div>
     <div id="bb-board-wrap" style="margin-top:10px;display:flex;justify-content:center"></div>
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px">Перетаскивай фигуры на поле</div>
-    <div id="bb-pieces-wrap" style="display:flex;gap:10px;justify-content:center;margin-top:8px;min-height:80px"></div>
+    <div id="bb-pieces-wrap" style="display:flex;gap:10px;justify-content:center;align-items:flex-end;margin-top:8px;min-height:80px"></div>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bbRestart()">🔄 Заново</button>
   </div>
 
@@ -874,6 +885,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div class="egg-score" id="br-score-label">Счёт: 0 • Рекорд: 0 • Жизни: ❤️❤️❤️</div>
     <canvas id="br-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="brRestart()">🔄 Заново</button>
+  </div>
+
+  <!-- Пузыри -->
+  <div id="egg-bubbles" class="egg-game" style="display:none">
+    <div class="egg-game-title">🫧 Пузыри</div>
+    <div class="diff-picker">
+      <button class="diff-btn" onclick="bubDifficulty='easy';updateDiffBtns('bubbles')">🐢 Легко</button>
+      <button class="diff-btn active" onclick="bubDifficulty='normal';updateDiffBtns('bubbles')">⚡ Нормально</button>
+      <button class="diff-btn" onclick="bubDifficulty='hard';updateDiffBtns('bubbles')">💀 Хардкор</button>
+    </div>
+    <div class="egg-score" id="bub-score-label">Счёт: 0 • Рекорд: 0 • Жизни: ❤️❤️❤️</div>
+    <canvas id="bub-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bubRestart()">🔄 Заново</button>
   </div>
 
 </div>
@@ -1458,10 +1482,113 @@ function base64ToArrayBuffer(b64) {
 
 // ══ ИКОНКА ПРИЛОЖЕНИЯ ══
 const ICON_VARIANTS = {
-  orange: {label:'Оранжевая', ico:'🟠', bg:'#E87722', dot:['#0d0d0d','#E87722','#c45f0a']},
-  amoled: {label:'AMOLED',    ico:'⚫', bg:'#000000', dot:['#000','#00e5ff','#333']},
-  samek:  {label:'СаМеК',     ico:'🔵', bg:'#10388A', dot:['#10388A','#4a7fd4','#061e55']},
+  orange:  {label:'Оранжевая',  ico:'🟠', bg:'#0d0d0d', accent:'#e87722', accent2:'#c45f0a', style:'gradient-warm'},
+  amoled:  {label:'AMOLED',     ico:'⚫', bg:'#000000', accent:'#00e5ff', accent2:'#0088aa', style:'glow-cyan'},
+  samek:   {label:'СаМеК',      ico:'🔵', bg:'#10388A', accent:'#7FBBFF', accent2:'#4a7fd4', style:'gradient-blue'},
+  purple:  {label:'Фиолет',     ico:'🫐', bg:'#0e0b1a', accent:'#a78bfa', accent2:'#7c3aed', style:'glow-purple'},
+  forest:  {label:'Лес',        ico:'🌿', bg:'#0b1a10', accent:'#4caf7d', accent2:'#2d8653', style:'glow-green'},
+  gold:    {label:'Золото',     ico:'✨', bg:'#100e00', accent:'#f5c518', accent2:'#c9a000', style:'glow-gold'},
+  glass:   {label:'Стекло',     ico:'🫧', bg:'#0a0f1e', accent:'#a0c4ff', accent2:'#7b9fff', style:'glass'},
 };
+
+// Draw CK icon preview on a canvas element
+function drawIconPreview(canvas, variant) {
+  const size = canvas.width;
+  const ctx = canvas.getContext('2d');
+  const t = variant;
+
+  // Background
+  if (t.style === 'gradient-warm') {
+    const g = ctx.createRadialGradient(size*0.5,size*0.35,0, size*0.5,size*0.5,size*0.7);
+    g.addColorStop(0, '#2a1800'); g.addColorStop(1, '#0d0d0d');
+    ctx.fillStyle = g;
+  } else if (t.style === 'gradient-blue') {
+    const g = ctx.createLinearGradient(0, 0, size, size);
+    g.addColorStop(0, '#0a1e4a'); g.addColorStop(1, '#10388A');
+    ctx.fillStyle = g;
+  } else if (t.style === 'glow-cyan') {
+    const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.6);
+    g.addColorStop(0, '#001a22'); g.addColorStop(1, '#000000');
+    ctx.fillStyle = g;
+  } else if (t.style === 'glow-purple') {
+    const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
+    g.addColorStop(0, '#1a0f35'); g.addColorStop(1, '#0e0b1a');
+    ctx.fillStyle = g;
+  } else if (t.style === 'glow-green') {
+    const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
+    g.addColorStop(0, '#0f2a18'); g.addColorStop(1, '#0b1a10');
+    ctx.fillStyle = g;
+  } else if (t.style === 'glow-gold') {
+    const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
+    g.addColorStop(0, '#1f1a00'); g.addColorStop(1, '#100e00');
+    ctx.fillStyle = g;
+  } else if (t.style === 'glass') {
+    const g = ctx.createLinearGradient(0,0,size,size);
+    g.addColorStop(0,'#1a2040'); g.addColorStop(0.5,'#0f1535'); g.addColorStop(1,'#0a0f1e');
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = t.bg;
+  }
+
+  // Rounded rect background
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(0,0,size,size, size*0.22);
+  else ctx.rect(0,0,size,size);
+  ctx.fill();
+
+  // Outer border ring
+  ctx.strokeStyle = t.accent + '55';
+  ctx.lineWidth = size * 0.035;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(size*0.04,size*0.04,size*0.92,size*0.92, size*0.18);
+  else ctx.rect(size*0.04,size*0.04,size*0.92,size*0.92);
+  ctx.stroke();
+
+  // Glow under logo
+  ctx.shadowColor = t.accent;
+  ctx.shadowBlur = size * 0.22;
+  ctx.fillStyle = 'transparent';
+  ctx.fillRect(size*0.3, size*0.3, size*0.4, size*0.4);
+  ctx.shadowBlur = 0;
+
+  // Draw CK logo mark
+  const cx = size * 0.5, cy = size * 0.5;
+  const lw = size * 0.09; // stroke width
+
+  ctx.strokeStyle = t.accent;
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.shadowColor = t.accent;
+  ctx.shadowBlur = size * 0.12;
+
+  // C shape (open on right)
+  const cr = size * 0.22;
+  ctx.beginPath();
+  ctx.arc(cx - size*0.04, cy, cr, Math.PI * 0.28, Math.PI * 1.72);
+  ctx.stroke();
+
+  // K shape (right side)
+  const kx = cx + size * 0.06, ky = cy;
+  const kh = cr * 0.95;
+  // Vertical bar of K
+  ctx.beginPath();
+  ctx.moveTo(kx, ky - kh);
+  ctx.lineTo(kx, ky + kh);
+  ctx.stroke();
+  // Upper diagonal
+  ctx.beginPath();
+  ctx.moveTo(kx, ky - kh * 0.08);
+  ctx.lineTo(kx + kh * 0.7, ky - kh);
+  ctx.stroke();
+  // Lower diagonal
+  ctx.beginPath();
+  ctx.moveTo(kx, ky - kh * 0.08);
+  ctx.lineTo(kx + kh * 0.75, ky + kh);
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+}
 
 function pickIcon(key) {
   if (!window.Android || !window.Android.setAppIcon) {
@@ -1479,21 +1606,48 @@ function renderIconGrid() {
   const g = document.getElementById('icon-grid-screen');
   if (!g) return;
   const cur = S.appIcon || 'orange';
-  // Показываем/скрываем секцию иконок — только в Android-приложении
   const sec = document.getElementById('icon-picker-section');
   if (sec) sec.style.display = window.Android ? '' : 'none';
+
   g.innerHTML = '';
+  // Use a flex-wrap grid instead of theme-card list
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:14px;padding:4px 0';
+  g.appendChild(grid);
+
   Object.entries(ICON_VARIANTS).forEach(([key, t]) => {
-    const c = document.createElement('div');
-    c.className = 'theme-card' + (cur === key ? ' selected' : '');
-    c.innerHTML = `
-      <div class="theme-swatch">${t.dot.map(cl=>`<div class="swatch" style="background:${cl}"></div>`).join('')}</div>
-      <div style="flex:1;min-width:0">
-        <div class="theme-name" style="font-size:13px;font-weight:700">${t.ico} ${t.label}</div>
-      </div>
-      <span class="theme-check">✓</span>`;
-    c.onclick = () => pickIcon(key);
-    g.appendChild(c);
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;position:relative';
+
+    const cvWrap = document.createElement('div');
+    const isSel = cur === key;
+    cvWrap.style.cssText = `border-radius:16px;overflow:hidden;transition:transform .15s,box-shadow .15s;` +
+      (isSel ? `box-shadow:0 0 0 2.5px var(--accent),0 0 18px color-mix(in srgb,var(--accent) 50%,transparent);transform:scale(1.08)` : '');
+
+    const cv = document.createElement('canvas');
+    cv.width = 64; cv.height = 64;
+    cv.style.cssText = 'display:block;border-radius:16px;';
+    drawIconPreview(cv, t);
+    cvWrap.appendChild(cv);
+
+    // Selection tick badge
+    const tick = document.createElement('div');
+    tick.style.cssText = `position:absolute;top:-4px;right:-4px;background:var(--accent);color:#fff;
+      font-size:10px;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;
+      justify-content:center;font-weight:700;opacity:${isSel?1:0};transition:opacity .15s`;
+    tick.textContent = '✓';
+    wrap.appendChild(cvWrap);
+    wrap.appendChild(tick);
+
+    const label = document.createElement('div');
+    label.style.cssText = `font-size:11px;font-weight:600;color:${isSel?'var(--accent)':'var(--muted)'};letter-spacing:.03em;text-align:center;max-width:68px;line-height:1.2`;
+    label.textContent = t.label;
+    wrap.appendChild(label);
+
+    wrap.onclick = () => pickIcon(key);
+    wrap.addEventListener('touchstart', () => { cvWrap.style.transform = 'scale(0.94)'; });
+    wrap.addEventListener('touchend', () => { cvWrap.style.transform = isSel ? 'scale(1.08)' : ''; });
+    grid.appendChild(wrap);
   });
 }
 
@@ -2254,7 +2408,7 @@ function eggClose() {
 
 function eggShowPicker() {
   eggStopAll();
-  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout'].forEach(id => {
+  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout','egg-bubbles'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -2273,6 +2427,7 @@ function eggStartGame(name) {
   else if (name === 'dino') { document.getElementById('egg-dino').style.display = ''; dinoInit(); }
   else if (name === 'blockblast') { document.getElementById('egg-blockblast').style.display = ''; bbInit(); }
   else if (name === 'breakout') { document.getElementById('egg-breakout').style.display = ''; brInit(); }
+  else if (name === 'bubbles')  { document.getElementById('egg-bubbles').style.display = '';  bubInit(); }
 }
 
 function eggStopAll() {
@@ -2281,19 +2436,20 @@ function eggStopAll() {
   tetStop();
   dinoStop();
   brStop();
+  bubStop();
 }
 
 // ── Утилита: обновить активную кнопку сложности ──
 function updateDiffBtns(game) {
   const gameIdMap = {
     snake: 'egg-snake', pong: 'egg-pong', tetris: 'egg-tetris',
-    dino: 'egg-dino', blockblast: 'egg-blockblast', breakout: 'egg-breakout'
+    dino: 'egg-dino', blockblast: 'egg-blockblast', breakout: 'egg-breakout', bubbles: 'egg-bubbles'
   };
   const container = document.getElementById(gameIdMap[game]);
   if (!container) return;
   const diffMap = {
     snake: snakeDifficulty, pong: pongDifficulty,
-    tetris: tetDifficulty, dino: dinoDifficulty, blockblast: bbDifficulty, breakout: brDifficulty
+    tetris: tetDifficulty, dino: dinoDifficulty, blockblast: bbDifficulty, breakout: brDifficulty, bubbles: bubDifficulty
   };
   const cur = diffMap[game];
   const order = ['easy', 'normal', 'hard'];
@@ -2938,11 +3094,12 @@ let dinoW, dinoH, dinoCellH;
 let dinoDino, dinoGround, dinoObstacles, dinoCloudX, dinoFrameCount;
 let dinoDifficulty = 'normal';
 let dinoLastTime = 0;
+let dinoLegFrame = 0, dinoLegTimer = 0; // simple 2-frame leg animation
 
 const DINO_DIFF = {
-  easy:   { initSpeed: 3.5, accel: 0.008, jumpVel: -9.5, gravity: 0.55 },
-  normal: { initSpeed: 5,   accel: 0.012, jumpVel: -10,  gravity: 0.65 },
-  hard:   { initSpeed: 7,   accel: 0.018, jumpVel: -10,  gravity: 0.85 },
+  easy:   { initSpeed: 4,   accel: 0.008, jumpVel: -13.5, gravity: 0.72 },
+  normal: { initSpeed: 5.5, accel: 0.012, jumpVel: -14.5, gravity: 0.80 },
+  hard:   { initSpeed: 7.5, accel: 0.018, jumpVel: -14,   gravity: 0.90 },
 };
 
 function dinoInit() {
@@ -2961,12 +3118,13 @@ function dinoInit() {
 function dinoRestart() {
   dinoStop();
   dinoLastTime = 0;
+  dinoLegFrame = 0; dinoLegTimer = 0;
   const d = DINO_DIFF[dinoDifficulty] || DINO_DIFF.normal;
   dinoScore = 0;
   dinoGround = dinoH - Math.round(dinoH * 0.12);
   dinoDino = {
-    x: Math.round(dinoW * 0.12), w: Math.round(dinoH * 0.24), h: Math.round(dinoH * 0.3),
-    y: 0, vy: 0, onGround: true, legPhase: 0,
+    x: Math.round(dinoW * 0.12), w: Math.round(dinoH * 0.26), h: Math.round(dinoH * 0.32),
+    y: 0, vy: 0, onGround: true,
     speed: d.initSpeed, accel: d.accel,
     jumpVel: d.jumpVel, gravity: d.gravity
   };
@@ -3006,7 +3164,12 @@ function dinoTick(dt) {
   // Acceleration
   d.speed = Math.min(d.speed + d.accel * dt, 20);
   dinoFrameCount += dt;
-  if (d.onGround) d.legPhase = (d.legPhase + d.speed * 0.08 * dt) % (Math.PI * 2);
+
+  // Simple 2-frame leg animation (like original Google dino)
+  if (d.onGround) {
+    dinoLegTimer += d.speed * dt;
+    if (dinoLegTimer >= 7) { dinoLegTimer = 0; dinoLegFrame = 1 - dinoLegFrame; }
+  }
 
   // Physics
   d.vy += d.gravity * dt;
@@ -3020,26 +3183,25 @@ function dinoTick(dt) {
 
   // Spawn obstacle
   const lastX = dinoObstacles.length ? dinoObstacles[dinoObstacles.length - 1].x : -Infinity;
-  const minGap = Math.max(140, 280 - d.speed * 10);
+  const minGap = Math.max(160, 320 - d.speed * 12);
   if (lastX < dinoW - minGap || dinoObstacles.length === 0) {
-    if (Math.random() < 0.018 * dt || dinoObstacles.length === 0) {
-      const cactH = Math.round(dinoH * (0.28 + Math.random() * 0.18));
-      const cactW = Math.round(cactH * 0.4);
+    if (Math.random() < 0.015 * dt || dinoObstacles.length === 0) {
+      const cactH = Math.round(dinoH * (0.22 + Math.random() * 0.15));
+      const cactW = Math.round(cactH * 0.45);
       dinoObstacles.push({ x: dinoW + 10, w: cactW, h: cactH, y: dinoGround - cactH });
     }
   }
 
   // Move obstacles
   for (const obs of dinoObstacles) obs.x -= d.speed * dt;
-  // Remove off-screen
   while (dinoObstacles.length && dinoObstacles[0].x + dinoObstacles[0].w < 0) dinoObstacles.shift();
 
   // Cloud
-  dinoCloudX -= d.speed * 0.3 * dt;
-  if (dinoCloudX < -80) dinoCloudX = dinoW + 20;
+  dinoCloudX -= d.speed * 0.25 * dt;
+  if (dinoCloudX < -100) dinoCloudX = dinoW + 30;
 
-  // Collision
-  const pad = 3;
+  // Collision (with tighter hitbox)
+  const pad = Math.round(d.w * 0.12);
   for (const obs of dinoObstacles) {
     if (d.x + d.w - pad > obs.x + pad && d.x + pad < obs.x + obs.w - pad &&
         d.y + d.h - pad > obs.y + pad && d.y + pad < obs.y + obs.h - pad) {
@@ -3057,112 +3219,138 @@ function dinoDraw() {
   const canvas = document.getElementById('dino-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  // Google dino uses grey/white — use light grey regardless of theme
-  const DINO_COLOR = '#535353';
-  const DINO_LIGHT = '#f7f7f7';
-  // Background: white for Google style
-  ctx.fillStyle = '#f7f7f7'; ctx.fillRect(0, 0, dinoW, dinoH);
+  const accent = getAccent();
 
-  // Ground — double line like Google dino
-  ctx.fillStyle = '#535353';
-  ctx.fillRect(0, dinoGround + 1, dinoW, 2);
-  // Ground texture dots
-  for (let i = 0; i < dinoW; i += Math.round(dinoW / 14)) {
-    const h = 2 + Math.round(Math.random() * 2);
-    ctx.fillRect(i + Math.round((dinoFrameCount * 0.5) % (dinoW/14)) - dinoW/14, dinoGround + 3, 3, h);
+  // Dark theme background matching app
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, dinoW, dinoH);
+
+  // Ground line
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.fillRect(0, dinoGround, dinoW, 1);
+
+  // Subtle ground pebbles (scroll with game)
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  const pebbleSeed = Math.floor(dinoFrameCount * 0.5) % 40;
+  for (let i = 0; i < 8; i++) {
+    const px = ((i * 53 + 7 - pebbleSeed) % (dinoW + 20)) - 10;
+    const pw = 3 + (i * 7 % 5), ph = 2 + (i * 3 % 3);
+    ctx.fillRect(px, dinoGround + 3 + (i % 3), pw, ph);
   }
 
-  // Clouds (multiple, lighter)
-  const drawCloud = (cx, cy) => {
-    ctx.fillStyle = '#f0f0f0';
-    ctx.fillRect(cx, cy + 6, 40, 6);
-    ctx.fillRect(cx + 6, cy + 2, 28, 4);
-    ctx.fillRect(cx + 10, cy, 18, 3);
+  // Clouds (subtle, monochrome)
+  const drawCloud = (cx, cy, scale) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    const s = scale || 1;
+    ctx.fillRect(cx, cy + 5*s, 46*s, 7*s);
+    ctx.fillRect(cx + 8*s, cy + 2*s, 22*s, 5*s);
+    ctx.fillRect(cx + 14*s, cy, 14*s, 3*s);
   };
-  drawCloud(dinoCloudX, dinoH * 0.1);
-  drawCloud((dinoCloudX + dinoW * 0.55) % (dinoW + 60) - 30, dinoH * 0.06);
+  drawCloud(dinoCloudX, dinoH * 0.1, 1);
+  drawCloud((dinoCloudX + dinoW * 0.6) % (dinoW + 60) - 30, dinoH * 0.06, 0.7);
+  drawCloud((dinoCloudX + dinoW * 0.3) % (dinoW + 50) - 20, dinoH * 0.2, 0.85);
 
-  // Score (top right, Google dino HI style)
-  ctx.fillStyle = '#535353';
-  ctx.font = `bold ${Math.round(dinoH*0.14)}px "JetBrains Mono",monospace`;
+  // HI score + score (top right)
+  const fs = Math.round(dinoH * 0.13);
+  ctx.font = `700 ${fs}px "JetBrains Mono",monospace`;
   ctx.textAlign = 'right';
   if (dinoHi > 0) {
-    ctx.fillStyle = '#aaa';
-    ctx.fillText('HI ' + String(dinoHi).padStart(5, '0'), dinoW - 8, dinoH * 0.16);
-    ctx.fillStyle = '#535353';
-    ctx.fillText(String(dinoScore).padStart(5, '0'), dinoW - 8 - Math.round(dinoH*0.14)*6.5, dinoH * 0.16);
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillText('HI ' + String(dinoHi).padStart(5,'0'), dinoW - 8, fs + 4);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    const hiW = ctx.measureText('HI 00000').width + 6;
+    ctx.fillText(String(dinoScore).padStart(5,'0'), dinoW - 8 - hiW, fs + 4);
   } else {
-    ctx.fillText(String(dinoScore).padStart(5, '0'), dinoW - 8, dinoH * 0.16);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText(String(dinoScore).padStart(5,'0'), dinoW - 8, fs + 4);
   }
   ctx.textAlign = 'left';
 
-  // Obstacles (cacti) — Google style dark green angular
+  // ── Cacti — drawn with app accent color ──
   for (const obs of dinoObstacles) {
-    ctx.fillStyle = '#535353';
-    // Main trunk
-    const tw = Math.round(obs.w * 0.38);
-    const tx = obs.x + Math.round((obs.w - tw) / 2);
-    ctx.fillRect(tx, obs.y, tw, obs.h);
-    // Left arm
-    const armH = Math.round(obs.h * 0.38), armW = Math.round(obs.w * 0.38);
-    ctx.fillRect(obs.x, obs.y + Math.round(obs.h * 0.22), armW, armH);
-    // Left arm top
-    ctx.fillRect(obs.x, obs.y + Math.round(obs.h * 0.22) - Math.round(armH*0.4), armW, Math.round(armH*0.4));
-    // Right arm
-    const rx = obs.x + obs.w - armW;
-    ctx.fillRect(rx, obs.y + Math.round(obs.h * 0.3), armW, armH);
-    ctx.fillRect(rx + Math.round(armW*0.6), obs.y + Math.round(obs.h * 0.3) - Math.round(armH*0.4), Math.round(armW*0.4), Math.round(armH*0.4));
+    ctx.fillStyle = accent;
+    ctx.shadowColor = accent; ctx.shadowBlur = 5;
+    // trunk (center column)
+    const tW = Math.max(3, Math.round(obs.w * 0.32));
+    const tX = obs.x + Math.round((obs.w - tW) / 2);
+    ctx.fillRect(tX, obs.y, tW, obs.h);
+    // left arm
+    const aH = Math.round(obs.h * 0.32), aW = Math.round(obs.w * 0.35);
+    ctx.fillRect(obs.x, obs.y + Math.round(obs.h * 0.25), aW, aH);
+    ctx.fillRect(obs.x, obs.y + Math.round(obs.h * 0.25) - Math.round(aH * 0.55), aW, Math.round(aH * 0.55));
+    // right arm
+    const rX = obs.x + obs.w - aW;
+    ctx.fillRect(rX, obs.y + Math.round(obs.h * 0.35), aW, aH);
+    ctx.fillRect(rX + Math.round(aW * 0.55), obs.y + Math.round(obs.h * 0.35) - Math.round(aH * 0.45), Math.round(aW * 0.45), Math.round(aH * 0.45));
+    ctx.shadowBlur = 0;
   }
 
-  // ─── Google-style Dino ───
+  // ── Google-style pixel dino (in app theme color) ──
   const d = dinoDino;
-  const S = d.w / 22; // scale unit (Google dino is ~22px wide baseline)
-  const bx = d.x, by = d.y;
+  // Scale unit based on dino height (original dino ~47px)
+  const U = d.h / 47;
+  const bx = Math.round(d.x), by = Math.round(d.y);
 
-  ctx.fillStyle = DINO_COLOR;
+  ctx.fillStyle = accent;
+  ctx.shadowColor = accent; ctx.shadowBlur = 6;
 
-  // Tail
-  ctx.fillRect(bx, by + d.h * 0.52, S*3, S*2.5);
-  ctx.fillRect(bx + S, by + d.h * 0.62, S*2.5, S*2);
-  ctx.fillRect(bx - S, by + d.h * 0.44, S*2, S*2);
+  // === Body (based on Chrome Dino sprite layout) ===
+  // Tail (pointing left)
+  ctx.fillRect(bx,            by + Math.round(23*U),  Math.round(6*U),  Math.round(6*U));
+  ctx.fillRect(bx+Math.round(2*U), by + Math.round(27*U), Math.round(5*U), Math.round(4*U));
 
-  // Main body
-  ctx.fillRect(bx + S*2, by + d.h * 0.32, d.w * 0.55, d.h * 0.52);
+  // Main torso
+  ctx.fillRect(bx+Math.round(4*U),  by+Math.round(20*U), Math.round(18*U), Math.round(20*U));
 
-  // Neck  
-  ctx.fillRect(bx + d.w * 0.48, by + d.h * 0.18, d.w * 0.28, d.h * 0.2);
+  // Chest/front
+  ctx.fillRect(bx+Math.round(18*U), by+Math.round(24*U), Math.round(8*U),  Math.round(12*U));
+
+  // Neck
+  ctx.fillRect(bx+Math.round(15*U), by+Math.round(12*U), Math.round(10*U), Math.round(11*U));
 
   // Head
-  ctx.fillRect(bx + d.w * 0.38, by, d.w * 0.58, d.h * 0.38);
+  ctx.fillRect(bx+Math.round(10*U), by,                   Math.round(22*U), Math.round(14*U));
+  ctx.fillRect(bx+Math.round(8*U),  by+Math.round(4*U),   Math.round(24*U), Math.round(9*U));
 
-  // Mouth / jaw area (slightly lighter stripe)
-  ctx.fillStyle = '#666';
-  ctx.fillRect(bx + d.w * 0.55, by + d.h * 0.22, d.w * 0.38, d.h * 0.1);
+  // Mouth / jaw notch (cut from head bottom-right)
+  ctx.fillStyle = '#111';
+  ctx.shadowBlur = 0;
+  ctx.fillRect(bx+Math.round(22*U), by+Math.round(10*U),  Math.round(10*U), Math.round(4*U));
 
-  // Eye
-  ctx.fillStyle = DINO_LIGHT;
-  ctx.fillRect(bx + d.w * 0.74, by + d.h * 0.05, S*3.5, S*3.5);
-  ctx.fillStyle = DINO_COLOR;
-  ctx.fillRect(bx + d.w * 0.78, by + d.h * 0.08, S*2, S*2);
+  // Eye white
+  ctx.fillStyle = '#f0ede8';
+  ctx.fillRect(bx+Math.round(22*U), by+Math.round(2*U),   Math.round(6*U),  Math.round(6*U));
+  // Eye pupil
+  ctx.fillStyle = '#111';
+  ctx.fillRect(bx+Math.round(25*U), by+Math.round(3*U),   Math.round(3*U),  Math.round(3*U));
 
-  // Legs (Google dino pixel style — two rectangles that alternate)
-  ctx.fillStyle = DINO_COLOR;
-  const legW = d.w * 0.18, legH = d.h * 0.36;
-  const lp = d.legPhase;
-  // Leg 1
-  const l1raise = d.onGround ? Math.max(0, Math.sin(lp)) * legH * 0.55 : 0;
-  ctx.fillRect(bx + d.w * 0.35, by + d.h * 0.79 + l1raise, legW, legH - l1raise);
-  // Foot 1
-  if (d.onGround) ctx.fillRect(bx + d.w * 0.35 - S, by + d.h * 0.79 + legH - S, legW + S*2, S*1.5);
-  // Leg 2
-  const l2raise = d.onGround ? Math.max(0, Math.sin(lp + Math.PI)) * legH * 0.55 : 0;
-  ctx.fillRect(bx + d.w * 0.54, by + d.h * 0.79 + l2raise, legW, legH - l2raise);
-  // Foot 2
-  if (d.onGround) ctx.fillRect(bx + d.w * 0.54 - S, by + d.h * 0.79 + legH - S, legW + S*2, S*1.5);
+  ctx.fillStyle = accent;
+  ctx.shadowColor = accent; ctx.shadowBlur = 4;
 
-  // Tiny arm
-  ctx.fillStyle = DINO_COLOR;
-  ctx.fillRect(bx + d.w * 0.6, by + d.h * 0.38, S*3, S*1.5);
+  // Small arm
+  ctx.fillRect(bx+Math.round(18*U), by+Math.round(27*U),  Math.round(6*U),  Math.round(3*U));
+
+  // ── Legs (2-frame alternating animation, like original) ──
+  const legW = Math.round(5*U), legH = Math.round(11*U);
+  const legY = by + Math.round(38*U); // legs attach at same Y always
+  // Frame 0: leg1 forward, leg2 back | Frame 1: opposite
+  if (!d.onGround) {
+    // In air: both legs slightly spread
+    ctx.fillRect(bx+Math.round(8*U),  legY, legW, Math.round(8*U));
+    ctx.fillRect(bx+Math.round(16*U), legY + Math.round(4*U), legW, Math.round(6*U));
+  } else if (dinoLegFrame === 0) {
+    // Stride A
+    ctx.fillRect(bx+Math.round(7*U),  legY,                   legW, legH);
+    ctx.fillRect(bx+Math.round(7*U),  legY+legH-Math.round(U),Math.round(7*U), Math.round(2*U)); // foot1
+    ctx.fillRect(bx+Math.round(18*U), legY+Math.round(4*U),   legW, legH-Math.round(4*U));
+    ctx.fillRect(bx+Math.round(16*U), legY+legH-Math.round(U),Math.round(7*U), Math.round(2*U)); // foot2
+  } else {
+    // Stride B
+    ctx.fillRect(bx+Math.round(7*U),  legY+Math.round(4*U),   legW, legH-Math.round(4*U));
+    ctx.fillRect(bx+Math.round(5*U),  legY+legH-Math.round(U),Math.round(7*U), Math.round(2*U)); // foot1
+    ctx.fillRect(bx+Math.round(18*U), legY,                   legW, legH);
+    ctx.fillRect(bx+Math.round(18*U), legY+legH-Math.round(U),Math.round(7*U), Math.round(2*U)); // foot2
+  }
+  ctx.shadowBlur = 0;
 }
 
 function _dinoRoundRect(ctx, x, y, w, h, r) {
@@ -3313,6 +3501,8 @@ function bbRenderPieces() {
     cv.style.cursor = 'grab';
     cv.style.touchAction = 'none';
     cv.style.opacity = '1';
+    cv.style.display = 'block';
+    cv.style.flexShrink = '0';
     cv.style.transition = 'transform .15s, opacity .15s';
     wrap.appendChild(cv);
     const ctx2 = cv.getContext('2d');
@@ -3697,5 +3887,165 @@ function brUpdateScore() {
   const el = document.getElementById('br-score-label'); if (!el) return;
   const hearts = '❤️'.repeat(Math.max(0,brLives)) + '🖤'.repeat(Math.max(0, 3 - brLives));
   el.textContent = 'Счёт: ' + brScore + ' • Рекорд: ' + brHi + ' • ' + hearts;
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🫧 ПУЗЫРИ (v2.2.0) ───────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+const BUB_COLORS = ['#e87722','#00e5ff','#a78bfa','#4caf7d','#f5c518','#f472b6','#60cdff','#c94f4f'];
+let bubRaf = null, bubRunning = false, bubLastTime = 0;
+let bubScore = 0, bubHi = 0, bubLives = 3;
+let bubW, bubH, bubBubbles = [], bubSpawnTimer = 0, bubDifficulty = 'normal', bubLevel = 1;
+let bubLevelTimer = 0, bubCombo = 0, bubComboTimer = 0;
+
+const BUB_DIFF = {
+  easy:   { spawnInterval: 2200, lifespan: 3500, minR: 26, maxR: 42, maxBubs: 8  },
+  normal: { spawnInterval: 1500, lifespan: 2800, minR: 22, maxR: 36, maxBubs: 12 },
+  hard:   { spawnInterval: 900,  lifespan: 2000, minR: 16, maxR: 30, maxBubs: 16 },
+};
+
+function bubInit() {
+  const canvas = document.getElementById('bub-canvas');
+  const w = Math.min(window.innerWidth - 36, 360);
+  canvas.width = w;
+  canvas.height = Math.round(w * 1.2);
+  bubW = canvas.width; bubH = canvas.height;
+  const handleTap = (clientX, clientY) => {
+    const rect = canvas.getBoundingClientRect();
+    const tx = clientX - rect.left, ty = clientY - rect.top;
+    let popped = false;
+    for (let i = bubBubbles.length - 1; i >= 0; i--) {
+      const b = bubBubbles[i];
+      if (b.popped) continue;
+      const dx = tx - b.x, dy = ty - b.y;
+      if (dx*dx + dy*dy <= (b.r + 8)*(b.r + 8)) {
+        b.popped = true; b.popTime = 0;
+        bubCombo++; bubComboTimer = 1500;
+        const pts = Math.round(10 * bubCombo * (1 + bubLevel * 0.1));
+        bubScore += pts; if (bubScore > bubHi) bubHi = bubScore;
+        bubUpdateScore(); popped = true; break;
+      }
+    }
+    if (!popped && bubRunning) bubCombo = 0;
+  };
+  canvas.ontouchstart = e => { e.preventDefault(); const t = e.touches[0]; handleTap(t.clientX, t.clientY); };
+  canvas.onclick = e => handleTap(e.clientX, e.clientY);
+  bubRestart();
+}
+
+function bubRestart() {
+  bubStop();
+  bubLastTime = 0; bubBubbles = []; bubSpawnTimer = 0;
+  bubScore = 0; bubLives = 3; bubLevel = 1; bubLevelTimer = 0;
+  bubCombo = 0; bubComboTimer = 0;
+  bubUpdateScore(); bubRunning = true;
+  bubRaf = requestAnimationFrame(bubLoop);
+}
+
+function bubStop() { cancelAnimationFrame(bubRaf); bubRaf = null; bubRunning = false; }
+
+function bubLoop(ts) {
+  if (!bubRunning) return;
+  const dt = bubLastTime ? Math.min(ts - bubLastTime, 50) : 16;
+  bubLastTime = ts;
+  bubTick(dt); bubDraw();
+  bubRaf = requestAnimationFrame(bubLoop);
+}
+
+function bubTick(dt) {
+  const d = BUB_DIFF[bubDifficulty] || BUB_DIFF.normal;
+  bubLevelTimer += dt; if (bubLevelTimer >= 25000) { bubLevelTimer = 0; bubLevel++; }
+  if (bubComboTimer > 0) { bubComboTimer -= dt; if (bubComboTimer <= 0) bubCombo = 0; }
+  const interval = Math.max(400, d.spawnInterval - bubLevel * 60);
+  bubSpawnTimer += dt;
+  if (bubSpawnTimer >= interval && bubBubbles.filter(b=>!b.popped).length < d.maxBubs) {
+    bubSpawnTimer = 0;
+    const r = d.minR + Math.random() * (d.maxR - d.minR);
+    const lifespan = Math.max(900, d.lifespan - bubLevel * 80 + (Math.random()-0.5)*400);
+    bubBubbles.push({
+      x: r*1.5 + Math.random()*(bubW - r*3), y: r*1.5 + Math.random()*(bubH - r*3 - 40),
+      r, color: BUB_COLORS[Math.floor(Math.random()*BUB_COLORS.length)],
+      age: 0, lifespan, popped: false, popTime: -1,
+      vy: (Math.random()-0.5)*0.25, vx: (Math.random()-0.5)*0.18,
+    });
+  }
+  for (let i = bubBubbles.length-1; i >= 0; i--) {
+    const b = bubBubbles[i];
+    if (b.popped) { b.popTime += dt; if (b.popTime > 380) bubBubbles.splice(i,1); continue; }
+    b.age += dt;
+    b.x += b.vx * dt * 0.06; b.y += b.vy * dt * 0.06;
+    if (b.x-b.r < 0) { b.x=b.r; b.vx=Math.abs(b.vx); }
+    if (b.x+b.r > bubW) { b.x=bubW-b.r; b.vx=-Math.abs(b.vx); }
+    if (b.y-b.r < 0) { b.y=b.r; b.vy=Math.abs(b.vy); }
+    if (b.y+b.r > bubH-40) { b.y=bubH-40-b.r; b.vy=-Math.abs(b.vy); }
+    if (b.age >= b.lifespan) {
+      bubBubbles.splice(i,1); bubLives--; bubCombo = 0; bubUpdateScore();
+      if (bubLives <= 0) {
+        bubStop(); bubRunning = false; bubDraw();
+        const canvas = document.getElementById('bub-canvas'); if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle='rgba(0,0,0,.7)'; ctx.fillRect(0,bubH/2-35,bubW,70);
+        ctx.fillStyle='#f0ede8'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('💀 Игра окончена! Тапни чтобы снова',bubW/2,bubH/2+6); ctx.textAlign='left';
+        toast('🫧 Счёт: '+bubScore);
+        canvas.ontouchstart = e => { e.preventDefault(); canvas.ontouchstart=null; canvas.onclick=null; bubRestart(); };
+        canvas.onclick = () => { canvas.ontouchstart=null; canvas.onclick=null; bubRestart(); };
+        return;
+      }
+    }
+  }
+}
+
+function bubDraw() {
+  const canvas = document.getElementById('bub-canvas'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const accent = getAccent();
+  ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,bubW,bubH);
+  for (const b of bubBubbles) {
+    if (b.popped) {
+      const t = b.popTime/380;
+      ctx.globalAlpha = Math.max(0,1-t);
+      for (let i=0; i<7; i++) {
+        const angle = (i/7)*Math.PI*2, dist = b.r*(0.6+t*1.1);
+        ctx.fillStyle=b.color; ctx.shadowColor=b.color; ctx.shadowBlur=8*(1-t);
+        ctx.beginPath(); ctx.arc(b.x+Math.cos(angle)*dist, b.y+Math.sin(angle)*dist, 4*(1-t)*0.6+1.5, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.shadowBlur=0; ctx.globalAlpha=1; continue;
+    }
+    const alpha = Math.min(1,b.age/200)*(1-Math.pow(b.age/b.lifespan,3));
+    ctx.globalAlpha = Math.max(0.05, alpha);
+    ctx.shadowColor=b.color; ctx.shadowBlur=b.r*0.5;
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+    const grad=ctx.createRadialGradient(b.x-b.r*0.3,b.y-b.r*0.35,b.r*0.05,b.x,b.y,b.r);
+    grad.addColorStop(0,b.color+'44'); grad.addColorStop(0.65,b.color+'18'); grad.addColorStop(1,b.color+'77');
+    ctx.fillStyle=grad; ctx.fill(); ctx.shadowBlur=0;
+    ctx.strokeStyle=b.color; ctx.lineWidth=1.8; ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.32)';
+    ctx.beginPath(); ctx.ellipse(b.x-b.r*0.28,b.y-b.r*0.28,b.r*0.28,b.r*0.16,-Math.PI/4,0,Math.PI*2); ctx.fill();
+    const ageFrac = b.age/b.lifespan;
+    if (ageFrac > 0.6) {
+      const warn=(ageFrac-0.6)/0.4;
+      ctx.strokeStyle=`rgba(255,60,60,${warn*0.75})`; ctx.lineWidth=1.5+warn*2;
+      ctx.beginPath(); ctx.arc(b.x,b.y,b.r+3+warn*2,0,Math.PI*2); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+  ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,bubH-38,bubW,38);
+  ctx.font=`700 12px "JetBrains Mono",monospace`;
+  ctx.fillStyle=accent; ctx.textAlign='left'; ctx.fillText('Lv'+bubLevel,8,bubH-12);
+  if (bubCombo>1) {
+    ctx.fillStyle='#f5c518'; ctx.textAlign='center';
+    ctx.fillText('x'+bubCombo+' КОМБО!',bubW/2,bubH-12);
+  }
+  const hearts='❤️'.repeat(Math.max(0,bubLives))+'🖤'.repeat(Math.max(0,3-bubLives));
+  ctx.fillStyle='rgba(255,255,255,0.75)'; ctx.textAlign='right';
+  ctx.fillText(hearts,bubW-6,bubH-12); ctx.textAlign='left';
+}
+
+function bubUpdateScore() {
+  const el=document.getElementById('bub-score-label'); if(!el) return;
+  const hearts='❤️'.repeat(Math.max(0,bubLives))+'🖤'.repeat(Math.max(0,3-bubLives));
+  el.textContent='Счёт: '+bubScore+' • Рекорд: '+bubHi+' • '+hearts;
 }
 </script>

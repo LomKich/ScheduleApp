@@ -119,6 +119,10 @@ public class MainActivity extends Activity {
         ws.setDatabaseEnabled(true);
         // Геолокация не нужна — отключаем
         ws.setGeolocationEnabled(false);
+        // Отключаем полосу прокрутки WebView
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+        webView.setScrollbarFadingEnabled(false);
         log.i(TAG, "WebSettings: JS=on DomStorage=on FileAccess=on MixedContent=ALWAYS_ALLOW Hardware=on Cache=CACHE_ELSE_NETWORK");
 
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
