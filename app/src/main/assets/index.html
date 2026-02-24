@@ -1273,67 +1273,65 @@ function onVpnStateChanged(active,statusText){
 let cur='s-home';
 const SCREEN_PARENTS = {
   's-groups':   {parent:'s-home',    nav:'nav-home'},
-  's-schedule': {parent:'s-home',    nav:'nav-home'}, // всегда на главную — список групп может быть пустым
+  's-schedule': {parent:'s-home',    nav:'nav-home'}, // всегда на главную
   's-bells':    {parent:'s-home',    nav:'nav-bells'},
   's-settings': {parent:'s-home',    nav:'nav-home'},
   's-dpi':      {parent:'s-settings',nav:null},
   's-proxy':    {parent:'s-settings',nav:null},
   's-themes':   {parent:'s-settings',nav:null},
 };
+
 // Вызывается из Android (кнопка Back на телефоне)
 function nativeBack(){
   const info = SCREEN_PARENTS[cur];
   if(info){
     if(info.parent==='s-home'){
-      // Используем полный goHome() — он обновляет nav, кнопку группы и перезапускает загрузку если нужно
       goHome();
     } else {
       showScreen(info.parent,'back');
       if(info.nav) updateNavActive(info.nav);
     }
-    return true; // перехватили навигацию
+    return true;
   }
-  return false; // уже на главном — разрешить выход из приложения
+  return false;
 }
-// Детектор лагов: отслеживаем время между кадрами
-let _prevFrameTs = performance.now();
-requestAnimationFrame(function _tick(ts){_prevFrameTs=ts;requestAnimationFrame(_tick);});
-const _LAG_MS = 180; // мс — если больше, анимацию пропускаем
 
-function showScreen(id,dir='forward'){
-  if(id===cur)return;
-  const prev=document.getElementById(cur),next=document.getElementById(id);
-  const laggy=(performance.now()-_prevFrameTs)>_LAG_MS;
-
+// ── Плавные переходы: ВСЕГДА с анимацией ──
+// requestIdleCallback: если браузер занят — ждём свободный момент, потом анимируем.
+// Анимация не пропускается, просто может начаться чуть позже.
+function _doTransition(prev, next, dir) {
   prev.classList.add(dir==='back'?'exit-right':'exit-left');
   prev.classList.remove('active');
-  setTimeout(()=>prev.classList.remove('exit-left','exit-right'),300);
-  cur=id;
-
-  // При открытии экрана тем — рендерим темы и иконки
-  if(id==='s-themes'){renderThemeGrid();renderIconGrid();}
-
-  if(laggy){
-    // Тормоза — мгновенный переход без CSS-анимации
-    next.style.transition='none';
+  setTimeout(()=>prev.classList.remove('exit-left','exit-right'), 320);
+  next.style.transition='none';
+  void next.getBoundingClientRect();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    next.style.transition='';
     next.classList.add('active');
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{next.style.transition='';}));
+  }));
+}
+let _pendingScreenId=null;
+function showScreen(id, dir='forward'){
+  if(id===cur)return;
+  const prev=document.getElementById(cur), next=document.getElementById(id);
+  // При открытии экрана тем — рендерим темы и иконки заранее
+  if(id==='s-themes'){renderThemeGrid();renderIconGrid();}
+  cur=id; _pendingScreenId=id;
+  const go=()=>{
+    if(_pendingScreenId!==id)return; // если уже другой переход — пропускаем
+    _doTransition(prev, next, dir);
+  };
+  if(typeof requestIdleCallback!=='undefined'){
+    requestIdleCallback(go, {timeout:300});
   } else {
-    // Двойной rAF: сначала браузер рисует начальное состояние (opacity:0),
-    // потом запускает плавный переход
-    next.style.transition='none';
-    void next.getBoundingClientRect();
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      next.style.transition='';
-      next.classList.add('active');
-    }));
+    setTimeout(go, 0);
   }
 }
+
 function goHome(){
   showScreen('s-home','back');
   updateNavActive('nav-home');
   updateLastGroupBtn();
-  // Если файлы не загружены и нет ошибки — перезапустить загрузку
   const fs=document.getElementById('file-section');
   const err=document.getElementById('home-error-hint');
   const noUrl=document.getElementById('no-url-hint');
