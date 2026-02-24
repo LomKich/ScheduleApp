@@ -1703,33 +1703,41 @@ async function checkOtaUpdate() {
   const btn = document.querySelector('[onclick="checkOtaUpdate()"]');
   if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
   try {
-    // Прямой запрос через Android bridge (нет CORS проблем)
-    const apiUrl = 'https://api.github.com/repos/marnik240808/ScheduleApp/releases/latest';
+    // Используем Android bridge — нет ограничений CORS, работает без интернета в WebView
+    const apiUrl = 'https://api.github.com/repos/LomKich/ScheduleApp/releases/latest';
     let data;
     if (window.Android && window.Android.nativeFetch) {
       const res = JSON.parse(window.Android.nativeFetch(apiUrl));
-      if (!res.ok) throw new Error(res.error || 'HTTP ' + res.status);
+      if (!res.ok) {
+        // 404 = нет ни одного релиза в репозитории
+        if (res.status === 404) throw new Error('В репозитории нет релизов. Создай релиз на GitHub с прикреплённым APK файлом.');
+        throw new Error(res.error || 'HTTP ' + res.status);
+      }
       data = JSON.parse(res.body);
     } else {
-      const r = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const r = await fetch(apiUrl);
+      if (!r.ok) {
+        if (r.status === 404) throw new Error('В репозитории нет релизов');
+        throw new Error('HTTP ' + r.status);
+      }
       data = await r.json();
     }
     const latestTag = (data.tag_name || '').replace(/^v/, '');
+    // Ищем APK среди вложений релиза
     const apkAsset = (data.assets || []).find(a => a.name && a.name.endsWith('.apk'));
-    if (!latestTag) throw new Error('Не удалось определить версию');
+    if (!latestTag) throw new Error('Не удалось определить версию в релизе');
     if (latestTag === APP_VERSION) {
-      toast('✅ Установлена актуальная версия ' + APP_VERSION);
+      toast('✅ Версия ' + APP_VERSION + ' актуальна');
     } else {
-      // Есть новая версия
-      if (window.Android && window.Android.openUrl && apkAsset) {
+      if (apkAsset) {
         showUpdateDialog(latestTag, apkAsset.browser_download_url, data.body || '');
       } else {
-        toast('🆕 Доступна версия ' + latestTag + ' — обнови через GitHub');
+        // Релиз есть, но APK не прикреплён
+        toast('🆕 Версия ' + latestTag + ' — APK не найден в релизе. Прикрепи APK файл к релизу на GitHub.');
       }
     }
   } catch(e) {
-    toast('❌ Ошибка проверки: ' + e.message);
+    toast('❌ ' + e.message);
   }
   if (btn) { btn.disabled = false; btn.textContent = '🔄 Проверить'; }
 }
