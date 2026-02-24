@@ -5,8 +5,12 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.net.VpnService;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.util.Base64;
 import android.view.View;
 import android.view.WindowManager;
@@ -23,6 +27,7 @@ import android.webkit.WebViewClient;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -30,11 +35,31 @@ import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
 
-    private static final String TAG = "MainActivity";
+    private static final String TAG             = "MainActivity";
+    private static final int    VPN_REQUEST_CODE = 1001;
 
     private WebView           webView;
     private SharedPreferences prefs;
+    private DnsVpnService     vpnService;
+    private boolean           vpnBound = false;
     private AppLogger         log;
+
+    private final ServiceConnection vpnConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            DnsVpnService.LocalBinder binder = (DnsVpnService.LocalBinder) service;
+            vpnService = binder.getService();
+            vpnBound   = true;
+            log.i(TAG, "VPN сервис подключён");
+            updateVpnStateInWeb();
+        }
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            vpnBound   = false;
+            vpnService = null;
+            log.w(TAG, "VPN сервис отключён");
+        }
+    };
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
@@ -61,6 +86,9 @@ public class MainActivity extends Activity {
         log.i(TAG, "Загружаем index.html");
         webView.loadUrl("file:///android_asset/index.html");
 
+        Intent vpnIntent = new Intent(this, DnsVpnService.class);
+        bindService(vpnIntent, vpnConnection, Context.BIND_AUTO_CREATE);
+
         log.i(TAG, "onCreate завершён");
     }
 
@@ -74,19 +102,25 @@ public class MainActivity extends Activity {
         ws.setDomStorageEnabled(true);
         ws.setAllowFileAccess(true);
         ws.setAllowContentAccess(true);
+        // Агрессивное кэширование — страница грузится из кэша, обновляется только при изменениях
         ws.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // Отключаем pinch-to-zoom
         ws.setSupportZoom(false);
         ws.setBuiltInZoomControls(false);
         ws.setDisplayZoomControls(false);
+        // Фиксируем зум на 100% — без этого бывает лишний пересчёт
         ws.setTextZoom(100);
+        // Включаем базу данных для офлайн-кэша
         ws.setDatabaseEnabled(true);
+        // Геолокация не нужна — отключаем
         ws.setGeolocationEnabled(false);
         log.i(TAG, "WebSettings: JS=on DomStorage=on FileAccess=on MixedContent=ALWAYS_ALLOW Hardware=on Cache=CACHE_ELSE_NETWORK");
 
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
         log.i(TAG, "JavascriptInterface 'Android' зарегистрирован");
 
+        // Перехват console.log / console.error из JS
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onConsoleMessage(ConsoleMessage cm) {
@@ -105,6 +139,7 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 log.i(TAG, "onPageFinished: " + url);
                 injectErrorHandler();
+                updateVpnStateInWeb();
             }
 
             @Override
@@ -151,29 +186,141 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == VPN_REQUEST_CODE && resultCode == RESULT_OK) {
+            log.i(TAG, "VPN разрешение получено");
+            startVpnService();
+        } else if (requestCode == VPN_REQUEST_CODE) {
+            log.w(TAG, "VPN разрешение отклонено");
+        }
+    }
+
+    private void startVpnService() {
+        String dnsKey      = prefs.getString("dns_key", "system");
+        String dohUrl      = prefs.getString("doh_url", "");
+        String dpiStrategy = prefs.getString("dpi_strategy", "general");
+        log.i(TAG, "startVpnService dns=" + dnsKey + " dpi=" + dpiStrategy);
+        Intent intent = new Intent(this, DnsVpnService.class);
+        intent.setAction(DnsVpnService.ACTION_START);
+        intent.putExtra(DnsVpnService.EXTRA_DOH_URL, dohUrl);
+        intent.putExtra(DnsVpnService.EXTRA_DPI_STRATEGY, dpiStrategy);
+        startService(intent);
+    }
+
+    private void stopVpnService() {
+        log.i(TAG, "stopVpnService");
+        Intent intent = new Intent(this, DnsVpnService.class);
+        intent.setAction(DnsVpnService.ACTION_STOP);
+        startService(intent);
+    }
+
+    void updateVpnStateInWeb() {
+        boolean active = vpnBound && vpnService != null && vpnService.isRunning();
+        String statusText = active
+            ? "DNS: " + prefs.getString("dns_key", "system").toUpperCase()
+              + " • DPI: " + prefs.getString("dpi_strategy", "general")
+            : "DNS и DPI обход неактивны";
+        String js = String.format(
+            "if(typeof onVpnStateChanged==='function')onVpnStateChanged(%b,'%s')",
+            active, statusText
+        );
+        webView.post(() -> webView.evaluateJavascript(js, null));
+    }
+
+    @Override
     public void onBackPressed() {
+        // Спрашиваем JS: можно ли перейти назад внутри приложения
         webView.evaluateJavascript(
             "(function(){ return typeof nativeBack==='function' ? (nativeBack() ? 'handled' : 'exit') : 'exit'; })()",
             result -> {
-                if (!("\"handled\"").equals(result)) {
+                if (!"\"handled\"".equals(result)) {
+                    // JS сказал 'exit' — мы на главном экране, закрываем приложение
                     finish();
                 }
             }
         );
     }
 
-    @Override protected void onPause()  { super.onPause();  log.i(TAG, "onPause"); }
-    @Override protected void onResume() { super.onResume(); log.i(TAG, "onResume"); }
+    @Override protected void onPause()   { super.onPause();   log.i(TAG, "onPause"); }
+    @Override protected void onResume()  { super.onResume();  log.i(TAG, "onResume"); }
     @Override
     protected void onDestroy() {
         super.onDestroy();
         log.section("onDestroy");
         log.i(TAG, "Приложение завершается");
+        if (vpnBound) unbindService(vpnConnection);
     }
 
     // ══════════════════════════════ JavaScript Bridge ══════════════════════════════
 
     class AndroidBridge {
+
+        @JavascriptInterface
+        public void setDns(String key, String dohUrl) {
+            log.i(TAG, "JS→setDns key=" + key + " url=" + dohUrl);
+            prefs.edit().putString("dns_key", key).putString("doh_url", dohUrl).apply();
+            if (vpnBound && vpnService != null && vpnService.isRunning()) {
+                vpnService.updateDns(dohUrl);
+            }
+        }
+
+        @JavascriptInterface
+        public void setDpiStrategy(String strategyId) {
+            log.i(TAG, "JS→setDpiStrategy " + strategyId);
+            prefs.edit().putString("dpi_strategy", strategyId).apply();
+            if (vpnBound && vpnService != null && vpnService.isRunning()) {
+                vpnService.updateDpiStrategy(strategyId);
+            }
+        }
+
+        @JavascriptInterface
+        public void toggleVpn() {
+            boolean running = vpnBound && vpnService != null && vpnService.isRunning();
+            log.i(TAG, "JS→toggleVpn running=" + running);
+            if (running) {
+                stopVpnService();
+                webView.post(() -> updateVpnStateInWeb());
+            } else {
+                Intent permIntent = VpnService.prepare(MainActivity.this);
+                if (permIntent != null) {
+                    startActivityForResult(permIntent, VPN_REQUEST_CODE);
+                } else {
+                    startVpnService();
+                }
+            }
+        }
+
+        @JavascriptInterface
+        public String getVpnState() {
+            try {
+                boolean active = vpnBound && vpnService != null && vpnService.isRunning();
+                String text = active
+                    ? "DNS: " + prefs.getString("dns_key", "system").toUpperCase()
+                      + " • DPI: " + prefs.getString("dpi_strategy", "general")
+                    : "DNS и DPI обход неактивны";
+                JSONObject obj = new JSONObject();
+                obj.put("active", active);
+                obj.put("text", text);
+                return obj.toString();
+            } catch (Exception e) {
+                log.e(TAG, "getVpnState error", e);
+                return "{}";
+            }
+        }
+
+        @JavascriptInterface
+        public String getSavedPrefs() {
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("dns", prefs.getString("dns_key", "system"));
+                obj.put("doh", prefs.getString("doh_url", ""));
+                obj.put("dpi", prefs.getString("dpi_strategy", "general"));
+                return obj.toString();
+            } catch (Exception e) {
+                log.e(TAG, "getSavedPrefs error", e);
+                return "{}";
+            }
+        }
 
         /** Вызывается из window.onerror через JS */
         @JavascriptInterface
@@ -244,6 +391,8 @@ public class MainActivity extends Activity {
         /**
          * Переключает иконку приложения через activity-alias.
          * icon: "dark" | "orange" | "amoled" | "samek"
+         * Показывает диалог-предупреждение, т.к. Android вынужден
+         * закрыть приложение при смене активного alias'а.
          */
         @JavascriptInterface
         public void setAppIcon(String icon) {
@@ -266,13 +415,16 @@ public class MainActivity extends Activity {
                 new AlertDialog.Builder(MainActivity.this)
                     .setTitle("Сменить иконку?")
                     .setMessage("После смены иконки приложение закроется — это стандартное поведение Android. " +
-                                "Ярлык на главном экране нужно будет добавить заново.\n\nПродолжить?")
+                                "Ярлык на главном экране нужно будет добавить заново.\n\n" +
+                                "Продолжить?")
                     .setPositiveButton("Сменить", (d, w) -> {
+                        // Сначала включаем новый alias
                         getPackageManager().setComponentEnabledSetting(
                             new ComponentName(pkg, target),
                             android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                             android.content.pm.PackageManager.DONT_KILL_APP
                         );
+                        // Отключаем остальные с небольшой задержкой
                         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                             for (String alias : allAliases) {
                                 if (!alias.equals(target)) {
@@ -283,6 +435,7 @@ public class MainActivity extends Activity {
                                     );
                                 }
                             }
+                            // Корректно завершаем приложение сами — иначе Android сделает это грубо
                             finishAffinity();
                         }, 500);
                     })
@@ -293,6 +446,7 @@ public class MainActivity extends Activity {
 
         /**
          * Нативное скачивание файла без CORS — возвращает JSON: {ok, base64, error?}
+         * base64 — содержимое файла в Base64, декодируется в JS в ArrayBuffer.
          */
         @JavascriptInterface
         public String nativeDownloadBase64(String urlStr) {
