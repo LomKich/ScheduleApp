@@ -16,12 +16,10 @@ android {
 
     signingConfigs {
         release {
-            // Ключи берём из переменных окружения (задаются в GitHub Actions через Secrets)
-            // При локальной сборке используй: ./gradlew assembleRelease -PKEYSTORE_PATH=... и т.д.
-            storeFile     (System.getenv("KEYSTORE_PATH")     ?: project.findProperty("KEYSTORE_PATH"))     ? file(System.getenv("KEYSTORE_PATH") ?: project.findProperty("KEYSTORE_PATH")) : null
-            storePassword (System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD") ?: "")
-            keyAlias      (System.getenv("KEY_ALIAS")         ?: project.findProperty("KEY_ALIAS")         ?: "schedule")
-            keyPassword   (System.getenv("KEY_PASSWORD")      ?: project.findProperty("KEY_PASSWORD")      ?: "")
+            storeFile     file(System.getenv("KEYSTORE_PATH")     ?: project.findProperty("KEYSTORE_PATH")     ?: "dummy.jks")
+            storePassword (System.getenv("KEYSTORE_PASSWORD")     ?: project.findProperty("KEYSTORE_PASSWORD") ?: "")
+            keyAlias      (System.getenv("KEY_ALIAS")             ?: project.findProperty("KEY_ALIAS")         ?: "schedule")
+            keyPassword   (System.getenv("KEY_PASSWORD")          ?: project.findProperty("KEY_PASSWORD")      ?: "")
         }
     }
 
