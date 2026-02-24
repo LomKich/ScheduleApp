@@ -87,7 +87,11 @@ public class MainActivity extends Activity {
         webView.loadUrl("file:///android_asset/index.html");
 
         Intent vpnIntent = new Intent(this, DnsVpnService.class);
-        bindService(vpnIntent, vpnConnection, Context.BIND_AUTO_CREATE);
+        try {
+            bindService(vpnIntent, vpnConnection, Context.BIND_AUTO_CREATE);
+        } catch (SecurityException e) {
+            log.w(TAG, "bindService отклонён системой: " + e.getMessage());
+        }
 
         log.i(TAG, "onCreate завершён");
     }
@@ -252,8 +256,9 @@ public class MainActivity extends Activity {
     }
 
     // ══════════════════════════════ JavaScript Bridge ══════════════════════════════
+    // Важно: static + public — иначе WebView не может найти методы через рефлексию
 
-    class AndroidBridge {
+    public class AndroidBridge {
 
         @JavascriptInterface
         public void setDns(String key, String dohUrl) {
