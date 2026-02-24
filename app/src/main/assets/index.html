@@ -319,6 +319,61 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .dpi-item.works{border-color:color-mix(in srgb,var(--success) 50%,transparent)}
 .dpi-item.works .dpi-badge{background:color-mix(in srgb,var(--success) 20%,transparent);color:var(--success)}
 .dpi-item.no-works{opacity:.4}
+
+/* ── OTA Update Modal ── */
+.ota-overlay{
+  position:fixed;inset:0;z-index:1000;
+  background:rgba(0,0,0,.65);
+  display:flex;align-items:flex-end;justify-content:center;
+  opacity:0;pointer-events:none;
+  transition:opacity .25s ease;
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)
+}
+.ota-overlay.show{opacity:1;pointer-events:all}
+.ota-sheet{
+  width:100%;max-width:480px;
+  background:var(--surface);
+  border-radius:24px 24px 0 0;
+  padding:12px 22px calc(22px + var(--safe-bot));
+  transform:translateY(100%);
+  transition:transform .32s cubic-bezier(.34,1.1,.64,1);
+  border-top:1px solid rgba(255,255,255,.08)
+}
+.ota-overlay.show .ota-sheet{transform:translateY(0)}
+.ota-handle{
+  width:40px;height:4px;border-radius:2px;
+  background:var(--surface3);margin:0 auto 20px
+}
+.ota-icon{font-size:38px;text-align:center;margin-bottom:10px;line-height:1}
+.ota-title{
+  font-size:20px;font-weight:800;text-align:center;
+  letter-spacing:-.02em;margin-bottom:6px;color:var(--text)
+}
+.ota-version{
+  font-size:13px;font-weight:600;text-align:center;
+  color:var(--accent);margin-bottom:14px;
+  font-family:'JetBrains Mono',monospace
+}
+.ota-notes{
+  font-size:13px;color:var(--muted);line-height:1.6;
+  background:var(--surface2);border-radius:var(--rb);
+  padding:12px 14px;margin-bottom:18px;
+  border:1px solid var(--surface3);
+  max-height:120px;overflow-y:auto;white-space:pre-wrap;
+  display:none
+}
+.ota-notes.has-text{display:block}
+.ota-progress-wrap{margin-bottom:16px}
+.ota-progress-track{
+  height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;margin-bottom:7px
+}
+.ota-progress-bar{
+  height:100%;width:0%;background:var(--accent);border-radius:3px;
+  transition:width .15s ease
+}
+.ota-progress-label{
+  font-size:12px;color:var(--muted);text-align:center;font-family:'JetBrains Mono',monospace
+}
 </style>
 </head>
 <body>
@@ -504,7 +559,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div>
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">1.4.0 — Android</div>
+        <div class="item-sub" id="app-version-str">1.5.0 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -599,6 +654,28 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ══ Модальное окно обновления (в стиле приложения) ══ -->
+<div class="ota-overlay" id="ota-overlay" onclick="otaOverlayClose(event)">
+  <div class="ota-sheet" id="ota-sheet">
+    <div class="ota-handle"></div>
+    <div class="ota-icon">⬆️</div>
+    <div class="ota-title">Доступно обновление</div>
+    <div class="ota-version" id="ota-version-label"></div>
+    <div class="ota-notes" id="ota-notes-text"></div>
+
+    <!-- Прогресс-бар (скрыт до скачивания) -->
+    <div class="ota-progress-wrap hidden" id="ota-progress-wrap">
+      <div class="ota-progress-track">
+        <div class="ota-progress-bar" id="ota-progress-bar"></div>
+      </div>
+      <div class="ota-progress-label" id="ota-progress-label">Скачивание...</div>
+    </div>
+
+    <button class="btn btn-accent" id="ota-dl-btn" onclick="otaStartDownload()">⬇ Скачать и установить</button>
+    <button class="btn btn-surface" id="ota-cancel-btn" onclick="otaClose()" style="margin-top:8px">Позже</button>
+  </div>
+</div>
 
 <script>
 // ══ ПОЛИФИЛ AbortSignal.timeout ══
@@ -1702,23 +1779,118 @@ if(window.Android){
 
 loadFiles();
 
-// ── OTA обновление ──
-const APP_VERSION = '1.4.0';
+// ══ OTA обновление ══
+const APP_VERSION = '1.5.0';
 
-// Показываем текущую версию при инициализации
+// Показываем текущую версию в настройках
 (function(){
   const el = document.getElementById('app-version-str');
   if (el) el.textContent = APP_VERSION + ' — Android';
 })();
 
-// GitHub Releases API — проверяем последний релиз
-async function checkOtaUpdate() {
-  const btn = document.querySelector('[onclick="checkOtaUpdate()"]');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+// ── Автопроверка при запуске (тихая: показывает диалог только если есть обновление) ──
+window.addEventListener('load', function() {
+  setTimeout(function() { checkOtaUpdate(true); }, 3000);
+});
+
+// ── Состояние OTA ──
+let _otaApkUrl = '';
+let _otaVersion = '';
+
+function otaOpen(version, apkUrl, notes) {
+  _otaApkUrl = apkUrl;
+  _otaVersion = version;
+  document.getElementById('ota-version-label').textContent =
+    'v' + version + '  →  установлена v' + APP_VERSION;
+  const notesEl = document.getElementById('ota-notes-text');
+  if (notes && notes.trim()) {
+    notesEl.textContent = notes.trim();
+    notesEl.classList.add('has-text');
+  } else {
+    notesEl.classList.remove('has-text');
+  }
+  document.getElementById('ota-progress-wrap').classList.add('hidden');
+  document.getElementById('ota-progress-bar').style.width = '0%';
+  document.getElementById('ota-progress-label').textContent = 'Скачивание...';
+  const dlBtn = document.getElementById('ota-dl-btn');
+  dlBtn.disabled = false;
+  dlBtn.textContent = '⬇ Скачать и установить';
+  document.getElementById('ota-cancel-btn').disabled = false;
+  document.getElementById('ota-overlay').classList.add('show');
+}
+
+function otaClose() {
+  document.getElementById('ota-overlay').classList.remove('show');
+}
+
+function otaOverlayClose(e) {
+  if (e.target === document.getElementById('ota-overlay')) otaClose();
+}
+
+async function otaStartDownload() {
+  if (!_otaApkUrl) { toast('❌ URL APK не найден'); return; }
+  const dlBtn = document.getElementById('ota-dl-btn');
+  const cancelBtn = document.getElementById('ota-cancel-btn');
+  const wrap = document.getElementById('ota-progress-wrap');
+  const bar = document.getElementById('ota-progress-bar');
+  const label = document.getElementById('ota-progress-label');
+  dlBtn.disabled = true;
+  dlBtn.textContent = '⏳ Скачиваю...';
+  cancelBtn.disabled = true;
+  wrap.classList.remove('hidden');
+
+  let fakeProgress = 0;
+  const fakeTimer = setInterval(() => {
+    if (fakeProgress < 88) {
+      fakeProgress += (88 - fakeProgress) * 0.05 + 0.5;
+      bar.style.width = Math.min(fakeProgress, 88) + '%';
+      label.textContent = Math.round(Math.min(fakeProgress, 88)) + '% — Скачиваю...';
+    }
+  }, 150);
+
   try {
-    // Пробуем /releases/latest, при 404 (черновик / pre-release) — берём список /releases
+    if (window.Android && window.Android.downloadAndInstallApk) {
+      clearInterval(fakeTimer);
+      bar.style.width = '100%';
+      label.textContent = '100% — Запускаю установщик...';
+      window.Android.downloadAndInstallApk(_otaApkUrl);
+      setTimeout(() => otaClose(), 1200);
+    } else {
+      clearInterval(fakeTimer);
+      bar.style.width = '100%';
+      label.textContent = 'Открываю браузер...';
+      if (window.Android && window.Android.openUrl) {
+        window.Android.openUrl(_otaApkUrl);
+      } else {
+        window.open(_otaApkUrl, '_blank');
+      }
+      setTimeout(() => otaClose(), 800);
+    }
+  } catch(e) {
+    clearInterval(fakeTimer);
+    dlBtn.disabled = false;
+    dlBtn.textContent = '⬇ Попробовать снова';
+    cancelBtn.disabled = false;
+    label.textContent = '❌ ' + e.message;
+    bar.style.width = '0%';
+  }
+}
+
+function compareVersions(a, b) {
+  const pa = (a || '').split('.').map(Number);
+  const pb = (b || '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+async function checkOtaUpdate(silent) {
+  const btn = document.querySelector('[onclick="checkOtaUpdate()"]');
+  if (!silent && btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
     const baseApi = 'https://api.github.com/repos/LomKich/ScheduleApp/releases';
-    let data;
 
     async function ghFetch(url) {
       if (window.Android && window.Android.nativeFetch) {
@@ -1732,80 +1904,52 @@ async function checkOtaUpdate() {
       }
     }
 
+    let data;
     try {
       data = await ghFetch(baseApi + '/latest');
     } catch(e) {
       if (e.status === 404) {
-        // /releases/latest отдаёт 404 для черновиков и pre-release.
-        // Берём первый из всех релизов (включая pre-release).
         const all = await ghFetch(baseApi + '?per_page=5');
-        if (!Array.isArray(all) || all.length === 0)
-          throw new Error('В репозитории нет релизов. Создай релиз на GitHub с прикреплённым APK файлом.');
+        if (!Array.isArray(all) || all.length === 0) {
+          if (!silent) toast('❌ В репозитории нет релизов');
+          return;
+        }
         data = all[0];
-      } else {
-        throw e;
-      }
+      } else { throw e; }
     }
 
-    // Тег может быть "v1.4.0", "1.4.0" или "Release" — нормализуем
-    const rawTag = (data.tag_name || '').trim();
+    const rawTag    = (data.tag_name || '').trim();
     const latestTag = rawTag.replace(/^v/i, '');
+    const apkAsset  = (data.assets || []).find(a => a.name && a.name.endsWith('.apk'));
 
-    // Ищем APK среди вложений релиза
-    const apkAsset = (data.assets || []).find(a => a.name && a.name.endsWith('.apk'));
+    if (!latestTag) { if (!silent) toast('❌ Не удалось определить версию'); return; }
 
-    if (!latestTag) throw new Error('Не удалось определить версию в релизе');
-
-    // Если тег не выглядит как версия (например "Release") — просто сообщаем
-    const looksLikeVersion = /^\d+\.\d+/.test(latestTag);
-    if (!looksLikeVersion) {
-      if (apkAsset) {
-        toast('🆕 Найден релиз "' + rawTag + '". APK доступен для скачивания.', 5000);
-        showUpdateDialog(rawTag, apkAsset.browser_download_url, data.body || '');
-      } else {
-        toast('⚠️ Релиз "' + rawTag + '" найден, но APK не прикреплён. Тег должен быть формата v1.4.0', 6000);
-      }
+    const isNewer = compareVersions(latestTag, APP_VERSION) > 0;
+    if (!isNewer) {
+      if (!silent) toast('✅ Версия ' + APP_VERSION + ' актуальна');
       return;
     }
 
-    if (latestTag === APP_VERSION) {
-      toast('✅ Версия ' + APP_VERSION + ' актуальна');
+    if (apkAsset) {
+      otaOpen(latestTag, apkAsset.browser_download_url, data.body || '');
     } else {
-      if (apkAsset) {
-        showUpdateDialog(latestTag, apkAsset.browser_download_url, data.body || '');
-      } else {
-        toast('🆕 Версия ' + latestTag + ' — APK не найден в релизе. Прикрепи APK файл к релизу на GitHub.');
-      }
+      if (!silent) toast('🆕 v' + latestTag + ' — APK не прикреплён к релизу');
     }
   } catch(e) {
-    toast('❌ ' + e.message);
+    if (!silent) toast('❌ ' + e.message);
   }
-  if (btn) { btn.disabled = false; btn.textContent = '🔄 Проверить'; }
+  if (!silent && btn) { btn.disabled = false; btn.textContent = '🔄 Проверить'; }
 }
 
 function showUpdateDialog(version, apkUrl, notes) {
-  const short = notes.length > 200 ? notes.slice(0, 200) + '...' : notes;
-  if (typeof Android !== 'undefined' && Android.showUpdateDialog) {
-    Android.showUpdateDialog(version, apkUrl, short);
-  } else {
-    // Fallback — открываем браузер на страницу релиза
-    const msg = 'Доступна версия ' + version + '.\n\n' + (short || 'Нет описания');
-    toast('🆕 ' + msg.slice(0, 80));
-  }
+  otaOpen(version, apkUrl, notes || '');
 }
 
 function clearCacheAndReload() {
-  try {
-    localStorage.clear();
-    sessionStorage.clear();
-  } catch(e) {}
-  if (window.Android && window.Android.clearWebViewCache) {
-    window.Android.clearWebViewCache();
-  }
+  try { localStorage.clear(); sessionStorage.clear(); } catch(e) {}
+  if (window.Android && window.Android.clearWebViewCache) window.Android.clearWebViewCache();
   setTimeout(() => location.reload(true), 200);
 }
 
 
 </script>
-</body>
-</html>

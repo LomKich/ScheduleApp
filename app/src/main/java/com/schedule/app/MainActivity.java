@@ -554,5 +554,89 @@ public class MainActivity extends Activity {
             });
         }
 
+        /**
+         * OTA: скачать APK и запустить системный установщик.
+         * Скачивает во внутреннее хранилище (getFilesDir/apk/) и открывает
+         * стандартный диалог "Установить" — пользователю нужна одна кнопка.
+         */
+        @JavascriptInterface
+        public void downloadAndInstallApk(String urlStr) {
+            log.i(TAG, "downloadAndInstallApk: " + urlStr);
+            // Скачивание в фоне, установка в UI-потоке
+            new Thread(() -> {
+                try {
+                    // Папка для APK
+                    java.io.File apkDir = new java.io.File(getFilesDir(), "apk");
+                    if (!apkDir.exists()) apkDir.mkdirs();
+                    java.io.File apkFile = new java.io.File(apkDir, "update.apk");
+                    if (apkFile.exists()) apkFile.delete();
+
+                    // Скачиваем
+                    java.net.URL url = new java.net.URL(urlStr);
+                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(30000);
+                    conn.setReadTimeout(60000);
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp/" + getVersionName());
+                    conn.setInstanceFollowRedirects(true);
+
+                    int status = conn.getResponseCode();
+                    if (status < 200 || status >= 300) {
+                        log.e(TAG, "downloadAndInstallApk HTTP error: " + status);
+                        runOnUiThread(() -> webView.evaluateJavascript(
+                            "if(typeof toast==='function')toast('❌ Ошибка скачивания: HTTP " + status + "')", null));
+                        return;
+                    }
+
+                    java.io.InputStream is = conn.getInputStream();
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(apkFile);
+                    byte[] buf = new byte[16384];
+                    int n;
+                    while ((n = is.read(buf)) != -1) fos.write(buf, 0, n);
+                    fos.close();
+                    is.close();
+                    conn.disconnect();
+                    log.i(TAG, "APK downloaded: " + apkFile.length() + " bytes");
+
+                    // Открываем установщик через FileProvider
+                    runOnUiThread(() -> {
+                        try {
+                            android.net.Uri apkUri = androidx.core.content.FileProvider.getUriForFile(
+                                MainActivity.this,
+                                getPackageName() + ".fileprovider",
+                                apkFile
+                            );
+                            android.content.Intent intent = new android.content.Intent(
+                                android.content.Intent.ACTION_INSTALL_PACKAGE);
+                            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                            intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                            // Разрешаем установку не из маркета
+                            intent.putExtra(android.content.Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+                            startActivity(intent);
+                            log.i(TAG, "Installer launched");
+                        } catch (Exception e) {
+                            log.e(TAG, "Launch installer error: " + e.getMessage());
+                            webView.evaluateJavascript(
+                                "if(typeof toast==='function')toast('❌ Не удалось открыть установщик')", null);
+                        }
+                    });
+
+                } catch (Exception e) {
+                    log.e(TAG, "downloadAndInstallApk error: " + e.getMessage());
+                    runOnUiThread(() -> webView.evaluateJavascript(
+                        "if(typeof toast==='function')toast('❌ " + e.getMessage() + "')", null));
+                }
+            }).start();
+        }
+
+        private String getVersionName() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            } catch (Exception e) {
+                return "1.5.0";
+            }
+        }
+
     }
 }
