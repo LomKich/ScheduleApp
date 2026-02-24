@@ -2182,10 +2182,7 @@ const APP_VERSION = '2.2.0';
   if (el) el.textContent = APP_VERSION + ' — Android';
 })();
 
-// ── Автопроверка при запуске (тихая: показывает диалог только если есть обновление) ──
-window.addEventListener('load', function() {
-  setTimeout(function() { checkOtaUpdate(true); }, 3000);
-});
+// ── Автопроверка при запуске отключена — проверка вручную через кнопку в настройках ──
 
 // ── Состояние OTA ──
 let _otaApkUrl = '';
@@ -2373,6 +2370,8 @@ function clearCacheAndReload() {
 // ║  • v1.7.0 — Крестики-нолики против ИИ (minimax). Touch/click.               ║
 // ║  • v1.8.0 — Пинг-понг. Управление платформой свайпом/тапом.                 ║
 // ║  • v1.9.0 — Тетрис. Свайп + экранные кнопки. Уровни, очки.                 ║
+// ║  • v2.2.0 — Динозавр: птеродактили (2 высоты), хаотичные группы кактусов,  ║
+// ║             приседание (свайп вниз), стикер управления в начале игры.       ║
 // ║                                                                              ║
 // ║  КАК АКТИВИРУЕТСЯ: 5 быстрых тапов по строке "Версия" в настройках.         ║
 // ║  После 2 тапов — тост "🤔 Продолжай..." как подсказка.                      ║
@@ -3088,19 +3087,38 @@ function tetDrawMsg(msg) {
 // ══════════════════════════════════════════════════════════════════
 // ── 🦕 ДИНОЗАВРИК (v2.0.0) ───────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// ── 🦕 DINO GAME (v2.2 — хаотичные кактусы + птеродактили) ──────
+// ══════════════════════════════════════════════════════════════════
 let dinoRaf = null, dinoRunning = false;
 let dinoScore = 0, dinoHi = 0;
 let dinoW, dinoH, dinoCellH;
-let dinoDino, dinoGround, dinoObstacles, dinoCloudX, dinoFrameCount;
+let dinoDino, dinoGround, dinoObstacles, dinoBirds, dinoCloudX, dinoFrameCount;
 let dinoDifficulty = 'normal';
 let dinoLastTime = 0;
-let dinoLegFrame = 0, dinoLegTimer = 0; // simple 2-frame leg animation
+let dinoLegFrame = 0, dinoLegTimer = 0;
+let dinoDucking = false;
+let dinoBirdWing = 0, dinoBirdWingTimer = 0; // 0 = wings up, 1 = wings down
 
 const DINO_DIFF = {
   easy:   { initSpeed: 4,   accel: 0.008, jumpVel: -13.5, gravity: 0.72 },
   normal: { initSpeed: 5.5, accel: 0.012, jumpVel: -14.5, gravity: 0.80 },
   hard:   { initSpeed: 7.5, accel: 0.018, jumpVel: -14,   gravity: 0.90 },
 };
+
+// Конфигурации групп кактусов: массив высот (как доля от dinoH) для каждого кактуса в группе
+const CACTUS_CONFIGS = [
+  [0.26],               // одиночный маленький
+  [0.34],               // одиночный средний
+  [0.40],               // одиночный высокий
+  [0.32, 0.36],         // двойной (маленький + высокий)
+  [0.38, 0.24],         // двойной (высокий + маленький)
+  [0.32, 0.32],         // двойной одинаковый
+  [0.28, 0.38, 0.28],   // тройной (арка)
+  [0.36, 0.36, 0.36],   // тройной монолит
+  [0.24, 0.38, 0.38],   // тройной нарастающий
+  [0.40, 0.28, 0.36],   // тройной хаос
+];
 
 function dinoInit() {
   const canvas = document.getElementById('dino-canvas');
@@ -3110,7 +3128,21 @@ function dinoInit() {
   dinoW = canvas.width; dinoH = canvas.height;
   dinoCellH = Math.round(dinoH * 0.28);
 
-  canvas.ontouchstart = e => { e.preventDefault(); dinoJump(); };
+  // Тач: свайп вниз = приседание, тап = прыжок
+  let _ty = 0, _moved = false;
+  canvas.ontouchstart = e => { e.preventDefault(); _ty = e.touches[0].clientY; _moved = false; };
+  canvas.ontouchmove  = e => {
+    e.preventDefault();
+    if (!_moved && e.touches[0].clientY - _ty > 22) {
+      _moved = true;
+      if (dinoRunning && dinoDino.onGround) dinoDucking = true;
+    }
+  };
+  canvas.ontouchend = e => {
+    e.preventDefault();
+    dinoDucking = false;
+    if (!_moved) dinoJump();
+  };
   canvas.onclick = () => dinoJump();
   dinoRestart();
 }
@@ -3119,17 +3151,24 @@ function dinoRestart() {
   dinoStop();
   dinoLastTime = 0;
   dinoLegFrame = 0; dinoLegTimer = 0;
+  dinoDucking = false;
+  dinoBirdWing = 0; dinoBirdWingTimer = 0;
   const d = DINO_DIFF[dinoDifficulty] || DINO_DIFF.normal;
   dinoScore = 0;
   dinoGround = dinoH - Math.round(dinoH * 0.12);
+  const baseH = Math.round(dinoH * 0.32);
   dinoDino = {
-    x: Math.round(dinoW * 0.12), w: Math.round(dinoH * 0.26), h: Math.round(dinoH * 0.32),
+    x: Math.round(dinoW * 0.12),
+    w: Math.round(dinoH * 0.26),
+    h: baseH, baseH,
+    duckH: Math.round(baseH * 0.55), // высота приседания
     y: 0, vy: 0, onGround: true,
     speed: d.initSpeed, accel: d.accel,
     jumpVel: d.jumpVel, gravity: d.gravity
   };
   dinoDino.y = dinoGround - dinoDino.h;
   dinoObstacles = [];
+  dinoBirds = [];
   dinoCloudX = dinoW;
   dinoFrameCount = 0;
   dinoUpdateScore();
@@ -3144,6 +3183,7 @@ function dinoStop() {
 
 function dinoJump() {
   if (!dinoRunning) { dinoRestart(); return; }
+  if (dinoDucking) { dinoDucking = false; return; }
   if (dinoDino.onGround) {
     dinoDino.vy = dinoDino.jumpVel;
     dinoDino.onGround = false;
@@ -3161,58 +3201,107 @@ function dinoLoop(ts) {
 
 function dinoTick(dt) {
   const d = dinoDino;
-  // Acceleration
-  d.speed = Math.min(d.speed + d.accel * dt, 20);
+  // Ускорение
+  d.speed = Math.min(d.speed + d.accel * dt, 22);
   dinoFrameCount += dt;
 
-  // Simple 2-frame leg animation (like original Google dino)
+  // Приседание: изменяем высоту дино
+  if (d.onGround) {
+    const targetH = dinoDucking ? d.duckH : d.baseH;
+    d.h = targetH;
+    d.y = dinoGround - d.h;
+  }
+
+  // Анимация ног
   if (d.onGround) {
     dinoLegTimer += d.speed * dt;
     if (dinoLegTimer >= 7) { dinoLegTimer = 0; dinoLegFrame = 1 - dinoLegFrame; }
   }
 
-  // Physics
+  // Анимация крыльев птицы
+  dinoBirdWingTimer += d.speed * dt * 0.6;
+  if (dinoBirdWingTimer >= 9) { dinoBirdWingTimer = 0; dinoBirdWing = 1 - dinoBirdWing; }
+
+  // Физика
   d.vy += d.gravity * dt;
   d.y  += d.vy * dt;
   if (d.y >= dinoGround - d.h) { d.y = dinoGround - d.h; d.vy = 0; d.onGround = true; }
 
-  // Score
+  // Счёт
   dinoScore = Math.floor(dinoFrameCount * 0.1);
   if (dinoScore > dinoHi) dinoHi = dinoScore;
   dinoUpdateScore();
 
-  // Spawn obstacle
-  const lastX = dinoObstacles.length ? dinoObstacles[dinoObstacles.length - 1].x : -Infinity;
-  const minGap = Math.max(160, 320 - d.speed * 12);
-  if (lastX < dinoW - minGap || dinoObstacles.length === 0) {
-    if (Math.random() < 0.015 * dt || dinoObstacles.length === 0) {
-      const cactH = Math.round(dinoH * (0.22 + Math.random() * 0.15));
-      const cactW = Math.round(cactH * 0.45);
-      dinoObstacles.push({ x: dinoW + 10, w: cactW, h: cactH, y: dinoGround - cactH });
+  // ── Спавн кактусов (хаотичные группы) ──
+  const lastCactX = dinoObstacles.length ? dinoObstacles[dinoObstacles.length - 1].x : -Infinity;
+  // Переменный промежуток: от 140 до 380px, зависит от скорости и случайности
+  const minGap = Math.max(140, 280 - d.speed * 10) + Math.random() * 120;
+  if (lastCactX < dinoW - minGap || dinoObstacles.length === 0) {
+    if (Math.random() < 0.018 * dt || dinoObstacles.length === 0) {
+      // Выбираем случайную конфигурацию группы кактусов
+      const config = CACTUS_CONFIGS[Math.floor(Math.random() * CACTUS_CONFIGS.length)];
+      let offsetX = dinoW + 10;
+      for (let i = 0; i < config.length; i++) {
+        const cactH = Math.round(dinoH * config[i]);
+        const cactW = Math.round(cactH * (0.40 + Math.random() * 0.15));
+        dinoObstacles.push({ x: offsetX, w: cactW, h: cactH, y: dinoGround - cactH });
+        // Между кактусами в группе маленький случайный зазор
+        offsetX += cactW + Math.round(6 + Math.random() * 10);
+      }
     }
   }
 
-  // Move obstacles
+  // ── Спавн птиц (начиная с очков 15) ──
+  if (dinoScore >= 15) {
+    const lastBirdX = dinoBirds.length ? dinoBirds[dinoBirds.length - 1].x : -Infinity;
+    const birdGap = Math.max(300, 550 - d.speed * 15) + Math.random() * 200;
+    if (lastBirdX < dinoW - birdGap) {
+      if (Math.random() < 0.010 * dt) {
+        const bW = Math.round(dinoH * 0.25);
+        const bH = Math.round(bW * 0.45);
+        // Два уровня высоты: LOW (надо прыгать) и HIGH (надо приседать)
+        // LOW: на уровне земли — птица летит на высоте тела дино
+        // HIGH: выше — дино пролетает под ней приседая
+        const isHigh = Math.random() < 0.45;
+        const birdY = isHigh
+          ? dinoGround - d.baseH * 1.05 - bH  // высоко — надо присесть
+          : dinoGround - d.baseH * 0.65 - bH; // низко — надо прыгнуть
+        dinoBirds.push({ x: dinoW + 10, w: bW, h: bH, y: birdY, high: isHigh });
+      }
+    }
+  }
+
+  // Движение препятствий
   for (const obs of dinoObstacles) obs.x -= d.speed * dt;
   while (dinoObstacles.length && dinoObstacles[0].x + dinoObstacles[0].w < 0) dinoObstacles.shift();
 
-  // Cloud
+  for (const bird of dinoBirds) bird.x -= d.speed * dt;
+  while (dinoBirds.length && dinoBirds[0].x + dinoBirds[0].w < 0) dinoBirds.shift();
+
+  // Облако
   dinoCloudX -= d.speed * 0.25 * dt;
   if (dinoCloudX < -100) dinoCloudX = dinoW + 30;
 
-  // Collision (with tighter hitbox)
-  const pad = Math.round(d.w * 0.12);
+  // Коллизии
+  const pad = Math.round(d.w * 0.13);
+  const checkHit = (obs) =>
+    d.x + d.w - pad > obs.x + pad && d.x + pad < obs.x + obs.w - pad &&
+    d.y + d.h - pad > obs.y + pad && d.y + pad < obs.y + obs.h - pad;
+
   for (const obs of dinoObstacles) {
-    if (d.x + d.w - pad > obs.x + pad && d.x + pad < obs.x + obs.w - pad &&
-        d.y + d.h - pad > obs.y + pad && d.y + pad < obs.y + obs.h - pad) {
-      dinoStop();
-      dinoRunning = false;
-      dinoDraw();
-      _dinoPaintMsg('💀 Игра окончена! Тапни чтобы снова');
-      toast('🦕 Счёт: ' + dinoScore);
-      return;
-    }
+    if (checkHit(obs)) { dinoDie(); return; }
   }
+  for (const bird of dinoBirds) {
+    if (checkHit(bird)) { dinoDie(); return; }
+  }
+}
+
+function dinoDie() {
+  dinoStop();
+  dinoRunning = false;
+  dinoDraw();
+  _dinoPaintMsg('💀 Игра окончена! Тапни чтобы снова');
+  toast('🦕 Счёт: ' + dinoScore);
 }
 
 function dinoDraw() {
@@ -3221,14 +3310,14 @@ function dinoDraw() {
   const ctx = canvas.getContext('2d');
   const accent = getAccent();
 
-  // Dark theme background matching app
+  // Фон
   ctx.fillStyle = '#111'; ctx.fillRect(0, 0, dinoW, dinoH);
 
-  // Ground line
+  // Земля
   ctx.fillStyle = 'rgba(255,255,255,0.25)';
   ctx.fillRect(0, dinoGround, dinoW, 1);
 
-  // Subtle ground pebbles (scroll with game)
+  // Камушки на земле
   ctx.fillStyle = 'rgba(255,255,255,0.12)';
   const pebbleSeed = Math.floor(dinoFrameCount * 0.5) % 40;
   for (let i = 0; i < 8; i++) {
@@ -3237,7 +3326,7 @@ function dinoDraw() {
     ctx.fillRect(px, dinoGround + 3 + (i % 3), pw, ph);
   }
 
-  // Clouds (subtle, monochrome)
+  // Облака
   const drawCloud = (cx, cy, scale) => {
     ctx.fillStyle = 'rgba(255,255,255,0.07)';
     const s = scale || 1;
@@ -3249,7 +3338,7 @@ function dinoDraw() {
   drawCloud((dinoCloudX + dinoW * 0.6) % (dinoW + 60) - 30, dinoH * 0.06, 0.7);
   drawCloud((dinoCloudX + dinoW * 0.3) % (dinoW + 50) - 20, dinoH * 0.2, 0.85);
 
-  // HI score + score (top right)
+  // HI + счёт
   const fs = Math.round(dinoH * 0.13);
   ctx.font = `700 ${fs}px "JetBrains Mono",monospace`;
   ctx.textAlign = 'right';
@@ -3265,97 +3354,125 @@ function dinoDraw() {
   }
   ctx.textAlign = 'left';
 
-  // ── Cacti — drawn with app accent color ──
+  // Подсказка по управлению (первые 10 очков)
+  if (dinoScore < 10) {
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.font = `${Math.round(dinoH * 0.09)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('▲ прыжок  ▼ присесть', dinoW / 2, dinoH * 0.88);
+    ctx.textAlign = 'left';
+  }
+
+  // ── Кактусы ──
   for (const obs of dinoObstacles) {
     ctx.fillStyle = accent;
     ctx.shadowColor = accent; ctx.shadowBlur = 5;
-    // trunk (center column)
     const tW = Math.max(3, Math.round(obs.w * 0.32));
     const tX = obs.x + Math.round((obs.w - tW) / 2);
     ctx.fillRect(tX, obs.y, tW, obs.h);
-    // left arm
     const aH = Math.round(obs.h * 0.32), aW = Math.round(obs.w * 0.35);
     ctx.fillRect(obs.x, obs.y + Math.round(obs.h * 0.25), aW, aH);
     ctx.fillRect(obs.x, obs.y + Math.round(obs.h * 0.25) - Math.round(aH * 0.55), aW, Math.round(aH * 0.55));
-    // right arm
     const rX = obs.x + obs.w - aW;
     ctx.fillRect(rX, obs.y + Math.round(obs.h * 0.35), aW, aH);
     ctx.fillRect(rX + Math.round(aW * 0.55), obs.y + Math.round(obs.h * 0.35) - Math.round(aH * 0.45), Math.round(aW * 0.45), Math.round(aH * 0.45));
     ctx.shadowBlur = 0;
   }
 
-  // ── Google-style pixel dino (in app theme color) ──
+  // ── Птеродактили ──
+  for (const bird of dinoBirds) {
+    ctx.fillStyle = accent;
+    ctx.shadowColor = accent; ctx.shadowBlur = 6;
+    const bx = Math.round(bird.x), by = Math.round(bird.y);
+    const bw = bird.w, bh = bird.h;
+    // Тело птицы (центральный прямоугольник)
+    const bodyW = Math.round(bw * 0.45), bodyH = Math.round(bh * 0.42);
+    const bodyX = bx + Math.round((bw - bodyW) / 2);
+    const bodyY = by + Math.round(bh * 0.35);
+    ctx.fillRect(bodyX, bodyY, bodyW, bodyH);
+    // Голова (справа от тела)
+    const headW = Math.round(bw * 0.22), headH = Math.round(bh * 0.32);
+    ctx.fillRect(bodyX + bodyW - Math.round(headW * 0.3), bodyY - Math.round(headH * 0.5), headW, headH);
+    // Клюв
+    ctx.fillRect(bodyX + bodyW + Math.round(headW * 0.6), bodyY - Math.round(headH * 0.15), Math.round(bw * 0.15), Math.round(bh * 0.12));
+    // Хвост (слева)
+    ctx.fillRect(bx, bodyY + Math.round(bodyH * 0.2), Math.round(bw * 0.15), Math.round(bh * 0.14));
+    // Крылья (2-кадровая анимация)
+    const wingW = Math.round(bw * 0.42), wingH = Math.round(bh * 0.38);
+    if (dinoBirdWing === 0) {
+      // Крылья вверх
+      ctx.fillRect(bodyX - Math.round(wingW * 0.5), by, wingW, Math.round(wingH * 0.6));
+      ctx.fillRect(bodyX + Math.round(bodyW * 0.3), by, Math.round(wingW * 0.8), Math.round(wingH * 0.5));
+    } else {
+      // Крылья вниз
+      ctx.fillRect(bodyX - Math.round(wingW * 0.5), bodyY - Math.round(wingH * 0.2), wingW, Math.round(wingH * 0.55));
+      ctx.fillRect(bodyX + Math.round(bodyW * 0.3), bodyY - Math.round(wingH * 0.15), Math.round(wingW * 0.8), Math.round(wingH * 0.5));
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  // ── Дино (пиксельный, Google-стиль) ──
   const d = dinoDino;
-  // Scale unit based on dino height (original dino ~47px)
-  const U = d.h / 47;
+  const isDuck = dinoDucking && d.onGround;
+  // Scale unit: в полный рост ~47, в приседе ~26
+  const U = d.h / (isDuck ? 26 : 47);
   const bx = Math.round(d.x), by = Math.round(d.y);
 
   ctx.fillStyle = accent;
   ctx.shadowColor = accent; ctx.shadowBlur = 6;
 
-  // === Body (based on Chrome Dino sprite layout) ===
-  // Tail (pointing left)
-  ctx.fillRect(bx,            by + Math.round(23*U),  Math.round(6*U),  Math.round(6*U));
-  ctx.fillRect(bx+Math.round(2*U), by + Math.round(27*U), Math.round(5*U), Math.round(4*U));
-
-  // Main torso
-  ctx.fillRect(bx+Math.round(4*U),  by+Math.round(20*U), Math.round(18*U), Math.round(20*U));
-
-  // Chest/front
-  ctx.fillRect(bx+Math.round(18*U), by+Math.round(24*U), Math.round(8*U),  Math.round(12*U));
-
-  // Neck
-  ctx.fillRect(bx+Math.round(15*U), by+Math.round(12*U), Math.round(10*U), Math.round(11*U));
-
-  // Head
-  ctx.fillRect(bx+Math.round(10*U), by,                   Math.round(22*U), Math.round(14*U));
-  ctx.fillRect(bx+Math.round(8*U),  by+Math.round(4*U),   Math.round(24*U), Math.round(9*U));
-
-  // Mouth / jaw notch (cut from head bottom-right)
-  ctx.fillStyle = '#111';
-  ctx.shadowBlur = 0;
-  ctx.fillRect(bx+Math.round(22*U), by+Math.round(10*U),  Math.round(10*U), Math.round(4*U));
-
-  // Eye white
-  ctx.fillStyle = '#f0ede8';
-  ctx.fillRect(bx+Math.round(22*U), by+Math.round(2*U),   Math.round(6*U),  Math.round(6*U));
-  // Eye pupil
-  ctx.fillStyle = '#111';
-  ctx.fillRect(bx+Math.round(25*U), by+Math.round(3*U),   Math.round(3*U),  Math.round(3*U));
-
-  ctx.fillStyle = accent;
-  ctx.shadowColor = accent; ctx.shadowBlur = 4;
-
-  // Small arm
-  ctx.fillRect(bx+Math.round(18*U), by+Math.round(27*U),  Math.round(6*U),  Math.round(3*U));
-
-  // ── Legs (2-frame alternating animation, like original) ──
-  const legW = Math.round(5*U), legH = Math.round(11*U);
-  const legY = by + Math.round(38*U); // legs attach at same Y always
-  // Frame 0: leg1 forward, leg2 back | Frame 1: opposite
-  if (!d.onGround) {
-    // In air: both legs slightly spread
-    ctx.fillRect(bx+Math.round(8*U),  legY, legW, Math.round(8*U));
-    ctx.fillRect(bx+Math.round(16*U), legY + Math.round(4*U), legW, Math.round(6*U));
-  } else if (dinoLegFrame === 0) {
-    // Stride A
-    ctx.fillRect(bx+Math.round(7*U),  legY,                   legW, legH);
-    ctx.fillRect(bx+Math.round(7*U),  legY+legH-Math.round(U),Math.round(7*U), Math.round(2*U)); // foot1
-    ctx.fillRect(bx+Math.round(18*U), legY+Math.round(4*U),   legW, legH-Math.round(4*U));
-    ctx.fillRect(bx+Math.round(16*U), legY+legH-Math.round(U),Math.round(7*U), Math.round(2*U)); // foot2
+  if (!isDuck) {
+    // ── Обычный дино ──
+    ctx.fillRect(bx,                      by + Math.round(23*U), Math.round(6*U),  Math.round(6*U));  // хвост
+    ctx.fillRect(bx+Math.round(2*U),      by + Math.round(27*U), Math.round(5*U),  Math.round(4*U));
+    ctx.fillRect(bx+Math.round(4*U),      by+Math.round(20*U),   Math.round(18*U), Math.round(20*U)); // торс
+    ctx.fillRect(bx+Math.round(18*U),     by+Math.round(24*U),   Math.round(8*U),  Math.round(12*U)); // грудь
+    ctx.fillRect(bx+Math.round(15*U),     by+Math.round(12*U),   Math.round(10*U), Math.round(11*U)); // шея
+    ctx.fillRect(bx+Math.round(10*U),     by,                    Math.round(22*U), Math.round(14*U)); // голова
+    ctx.fillRect(bx+Math.round(8*U),      by+Math.round(4*U),    Math.round(24*U), Math.round(9*U));
+    ctx.fillStyle = '#111'; ctx.shadowBlur = 0;
+    ctx.fillRect(bx+Math.round(22*U),     by+Math.round(10*U),   Math.round(10*U), Math.round(4*U));  // пасть
+    ctx.fillStyle = '#f0ede8';
+    ctx.fillRect(bx+Math.round(22*U),     by+Math.round(2*U),    Math.round(6*U),  Math.round(6*U));  // белок
+    ctx.fillStyle = '#111';
+    ctx.fillRect(bx+Math.round(25*U),     by+Math.round(3*U),    Math.round(3*U),  Math.round(3*U));  // зрачок
+    ctx.fillStyle = accent; ctx.shadowColor = accent; ctx.shadowBlur = 4;
+    ctx.fillRect(bx+Math.round(18*U),     by+Math.round(27*U),   Math.round(6*U),  Math.round(3*U));  // лапка
+    // Ноги
+    const legW = Math.round(5*U), legH = Math.round(11*U);
+    const legY = by + Math.round(38*U);
+    if (!d.onGround) {
+      ctx.fillRect(bx+Math.round(8*U),  legY, legW, Math.round(8*U));
+      ctx.fillRect(bx+Math.round(16*U), legY + Math.round(4*U), legW, Math.round(6*U));
+    } else if (dinoLegFrame === 0) {
+      ctx.fillRect(bx+Math.round(7*U),  legY,                    legW, legH);
+      ctx.fillRect(bx+Math.round(7*U),  legY+legH-Math.round(U), Math.round(7*U), Math.round(2*U));
+      ctx.fillRect(bx+Math.round(18*U), legY+Math.round(4*U),    legW, legH-Math.round(4*U));
+      ctx.fillRect(bx+Math.round(16*U), legY+legH-Math.round(U), Math.round(7*U), Math.round(2*U));
+    } else {
+      ctx.fillRect(bx+Math.round(7*U),  legY+Math.round(4*U),    legW, legH-Math.round(4*U));
+      ctx.fillRect(bx+Math.round(5*U),  legY+legH-Math.round(U), Math.round(7*U), Math.round(2*U));
+      ctx.fillRect(bx+Math.round(18*U), legY,                    legW, legH);
+      ctx.fillRect(bx+Math.round(18*U), legY+legH-Math.round(U), Math.round(7*U), Math.round(2*U));
+    }
   } else {
-    // Stride B
-    ctx.fillRect(bx+Math.round(7*U),  legY+Math.round(4*U),   legW, legH-Math.round(4*U));
-    ctx.fillRect(bx+Math.round(5*U),  legY+legH-Math.round(U),Math.round(7*U), Math.round(2*U)); // foot1
-    ctx.fillRect(bx+Math.round(18*U), legY,                   legW, legH);
-    ctx.fillRect(bx+Math.round(18*U), legY+legH-Math.round(U),Math.round(7*U), Math.round(2*U)); // foot2
+    // ── Дино в приседе (плоский, вытянутый) ──
+    const DW = d.w * 1.3; // присев — длиннее
+    ctx.fillRect(bx,                   by + Math.round(8*U),  Math.round(8*U),  Math.round(8*U));  // хвост
+    ctx.fillRect(bx+Math.round(6*U),   by + Math.round(6*U),  Math.round(DW*0.55), Math.round(14*U)); // тело
+    ctx.fillRect(bx+Math.round(DW*0.45), by,                  Math.round(DW*0.35), Math.round(10*U)); // голова
+    ctx.fillRect(bx+Math.round(DW*0.78), by+Math.round(2*U), Math.round(DW*0.18), Math.round(5*U));  // клюв
+    ctx.fillStyle = '#f0ede8';
+    ctx.fillRect(bx+Math.round(DW*0.5), by+Math.round(1*U), Math.round(5*U), Math.round(4*U));  // глаз
+    ctx.fillStyle = '#111'; ctx.shadowBlur = 0;
+    ctx.fillRect(bx+Math.round(DW*0.53), by+Math.round(2*U), Math.round(3*U), Math.round(2*U)); // зрачок
+    ctx.fillStyle = accent; ctx.shadowColor = accent; ctx.shadowBlur = 4;
+    // Ноги при приседе (горизонтальные)
+    const legH2 = Math.round(5*U);
+    ctx.fillRect(bx+Math.round(8*U),  by+Math.round(18*U), Math.round(7*U), legH2);
+    ctx.fillRect(bx+Math.round(18*U), by+Math.round(20*U), Math.round(7*U), legH2);
   }
   ctx.shadowBlur = 0;
-}
-
-function _dinoRoundRect(ctx, x, y, w, h, r) {
-  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
-  else { ctx.fillRect(x, y, w, h); }
 }
 
 function _dinoPaintMsg(msg) {
