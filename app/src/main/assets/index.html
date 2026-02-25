@@ -561,11 +561,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     </div>
   </div>
   <div class="bottom-nav">
-    <button class="nav-item active" id="nav-home" onclick="goHome()">
+    <button class="nav-item active" id="nav-home" onclick="SFX.play('navHome');goHome()">
       <span class="nav-icon">🏠</span><span>Главная</span></button>
-    <button class="nav-item" id="nav-bells" onclick="navTo('s-bells','nav-bells')">
+    <button class="nav-item" id="nav-bells" onclick="SFX.play('navBells');navTo('s-bells','nav-bells')">
       <span class="nav-icon">🔔</span><span>Звонки</span></button>
-    <button class="nav-item" id="nav-settings" onclick="navTo('s-settings','nav-settings')">
+    <button class="nav-item" id="nav-settings" onclick="SFX.play('navSettings');navTo('s-settings','nav-settings')">
       <span class="nav-icon">⚙️</span><span>Настройки</span></button>
   </div>
 </div>
@@ -573,7 +573,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 <!-- ГРУППЫ -->
 <div class="screen" id="s-groups">
   <div class="hdr">
-    <button class="hdr-back" onclick="goHome()">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
     <div><div class="hdr-title" id="groups-title">Выбор группы</div>
     <div class="hdr-sub" id="groups-sub"></div></div>
   </div>
@@ -592,7 +592,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 <div class="screen" id="s-schedule">
   <div class="sched-header">
     <div style="display:flex;align-items:center;gap:10px">
-      <button class="hdr-back" onclick="showScreen('s-groups','back')">‹</button>
+      <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-groups','back')">‹</button>
       <div><div class="sched-group" id="sched-group-name"></div>
       <div class="sched-date" id="sched-date"></div></div>
     </div>
@@ -603,7 +603,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 <!-- ЗВОНКИ -->
 <div class="screen" id="s-bells">
   <div class="hdr">
-    <button class="hdr-back" onclick="goHome()">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
     <div class="hdr-title">Расписание звонков</div>
   </div>
   <div class="body" id="bells-body"></div>
@@ -612,7 +612,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 <!-- НАСТРОЙКИ -->
 <div class="screen" id="s-settings">
   <div class="hdr">
-    <button class="hdr-back" onclick="goHome()">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
     <div class="hdr-title">Настройки</div>
   </div>
   <div class="body">
@@ -623,7 +623,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
            placeholder="https://disk.yandex.ru/d/..."
            autocomplete="off" autocorrect="off" autocapitalize="off">
     <div style="height:8px"></div>
-    <button class="btn btn-accent2" onclick="saveUrlAndLoad()">⬇ Обновить файлы</button>
+    <button class="btn btn-accent2" onclick="SFX.play('btnAccent');saveUrlAndLoad()">⬇ Обновить файлы</button>
     <div style="height:6px"></div>
     <div class="status" id="proxy-status" style="text-align:left;font-size:11px"></div>
     <div class="sep"></div>
@@ -634,6 +634,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
       <div>
         <div class="item-name" id="theme-current-name">Колледж</div>
         <div class="item-sub" id="theme-current-sub">Нажми для выбора</div>
+      </div>
+      <span class="item-arrow">›</span>
+    </div>
+    <div class="sep"></div>
+
+    <!-- Звук -->
+    <div class="section-label">Звук</div>
+    <div class="list-item" onclick="toggleMute()" style="margin-bottom:8px">
+      <div>
+        <div class="item-name" id="mute-label">🔇 Звук выключен</div>
+        <div class="item-sub">Интерфейс и мини-игры</div>
       </div>
       <span class="item-arrow">›</span>
     </div>
@@ -672,7 +683,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 <!-- ВЫБОР ТЕМЫ -->
 <div class="screen" id="s-themes">
   <div class="hdr">
-    <button class="hdr-back" onclick="showScreen('s-settings','back')">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-settings','back')">‹</button>
     <div>
       <div class="hdr-title">Тема оформления</div>
       <div class="hdr-sub" id="theme-screen-sub">Выбери цветовую схему</div>
@@ -936,6 +947,168 @@ if (typeof AbortSignal !== 'undefined' && !AbortSignal.timeout) {
     }, ms);
     return ctrl.signal;
   };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🔊 ЗВУКОВАЯ СИСТЕМА (Web Audio API, синтетическая) ───────────
+// ══════════════════════════════════════════════════════════════════
+const SFX = (() => {
+  let ctx = null;
+  let muted = true; // по дефолту выключено
+
+  function ac() {
+    if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} }
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  const V = 0.5;
+  function tone(freq, type, attack, sustain, release, vol=0.18) {
+    const c = ac(); if (!c || muted) return;
+    const g = c.createGain(), o = c.createOscillator();
+    o.type = type; o.frequency.value = freq;
+    const v = vol * V;
+    g.gain.setValueAtTime(0, c.currentTime);
+    g.gain.linearRampToValueAtTime(v, c.currentTime + attack);
+    g.gain.setValueAtTime(v, c.currentTime + attack + sustain);
+    g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + attack + sustain + release);
+    o.connect(g); g.connect(c.destination);
+    o.start(c.currentTime); o.stop(c.currentTime + attack + sustain + release + 0.05);
+  }
+  function sweep(f0, f1, type, dur, vol=0.15) {
+    const c = ac(); if (!c || muted) return;
+    const g = c.createGain(), o = c.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, c.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f1, c.currentTime + dur * 0.85);
+    const v = vol * V;
+    g.gain.setValueAtTime(v, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(c.currentTime); o.stop(c.currentTime + dur + 0.05);
+  }
+  function noise(dur, vol=0.08, lpFreq=800) {
+    const c = ac(); if (!c || muted) return;
+    const bufSize = Math.floor(c.sampleRate * dur);
+    const buf = c.createBuffer(1, bufSize, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const filt = c.createBiquadFilter();
+    filt.type = 'lowpass'; filt.frequency.value = lpFreq;
+    const g = c.createGain();
+    const v = vol * V;
+    g.gain.setValueAtTime(v, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+    src.connect(filt); filt.connect(g); g.connect(c.destination);
+    src.start(); src.stop(c.currentTime + dur + 0.05);
+  }
+  const after = (fn, ms) => setTimeout(fn, ms);
+
+  const sounds = {
+    // Навигация — мягкие, низкие, тёплые
+    navHome()     { tone(220,'sine',.03,.06,.28,.10); after(()=>tone(330,'sine',.03,.04,.22,.06),80); },
+    navBells()    { tone(440,'sine',.02,.06,.38,.09); after(()=>tone(660,'sine',.02,.03,.28,.05),70); },
+    navSettings() { tone(180,'triangle',.03,.05,.22,.08); after(()=>tone(240,'triangle',.03,.03,.18,.05),90); },
+    screenPush()  { sweep(200,300,'sine',.14,.08); },
+    screenBack()  { sweep(300,180,'sine',.12,.08); },
+    themeSelect() { [330,415,494].forEach((f,i)=>after(()=>tone(f,'sine',.02,.06,.26,.07),i*70)); },
+    // Кнопки — почти неслышные тихие касания
+    btnClick()    { noise(.025,.018,500); tone(280,'sine',.008,.01,.10,.03); },
+    btnAccent()   { sweep(220,360,'sine',.15,.08); },
+    keyTap()      { noise(.015,.012,400); },
+    // Тост / статус
+    toastShow()   { tone(440,'sine',.015,.04,.24,.07); after(()=>tone(550,'sine',.015,.02,.18,.04),90); },
+    success()     { [330,415,494,660].forEach((f,i)=>after(()=>tone(f,'sine',.02,.06,.28,.06),i*80)); },
+    error()       { tone(160,'triangle',.02,.10,.22,.08); after(()=>tone(130,'triangle',.02,.08,.22,.07),140); },
+    // Пасхалка / игры
+    eggOpen()     { [196,247,294,370,494].forEach((f,i)=>after(()=>tone(f,'sine',.02,.06,.30,.06),i*70)); },
+    gameSelect()  { sweep(280,420,'sine',.12,.08); },
+    // ── Змейка ──
+    snakeEat()    { tone(440,'sine',.01,.03,.14,.07); after(()=>tone(550,'sine',.01,.02,.10,.04),60); },
+    snakeDie()    { sweep(300,80,'sine',.42,.09); after(()=>noise(.20,.04,350),120); },
+    snakeTurn()   { noise(.018,.014,600); },
+    // ── Крестики-нолики ──
+    tttPlace()    { tone(360,'sine',.01,.03,.18,.06); },
+    tttWin()      { [330,415,494,660,830].forEach((f,i)=>after(()=>tone(f,'sine',.02,.06,.28,.07),i*90)); },
+    tttLose()     { sweep(280,120,'sine',.52,.09); },
+    tttDraw()     { tone(330,'sine',.02,.18,.28,.06); },
+    // ── Пинг-понг ──
+    pongHit()     { noise(.018,.04,800); tone(440,'sine',.005,.01,.08,.04); },
+    pongWall()    { noise(.014,.03,600); },
+    pongScore()   { sweep(240,420,'sine',.18,.08); },
+    pongLose()    { sweep(360,100,'sine',.36,.09); },
+    // ── Тетрис ──
+    tetMove()     { noise(.014,.022,700); },
+    tetRotate()   { tone(330,'sine',.01,.02,.12,.05); },
+    tetLine()     { [294,370,440,587].forEach((f,i)=>after(()=>tone(f,'sine',.01,.05,.20,.07),i*55)); },
+    tetDrop()     { noise(.040,.05,500); tone(120,'sine',.01,.04,.16,.07); },
+    tetGameOver() { [330,277,233,196].forEach((f,i)=>after(()=>tone(f,'triangle',.02,.10,.28,.08),i*110)); },
+    // ── Дино ──
+    dinoJump()    { sweep(220,380,'sine',.15,.07); },
+    dinoCactus()  { noise(.050,.06,450); tone(140,'triangle',.01,.06,.18,.07); },
+    dinoScore()   { tone(550,'sine',.008,.01,.12,.05); },
+    // ── Block Blast ──
+    bbPlace()     { tone(280,'sine',.01,.03,.14,.06); },
+    bbLine()      { [330,415,494].forEach((f,i)=>after(()=>tone(f,'sine',.01,.06,.22,.07),i*60)); },
+    bbGameOver()  { sweep(240,80,'sine',.50,.09); },
+    // ── Арканоид ──
+    brBrick()     { noise(.020,.05,1000); tone(440,'sine',.004,.01,.09,.04); },
+    brWall()      { noise(.016,.035,700); },
+    brPaddle()    { noise(.020,.04,800); tone(360,'sine',.005,.01,.08,.04); },
+    brLive()      { sweep(420,160,'sine',.32,.09); },
+    brLevelUp()   { [294,370,440,587].forEach((f,i)=>after(()=>tone(f,'sine',.02,.06,.26,.07),i*65)); },
+    // ── Пузыри ──
+    bubPop() {
+      const c = ac(); if (!c || muted) return;
+      // Слоёный поп: основной «влажный» щелчок + призвук
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine';
+      const bf = 180 + Math.random() * 120;
+      o.frequency.setValueAtTime(bf * 2.2, c.currentTime);
+      o.frequency.exponentialRampToValueAtTime(bf * 0.35, c.currentTime + 0.10);
+      const v = 0.13 * V;
+      g.gain.setValueAtTime(v, c.currentTime);
+      g.gain.linearRampToValueAtTime(v * 1.1, c.currentTime + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.22);
+      o.connect(g); g.connect(c.destination);
+      o.start(); o.stop(c.currentTime + 0.26);
+      // Шлепок воздуха
+      noise(0.035, 0.05, 320);
+    },
+    bubMiss()     { sweep(140, 80, 'sine', 0.28, 0.07); after(() => noise(0.04, 0.03, 250), 60); },
+    bubCombo()    { [280, 350, 470].forEach((f,i) => after(() => tone(f, 'sine', 0.02, 0.05, 0.22, 0.07), i*55)); },
+  };
+
+  return {
+    play(name) { try { if (sounds[name]) sounds[name](); } catch(e){} },
+    toggle()   { muted = !muted; return muted; },
+    isMuted()  { return muted; },
+    init()     { ac(); }
+  };
+})();
+
+// Разблокировать AudioContext при первом жесте
+document.addEventListener('click',      () => SFX.init(), {once:true});
+document.addEventListener('touchstart', () => SFX.init(), {once:true});
+
+// ── Глобальный btnClick на все кнопки без явного SFX ────────────
+document.addEventListener('pointerdown', e => {
+  const el = e.target.closest('button,a,[role=button],.btn,.nav-item,.hdr-back,.list-item,.theme-card,.egg-card,.diff-btn,.dpad-btn,.ttt-cell,.dino-ctrl-btn');
+  if (!el) return;
+  const hasExplicit = el.onclick && ('' + el.onclick).includes('SFX.play');
+  if (!hasExplicit) SFX.play('btnClick');
+  if (e.target.matches('input,textarea')) SFX.play('keyTap');
+});
+
+function toggleMute(){
+  const m = SFX.toggle();
+  const lbl = document.getElementById('mute-label');
+  if (lbl) lbl.textContent = m ? '🔇 Звук выключен' : '🔊 Звук включён';
+  if (!m) SFX.play('btnClick');
+}
+function updateMuteLabel(){
+  const el = document.getElementById('mute-label');
+  if (el) el.textContent = SFX.isMuted() ? '🔇 Звук выключен' : '🔊 Звук включён';
 }
 
 // ══ RIPPLE ══
@@ -1673,7 +1846,7 @@ function renderThemeGrid(){
           <div class="theme-name" style="font-size:13px;font-weight:700">${t.ico||''} ${t.name}</div>
         </div>
         <span class="theme-check">✓</span>`;
-      c.onclick=()=>applyTheme(key); g.appendChild(c);
+      c.onclick=()=>{SFX.play('themeSelect');applyTheme(key);}; g.appendChild(c);
     });
   });
 }
@@ -2029,7 +2202,7 @@ function renderBells(){
 function setStatus(id,t){const el=document.getElementById(id);if(el)el.textContent=t;}
 function setBar(id,v){const el=document.getElementById(id);if(el)el.style.width=v+'%';}
 let _tt;
-function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),2500);}
+function toast(msg){SFX.play('toastShow');const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),2500);}
 
 // ══ DPI ТЕСТИРОВАНИЕ ══
 const TEST_URLS = [
@@ -2154,6 +2327,7 @@ updateThemeCurrentRow();
 // ══ INIT ══
 loadLocal();
 applyTheme(S.theme);
+updateMuteLabel();
 // Логируем инициализацию
 setTimeout(function(){
   if(window.Android&&window.Android.logMsg){
@@ -2396,6 +2570,7 @@ function eggTap() {
 }
 
 function eggOpen() {
+  SFX.play('eggOpen');
   document.getElementById('egg-overlay').classList.add('show');
   eggShowPicker();
 }
@@ -2416,6 +2591,7 @@ function eggShowPicker() {
 }
 
 function eggStartGame(name) {
+  SFX.play('gameSelect');
   document.getElementById('egg-picker').style.display = 'none';
   document.getElementById('egg-back').classList.add('show');
   eggStopAll();
@@ -2518,7 +2694,7 @@ function snakeTogglePause() {
   if (!snakePaused) snakeSchedule();
 }
 
-function snakeDir(dx, dy) {
+function snakeDir(dx, dy) { SFX.play('snakeTurn');
   // Нельзя развернуться назад
   if (dx === -snakeDir_v.x && dy === -snakeDir_v.y) return;
   snakeNextDir = {x: dx, y: dy};
@@ -2550,6 +2726,7 @@ function snakeTick() {
   if (snakeGrid[ny][nx] === 1) {
     snakeRunning = false;
     snakeDrawGameOver();
+    SFX.play('snakeDie');
     if (snakeLen - 3 > snakeHi) snakeHi = snakeLen - 3;
     snakeUpdateScore();
     toast('🐍 Игра окончена! Счёт: ' + (snakeLen - 3));
@@ -2565,6 +2742,7 @@ function snakeTick() {
     snakeGrid[tail.y][tail.x] = 0;
   } else {
     snakeLen++;
+    SFX.play('snakeEat');
     snakePlaceFood();
     snakeUpdateScore();
   }
@@ -2605,7 +2783,23 @@ function snakeDraw() {
   snakeCells.forEach((c, i) => {
     const alpha = i === 0 ? 1 : Math.max(0.35, 1 - i / snakeCells.length * 0.65);
     ctx.shadowColor = accent; ctx.shadowBlur = i === 0 ? 10 : 0;
-    ctx.fillStyle = i === 0 ? accent : `rgba(232,119,34,${alpha})`;
+    // Для тела парсим accent и применяем с прозрачностью
+    let bodyColor;
+    if (i === 0) {
+      bodyColor = accent;
+    } else {
+      // Пробуем распарсить HEX в RGB для прозрачности
+      const hex = accent.replace('#','');
+      if (hex.length === 6) {
+        const r = parseInt(hex.slice(0,2),16);
+        const g2 = parseInt(hex.slice(2,4),16);
+        const b2 = parseInt(hex.slice(4,6),16);
+        bodyColor = `rgba(${r},${g2},${b2},${alpha})`;
+      } else {
+        bodyColor = accent;
+      }
+    }
+    ctx.fillStyle = bodyColor;
     const pad = i === 0 ? 1 : 2;
     if (ctx.roundRect) ctx.roundRect(c.x*cs+pad, c.y*cs+pad, cs-pad*2, cs-pad*2, 3);
     else ctx.rect(c.x*cs+pad, c.y*cs+pad, cs-pad*2, cs-pad*2);
@@ -2665,19 +2859,21 @@ function tttRenderBoard() {
 
 function tttMove(i) {
   if (tttBoard[i] || tttGameOver) return;
+  SFX.play('tttPlace');
   tttBoard[i] = 'X';
   tttRenderBoard();
   const win = tttCheck(tttBoard);
-  if (win === 'X') { tttEndGame('✨ Ты победил! Неплохо!', win); return; }
-  if (tttFull(tttBoard)) { tttEndGame('🤝 Ничья!', null); return; }
+  if (win === 'X') { SFX.play('tttWin'); tttEndGame('✨ Ты победил! Неплохо!', win); return; }
+  if (tttFull(tttBoard)) { SFX.play('tttDraw'); tttEndGame('🤝 Ничья!', null); return; }
   document.getElementById('ttt-status').textContent = '🤔 ИИ думает...';
   setTimeout(() => {
     const best = tttMinimax(tttBoard, 'O', -Infinity, Infinity);
     tttBoard[best.idx] = 'O';
+    SFX.play('tttPlace');
     tttRenderBoard();
     const win2 = tttCheck(tttBoard);
-    if (win2 === 'O') { tttEndGame('🤖 ИИ победил! Ещё раз?', win2); return; }
-    if (tttFull(tttBoard)) { tttEndGame('🤝 Ничья!', null); return; }
+    if (win2 === 'O') { SFX.play('tttLose'); tttEndGame('🤖 ИИ победил! Ещё раз?', win2); return; }
+    if (tttFull(tttBoard)) { SFX.play('tttDraw'); tttEndGame('🤝 Ничья!', null); return; }
     document.getElementById('ttt-status').textContent = 'Твой ход — ставь ✕';
   }, 250);
 }
@@ -2772,7 +2968,7 @@ function pongRestart() {
   pongPad = {x: pongW/2, w: padW, h: 10, y: pongH - 22};
   pongSpeed = diff.initSpeed; pongScore = 0; pongMissed = false; pongRunning = false;
   const angle = (Math.random() * 60 + 60) * (Math.PI/180) * (Math.random() > .5 ? 1 : -1);
-  pongBall = {x: pongW/2, y: pongH/2, r: 8, vx: Math.cos(angle)*pongSpeed, vy: -Math.abs(Math.sin(angle)*pongSpeed)};
+  pongBall = {x: pongW/2, y: pongH/2, r: 8, vx: Math.cos(angle)*pongSpeed, vy: -Math.abs(Math.sin(angle)*pongSpeed), sx:1, sy:1, sqT:0, trail:[]};
   pongUpdateScore();
   pongDraw();
   _drawPongMsg('Тапни для старта 🏓');
@@ -2793,9 +2989,35 @@ function pongLoop(ts) {
 function pongTick(dt) {
   const b = pongBall, p = pongPad;
   b.x += b.vx * dt; b.y += b.vy * dt;
-  if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx); }
-  if (b.x + b.r > pongW) { b.x = pongW - b.r; b.vx = -Math.abs(b.vx); }
-  if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy); }
+
+  // Trail — храним с временной меткой, чтобы длина не зависела от FPS
+  const now1 = performance.now();
+  b.trail.push({x: b.x, y: b.y, ts: now1});
+  // Удаляем точки старше 160мс
+  while (b.trail.length > 0 && now1 - b.trail[0].ts > 160) b.trail.shift();
+
+  // Squish recovery
+  if (b.sqT > 0) {
+    b.sqT = Math.max(0, b.sqT - dt * 0.17);
+    const k = b.sqT;
+    b.sx = 1 + (b._sqTx || 0) * k;
+    b.sy = 1 + (b._sqTy || 0) * k;
+  } else { b.sx = 1; b.sy = 1; }
+
+  if (b.x - b.r < 0) {
+    b.x = b.r; b.vx = Math.abs(b.vx);
+    b.sx = 0.84; b.sy = 1.14; b._sqTx = -0.16; b._sqTy = 0.14; b.sqT = 1;
+    SFX.play('pongWall');
+  }
+  if (b.x + b.r > pongW) {
+    b.x = pongW - b.r; b.vx = -Math.abs(b.vx);
+    b.sx = 0.84; b.sy = 1.14; b._sqTx = -0.16; b._sqTy = 0.14; b.sqT = 1;
+    SFX.play('pongWall');
+  }
+  if (b.y - b.r < 0) {
+    b.y = b.r; b.vy = Math.abs(b.vy);
+    b.sx = 1.14; b.sy = 0.84; b._sqTx = 0.14; b._sqTy = -0.16; b.sqT = 1;
+  }
   const padLeft = p.x - p.w/2, padRight = p.x + p.w/2;
   if (b.vy > 0 && b.y+b.r >= p.y && b.y+b.r <= p.y+p.h+4 && b.x >= padLeft-b.r && b.x <= padRight+b.r) {
     b.y = p.y - b.r;
@@ -2803,12 +3025,15 @@ function pongTick(dt) {
     const ba = hit * 65 * (Math.PI/180);
     pongSpeed = Math.min(pongSpeed + 0.18, PONG_DIFF[pongDifficulty].maxSpeed);
     b.vx = Math.sin(ba) * pongSpeed; b.vy = -Math.cos(ba) * pongSpeed;
+    b.sx = 1.16; b.sy = 0.86; b._sqTx = 0.16; b._sqTy = -0.14; b.sqT = 1;
+    SFX.play('pongHit'); SFX.play('pongScore');
     pongScore++; if (pongScore > pongHi) pongHi = pongScore;
     pongUpdateScore();
   }
   if (b.y - b.r > pongH) {
     pongRunning = false; pongMissed = true;
     cancelAnimationFrame(pongRaf);
+    SFX.play('pongLose');
     pongDraw(); _drawPongMsg('💀 Промах! Тапни — заново');
     toast('💀 Счёт: ' + pongScore);
   }
@@ -2824,8 +3049,33 @@ function pongDraw() {
   ctx.setLineDash([6,6]); ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, pongH/2); ctx.lineTo(pongW, pongH/2); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.shadowColor = accent; ctx.shadowBlur = 14; ctx.fillStyle = accent;
-  ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+
+  // Trail — по возрасту точки, не по индексу
+  const trail = b.trail || [];
+  const trailDur = 160;
+  const nowT = performance.now();
+  for (let i = 0; i < trail.length; i++) {
+    const age = nowT - trail[i].ts;
+    const t = Math.max(0, 1 - age / trailDur); // 1=свежая, 0=старая
+    const alpha = t * t * 0.45;
+    const r = b.r * (0.25 + t * 0.55);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.arc(trail[i].x, trail[i].y, r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Ball with squish
+  const sx = b.sx || 1, sy = b.sy || 1;
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  ctx.scale(sx, sy);
+  ctx.shadowColor = accent; ctx.shadowBlur = 16; ctx.fillStyle = accent;
+  ctx.beginPath(); ctx.arc(0, 0, b.r, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // Paddle
   const grad = ctx.createLinearGradient(p.x-p.w/2, 0, p.x+p.w/2, 0);
   grad.addColorStop(0, 'rgba(255,255,255,.15)'); grad.addColorStop(.5, accent); grad.addColorStop(1, 'rgba(255,255,255,.15)');
   ctx.fillStyle = grad; ctx.shadowColor = accent; ctx.shadowBlur = 10;
@@ -2930,6 +3180,7 @@ function tetSpawn() {
   tetY = 0;
   if (tetCollide(tetPiece.shape, tetX, tetY)) {
     tetDead = true; tetStop();
+    SFX.play('tetGameOver');
     if (tetScore > tetHi) tetHi = tetScore;
     tetUpdateScore();
     tetDraw();
@@ -2980,6 +3231,7 @@ function tetClearLines() {
     }
   }
   if (cleared) {
+    SFX.play('tetLine');
     const pts = [0, 100, 300, 500, 800][cleared] * tetLevel;
     tetScore += pts; tetLines += cleared;
     tetLevel = Math.floor(tetLines / 10) + 1;
@@ -2994,7 +3246,7 @@ function tetClearLines() {
 
 function tetMove(dx) {
   if (tetDead || !tetRunning) return;
-  if (!tetCollide(tetPiece.shape, tetX + dx, tetY)) { tetX += dx; tetDraw(); }
+  if (!tetCollide(tetPiece.shape, tetX + dx, tetY)) { tetX += dx; SFX.play('tetMove'); tetDraw(); }
 }
 
 function tetRotate() {
@@ -3004,7 +3256,7 @@ function tetRotate() {
   // Kick: пробуем оригинальное место, ±1, ±2
   for (const kick of [0, -1, 1, -2, 2]) {
     if (!tetCollide(rotated, tetX + kick, tetY)) {
-      tetPiece.shape = rotated; tetX += kick; tetDraw(); return;
+      tetPiece.shape = rotated; tetX += kick; SFX.play('tetRotate'); tetDraw(); return;
     }
   }
 }
@@ -3013,6 +3265,7 @@ function tetDrop() {
   if (tetDead || !tetRunning) return;
   while (!tetCollide(tetPiece.shape, tetX, tetY + 1)) { tetY++; tetScore += 1; }
   tetUpdateScore();
+  SFX.play('tetDrop');
   tetLock(); tetDraw();
 }
 
@@ -3098,7 +3351,8 @@ let dinoDifficulty = 'normal';
 let dinoLastTime = 0;
 let dinoLegFrame = 0, dinoLegTimer = 0;
 let dinoDucking = false;
-let dinoBirdWing = 0, dinoBirdWingTimer = 0; // 0 = wings up, 1 = wings down
+let dinoBirdWing = 0, dinoBirdWingTimer = 0;
+let dinoDustParticles = [];
 
 const DINO_DIFF = {
   easy:   { initSpeed: 4,   accel: 0.008, jumpVel: -13.5, gravity: 0.72 },
@@ -3185,6 +3439,7 @@ function dinoJump() {
   if (!dinoRunning) { dinoRestart(); return; }
   if (dinoDucking) { dinoDucking = false; return; }
   if (dinoDino.onGround) {
+    SFX.play('dinoJump');
     dinoDino.vy = dinoDino.jumpVel;
     dinoDino.onGround = false;
   }
@@ -3215,7 +3470,7 @@ function dinoTick(dt) {
   // Анимация ног
   if (d.onGround) {
     dinoLegTimer += d.speed * dt;
-    if (dinoLegTimer >= 7) { dinoLegTimer = 0; dinoLegFrame = 1 - dinoLegFrame; }
+    if (dinoLegTimer >= 38) { dinoLegTimer = 0; dinoLegFrame = 1 - dinoLegFrame; }
   }
 
   // Анимация крыльев птицы
@@ -3223,9 +3478,34 @@ function dinoTick(dt) {
   if (dinoBirdWingTimer >= 9) { dinoBirdWingTimer = 0; dinoBirdWing = 1 - dinoBirdWing; }
 
   // Физика
+  const wasOnGround = d.onGround;
   d.vy += d.gravity * dt;
   d.y  += d.vy * dt;
-  if (d.y >= dinoGround - d.h) { d.y = dinoGround - d.h; d.vy = 0; d.onGround = true; }
+  if (d.y >= dinoGround - d.h) {
+    d.y = dinoGround - d.h; d.vy = 0;
+    if (!wasOnGround) {
+      // Landing dust burst
+      for (let i = 0; i < 8; i++) {
+        const ang = Math.PI + (Math.random() - 0.5) * 1.2;
+        const spd = 0.8 + Math.random() * 2;
+        dinoDustParticles.push({
+          x: d.x + d.w * 0.3, y: dinoGround,
+          vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd - 0.5,
+          life: 1, maxLife: 1, r: 3 + Math.random() * 3
+        });
+      }
+    }
+    d.onGround = true;
+  }
+
+  // Update dust
+  for (let i = dinoDustParticles.length - 1; i >= 0; i--) {
+    const p = dinoDustParticles[i];
+    p.x += p.vx * dt * 0.4; p.y += p.vy * dt * 0.4;
+    p.vy += 0.04 * dt;
+    p.life -= dt * 0.004;
+    if (p.life <= 0) dinoDustParticles.splice(i, 1);
+  }
 
   // Счёт
   dinoScore = Math.floor(dinoFrameCount * 0.1);
@@ -3299,6 +3579,7 @@ function dinoTick(dt) {
 function dinoDie() {
   dinoStop();
   dinoRunning = false;
+  SFX.play('dinoCactus');
   dinoDraw();
   _dinoPaintMsg('💀 Игра окончена! Тапни чтобы снова');
   toast('🦕 Счёт: ' + dinoScore);
@@ -3316,6 +3597,16 @@ function dinoDraw() {
   // Земля
   ctx.fillStyle = 'rgba(255,255,255,0.25)';
   ctx.fillRect(0, dinoGround, dinoW, 1);
+
+  // Пыль при приземлении
+  for (const p of dinoDustParticles) {
+    ctx.globalAlpha = Math.max(0, p.life * 0.55);
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 
   // Камушки на земле
   ctx.fillStyle = 'rgba(255,255,255,0.12)';
@@ -3767,6 +4058,7 @@ function bbTryPlaceDirect(pr, pc) {
   }));
   bbDragging.piece.placed = true;
   bbDragging = null;
+  SFX.play('bbPlace');
 
   // Count cells
   let cells = 0; piece.shape.forEach(r => r.forEach(v => { if(v) cells++; }));
@@ -3795,29 +4087,66 @@ function bbClearLines() {
     if (full) for (let r = 0; r < BB_ROWS; r++) toClear.add(`${r},${c}`);
   }
   if (!toClear.size) return;
-  const linesCleared = toClear.size / BB_COLS || 1;
+  SFX.play('bbLine');
   bbScore += toClear.size * 10;
   if (bbScore > bbHi) bbHi = bbScore;
 
-  // Flash animation
   const canvas = document.getElementById('bb-canvas'); if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  let alpha = 1;
-  const flashInterval = setInterval(() => {
+  const cs = bbCellSize;
+
+  // Collect cell data for animation
+  const cells = [];
+  toClear.forEach(key => {
+    const [r, c] = key.split(',').map(Number);
+    cells.push({ r, c, color: bbGrid[r][c], scale: 1, alpha: 1, vy: 0 });
+  });
+
+  const startTime = performance.now();
+  const DURATION = 380;
+
+  function animFrame(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / DURATION, 1);
+    // Easing: fast at start, smooth out
+    const ease = 1 - Math.pow(1 - t, 3);
+
     bbDrawBoard();
-    toClear.forEach(key => {
-      const [r, c] = key.split(',').map(Number);
-      ctx.fillStyle = `rgba(255,255,255,${alpha * 0.6})`;
-      ctx.fillRect(c * bbCellSize, r * bbCellSize, bbCellSize, bbCellSize);
-    });
-    alpha -= 0.2;
-    if (alpha <= 0) {
-      clearInterval(flashInterval);
+
+    // Draw animating cells on top
+    for (const cell of cells) {
+      const sc = 1 - ease * 0.8; // shrink
+      const alpha = 1 - ease;
+      const x = cell.c * cs + cs / 2;
+      const y = cell.r * cs + cs / 2 + ease * cs * 0.4; // slight drop
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(x, y);
+      ctx.scale(sc, sc);
+      ctx.fillStyle = cell.color;
+      ctx.shadowColor = cell.color;
+      ctx.shadowBlur = 8 * (1 - ease);
+      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-cs/2 + 1.5, -cs/2 + 1.5, cs - 3, cs - 3, 3); ctx.fill(); }
+      else ctx.fillRect(-cs/2 + 1.5, -cs/2 + 1.5, cs - 3, cs - 3);
+      // Gleam flash at start
+      if (t < 0.3) {
+        ctx.fillStyle = `rgba(255,255,255,${0.6 * (1 - t / 0.3)})`;
+        ctx.fillRect(-cs/2 + 1.5, -cs/2 + 1.5, cs - 3, (cs - 3) * 0.5);
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+    if (t < 1) {
+      requestAnimationFrame(animFrame);
+    } else {
       toClear.forEach(key => { const [r, c] = key.split(',').map(Number); bbGrid[r][c] = null; });
       bbDrawBoard();
       bbUpdateScore();
     }
-  }, 60);
+  }
+  requestAnimationFrame(animFrame);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -3827,6 +4156,7 @@ const BR_COLS = 8, BR_BRICK_ROWS = 5;
 let brRaf = null, brRunning = false, brLastTime = 0;
 let brScore = 0, brHi = 0, brLives = 3, brDifficulty = 'normal';
 let brW, brH, brBall, brPad, brBricks, brSpeed;
+let brParticles = [];
 let brWaiting = true;
 
 const BR_DIFF = {
@@ -3870,7 +4200,7 @@ function brRestart() {
   brSpeed = d.speed;
   const padW = Math.round(brW * d.padW);
   brPad = { x: brW/2, w: padW, h: 10, y: brH - 28 };
-  brBall = { x: brW/2, y: brPad.y - 9, r: 7, vx: 0, vy: 0 };
+  brBall = { x: brW/2, y: brPad.y - 9, r: 7, vx: 0, vy: 0, sx:1, sy:1, sqT:0, trail:[] };
   brBricks = [];
   const bw = Math.floor((brW - 16) / BR_COLS);
   const bh = Math.round(bw * 0.38);
@@ -3912,9 +4242,34 @@ function brLoop(ts) {
 function brTick(dt) {
   const b = brBall;
   b.x += b.vx * dt; b.y += b.vy * dt;
-  if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx); }
-  if (b.x + b.r > brW) { b.x = brW - b.r; b.vx = -Math.abs(b.vx); }
-  if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy); }
+
+  // Trail — храним с временной меткой
+  if (!b.trail) b.trail = [];
+  const now2 = performance.now();
+  b.trail.push({x: b.x, y: b.y, ts: now2});
+  while (b.trail.length > 0 && now2 - b.trail[0].ts > 160) b.trail.shift();
+
+  // Squish recovery
+  if (b.sqT > 0) {
+    b.sqT = Math.max(0, b.sqT - dt * 0.17);
+    b.sx = 1 + (b._sqTx || 0) * b.sqT;
+    b.sy = 1 + (b._sqTy || 0) * b.sqT;
+  } else { b.sx = 1; b.sy = 1; }
+
+  if (b.x - b.r < 0) {
+    b.x = b.r; b.vx = Math.abs(b.vx);
+    b.sx = 0.84; b.sy = 1.14; b._sqTx = -0.16; b._sqTy = 0.14; b.sqT = 1;
+    SFX.play('brWall');
+  }
+  if (b.x + b.r > brW) {
+    b.x = brW - b.r; b.vx = -Math.abs(b.vx);
+    b.sx = 0.84; b.sy = 1.14; b._sqTx = -0.16; b._sqTy = 0.14; b.sqT = 1;
+    SFX.play('brWall');
+  }
+  if (b.y - b.r < 0) {
+    b.y = b.r; b.vy = Math.abs(b.vy);
+    b.sx = 1.14; b.sy = 0.84; b._sqTx = 0.14; b._sqTy = -0.16; b.sqT = 1;
+  }
   const pl = brPad.x - brPad.w/2, pr2 = brPad.x + brPad.w/2;
   if (b.vy > 0 && b.y + b.r >= brPad.y && b.y + b.r <= brPad.y + brPad.h + 4
       && b.x >= pl - b.r && b.x <= pr2 + b.r) {
@@ -3924,6 +4279,8 @@ function brTick(dt) {
     const spd = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
     b.vx = Math.sin(angle) * spd;
     b.vy = -Math.cos(angle) * spd;
+    b.sx = 1.16; b.sy = 0.86; b._sqTx = 0.16; b._sqTy = -0.14; b.sqT = 1;
+    SFX.play('brPaddle');
   }
   let brokeCount = 0;
   for (const bk of brBricks) {
@@ -3931,21 +4288,41 @@ function brTick(dt) {
     if (b.x + b.r > bk.x && b.x - b.r < bk.x + bk.w &&
         b.y + b.r > bk.y && b.y - b.r < bk.y + bk.h) {
       bk.hits--;
-      if (bk.hits <= 0) { bk.alive = false; brokeCount++; }
+      if (bk.hits <= 0) {
+        bk.alive = false; brokeCount++;
+        // Brick death particles
+        if (!brParticles) brParticles = [];
+        for (let i = 0; i < 8; i++) {
+          const ang = Math.random() * Math.PI * 2;
+          const spd2 = 1.5 + Math.random() * 2.5;
+          brParticles.push({ x: bk.x + bk.w/2, y: bk.y + bk.h/2, vx: Math.cos(ang)*spd2, vy: Math.sin(ang)*spd2, life: 1, color: bk.color });
+        }
+        SFX.play('brBrick');
+      } else {
+        bk.hitTime = performance.now(); // hit flash timestamp
+      }
       const overlapL = (b.x + b.r) - bk.x, overlapR = (bk.x + bk.w) - (b.x - b.r);
       const overlapT = (b.y + b.r) - bk.y, overlapB = (bk.y + bk.h) - (b.y - b.r);
-      if (Math.min(overlapL, overlapR) < Math.min(overlapT, overlapB)) b.vx = -b.vx; else b.vy = -b.vy;
+      if (Math.min(overlapL, overlapR) < Math.min(overlapT, overlapB)) {
+        b.vx = -b.vx;
+        b.sx = 0.86; b.sy = 1.14; b._sqTx = -0.14; b._sqTy = 0.14; b.sqT = 1;
+      } else {
+        b.vy = -b.vy;
+        b.sx = 1.14; b.sy = 0.86; b._sqTx = 0.14; b._sqTy = -0.14; b.sqT = 1;
+      }
       break;
     }
   }
   if (brokeCount) { brScore += brokeCount * 10; if (brScore > brHi) brHi = brScore; brUpdateScore(); }
   if (brBricks.every(bk => !bk.alive)) {
     brStop(); brWaiting = true;
+    SFX.play('brLevelUp');
     setTimeout(() => { brRestart(); toast('🎉 Уровень пройден!'); }, 400);
     return;
   }
   if (b.y - b.r > brH) {
     brLives--;
+    SFX.play('brLive');
     brUpdateScore();
     if (brLives <= 0) {
       brStop(); brRunning = false;
@@ -3954,7 +4331,17 @@ function brTick(dt) {
     }
     brWaiting = true;
     b.x = brPad.x; b.y = brPad.y - b.r - 2; b.vx = 0; b.vy = 0;
+    b.trail = [];
     toast('❤️ Осталось жизней: ' + brLives);
+  }
+  // Update particles
+  if (brParticles) {
+    for (let i = brParticles.length - 1; i >= 0; i--) {
+      const p2 = brParticles[i];
+      p2.x += p2.vx * dt * 0.5; p2.y += p2.vy * dt * 0.5;
+      p2.life -= dt * 0.003;
+      if (p2.life <= 0) brParticles.splice(i, 1);
+    }
   }
 }
 
@@ -3963,10 +4350,15 @@ function brDraw() {
   const ctx = canvas.getContext('2d');
   const accent = getAccent();
   ctx.fillStyle = '#0d0d0d'; ctx.fillRect(0, 0, brW, brH);
+
+  // Bricks
   for (const bk of brBricks) {
     if (!bk.alive) continue;
+    const flashAge = bk.hitTime ? performance.now() - bk.hitTime : Infinity;
+    const flashT = Math.max(0, 1 - flashAge / 120);
     ctx.globalAlpha = bk.hits > 1 ? 1 : 0.82;
-    ctx.fillStyle = bk.color; ctx.shadowColor = bk.color; ctx.shadowBlur = bk.hits > 1 ? 8 : 3;
+    ctx.fillStyle = flashT > 0 ? `rgba(255,255,255,${flashT})` : bk.color;
+    ctx.shadowColor = bk.color; ctx.shadowBlur = bk.hits > 1 ? 8 : 3;
     if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bk.x, bk.y, bk.w, bk.h, 3); ctx.fill(); }
     else ctx.fillRect(bk.x, bk.y, bk.w, bk.h);
     ctx.shadowBlur = 0;
@@ -3974,15 +4366,53 @@ function brDraw() {
     ctx.fillRect(bk.x + 2, bk.y + 2, bk.w - 4, Math.floor((bk.h - 4) * 0.4));
     ctx.globalAlpha = 1;
   }
+
+  // Particles
+  if (brParticles) {
+    for (const p2 of brParticles) {
+      ctx.globalAlpha = Math.max(0, p2.life * 0.9);
+      ctx.fillStyle = p2.color;
+      ctx.shadowColor = p2.color; ctx.shadowBlur = 4;
+      const sz = 3 * p2.life;
+      ctx.fillRect(p2.x - sz/2, p2.y - sz/2, sz, sz);
+    }
+    ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+  }
+
+  // Paddle
   const grad = ctx.createLinearGradient(brPad.x - brPad.w/2, 0, brPad.x + brPad.w/2, 0);
   grad.addColorStop(0, 'rgba(255,255,255,.15)'); grad.addColorStop(.5, accent); grad.addColorStop(1, 'rgba(255,255,255,.15)');
   ctx.fillStyle = grad; ctx.shadowColor = accent; ctx.shadowBlur = 10;
   if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(brPad.x - brPad.w/2, brPad.y, brPad.w, brPad.h, 6); ctx.fill(); }
   else ctx.fillRect(brPad.x - brPad.w/2, brPad.y, brPad.w, brPad.h);
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#fff'; ctx.shadowColor = accent; ctx.shadowBlur = 12;
-  ctx.beginPath(); ctx.arc(brBall.x, brBall.y, brBall.r, 0, Math.PI*2); ctx.fill();
+
+  // Ball trail — по возрасту точки
+  const bt = brBall.trail || [];
+  const brTrailDur = 160;
+  const nowBr = performance.now();
+  for (let i = 0; i < bt.length; i++) {
+    const age = nowBr - bt[i].ts;
+    const t = Math.max(0, 1 - age / brTrailDur);
+    const alpha = t * t * 0.5;
+    const r = brBall.r * (0.2 + t * 0.6);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = accent; ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.arc(bt[i].x, bt[i].y, r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+  // Ball with squish
+  const sx = brBall.sx || 1, sy = brBall.sy || 1;
+  ctx.save();
+  ctx.translate(brBall.x, brBall.y);
+  ctx.scale(sx, sy);
+  ctx.fillStyle = '#fff'; ctx.shadowColor = accent; ctx.shadowBlur = 14;
+  ctx.beginPath(); ctx.arc(0, 0, brBall.r, 0, Math.PI*2); ctx.fill();
   ctx.shadowBlur = 0;
+  ctx.restore();
+
   if (brWaiting && brRunning) {
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, brH/2 - 20, brW, 40);
     ctx.fillStyle = '#f0ede8'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
@@ -4039,6 +4469,7 @@ function bubInit() {
       if (dx*dx + dy*dy <= (b.r + 8)*(b.r + 8)) {
         b.popped = true; b.popTime = 0;
         bubCombo++; bubComboTimer = 1500;
+        SFX.play('bubPop'); if(bubCombo>=3) SFX.play('bubCombo');
         const pts = Math.round(10 * bubCombo * (1 + bubLevel * 0.1));
         bubScore += pts; if (bubScore > bubHi) bubHi = bubScore;
         bubUpdateScore(); popped = true; break;
@@ -4085,19 +4516,24 @@ function bubTick(dt) {
       r, color: BUB_COLORS[Math.floor(Math.random()*BUB_COLORS.length)],
       age: 0, lifespan, popped: false, popTime: -1,
       vy: (Math.random()-0.5)*0.25, vx: (Math.random()-0.5)*0.18,
+      spawnT: 0,  // 0→1 появление
+      wobble: Math.random() * Math.PI * 2, // фаза покачивания
+      wobbleSpeed: 0.003 + Math.random() * 0.002,
     });
   }
   for (let i = bubBubbles.length-1; i >= 0; i--) {
     const b = bubBubbles[i];
-    if (b.popped) { b.popTime += dt; if (b.popTime > 380) bubBubbles.splice(i,1); continue; }
+    if (b.popped) { b.popTime += dt; if (b.popTime > 520) bubBubbles.splice(i,1); continue; }
     b.age += dt;
+    b.spawnT = Math.min(1, (b.spawnT || 0) + dt * 0.006);
+    b.wobble = (b.wobble || 0) + (b.wobbleSpeed || 0.003) * dt;
     b.x += b.vx * dt * 0.06; b.y += b.vy * dt * 0.06;
     if (b.x-b.r < 0) { b.x=b.r; b.vx=Math.abs(b.vx); }
     if (b.x+b.r > bubW) { b.x=bubW-b.r; b.vx=-Math.abs(b.vx); }
     if (b.y-b.r < 0) { b.y=b.r; b.vy=Math.abs(b.vy); }
     if (b.y+b.r > bubH-40) { b.y=bubH-40-b.r; b.vy=-Math.abs(b.vy); }
     if (b.age >= b.lifespan) {
-      bubBubbles.splice(i,1); bubLives--; bubCombo = 0; bubUpdateScore();
+      bubBubbles.splice(i,1); SFX.play('bubMiss'); bubLives--; bubCombo = 0; bubUpdateScore();
       if (bubLives <= 0) {
         bubStop(); bubRunning = false; bubDraw();
         const canvas = document.getElementById('bub-canvas'); if (!canvas) return;
@@ -4119,35 +4555,91 @@ function bubDraw() {
   const ctx = canvas.getContext('2d');
   const accent = getAccent();
   ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,bubW,bubH);
+
   for (const b of bubBubbles) {
+    // ── Анимация лопанья ──
     if (b.popped) {
-      const t = b.popTime/380;
-      ctx.globalAlpha = Math.max(0,1-t);
-      for (let i=0; i<7; i++) {
-        const angle = (i/7)*Math.PI*2, dist = b.r*(0.6+t*1.1);
-        ctx.fillStyle=b.color; ctx.shadowColor=b.color; ctx.shadowBlur=8*(1-t);
-        ctx.beginPath(); ctx.arc(b.x+Math.cos(angle)*dist, b.y+Math.sin(angle)*dist, 4*(1-t)*0.6+1.5, 0, Math.PI*2); ctx.fill();
+      const t = Math.min(b.popTime / 520, 1);
+      const ease = 1 - Math.pow(1 - t, 2);
+      // Расходящееся кольцо
+      const ringR = b.r * (1 + ease * 1.3);
+      ctx.globalAlpha = (1 - ease) * 0.9;
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 2.8 * (1 - ease) + 0.5;
+      ctx.shadowColor = b.color; ctx.shadowBlur = 12 * (1 - ease);
+      ctx.beginPath(); ctx.arc(b.x, b.y, ringR, 0, Math.PI * 2); ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Брызги
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2 + (b.wobble || 0);
+        const dist = b.r * (0.3 + ease * 1.6);
+        const dropR = Math.max(0.5, (1 - ease) * b.r * 0.26 + 1);
+        ctx.globalAlpha = Math.max(0, (1 - ease) * 0.9);
+        ctx.fillStyle = b.color;
+        ctx.shadowColor = b.color; ctx.shadowBlur = 4;
+        ctx.beginPath(); ctx.arc(b.x + Math.cos(ang)*dist, b.y + Math.sin(ang)*dist, dropR, 0, Math.PI*2); ctx.fill();
       }
-      ctx.shadowBlur=0; ctx.globalAlpha=1; continue;
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      continue;
     }
-    const alpha = Math.min(1,b.age/200)*(1-Math.pow(b.age/b.lifespan,3));
-    ctx.globalAlpha = Math.max(0.05, alpha);
-    ctx.shadowColor=b.color; ctx.shadowBlur=b.r*0.5;
-    ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
-    const grad=ctx.createRadialGradient(b.x-b.r*0.3,b.y-b.r*0.35,b.r*0.05,b.x,b.y,b.r);
-    grad.addColorStop(0,b.color+'44'); grad.addColorStop(0.65,b.color+'18'); grad.addColorStop(1,b.color+'77');
-    ctx.fillStyle=grad; ctx.fill(); ctx.shadowBlur=0;
-    ctx.strokeStyle=b.color; ctx.lineWidth=1.8; ctx.stroke();
-    ctx.fillStyle='rgba(255,255,255,0.32)';
-    ctx.beginPath(); ctx.ellipse(b.x-b.r*0.28,b.y-b.r*0.28,b.r*0.28,b.r*0.16,-Math.PI/4,0,Math.PI*2); ctx.fill();
-    const ageFrac = b.age/b.lifespan;
-    if (ageFrac > 0.6) {
-      const warn=(ageFrac-0.6)/0.4;
-      ctx.strokeStyle=`rgba(255,60,60,${warn*0.75})`; ctx.lineWidth=1.5+warn*2;
-      ctx.beginPath(); ctx.arc(b.x,b.y,b.r+3+warn*2,0,Math.PI*2); ctx.stroke();
+
+    // ── Появление с упругим отскоком ──
+    const spawnT = Math.min(b.spawnT || 0, 1);
+    let spawnScale;
+    if (spawnT < 1) {
+      const c2 = (2 * Math.PI) / 3;
+      spawnScale = spawnT === 0 ? 0 : Math.pow(2, -8 * spawnT) * Math.sin((spawnT * 8 - 0.75) * c2) + 1;
+    } else { spawnScale = 1; }
+
+    // ── Прозрачность появления/исчезания ──
+    const ageFrac = b.age / b.lifespan;
+    const fadeIn = Math.min(1, b.age / 180);
+    const fadeOut = ageFrac > 0.78 ? 1 - Math.pow((ageFrac - 0.78) / 0.22, 2) * 0.3 : 1;
+    const alpha = fadeIn * fadeOut;
+
+    // ── Покачивание ──
+    const wob = Math.sin(b.wobble || 0) * 0.035;
+    const drawR = b.r * spawnScale;
+
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.scale(1 + wob, 1 - wob);
+    ctx.globalAlpha = Math.max(0.04, alpha);
+
+    // Тело
+    ctx.shadowColor = b.color; ctx.shadowBlur = drawR * 0.5;
+    ctx.beginPath(); ctx.arc(0, 0, drawR, 0, Math.PI*2);
+    const grad = ctx.createRadialGradient(-drawR*0.28, -drawR*0.3, drawR*0.04, 0, 0, drawR);
+    grad.addColorStop(0, b.color + '55');
+    grad.addColorStop(0.55, b.color + '18');
+    grad.addColorStop(1, b.color + '88');
+    ctx.fillStyle = grad; ctx.fill(); ctx.shadowBlur = 0;
+    // Обводка
+    ctx.strokeStyle = b.color + 'cc'; ctx.lineWidth = 1.8; ctx.stroke();
+    // Основной блик
+    ctx.fillStyle = 'rgba(255,255,255,0.40)';
+    ctx.beginPath(); ctx.ellipse(-drawR*0.25, -drawR*0.28, drawR*0.26, drawR*0.13, -Math.PI/4, 0, Math.PI*2); ctx.fill();
+    // Вторичный блик
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.beginPath(); ctx.ellipse(drawR*0.2, drawR*0.25, drawR*0.1, drawR*0.055, Math.PI/5, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+
+    // Пульсирующее предупреждение
+    if (ageFrac > 0.65) {
+      const warn = (ageFrac - 0.65) / 0.35;
+      const pulse = 0.5 + 0.5 * Math.sin(b.age * 0.018);
+      ctx.globalAlpha = warn * pulse * 0.8;
+      ctx.strokeStyle = `rgba(255,80,80,1)`;
+      ctx.lineWidth = 1.5 + warn * 2;
+      ctx.shadowColor = 'rgba(255,60,60,0.8)'; ctx.shadowBlur = 8 * warn;
+      ctx.beginPath(); ctx.arc(b.x, b.y, drawR + 4 + warn * 3, 0, Math.PI*2); ctx.stroke();
+      ctx.shadowBlur = 0;
     }
-    ctx.globalAlpha=1;
+    ctx.globalAlpha = 1;
   }
+
+  // HUD
   ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,bubH-38,bubW,38);
   ctx.font=`700 12px "JetBrains Mono",monospace`;
   ctx.fillStyle=accent; ctx.textAlign='left'; ctx.fillText('Lv'+bubLevel,8,bubH-12);
