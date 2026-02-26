@@ -589,8 +589,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 #matrix-canvas{position:fixed;inset:0;z-index:9998;pointer-events:none;opacity:0;transition:opacity .5s;}
 #matrix-canvas.active{opacity:.85;}
 #snow-canvas{position:fixed;inset:0;z-index:8;pointer-events:none;}
-@keyframes disco-flash{0%{filter:hue-rotate(0deg) saturate(1.4)}100%{filter:hue-rotate(360deg) saturate(1.4)}}
-body.disco-mode{animation:disco-flash 1.5s linear infinite;}
+body.disco-mode{filter:hue-rotate(var(--disco-hue,0deg)) saturate(1.6) brightness(1.06);transition:filter 0s;}
+/* ── Режим слабого устройства ── */
+body.low-perf *{transition:none!important;animation:none!important;}
+body.low-perf .hero-title,body.low-perf .list-item.selected .item-name{text-shadow:none!important;}
+body.low-perf .list-item.selected{box-shadow:0 0 0 1px var(--accent)!important;}
+body.low-perf .btn-accent,body.low-perf .btn-accent2,body.low-perf .btn-success,body.low-perf .btn-danger{box-shadow:none!important;}
+body.low-perf .home-hero::before{display:none!important;}
+body.low-perf .screen{transition:none!important;transform:none!important;}
 @keyframes app-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
 body.shaking{animation:app-shake .45s ease;}
 </style>
@@ -904,10 +910,40 @@ body.shaking{animation:app-shake .45s ease;}
         </div>
         <div class="egg-card-arrow">›</div>
       </div>
+      <div style="height:1px;background:rgba(255,255,255,.07);margin:4px 0"></div>
+      <div class="egg-card" onclick="eggStartGame('secret-settings')">
+        <div class="egg-card-icon">⚙️</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Секретные настройки</div>
+          <div class="egg-card-desc">Диско-режим, режим слабого устройства</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
     </div>
   </div>
 
-  <!-- Змейка -->
+  <!-- Секретные настройки -->
+  <div id="egg-secret-settings" class="egg-game" style="display:none">
+    <div class="egg-game-title">⚙️ Секретные настройки</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+      <div class="settings-row">
+        <div>
+          <div>🕺 Диско-режим</div>
+          <div class="settings-row-sub">RGB-эффект без смены тем</div>
+        </div>
+        <div class="toggle-switch" id="secret-disco-toggle" onclick="secretToggle('disco')"></div>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div>🐢 Режим слабого устройства</div>
+          <div class="settings-row-sub">Отключает анимации и тени для ускорения</div>
+        </div>
+        <div class="toggle-switch" id="secret-lowperf-toggle" onclick="secretToggle('lowperf')"></div>
+      </div>
+    </div>
+    <div style="height:16px"></div>
+    <div style="font-size:11px;color:var(--muted);text-align:center">Настройки сохраняются автоматически</div>
+  </div>
   <div id="egg-snake" class="egg-game" style="display:none">
     <div class="egg-game-title">🐍 Змейка</div>
     <div class="diff-picker">
@@ -1902,50 +1938,45 @@ function drawIconPreview(canvas, variant) {
   else ctx.rect(size*0.04,size*0.04,size*0.92,size*0.92);
   ctx.stroke();
 
-  // Glow under logo
-  ctx.shadowColor = t.accent;
-  ctx.shadowBlur = size * 0.22;
-  ctx.fillStyle = 'transparent';
-  ctx.fillRect(size*0.3, size*0.3, size*0.4, size*0.4);
-  ctx.shadowBlur = 0;
+  // Мягкое свечение под логотипом (многослойное радиальное, без резкого shadowBlur)
+  const cx = size * 0.5, cy = size * 0.5;
+  const glowGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size*0.40);
+  const ac = t.accent;
+  glowGrad.addColorStop(0, ac + '22');
+  glowGrad.addColorStop(0.45, ac + '0e');
+  glowGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = glowGrad;
+  ctx.beginPath(); ctx.arc(cx, cy, size*0.40, 0, Math.PI*2); ctx.fill();
 
   // Draw CK logo mark
-  const cx = size * 0.5, cy = size * 0.5;
-  const lw = size * 0.09; // stroke width
-
-  ctx.strokeStyle = t.accent;
-  ctx.lineWidth = lw;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.shadowColor = t.accent;
-  ctx.shadowBlur = size * 0.12;
-
-  // C shape (open on right)
+  const lw = size * 0.09;
   const cr = size * 0.22;
-  ctx.beginPath();
-  ctx.arc(cx - size*0.04, cy, cr, Math.PI * 0.28, Math.PI * 1.72);
-  ctx.stroke();
-
-  // K shape (right side)
-  const kx = cx + size * 0.06, ky = cy;
-  const kh = cr * 0.95;
-  // Vertical bar of K
-  ctx.beginPath();
-  ctx.moveTo(kx, ky - kh);
-  ctx.lineTo(kx, ky + kh);
-  ctx.stroke();
-  // Upper diagonal
-  ctx.beginPath();
-  ctx.moveTo(kx, ky - kh * 0.08);
-  ctx.lineTo(kx + kh * 0.7, ky - kh);
-  ctx.stroke();
-  // Lower diagonal
-  ctx.beginPath();
-  ctx.moveTo(kx, ky - kh * 0.08);
-  ctx.lineTo(kx + kh * 0.75, ky + kh);
-  ctx.stroke();
-
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.shadowBlur = 0;
+
+  function drawCK(alpha, lineScale) {
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = t.accent;
+    ctx.lineWidth = lw * lineScale;
+    // C shape
+    ctx.beginPath();
+    ctx.arc(cx - size*0.04, cy, cr, Math.PI * 0.28, Math.PI * 1.72);
+    ctx.stroke();
+    // K vertical
+    const kx = cx + size*0.06, ky = cy, kh = cr * 0.95;
+    ctx.beginPath(); ctx.moveTo(kx, ky-kh); ctx.lineTo(kx, ky+kh); ctx.stroke();
+    // K upper diagonal
+    ctx.beginPath(); ctx.moveTo(kx, ky-kh*0.08); ctx.lineTo(kx+kh*0.7, ky-kh); ctx.stroke();
+    // K lower diagonal
+    ctx.beginPath(); ctx.moveTo(kx, ky-kh*0.08); ctx.lineTo(kx+kh*0.75, ky+kh); ctx.stroke();
+  }
+  // Слой 1: широкое мягкое свечение
+  drawCK(0.18, 3.2);
+  // Слой 2: среднее свечение
+  drawCK(0.28, 1.8);
+  // Слой 3: чёткий штрих
+  drawCK(1.0, 1.0);
+  ctx.globalAlpha = 1;
 }
 
 function pickIcon(key) {
@@ -2626,6 +2657,32 @@ const SECRET_KEY='sched_secret';
 function loadSecret(){try{return JSON.parse(stor.get(SECRET_KEY)||'{}')}catch(e){return{};}}
 function saveSecret(obj){stor.set(SECRET_KEY,JSON.stringify(obj));}
 
+// ══ СЕКРЕТНЫЕ НАСТРОЙКИ — логика ══
+function secretSettingsApply(){
+  const sec=loadSecret();
+  // Диско
+  if(sec.disco){discoStart();}else{discoStop();}
+  // Слабое устройство
+  if(sec.lowperf){document.body.classList.add('low-perf');}
+  else{document.body.classList.remove('low-perf');}
+}
+function secretSettingsRender(){
+  const sec=loadSecret();
+  const dt=document.getElementById('secret-disco-toggle');
+  const lt=document.getElementById('secret-lowperf-toggle');
+  if(dt)dt.style.background=sec.disco?'var(--accent)':'var(--surface3)';
+  if(lt)lt.style.background=sec.lowperf?'var(--accent)':'var(--surface3)';
+  if(dt)dt.style.setProperty('--tog','auto');
+}
+function secretToggle(key){
+  const sec=loadSecret();
+  sec[key]=!sec[key];
+  saveSecret(sec);
+  secretSettingsApply();
+  secretSettingsRender();
+  SFX.play('themeSelect');
+}
+
 // ══ РЕКОРДЫ МНИ-ИГР ══
 const HI_KEY='sched_hiscores';
 function loadHiScores(){try{return JSON.parse(stor.get(HI_KEY)||'{}');}catch(e){return{};}}
@@ -2761,9 +2818,13 @@ function cmdExec(raw){
       else cmdPrint('err','Использование: /snow on|off');
       break;
     case '/disco':
-      if(arg==='on'){discoStart();cmdPrint('warn','🕺 DISCO MODE ACTIVATED');}
-      else if(arg==='off'){discoStop();cmdPrint('ok','Дискотека закончилась.');}
-      else cmdPrint('err','Использование: /disco on|off');
+      if(arg==='on'){
+        const sec2=loadSecret();sec2.disco=true;saveSecret(sec2);
+        discoStart();cmdPrint('warn','🕺 DISCO RGB MODE ACTIVATED • без смены тем 🌈');
+      } else if(arg==='off'){
+        const sec2=loadSecret();sec2.disco=false;saveSecret(sec2);
+        discoStop();cmdPrint('ok','Дискотека закончилась.');
+      } else cmdPrint('err','Использование: /disco on|off');
       break;
     case '/shake':
       cmdPrint('warn','💥 ВАУ!');
@@ -3026,6 +3087,7 @@ updateThemeCurrentRow();
 loadLocal();
 applyTheme(S.theme);
 updateMuteLabel();
+secretSettingsApply(); // Восстанавливаем секретные настройки
 // Логируем инициализацию
 setTimeout(function(){
   if(window.Android&&window.Android.logMsg){
@@ -3281,7 +3343,7 @@ function eggClose() {
 
 function eggShowPicker() {
   eggStopAll();
-  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout','egg-bubbles','egg-flappy','egg-2048'].forEach(id => {
+  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout','egg-bubbles','egg-flappy','egg-2048','egg-secret-settings'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -3304,6 +3366,10 @@ function eggStartGame(name) {
   else if (name === 'bubbles')  { document.getElementById('egg-bubbles').style.display = '';  bubInit(); }
   else if (name === 'flappy')   { document.getElementById('egg-flappy').style.display = '';   flappyInit(); }
   else if (name === '2048')     { document.getElementById('egg-2048').style.display = '';     g2048Init(); }
+  else if (name === 'secret-settings') {
+    document.getElementById('egg-secret-settings').style.display = '';
+    secretSettingsRender();
+  }
 }
 
 function eggStopAll() {
@@ -3695,11 +3761,26 @@ function pongTick(dt) {
   const b = pongBall, p = pongPad;
   b.x += b.vx * dt; b.y += b.vy * dt;
 
-  // Trail — храним с временной меткой, чтобы длина не зависела от FPS
+  // Trail — добавляем промежуточные точки чтобы трейл был гладким при высокой скорости
   const now1 = performance.now();
-  b.trail.push({x: b.x, y: b.y, ts: now1});
-  // Удаляем точки старше 160мс
-  while (b.trail.length > 0 && now1 - b.trail[0].ts > 160) b.trail.shift();
+  const lastTr = b.trail[b.trail.length-1];
+  if(lastTr){
+    const dx=b.x-lastTr.x,dy=b.y-lastTr.y;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    const step=4; // макс расстояние между точками трейла
+    if(dist>step){
+      const n=Math.floor(dist/step);
+      for(let i=1;i<=n;i++){
+        b.trail.push({x:lastTr.x+dx*i/n,y:lastTr.y+dy*i/n,ts:now1-((n-i)*(16/n))});
+      }
+    } else {
+      b.trail.push({x: b.x, y: b.y, ts: now1});
+    }
+  } else {
+    b.trail.push({x: b.x, y: b.y, ts: now1});
+  }
+  // Удаляем точки старше 200мс
+  while (b.trail.length > 0 && now1 - b.trail[0].ts > 200) b.trail.shift();
 
   // Squish recovery
   if (b.sqT > 0) {
@@ -3757,13 +3838,13 @@ function pongDraw() {
 
   // Trail — по возрасту точки, не по индексу
   const trail = b.trail || [];
-  const trailDur = 160;
+  const trailDur = 200;
   const nowT = performance.now();
   for (let i = 0; i < trail.length; i++) {
     const age = nowT - trail[i].ts;
     const t = Math.max(0, 1 - age / trailDur); // 1=свежая, 0=старая
-    const alpha = t * t * 0.45;
-    const r = b.r * (0.25 + t * 0.55);
+    const alpha = t * t * 0.5;
+    const r = b.r * (0.2 + t * 0.6);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = accent;
     ctx.beginPath(); ctx.arc(trail[i].x, trail[i].y, r, 0, Math.PI*2); ctx.fill();
@@ -4952,11 +5033,26 @@ function brTick(dt) {
   const b = brBall;
   b.x += b.vx * dt; b.y += b.vy * dt;
 
-  // Trail — храним с временной меткой
+  // Trail — добавляем промежуточные точки для гладкого трейла при высокой скорости
   if (!b.trail) b.trail = [];
   const now2 = performance.now();
-  b.trail.push({x: b.x, y: b.y, ts: now2});
-  while (b.trail.length > 0 && now2 - b.trail[0].ts > 160) b.trail.shift();
+  const lastBrTr = b.trail[b.trail.length-1];
+  if(lastBrTr){
+    const dx2=b.x-lastBrTr.x,dy2=b.y-lastBrTr.y;
+    const dist2=Math.sqrt(dx2*dx2+dy2*dy2);
+    const step2=4;
+    if(dist2>step2){
+      const n2=Math.floor(dist2/step2);
+      for(let i=1;i<=n2;i++){
+        b.trail.push({x:lastBrTr.x+dx2*i/n2,y:lastBrTr.y+dy2*i/n2,ts:now2-((n2-i)*(16/n2))});
+      }
+    } else {
+      b.trail.push({x: b.x, y: b.y, ts: now2});
+    }
+  } else {
+    b.trail.push({x: b.x, y: b.y, ts: now2});
+  }
+  while (b.trail.length > 0 && now2 - b.trail[0].ts > 200) b.trail.shift();
 
   // Squish recovery
   if (b.sqT > 0) {
@@ -5098,13 +5194,13 @@ function brDraw() {
 
   // Ball trail — по возрасту точки
   const bt = brBall.trail || [];
-  const brTrailDur = 160;
+  const brTrailDur = 200;
   const nowBr = performance.now();
   for (let i = 0; i < bt.length; i++) {
     const age = nowBr - bt[i].ts;
     const t = Math.max(0, 1 - age / brTrailDur);
-    const alpha = t * t * 0.5;
-    const r = brBall.r * (0.2 + t * 0.6);
+    const alpha = t * t * 0.55;
+    const r = brBall.r * (0.18 + t * 0.65);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = '#fff';
     ctx.shadowColor = accent; ctx.shadowBlur = 6;
@@ -5439,24 +5535,23 @@ function snowStop(){
 }
 
 // ── 🕺 ДИСКО ──
-let _discoTimer=null;
+let _discoRaf=null,_discoHue=0;
 function discoStart(){
+  if(_discoRaf)return;
   document.body.classList.add('disco-mode');
-  // Случайно меняем тему каждые 600мс (скрытые темы — исключены)
-  const themeKeys=Object.keys(THEMES||{}).filter(k=>!THEMES[k].hidden);
-  if(themeKeys.length>1){
-    let ti=0;
-    _discoTimer=setInterval(()=>{
-      const k=themeKeys[(ti++)%themeKeys.length];
-      applyTheme(k);
-    },600);
+  // Чистый RGB-режим: плавно крутим hue без смены тем (производительность!)
+  function _discoFrame(){
+    _discoHue=(_discoHue+1.4)%360;
+    document.documentElement.style.setProperty('--disco-hue',_discoHue+'deg');
+    _discoRaf=requestAnimationFrame(_discoFrame);
   }
+  _discoRaf=requestAnimationFrame(_discoFrame);
 }
 function discoStop(){
   document.body.classList.remove('disco-mode');
-  clearInterval(_discoTimer);
-  // Восстанавливаем исходную тему
-  applyTheme(S.theme);
+  if(_discoRaf){cancelAnimationFrame(_discoRaf);_discoRaf=null;}
+  _discoHue=0;
+  document.documentElement.style.removeProperty('--disco-hue');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -5468,6 +5563,7 @@ let flappyBird={x:0,y:0,vy:0,r:14};
 const FLAPPY_GRAVITY=0.38,FLAPPY_JUMP=-7.2,FLAPPY_PIPE_W=52,FLAPPY_GAP=140,FLAPPY_SPEED=2.4;
 let flappyPipes=[];
 let flappyFrames=0;
+let flappyLastTime=0;
 
 function flappyInit(){
   flappyHi=getHi('flappy');
@@ -5493,7 +5589,7 @@ function flappyFlap(){
 function flappyRestart(){
   flappyScore=0; flappyStarted=false;
   flappyBird={x:flappyW*0.28,y:flappyH*0.45,vy:0,r:14};
-  flappyPipes=[]; flappyFrames=0;
+  flappyPipes=[]; flappyFrames=0; flappyLastTime=0;
   flappyRunning=true;
   cancelAnimationFrame(flappyRaf);
   flappyRaf=requestAnimationFrame(flappyLoop);
@@ -5504,16 +5600,18 @@ function flappySpawnPipe(){
   const topH=minY+Math.random()*(maxY-minY);
   flappyPipes.push({x:flappyW,topH,passed:false});
 }
-function flappyLoop(){
+function flappyLoop(ts){
   if(!flappyRunning)return;
+  const dt=flappyLastTime?Math.min((ts-flappyLastTime)/16.667,3):1;
+  flappyLastTime=ts;
   const canvas=document.getElementById('flappy-canvas');
   if(!canvas){flappyRunning=false;return;}
   if(flappyStarted){
-    flappyBird.vy+=FLAPPY_GRAVITY;
-    flappyBird.y+=flappyBird.vy;
-    flappyFrames++;
-    if(flappyFrames%90===0)flappySpawnPipe();
-    for(let p of flappyPipes){p.x-=FLAPPY_SPEED;}
+    flappyBird.vy+=FLAPPY_GRAVITY*dt;
+    flappyBird.y+=flappyBird.vy*dt;
+    flappyFrames+=dt;
+    if(flappyFrames>=90){flappyFrames-=90;flappySpawnPipe();}
+    for(let p of flappyPipes){p.x-=FLAPPY_SPEED*dt;}
     flappyPipes=flappyPipes.filter(p=>p.x>-FLAPPY_PIPE_W-10);
     // Score
     for(let p of flappyPipes){
