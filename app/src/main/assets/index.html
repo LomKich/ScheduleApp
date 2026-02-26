@@ -522,19 +522,50 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .ota-progress-label{
   font-size:12px;color:var(--muted);text-align:center;font-family:'JetBrains Mono',monospace
 }
-/* ── Приветствие ── */
+/* ── Приветствие (Sber-style) ── */
 .greeting-overlay{
-  position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
+  position:fixed;inset:0;z-index:9999;
+  display:none; /* старт скрытым — JS управляет показом */
+  flex-direction:column;align-items:center;justify-content:center;
   background:var(--bg);
-  opacity:1;transition:opacity .5s ease;pointer-events:all;
+  will-change:transform,opacity;
 }
-.greeting-overlay.fade-out{opacity:0;pointer-events:none;}
-.greeting-time{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}
-.greeting-text{font-size:32px;font-weight:800;color:var(--accent);letter-spacing:-.02em;text-align:center;line-height:1.2;
-  text-shadow:0 0 24px color-mix(in srgb,var(--accent) 50%,transparent),0 0 60px color-mix(in srgb,var(--accent) 20%,transparent);}
-.greeting-sub{font-size:13px;color:var(--muted);margin-top:10px;letter-spacing:.02em;}
-.greeting-skip{position:absolute;bottom:48px;font-size:12px;color:var(--muted);letter-spacing:.06em;cursor:pointer;}
+.greeting-overlay.greet-show{
+  display:flex;
+  animation:greet-enter .35s cubic-bezier(.4,0,.2,1) forwards;
+}
+.greeting-overlay.greet-hide{
+  display:flex;
+  animation:greet-leave .42s cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes greet-enter{
+  from{opacity:0;transform:scale(.94)}
+  to{opacity:1;transform:scale(1)}
+}
+@keyframes greet-leave{
+  from{opacity:1;transform:translateY(0)}
+  to{opacity:0;transform:translateY(-28px)}
+}
+.greet-logo{
+  width:72px;height:72px;border-radius:22px;
+  background:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:34px;
+  box-shadow:0 8px 32px color-mix(in srgb,var(--accent) 45%,transparent);
+  margin-bottom:22px;
+  animation:greet-logo-pulse 1.8s ease-in-out infinite;
+}
+@keyframes greet-logo-pulse{
+  0%,100%{box-shadow:0 8px 32px color-mix(in srgb,var(--accent) 45%,transparent)}
+  50%{box-shadow:0 12px 48px color-mix(in srgb,var(--accent) 65%,transparent),0 0 80px color-mix(in srgb,var(--accent) 25%,transparent)}
+}
+.greet-main{font-size:26px;font-weight:800;color:var(--text);letter-spacing:-.02em;text-align:center;}
+.greet-sub{font-size:13px;color:var(--muted);margin-top:8px;letter-spacing:.01em;text-align:center;}
+.greet-time{
+  position:absolute;bottom:52px;
+  font-family:'JetBrains Mono',monospace;font-size:13px;
+  color:var(--muted);letter-spacing:.08em;
+}
 
 /* ── Секретная CMD-консоль ── */
 .cmd-overlay{
@@ -570,6 +601,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 }
 .cmd-cursor-blink{display:inline-block;width:8px;height:14px;background:var(--accent);margin-left:1px;vertical-align:text-bottom;animation:blink 1s step-end infinite;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+/* ── Секретные эффекты ── */
+#matrix-canvas{position:fixed;inset:0;z-index:9998;pointer-events:none;opacity:0;transition:opacity .5s;}
+#matrix-canvas.active{opacity:.85;}
+#snow-canvas{position:fixed;inset:0;z-index:8;pointer-events:none;}
+@keyframes disco-flash{0%{filter:hue-rotate(0deg) saturate(1.4)}100%{filter:hue-rotate(360deg) saturate(1.4)}}
+body.disco-mode{animation:disco-flash 1.5s linear infinite;}
+@keyframes app-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+body.shaking{animation:app-shake .45s ease;}
 </style>
 <body>
 
@@ -717,7 +756,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div onclick="eggTap()" style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:2px 0">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">2.7 — Android</div>
+        <div class="item-sub" id="app-version-str">2.8 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -747,12 +786,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   </div>
 </div>
 
-<!-- ══ Приветствие ══ -->
-<div class="greeting-overlay" id="greeting-overlay" onclick="skipGreeting()">
-  <div class="greeting-time" id="greeting-time-label"></div>
-  <div class="greeting-text" id="greeting-text"></div>
-  <div class="greeting-sub" id="greeting-sub">Расписание колледжа</div>
-  <div class="greeting-skip">нажми в любом месте, чтобы продолжить</div>
+<!-- ══ Секретные эффекты ══ -->
+<canvas id="matrix-canvas"></canvas>
+<canvas id="snow-canvas" style="display:none"></canvas>
+
+<!-- ══ Приветствие (Sber-style) ══ -->
+<div id="greeting-overlay" class="greeting-overlay">
+  <div class="greet-logo" id="greet-logo">📅</div>
+  <div class="greet-main" id="greet-main">Расписание</div>
+  <div class="greet-sub" id="greet-sub">колледжа</div>
+  <div class="greet-time" id="greet-time"></div>
 </div>
 
 <!-- ══ Секретная CMD-консоль ══ -->
@@ -1482,13 +1525,7 @@ function getCells(ab){
     // Это исключает мусорные расширенные кириллические символы (Ђ U+0402, Ѐ U+0400 и т.п.)
     const clean = c
       .replace(/\r/g,'\n')
-<<<<<<< HEAD
       .replace(/[^\x09\x0A\x20-\x7E\u0401\u0410-\u044F\u0451«»№]/g,'')
-=======
-      // Строгая фильтрация: оставляем только ASCII-printable + кириллицу + спецсимволы русского
-      // Это устраняет КНК-символы и прочий бинарный мусор, который проходил через старый fallback
-      .replace(/[^\x09\x0A\x20-\x7E\u0400-\u04FF«»№]/g,'')
->>>>>>> 33c87adbb6823be2ddddc83506b6c2f5fbe840e5
       // Убираем строки где >60% символов — нечитаемые (бинарный мусор)
       .split('\n')
       .map(line => {
@@ -2331,7 +2368,6 @@ async function loadSchedule(group){
 }
 function renderSchedule(group,hdr,sched,filename){
   document.getElementById('sched-group-name').textContent=group;
-<<<<<<< HEAD
   const cleanDate=formatScheduleDate(hdr);
   document.getElementById('sched-date').textContent=cleanDate||'';
   // Проверяем совпадение даты расписания с сегодняшней
@@ -2342,13 +2378,6 @@ function renderSchedule(group,hdr,sched,filename){
     const sd=new Date(+dateM[3],+dateM[2]-1,+dateM[1]);
     isToday=(sd.getFullYear()===today.getFullYear()&&sd.getMonth()===today.getMonth()&&sd.getDate()===today.getDate());
   }
-=======
-  // Очищаем заголовок — вырезаем только читаемую часть (дата + неделя)
-  const rawDate=hdr.replace('Расписание занятий на ','').trim();
-  // Оставляем только кириллицу, цифры, скобки, пробелы, точки — убираем мусор
-  const cleanDate=rawDate.replace(/[^\u0400-\u04FF\d\s.,()]/g,'').replace(/\s{2,}/g,' ').trim();
-  document.getElementById('sched-date').textContent=cleanDate||'';
->>>>>>> 33c87adbb6823be2ddddc83506b6c2f5fbe840e5
   const isMon=filename.toUpperCase().includes('ПОНЕДЕЛЬНИК');
   const bell=isMon?BELL_MON:BELL_TUE;
   const nowMin=today.getHours()*60+today.getMinutes();
@@ -2392,7 +2421,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='2.7';
+const APP_VERSION='2.8';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -2410,26 +2439,47 @@ function getGreeting(){
   return{greet:'Доброй ночи',icon:'🌙',sub:'Не забудь поспать 😴'};
 }
 function showGreeting(){
-  const stored=loadSecret();
-  if(stored.greetingOff){document.getElementById('greeting-overlay').style.display='none';return;}
   const ov=document.getElementById('greeting-overlay');
   if(!ov)return;
+  const stored=loadSecret();
+  if(stored.greetingOff){ov.style.display='none';return;}
+
   const now=new Date();
+  const g=getGreeting();
   const hh=String(now.getHours()).padStart(2,'0');
   const mm=String(now.getMinutes()).padStart(2,'0');
-  const g=getGreeting();
-  document.getElementById('greeting-time-label').textContent=hh+':'+mm;
-  document.getElementById('greeting-text').textContent=g.icon+' '+g.greet;
-  document.getElementById('greeting-sub').textContent=g.sub;
-  ov.style.display='';
-  ov.classList.remove('fade-out');
-  setTimeout(()=>skipGreeting(),2400);
+
+  // Обновляем контент новыми ID
+  const logo=document.getElementById('greet-logo');
+  const main=document.getElementById('greet-main');
+  const sub=document.getElementById('greet-sub');
+  const time=document.getElementById('greet-time');
+  if(logo) logo.textContent=g.icon;
+  if(main) main.textContent=g.greet;
+  if(sub)  sub.textContent=g.sub;
+  if(time) time.textContent=hh+':'+mm;
+
+  // Показываем с анимацией входа
+  ov.classList.remove('greet-hide','greet-show');
+  ov.style.display='flex';
+  // Принудительный reflow чтобы анимация сработала
+  ov.offsetHeight;
+  ov.classList.add('greet-show');
+
+  // Sber-style: пауза 1.8 сек, потом плавный уход
+  setTimeout(skipGreeting, 1900);
 }
+
 function skipGreeting(){
   const ov=document.getElementById('greeting-overlay');
-  if(!ov||ov.classList.contains('fade-out'))return;
-  ov.classList.add('fade-out');
-  setTimeout(()=>{ov.style.display='none';},500);
+  if(!ov||ov.classList.contains('greet-hide'))return;
+  ov.classList.remove('greet-show');
+  ov.classList.add('greet-hide');
+  // После анимации — полностью прячем чтобы не блокировало тапы
+  setTimeout(()=>{
+    ov.style.display='none';
+    ov.classList.remove('greet-hide');
+  },450);
 }
 
 // ══ 4 ТАПА ПО ЗАГОЛОВКУ → CMD (только МПД-2-24) ══
@@ -2463,15 +2513,20 @@ function getHi(game){return loadHiScores()[game]||0;}
 
 // ══ CMD-КОНСОЛЬ ══
 const CMD_HELP=[
-  ['/help',      'показать этот список'],
-  ['/greeting',  'on|off — включить/выключить приветствие'],
-  ['/hiscores',  'рекорды мини-игр  |  reset — сбросить'],
-  ['/version',   'информация о версии'],
-  ['/group',     'текущая группа и файл'],
-  ['/cache',     '[clear] — кэш файлов или очистить'],
-  ['/theme',     'list|<n> — список тем или сменить'],
-  ['/sound',     'on|off — звуки интерфейса'],
-  ['/exit',      'закрыть консоль'],
+  ['/help',         'показать этот список'],
+  ['/greeting',     'on|off — вкл/выкл приветствие'],
+  ['/hiscores',     'рекорды мини-игр  |  reset — сбросить'],
+  ['/version',      'информация о версии'],
+  ['/group',        'текущая группа и файл'],
+  ['/cache',        '[clear] — кэш файлов'],
+  ['/theme',        'list|<n> — список тем или сменить'],
+  ['/sound',        'on|off — звуки'],
+  ['/matrix',       'on|off — режим Матрицы'],
+  ['/snow',         'on|off — снег'],
+  ['/disco',        'on|off — диско-режим'],
+  ['/shake',        'встряхнуть апп'],
+  ['/time',         'сколько времени приложение работает'],
+  ['/exit',         'закрыть консоль'],
 ];
 function cmdOpen(){
   const ov=document.getElementById('cmd-overlay');
@@ -2562,6 +2617,35 @@ function cmdExec(raw){
       else if(arg==='on'){S.muted=false;saveLocal();updateMuteLabel();cmdPrint('ok','Звук включён.');}
       else cmdPrint('err','Использование: /sound on|off');
       break;
+    case '/matrix':
+      if(arg==='on'){matrixStart();cmdPrint('ok','Добро пожаловать в Матрицу. Красная таблетка принята.');}
+      else if(arg==='off'){matrixStop();cmdPrint('ok','Матрица отключена.');}
+      else cmdPrint('err','Использование: /matrix on|off');
+      break;
+    case '/snow':
+      if(arg==='on'){snowStart();cmdPrint('ok','❄️ Снег пошёл!');}
+      else if(arg==='off'){snowStop();cmdPrint('ok','Снег остановлен.');}
+      else cmdPrint('err','Использование: /snow on|off');
+      break;
+    case '/disco':
+      if(arg==='on'){discoStart();cmdPrint('warn','🕺 DISCO MODE ACTIVATED');}
+      else if(arg==='off'){discoStop();cmdPrint('ok','Дискотека закончилась.');}
+      else cmdPrint('err','Использование: /disco on|off');
+      break;
+    case '/shake':
+      cmdPrint('warn','💥 ВАУ!');
+      document.body.classList.remove('shaking');
+      document.body.offsetHeight;
+      document.body.classList.add('shaking');
+      setTimeout(()=>document.body.classList.remove('shaking'),500);
+      break;
+    case '/time':{
+      const upMs=performance.now();
+      const upS=Math.floor(upMs/1000);
+      const m=Math.floor(upS/60),s=upS%60;
+      cmdPrint('info',`Приложение работает: ${m} мин ${s} сек`);
+      cmdPrint('info',`Сейчас: ${new Date().toLocaleString('ru')}`);
+    } break;
     case '/exit':
       cmdPrint('out','Выход...');
       setTimeout(cmdClose,500);
@@ -5056,8 +5140,97 @@ function bubUpdateScore() {
   el.textContent='Счёт: '+bubScore+' • Рекорд: '+bubHi+' • '+hearts;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// ── 🐦 ФЛАППИ ПТИЦА (v2.6.0) ─────────────────────────────────────
+// ══ СЕКРЕТНЫЕ ЭФФЕКТЫ ══
+
+// ── 🟩 МАТРИЦА ──
+let _matrixRaf=null,_matrixRunning=false;
+function matrixStart(){
+  const c=document.getElementById('matrix-canvas');
+  if(!c)return;
+  _matrixRunning=true;
+  c.width=window.innerWidth;c.height=window.innerHeight;
+  c.classList.add('active');
+  const ctx=c.getContext('2d');
+  const cols=Math.ceil(c.width/16);
+  const drops=Array(cols).fill(1);
+  const chars='アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホ0123456789ABCDEFabcdef';
+  const accent=getAccent();
+  function draw(){
+    if(!_matrixRunning)return;
+    ctx.fillStyle='rgba(0,0,0,.07)';ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle=accent;ctx.font='14px monospace';
+    drops.forEach((y,i)=>{
+      const ch=chars[Math.floor(Math.random()*chars.length)];
+      ctx.fillStyle=i%7===0?'#fff':accent;
+      ctx.fillText(ch,i*16,y*16);
+      if(y*16>c.height&&Math.random()>.96)drops[i]=0;
+      drops[i]++;
+    });
+    _matrixRaf=requestAnimationFrame(draw);
+  }
+  cancelAnimationFrame(_matrixRaf);
+  draw();
+}
+function matrixStop(){
+  _matrixRunning=false;cancelAnimationFrame(_matrixRaf);
+  const c=document.getElementById('matrix-canvas');
+  if(c){c.classList.remove('active');setTimeout(()=>{const ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);},500);}
+}
+
+// ── ❄️ СНЕГ ──
+let _snowRaf=null,_snowRunning=false,_snowFlakes=[];
+function snowStart(){
+  const c=document.getElementById('snow-canvas');
+  if(!c)return;
+  _snowRunning=true;c.style.display='';
+  c.width=window.innerWidth;c.height=window.innerHeight;
+  _snowFlakes=Array.from({length:80},()=>({
+    x:Math.random()*c.width,y:Math.random()*c.height,
+    r:1+Math.random()*3,vy:.4+Math.random()*1.2,vx:(Math.random()-.5)*.6,
+    op:.4+Math.random()*.6
+  }));
+  const ctx=c.getContext('2d');
+  function draw(){
+    if(!_snowRunning)return;
+    ctx.clearRect(0,0,c.width,c.height);
+    _snowFlakes.forEach(f=>{
+      ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(255,255,255,${f.op})`;ctx.fill();
+      f.y+=f.vy;f.x+=f.vx;
+      if(f.y>c.height){f.y=-5;f.x=Math.random()*c.width;}
+      if(f.x<0)f.x=c.width;if(f.x>c.width)f.x=0;
+    });
+    _snowRaf=requestAnimationFrame(draw);
+  }
+  cancelAnimationFrame(_snowRaf);draw();
+}
+function snowStop(){
+  _snowRunning=false;cancelAnimationFrame(_snowRaf);
+  const c=document.getElementById('snow-canvas');
+  if(c)c.style.display='none';
+}
+
+// ── 🕺 ДИСКО ──
+let _discoTimer=null;
+function discoStart(){
+  document.body.classList.add('disco-mode');
+  // Случайно меняем тему каждые 600мс
+  const themeKeys=Object.keys(THEMES||{});
+  if(themeKeys.length>1){
+    let ti=0;
+    _discoTimer=setInterval(()=>{
+      const k=themeKeys[(ti++)%themeKeys.length];
+      applyTheme(k);
+    },600);
+  }
+}
+function discoStop(){
+  document.body.classList.remove('disco-mode');
+  clearInterval(_discoTimer);
+  // Восстанавливаем исходную тему
+  applyTheme(S.theme);
+}
+</script> (v2.6.0) ─────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
 let flappyRaf=null,flappyRunning=false,flappyStarted=false;
 let flappyW=0,flappyH=0,flappyScore=0,flappyHi=0;
