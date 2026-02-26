@@ -522,8 +522,55 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .ota-progress-label{
   font-size:12px;color:var(--muted);text-align:center;font-family:'JetBrains Mono',monospace
 }
+/* ── Приветствие ── */
+.greeting-overlay{
+  position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:var(--bg);
+  opacity:1;transition:opacity .5s ease;pointer-events:all;
+}
+.greeting-overlay.fade-out{opacity:0;pointer-events:none;}
+.greeting-time{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}
+.greeting-text{font-size:32px;font-weight:800;color:var(--accent);letter-spacing:-.02em;text-align:center;line-height:1.2;
+  text-shadow:0 0 24px color-mix(in srgb,var(--accent) 50%,transparent),0 0 60px color-mix(in srgb,var(--accent) 20%,transparent);}
+.greeting-sub{font-size:13px;color:var(--muted);margin-top:10px;letter-spacing:.02em;}
+.greeting-skip{position:absolute;bottom:48px;font-size:12px;color:var(--muted);letter-spacing:.06em;cursor:pointer;}
+
+/* ── Секретная CMD-консоль ── */
+.cmd-overlay{
+  position:fixed;inset:0;z-index:600;display:flex;flex-direction:column;
+  background:#0c0c0c;font-family:'JetBrains Mono',monospace;
+  padding-top:var(--safe-top);padding-bottom:var(--safe-bot);
+}
+.cmd-titlebar{
+  background:#1a1a1a;padding:10px 14px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid #333;flex-shrink:0;
+}
+.cmd-titlebar-dots{display:flex;gap:6px;}
+.cmd-dot{width:12px;height:12px;border-radius:50%;}
+.cmd-title{font-size:12px;color:#888;flex:1;text-align:center;letter-spacing:.06em;}
+.cmd-close{background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;}
+.cmd-body{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:2px;}
+.cmd-body::-webkit-scrollbar{display:none;}
+.cmd-line{font-size:12.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word;}
+.cmd-line.out{color:#cccccc;}
+.cmd-line.ok{color:#4ec94e;}
+.cmd-line.err{color:#ff6b6b;}
+.cmd-line.info{color:#5bb8f5;}
+.cmd-line.warn{color:#f5c842;}
+.cmd-line.prompt{color:#888;}
+.cmd-input-row{
+  display:flex;align-items:center;gap:0;padding:10px 16px;
+  border-top:1px solid #222;flex-shrink:0;background:#0c0c0c;
+}
+.cmd-prompt-sym{color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:13px;margin-right:8px;flex-shrink:0;}
+.cmd-input{
+  flex:1;background:transparent;border:none;outline:none;
+  font-family:'JetBrains Mono',monospace;font-size:13px;color:#eee;caret-color:var(--accent);
+}
+.cmd-cursor-blink{display:inline-block;width:8px;height:14px;background:var(--accent);margin-left:1px;vertical-align:text-bottom;animation:blink 1s step-end infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 </style>
-</head>
 <body>
 
 <!-- ГЛАВНАЯ -->
@@ -590,7 +637,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 
 <!-- РАСПИСАНИЕ -->
 <div class="screen" id="s-schedule">
-  <div class="sched-header">
+  <div class="sched-header" id="sched-header-tap">
     <div style="display:flex;align-items:center;gap:10px">
       <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-groups','back')">‹</button>
       <div><div class="sched-group" id="sched-group-name"></div>
@@ -644,7 +691,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div class="list-item" onclick="toggleMute()" style="margin-bottom:8px">
       <div>
         <div class="item-name" id="mute-label">🔇 Звук выключен</div>
-        <div class="item-sub">Интерфейс и мини-игры</div>
+        <div class="item-sub">Звуки интерфейса</div>
       </div>
       <span class="item-arrow">›</span>
     </div>
@@ -670,7 +717,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div onclick="eggTap()" style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:2px 0">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">2.3 — Android</div>
+        <div class="item-sub" id="app-version-str">2.6 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -697,6 +744,33 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
       <div class="section-label" style="margin-top:16px;margin-bottom:8px">Иконка приложения</div>
       <div class="theme-grid" id="icon-grid-screen"></div>
     </div>
+  </div>
+</div>
+
+<!-- ══ Приветствие ══ -->
+<div class="greeting-overlay" id="greeting-overlay" onclick="skipGreeting()">
+  <div class="greeting-time" id="greeting-time-label"></div>
+  <div class="greeting-text" id="greeting-text"></div>
+  <div class="greeting-sub" id="greeting-sub">Расписание колледжа</div>
+  <div class="greeting-skip">нажми в любом месте, чтобы продолжить</div>
+</div>
+
+<!-- ══ Секретная CMD-консоль ══ -->
+<div class="cmd-overlay" id="cmd-overlay" style="display:none">
+  <div class="cmd-titlebar">
+    <div class="cmd-titlebar-dots">
+      <div class="cmd-dot" style="background:#ff5f57"></div>
+      <div class="cmd-dot" style="background:#febc2e"></div>
+      <div class="cmd-dot" style="background:#28c840"></div>
+    </div>
+    <div class="cmd-title">Schedule App — Developer Console</div>
+    <button class="cmd-close" onclick="cmdClose()">×</button>
+  </div>
+  <div class="cmd-body" id="cmd-body"></div>
+  <div class="cmd-input-row">
+    <span class="cmd-prompt-sym">C:\&gt;</span>
+    <input class="cmd-input" id="cmd-input" autocomplete="off" autocorrect="off" spellcheck="false"
+      placeholder="введи команду..." onkeydown="cmdKey(event)">
   </div>
 </div>
 
@@ -782,6 +856,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
           <div class="egg-card-name">Пузыри</div>
           <div class="egg-card-desc">Лопай пузыри до того, как они исчезнут!</div>
           <div class="egg-card-badge egg-card-new">v2.2.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('flappy')">
+        <div class="egg-card-icon">🐦</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Флаппи птица</div>
+          <div class="egg-card-desc">Лети между трубами, не касайся!</div>
+          <div class="egg-card-badge egg-card-new">v2.6.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('2048')">
+        <div class="egg-card-icon">🔢</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">2048</div>
+          <div class="egg-card-desc">Складывай плитки, доберись до 2048!</div>
+          <div class="egg-card-badge egg-card-new">v2.6.0 ✦ НОВАЯ</div>
         </div>
         <div class="egg-card-arrow">›</div>
       </div>
@@ -911,6 +1003,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bubRestart()">🔄 Заново</button>
   </div>
 
+  <!-- Флаппи птица -->
+  <div id="egg-flappy" class="egg-game" style="display:none">
+    <div class="egg-game-title">🐦 Флаппи птица</div>
+    <div class="egg-score" id="flappy-score-label">Счёт: 0 • Рекорд: 0</div>
+    <canvas id="flappy-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">тап / пробел — взмах</div>
+  </div>
+
+  <!-- 2048 -->
+  <div id="egg-2048" class="egg-game" style="display:none">
+    <div class="egg-game-title">🔢 2048</div>
+    <div class="egg-score" id="g2048-score-label">Счёт: 0 • Рекорд: 0</div>
+    <div id="g2048-board" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(300px,85vw);margin:12px auto 0;touch-action:none"></div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px">свайп или стрелки — двигать плитки</div>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="g2048Restart()">🔄 Заново</button>
+  </div>
+
 </div>
 
 <!-- ══ Модальное окно обновления (в стиле приложения) ══ -->
@@ -950,6 +1059,31 @@ if (typeof AbortSignal !== 'undefined' && !AbortSignal.timeout) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// Карта падежных форм дней недели → именительный падеж
+const DAY_NOMINATIVE={
+  'ПОНЕДЕЛЬНИК':'ПОНЕДЕЛЬНИК','ПОНЕДЕЛЬНИКА':'ПОНЕДЕЛЬНИК','ПОНЕДЕЛЬНИКУ':'ПОНЕДЕЛЬНИК',
+  'ВТОРНИК':'ВТОРНИК','ВТОРНИКА':'ВТОРНИК','ВТОРНИКУ':'ВТОРНИК',
+  'СРЕДУ':'СРЕДА','СРЕДЫ':'СРЕДА','СРЕДЕ':'СРЕДА','СРЕДА':'СРЕДА',
+  'ЧЕТВЕРГ':'ЧЕТВЕРГ','ЧЕТВЕРГА':'ЧЕТВЕРГ','ЧЕТВЕРГУ':'ЧЕТВЕРГ',
+  'ПЯТНИЦУ':'ПЯТНИЦА','ПЯТНИЦЫ':'ПЯТНИЦА','ПЯТНИЦЕ':'ПЯТНИЦА','ПЯТНИЦА':'ПЯТНИЦА',
+  'СУББОТУ':'СУББОТА','СУББОТЫ':'СУББОТА','СУББОТЕ':'СУББОТА','СУББОТА':'СУББОТА',
+  'ВОСКРЕСЕНЬЕ':'ВОСКРЕСЕНЬЕ','ВОСКРЕСЕНЬЯ':'ВОСКРЕСЕНЬЕ','ВОСКРЕСЕНЬЮ':'ВОСКРЕСЕНЬЕ',
+};
+function formatScheduleDate(hdr){
+  // Ищем в строке: ДеньНедели ДД.ММ.ГГГГ (неделя)
+  const m=hdr.match(/([А-ЯЁа-яё]+)\s+(\d{2}\.\d{2}\.\d{4})\s*(\([^)]*\))?/);
+  if(m){
+    const dayRaw=m[1].toUpperCase();
+    const day=DAY_NOMINATIVE[dayRaw]||dayRaw;
+    const date=m[2];
+    const week=m[3]||'';
+    return [day,date,week].filter(Boolean).join(' ');
+  }
+  // Запасной вариант: убираем служебный префикс и мусор
+  return hdr.replace('Расписание занятий на ','')
+    .replace(/[^\u0401\u0410-\u044F\u0451\d\s.,()]/g,'')
+    .replace(/\s{2,}/g,' ').trim();
+}
 // ── 🔊 ЗВУКОВАЯ СИСТЕМА (Web Audio API, синтетическая) ───────────
 // ══════════════════════════════════════════════════════════════════
 const SFX = (() => {
@@ -1344,43 +1478,44 @@ function getCells(ab){
   if(!t)return[];
   return t.split('\x07').map(c=>{
     // Фильтруем бинарный мусор: оставляем только читаемые символы
-    // Разрешены: кириллица, латиница, цифры, базовая пунктуация, пробелы, переносы
+    // Строгий белый список: ASCII-printable + только стандартный русский алфавит (А-Я а-я Ёё)
+    // Это исключает мусорные расширенные кириллические символы (Ђ U+0402, Ѐ U+0400 и т.п.)
     const clean = c
       .replace(/\r/g,'\n')
-      // Убираем управляющие символы кроме \n и \t
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'')
-      // Убираем суррогатные пары и непечатаемые Unicode-блоки (OLE объекты, поля Word)
-      .replace(/[\uFFFD\uFFFE\uFFFF]/g,'')
-      // Убираем символы Private Use Area (часто используются OLE для маркеров)
-      .replace(/[\uE000-\uF8FF]/g,'')
-      // Убираем длинные последовательности нечитаемых символов (бинарный мусор)
-      .replace(/[^\u0000-\u007E\u0080-\u024F\u0400-\u04FF\u2000-\u206F\u2100-\u214F\n\t .,;:!?«»"'()\-+=%@#№0-9]/g, c => {
-        // Оставляем если это нормальный печатаемый символ из других языков
-        const code = c.codePointAt(0);
-        return (code >= 0x20 && code < 0xD800) ? c : '';
-      })
+      .replace(/[^\x09\x0A\x20-\x7E\u0401\u0410-\u044F\u0451«»№]/g,'')
       // Убираем строки где >60% символов — нечитаемые (бинарный мусор)
       .split('\n')
       .map(line => {
         if (!line.trim()) return line;
-        const readable = (line.match(/[\u0400-\u04FF\u0041-\u007A\u0030-\u0039\s.,;:!?\-+=%()«»"'№]/g) || []).length;
+        const readable = (line.match(/[\u0401\u0410-\u044F\u0451A-Za-z\u0030-\u0039\s.,;:!?\-+=%()«»"'№]/g) || []).length;
         const ratio = readable / line.length;
-        return ratio > 0.3 || line.length < 5 ? line : '';
+        return ratio > 0.35 || line.length < 5 ? line : '';
       })
       .join('\n')
-      // Схлопываем множественные пустые строки
       .replace(/\n{3,}/g, '\n\n')
       .trim();
     return clean;
   });
 }
 const GRP=/^[А-ЯЁA-Z0-9]{1,5}[\-]?\d[\-]\d{2}$/u;
+const GRP_SEARCH=/\b([А-ЯЁA-Z0-9]{1,5}[\-]?\d[\-]\d{2})\b/gu;
 const ROM=/^(I{1,3}V?|VI{0,3}|IV)$/;
 const HDR=/Расписание занятий/i;
 function norm(s){return s.trim().toUpperCase().replace(/[\s\-\.]/g,'')}
 function detectGroups(ab){
   const seen={};
-  for(const c of getCells(ab)){const t=c.trim();if(GRP.test(t)){const k=norm(t);if(!seen[k])seen[k]=t;}}
+  for(const c of getCells(ab)){
+    const t=c.trim();
+    // Сначала проверяем точное совпадение
+    if(GRP.test(t)){const k=norm(t);if(!seen[k])seen[k]=t;continue;}
+    // Проверяем первую строку ячейки
+    const singleLine=t.split('\n')[0].trim();
+    if(GRP.test(singleLine)){const k=norm(singleLine);if(!seen[k])seen[k]=singleLine;continue;}
+    // Поиск шаблона группы внутри текста ячейки
+    GRP_SEARCH.lastIndex=0;
+    let m;
+    while((m=GRP_SEARCH.exec(t))!==null){const k=norm(m[1]);if(!seen[k])seen[k]=m[1];}
+  }
   return Object.values(seen).sort();
 }
 function parseDoc(ab,group){
@@ -2132,6 +2267,46 @@ function filterGroups(q){
 }
 
 // ══ РАСПИСАНИЕ ══
+// Разбирает строку "Никитина Ю.В.к.17(2)" на имя преподавателя и кабинет
+// Разбирает строку вида "Фамилия И.О.к.21(1)" на компоненты
+function parseTeacherLine(line){
+  // Ищем паттерн: к.NN(N) или к.NN
+  const ki=line.search(/к\.\d/);
+  if(ki<0)return{teacher:line.trim(),cabinetNum:'',korpus:''};
+  const teacher=line.slice(0,ki).trim();
+  const cabPart=line.slice(ki); // "к.21(1)" или "к.21"
+  const numM=cabPart.match(/к\.(\d+)/);
+  const korpM=cabPart.match(/\((\d)\)/);
+  return{
+    teacher,
+    cabinetNum:numM?numM[1]:'',
+    korpus:korpM?korpM[1]:''
+  };
+}
+
+// Формирует HTML для строки деталей пары (преподаватель + кабинет + корпус)
+function renderDetailLine(line){
+  const p=parseTeacherLine(line);
+  if(!p.cabinetNum)return`<span>${line}</span>`;
+  let html=`<span>${p.teacher}</span>`;
+  html+=`<br><span>кабинет ${p.cabinetNum}</span>`;
+  if(p.korpus)html+=`<br><span>корпус ${p.korpus}</span>`;
+  return html;
+}
+
+// Пытается отделить преподавателя+кабинет, если они слиты с названием предмета в одну строку
+// Например: "Основы алгоритмизации и программирования Кубасова В.В.к.21(1)"
+function splitSubjectAndTeacher(subjectLine){
+  // Паттерн: за текстом предмета идёт Фамилия (одно/два слова) И.О. (два инициала с точками)
+  // Дополнительно может идти к.NN(N)
+  const m=subjectLine.match(
+    /^(.+?)\s+([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)?\s+[А-ЯЁ]\.[А-ЯЁ]\.(к\.\d+(?:\(\d\))?)?)$/u
+  );
+  if(m&&m[1].trim().length>2){
+    return{subject:m[1].trim(),teacherStr:m[2].trim()};
+  }
+  return null;
+}
 async function loadSchedule(group){
   if(!S.selectedFile){toast('Выбери файл');return;}
   showScreen('s-schedule');
@@ -2150,15 +2325,24 @@ async function loadSchedule(group){
 }
 function renderSchedule(group,hdr,sched,filename){
   document.getElementById('sched-group-name').textContent=group;
-  document.getElementById('sched-date').textContent=hdr.replace('Расписание занятий на ','').trim()||'';
+  const cleanDate=formatScheduleDate(hdr);
+  document.getElementById('sched-date').textContent=cleanDate||'';
+  // Проверяем совпадение даты расписания с сегодняшней
+  const dateM=hdr.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  const today=new Date();
+  let isToday=false;
+  if(dateM){
+    const sd=new Date(+dateM[3],+dateM[2]-1,+dateM[1]);
+    isToday=(sd.getFullYear()===today.getFullYear()&&sd.getMonth()===today.getMonth()&&sd.getDate()===today.getDate());
+  }
   const isMon=filename.toUpperCase().includes('ПОНЕДЕЛЬНИК');
   const bell=isMon?BELL_MON:BELL_TUE;
-  const now=new Date(),nowMin=now.getHours()*60+now.getMinutes();
+  const nowMin=today.getHours()*60+today.getMinutes();
   const body=document.getElementById('sched-body');body.innerHTML='';
   for(const[roman,lesson]of sched){
     const b=bell[roman];
     let isNow=false,isNext=false;
-    if(b&&b[0]){
+    if(isToday&&b&&b[0]){
       const[sh,sm]=b[0].split(':').map(Number);
       const endS=b[3]||b[1];
       const[eh,em]=endS.split(':').map(Number);
@@ -2166,7 +2350,12 @@ function renderSchedule(group,hdr,sched,filename){
       isNow=nowMin>=startMin&&nowMin<=endMin;
       if(!isNow){const diff=startMin-nowMin;isNext=diff>0&&diff<=30;}
     }
-    const lines=lesson?lesson.split('\n').map(l=>l.trim()).filter(Boolean):[];
+    let lines=lesson?lesson.split('\n').map(l=>l.trim()).filter(Boolean):[];
+    // Если преподаватель и кабинет слиты с названием предмета в одну строку — разделяем
+    if(lines.length>0){
+      const split=splitSubjectAndTeacher(lines[0]);
+      if(split)lines=[split.subject,split.teacherStr,...lines.slice(1)];
+    }
     const isEmpty=!lines.length;
     const card=document.createElement('div');
     card.className='pair-card'+(isEmpty?'':' has-subject')+(isNow?' is-now':isNext?' is-next':'');
@@ -2180,8 +2369,191 @@ function renderSchedule(group,hdr,sched,filename){
       const[s1,e1,s2,e2]=b;
       timesHtml=`<div class="pair-times"><div class="pair-time-row"><span class="pair-time-val">${s1} – ${e1}</span><span class="pair-time-tag">${s2?'1 урок':'60 мин'}</span></div>${s2?`<div class="pair-time-row"><span class="pair-time-val">${s2} – ${e2}</span><span class="pair-time-tag">2 урок</span></div>`:''}</div>`;
     }
-    card.innerHTML=`<div class="pair-top"><div class="pair-num">${roman}</div><div class="pair-subject-wrap"><div class="pair-subject${isEmpty?' empty':''}">${isEmpty?'Окно':lines[0]}</div>${badge}</div>${remain}</div>${timesHtml}${lines.length>1?`<div class="pair-details">${lines.slice(1).join('<br>')}</div>`:''}`;
+    const detailsHtml=lines.length>1
+      ?`<div class="pair-details">${lines.slice(1).map(l=>renderDetailLine(l)).join('<br>')}</div>`
+      :'';
+    card.innerHTML=`<div class="pair-top"><div class="pair-num">${roman}</div><div class="pair-subject-wrap"><div class="pair-subject${isEmpty?' empty':''}">${isEmpty?'Окно':lines[0]}</div>${badge}</div>${remain}</div>${timesHtml}${detailsHtml}`;
     body.appendChild(card);
+  }
+}
+
+// ══ ПРИВЕТСТВИЕ ══
+const APP_VERSION='2.6';
+function getGreeting(){
+  const now=new Date();
+  const h=now.getHours();
+  const dow=now.getDay(); // 0=вс, 6=сб
+  const isWeekend=(dow===0||dow===6);
+  if(isWeekend){
+    if(h>=5&&h<12) return{greet:'Доброе утро',icon:'🛋',sub:'Сегодня выходной — отдыхай!'};
+    if(h>=12&&h<17) return{greet:'Добрый день',icon:'😎',sub:'Хороших выходных!'};
+    if(h>=17&&h<22) return{greet:'Добрый вечер',icon:'🌆',sub:'Наслаждайся вечером 🎉'};
+    return{greet:'Доброй ночи',icon:'🌙',sub:'Выходные — не повод не спать 😅'};
+  }
+  if(h>=5&&h<12) return{greet:'Доброе утро',icon:'🌤',sub:'Хорошего учебного дня!'};
+  if(h>=12&&h<17) return{greet:'Добрый день',icon:'☀️',sub:'Успехов на парах!'};
+  if(h>=17&&h<22) return{greet:'Добрый вечер',icon:'🌇',sub:'Время отдохнуть.'};
+  return{greet:'Доброй ночи',icon:'🌙',sub:'Не забудь поспать 😴'};
+}
+function showGreeting(){
+  const stored=loadSecret();
+  if(stored.greetingOff){document.getElementById('greeting-overlay').style.display='none';return;}
+  const ov=document.getElementById('greeting-overlay');
+  if(!ov)return;
+  const now=new Date();
+  const hh=String(now.getHours()).padStart(2,'0');
+  const mm=String(now.getMinutes()).padStart(2,'0');
+  const g=getGreeting();
+  document.getElementById('greeting-time-label').textContent=hh+':'+mm;
+  document.getElementById('greeting-text').textContent=g.icon+' '+g.greet;
+  document.getElementById('greeting-sub').textContent=g.sub;
+  ov.style.display='';
+  ov.classList.remove('fade-out');
+  setTimeout(()=>skipGreeting(),2400);
+}
+function skipGreeting(){
+  const ov=document.getElementById('greeting-overlay');
+  if(!ov||ov.classList.contains('fade-out'))return;
+  ov.classList.add('fade-out');
+  setTimeout(()=>{ov.style.display='none';},500);
+}
+
+// ══ 4 ТАПА ПО ЗАГОЛОВКУ → CMD (только МПД-2-24) ══
+let _schedTapCount=0,_schedTapTimer=null;
+function initSchedTapTrigger(){
+  const el=document.getElementById('sched-header-tap');
+  if(!el)return;
+  el.addEventListener('click',e=>{
+    if(S.lastGroup!=='МПД-2-24')return;
+    _schedTapCount++;
+    clearTimeout(_schedTapTimer);
+    _schedTapTimer=setTimeout(()=>{_schedTapCount=0;},800);
+    if(_schedTapCount>=4){_schedTapCount=0;clearTimeout(_schedTapTimer);SFX.play('themeSelect');cmdOpen();}
+  });
+}
+
+// ══ SECRET STORAGE ══
+const SECRET_KEY='sched_secret';
+function loadSecret(){try{return JSON.parse(stor.get(SECRET_KEY)||'{}')}catch(e){return{};}}
+function saveSecret(obj){stor.set(SECRET_KEY,JSON.stringify(obj));}
+
+// ══ РЕКОРДЫ МНИ-ИГР ══
+const HI_KEY='sched_hiscores';
+function loadHiScores(){try{return JSON.parse(stor.get(HI_KEY)||'{}');}catch(e){return{};}}
+function saveHi(game,score){
+  const h=loadHiScores();
+  if(!h[game]||score>h[game]){h[game]=score;stor.set(HI_KEY,JSON.stringify(h));}
+  return Math.max(score,h[game]||0);
+}
+function getHi(game){return loadHiScores()[game]||0;}
+
+// ══ CMD-КОНСОЛЬ ══
+const CMD_HELP=[
+  ['/help',      'показать этот список'],
+  ['/greeting',  'on|off — включить/выключить приветствие'],
+  ['/hiscores',  'рекорды мини-игр  |  reset — сбросить'],
+  ['/version',   'информация о версии'],
+  ['/group',     'текущая группа и файл'],
+  ['/cache',     '[clear] — кэш файлов или очистить'],
+  ['/theme',     'list|<n> — список тем или сменить'],
+  ['/sound',     'on|off — звуки интерфейса'],
+  ['/exit',      'закрыть консоль'],
+];
+function cmdOpen(){
+  const ov=document.getElementById('cmd-overlay');
+  if(!ov)return;
+  ov.style.display='flex';
+  const body=document.getElementById('cmd-body');
+  body.innerHTML='';
+  cmdPrint('out','Microsoft Windows [Version 10.0.26100.3194]');
+  cmdPrint('out','(c) Microsoft Corporation. Все права защищены.');
+  cmdPrint('out','');
+  cmdPrint('info','╔══════════════════════════════════════╗');
+  cmdPrint('info','║  Schedule App v'+APP_VERSION+'  Dev Console  ║');
+  cmdPrint('info','╚══════════════════════════════════════╝');
+  cmdPrint('out','');
+  cmdPrintHelp();
+  cmdPrint('out','');
+  setTimeout(()=>document.getElementById('cmd-input')?.focus(),80);
+}
+function cmdClose(){
+  document.getElementById('cmd-overlay').style.display='none';
+}
+function cmdPrint(cls,text){
+  const body=document.getElementById('cmd-body');
+  const line=document.createElement('div');
+  line.className='cmd-line '+cls;
+  line.textContent=text;
+  body.appendChild(line);
+  body.scrollTop=body.scrollHeight;
+}
+function cmdPrintHelp(){
+  cmdPrint('warn','Доступные команды:');
+  CMD_HELP.forEach(([c,d])=>cmdPrint('ok','  '+c.padEnd(14)+' — '+d));
+}
+function cmdKey(e){
+  if(e.key!=='Enter')return;
+  const inp=document.getElementById('cmd-input');
+  const raw=(inp.value||'').trim();
+  inp.value='';
+  if(!raw)return;
+  cmdPrint('prompt','C:\\> '+raw);
+  cmdExec(raw);
+}
+function cmdExec(raw){
+  const parts=raw.split(/\s+/),cmd=parts[0].toLowerCase(),arg=(parts[1]||'').toLowerCase();
+  const sec=loadSecret();
+  switch(cmd){
+    case '/help': cmdPrintHelp(); break;
+    case '/greeting':
+      if(arg==='off'){sec.greetingOff=true;saveSecret(sec);cmdPrint('ok','Приветствие отключено.');}
+      else if(arg==='on'){delete sec.greetingOff;saveSecret(sec);cmdPrint('ok','Приветствие включено.');}
+      else cmdPrint('err','Использование: /greeting on|off');
+      break;
+    case '/hiscores':{
+      const GAME_NAMES={snake:'Змейка',pong:'Пинг-понг',tetris:'Тетрис',dino:'Динозаврик',
+        blockblast:'Block Blast',breakout:'Арканоид',bubbles:'Пузыри',flappy:'Флаппи птица','2048':'2048'};
+      if(arg==='reset'){stor.set(HI_KEY,'{}');cmdPrint('ok','Все рекорды сброшены.');}
+      else{
+        cmdPrint('info','── Рекорды мини-игр ──');
+        const h=loadHiScores();
+        let any=false;
+        Object.entries(GAME_NAMES).forEach(([k,n])=>{
+          cmdPrint(h[k]?'ok':'out','  '+(n+':').padEnd(18)+(h[k]||'нет'));any=true;
+        });
+        cmdPrint('prompt','  /hiscores reset — сбросить все');
+      }
+    } break;
+    case '/version':
+      cmdPrint('info','Версия приложения: '+APP_VERSION);
+      cmdPrint('info','versionCode: 11');
+      cmdPrint('info','Платформа: Android WebView');
+      break;
+    case '/group':
+      cmdPrint('info','Группа: '+(S.lastGroup||'не выбрана'));
+      cmdPrint('info','Файл: '+(S.selectedFile?.name||'—'));
+      break;
+    case '/cache':
+      if(arg==='clear'){Object.keys(FILE_CACHE).forEach(k=>delete FILE_CACHE[k]);cmdPrint('ok','Кэш очищен.');}
+      else cmdPrint('info','Файлов в кэше: '+Object.keys(FILE_CACHE).length+'.  /cache clear — для очистки.');
+      break;
+    case '/theme':
+      if(arg==='list'){Object.entries(THEMES).forEach(([k,t])=>cmdPrint(S.theme===k?'ok':'out','  '+(k+(S.theme===k?' ✓':'')).padEnd(15)+t.name));}
+      else if(arg&&THEMES[arg]){applyTheme(arg);cmdPrint('ok','Тема: '+THEMES[arg].name);}
+      else if(arg)cmdPrint('err','Тема "'+arg+'" не найдена. /theme list');
+      else cmdPrint('info','Тема: '+S.theme+'.  /theme list или /theme <name>');
+      break;
+    case '/sound':
+      if(arg==='off'){S.muted=true;saveLocal();updateMuteLabel();cmdPrint('ok','Звук выключен.');}
+      else if(arg==='on'){S.muted=false;saveLocal();updateMuteLabel();cmdPrint('ok','Звук включён.');}
+      else cmdPrint('err','Использование: /sound on|off');
+      break;
+    case '/exit':
+      cmdPrint('out','Выход...');
+      setTimeout(cmdClose,500);
+      break;
+    default:
+      cmdPrint('err','"'+cmd+'" не найдена. Введи /help');
   }
 }
 
@@ -2342,15 +2714,16 @@ updateLastGroupBtn();
 updateNavActive('nav-home');
 updateThemeCurrentRow();
 initIconPicker();
+initSchedTapTrigger();
 document.getElementById('url-input').value=S.url;
 
 loadFiles();
+showGreeting();
 
 // ══ OTA обновление ══
 // ⚠️ CLAUDE: при каждом изменении кода — обновляй эту версию!
-const APP_VERSION = '2.3';
 
-// Показываем текущую версию в настройках
+// Показываем текущую версию в настройках (APP_VERSION определён выше)
 (function(){
   const el = document.getElementById('app-version-str');
   if (el) el.textContent = APP_VERSION + ' — Android';
@@ -2582,7 +2955,7 @@ function eggClose() {
 
 function eggShowPicker() {
   eggStopAll();
-  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout','egg-bubbles'].forEach(id => {
+  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout','egg-bubbles','egg-flappy','egg-2048'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -2603,6 +2976,8 @@ function eggStartGame(name) {
   else if (name === 'blockblast') { document.getElementById('egg-blockblast').style.display = ''; bbInit(); }
   else if (name === 'breakout') { document.getElementById('egg-breakout').style.display = ''; brInit(); }
   else if (name === 'bubbles')  { document.getElementById('egg-bubbles').style.display = '';  bubInit(); }
+  else if (name === 'flappy')   { document.getElementById('egg-flappy').style.display = '';   flappyInit(); }
+  else if (name === '2048')     { document.getElementById('egg-2048').style.display = '';     g2048Init(); }
 }
 
 function eggStopAll() {
@@ -2612,7 +2987,10 @@ function eggStopAll() {
   dinoStop();
   brStop();
   bubStop();
+  flappyStop();
+  g2048Stop();
 }
+function g2048Stop(){document.removeEventListener('keydown',g2048Key);}
 
 // ── Утилита: обновить активную кнопку сложности ──
 function updateDiffBtns(game) {
@@ -2648,6 +3026,7 @@ let snakeDifficulty = 'normal';
 const SNAKE_DIFF = { easy: {baseDelay:280, step:3}, normal: {baseDelay:200, step:4}, hard: {baseDelay:120, step:6} };
 
 function snakeInit() {
+  snakeHi = getHi('snake');
   const canvas = document.getElementById('snake-canvas');
   const maxW = Math.min(window.innerWidth - 64, 320);
   snakeCellSize = Math.floor(maxW / SNAKE_COLS);
@@ -2727,7 +3106,7 @@ function snakeTick() {
     snakeRunning = false;
     snakeDrawGameOver();
     SFX.play('snakeDie');
-    if (snakeLen - 3 > snakeHi) snakeHi = snakeLen - 3;
+    if (snakeLen - 3 > snakeHi) snakeHi = saveHi('snake', snakeLen - 3);
     snakeUpdateScore();
     toast('🐍 Игра окончена! Счёт: ' + (snakeLen - 3));
     return;
@@ -2948,7 +3327,7 @@ function pongInit() {
   canvas.width = side;
   canvas.height = Math.round(side * 1.1);
   pongW = canvas.width; pongH = canvas.height;
-  pongHi = pongHi || 0;
+  pongHi = getHi('pong');
   pongRestart();
   const movePad = (clientX) => {
     const rect = canvas.getBoundingClientRect();
@@ -3027,7 +3406,7 @@ function pongTick(dt) {
     b.vx = Math.sin(ba) * pongSpeed; b.vy = -Math.cos(ba) * pongSpeed;
     b.sx = 1.16; b.sy = 0.86; b._sqTx = 0.16; b._sqTy = -0.14; b.sqT = 1;
     SFX.play('pongHit'); SFX.play('pongScore');
-    pongScore++; if (pongScore > pongHi) pongHi = pongScore;
+    pongScore++; if (pongScore > pongHi) pongHi = saveHi('pong', pongScore);
     pongUpdateScore();
   }
   if (b.y - b.r > pongH) {
@@ -3121,6 +3500,7 @@ let tetDifficulty = 'normal';
 const TET_DIFF = { easy: {speedBase:600, minSpeed:150}, normal: {speedBase:500, minSpeed:80}, hard: {speedBase:300, minSpeed:50} };
 
 function tetInit() {
+  tetHi = getHi('tetris');
   const canvas = document.getElementById('tet-canvas');
   const maxW = Math.min(window.innerWidth - 64, 220);
   tetCellSize = Math.floor(maxW / TET_COLS);
@@ -3181,7 +3561,7 @@ function tetSpawn() {
   if (tetCollide(tetPiece.shape, tetX, tetY)) {
     tetDead = true; tetStop();
     SFX.play('tetGameOver');
-    if (tetScore > tetHi) tetHi = tetScore;
+    if (tetScore > tetHi) tetHi = saveHi("tetris", tetScore);
     tetUpdateScore();
     tetDraw();
     tetDrawMsg('💀 Игра окончена!');
@@ -3235,7 +3615,7 @@ function tetClearLines() {
     const pts = [0, 100, 300, 500, 800][cleared] * tetLevel;
     tetScore += pts; tetLines += cleared;
     tetLevel = Math.floor(tetLines / 10) + 1;
-    if (tetScore > tetHi) tetHi = tetScore;
+    if (tetScore > tetHi) tetHi = saveHi("tetris", tetScore);
     tetUpdateScore();
     // Перезапланировать с новой скоростью
     tetStop();
@@ -3375,6 +3755,7 @@ const CACTUS_CONFIGS = [
 ];
 
 function dinoInit() {
+  dinoHi = getHi("dino");
   const canvas = document.getElementById('dino-canvas');
   const maxW = Math.min(window.innerWidth - 36, 400);
   canvas.width  = maxW;
@@ -3509,7 +3890,7 @@ function dinoTick(dt) {
 
   // Счёт
   dinoScore = Math.floor(dinoFrameCount * 0.1);
-  if (dinoScore > dinoHi) dinoHi = dinoScore;
+  if (dinoScore > dinoHi) dinoHi = saveHi("dino", dinoScore);
   dinoUpdateScore();
 
   // ── Спавн кактусов (хаотичные группы) ──
@@ -3805,6 +4186,7 @@ const BB_SHAPES = [
 const BB_COLORS = ['#e87722','#00e5ff','#a78bfa','#4caf7d','#f5c518','#c94f4f','#60cdff','#f472b6'];
 
 function bbInit() {
+  bbHi = getHi("blockblast");
   const wrap = document.getElementById('bb-board-wrap');
   const maxW = Math.min(window.innerWidth - 64, 280);
   bbCellSize = Math.floor(maxW / BB_COLS);
@@ -4063,7 +4445,7 @@ function bbTryPlaceDirect(pr, pc) {
   // Count cells
   let cells = 0; piece.shape.forEach(r => r.forEach(v => { if(v) cells++; }));
   bbScore += cells;
-  if (bbScore > bbHi) bbHi = bbScore;
+  if (bbScore > bbHi) bbHi = saveHi("blockblast", bbScore);
 
   bbClearLines();
   bbDrawBoard();
@@ -4089,7 +4471,7 @@ function bbClearLines() {
   if (!toClear.size) return;
   SFX.play('bbLine');
   bbScore += toClear.size * 10;
-  if (bbScore > bbHi) bbHi = bbScore;
+  if (bbScore > bbHi) bbHi = saveHi("blockblast", bbScore);
 
   const canvas = document.getElementById('bb-canvas'); if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -4174,6 +4556,7 @@ const BR_BRICK_COLORS = [
 ];
 
 function brInit() {
+  brHi = getHi("breakout");
   const canvas = document.getElementById('br-canvas');
   const w = Math.min(window.innerWidth - 36, 360);
   canvas.width = w;
@@ -4313,7 +4696,7 @@ function brTick(dt) {
       break;
     }
   }
-  if (brokeCount) { brScore += brokeCount * 10; if (brScore > brHi) brHi = brScore; brUpdateScore(); }
+  if (brokeCount) { brScore += brokeCount * 10; if (brScore > brHi) brHi = saveHi("breakout", brScore); brUpdateScore(); }
   if (brBricks.every(bk => !bk.alive)) {
     brStop(); brWaiting = true;
     SFX.play('brLevelUp');
@@ -4453,6 +4836,7 @@ const BUB_DIFF = {
 };
 
 function bubInit() {
+  bubHi = getHi("bubbles");
   const canvas = document.getElementById('bub-canvas');
   const w = Math.min(window.innerWidth - 36, 360);
   canvas.width = w;
@@ -4471,7 +4855,7 @@ function bubInit() {
         bubCombo++; bubComboTimer = 1500;
         SFX.play('bubPop'); if(bubCombo>=3) SFX.play('bubCombo');
         const pts = Math.round(10 * bubCombo * (1 + bubLevel * 0.1));
-        bubScore += pts; if (bubScore > bubHi) bubHi = bubScore;
+        bubScore += pts; if (bubScore > bubHi) bubHi = saveHi("bubbles", bubScore);
         bubUpdateScore(); popped = true; break;
       }
     }
@@ -4656,5 +5040,234 @@ function bubUpdateScore() {
   const el=document.getElementById('bub-score-label'); if(!el) return;
   const hearts='❤️'.repeat(Math.max(0,bubLives))+'🖤'.repeat(Math.max(0,3-bubLives));
   el.textContent='Счёт: '+bubScore+' • Рекорд: '+bubHi+' • '+hearts;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🐦 ФЛАППИ ПТИЦА (v2.6.0) ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+let flappyRaf=null,flappyRunning=false,flappyStarted=false;
+let flappyW=0,flappyH=0,flappyScore=0,flappyHi=0;
+let flappyBird={x:0,y:0,vy:0,r:14};
+const FLAPPY_GRAVITY=0.38,FLAPPY_JUMP=-7.2,FLAPPY_PIPE_W=52,FLAPPY_GAP=140,FLAPPY_SPEED=2.4;
+let flappyPipes=[];
+let flappyFrames=0;
+
+function flappyInit(){
+  flappyHi=getHi('flappy');
+  const canvas=document.getElementById('flappy-canvas');
+  flappyW=Math.min(window.innerWidth-36,360);
+  flappyH=Math.round(flappyW*1.45);
+  canvas.width=flappyW; canvas.height=flappyH;
+  canvas.ontouchstart=e=>{e.preventDefault();flappyFlap();};
+  canvas.onclick=flappyFlap;
+  document.addEventListener('keydown',flappyKeyDown);
+  flappyRestart();
+}
+function flappyKeyDown(e){if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();flappyFlap();}}
+function flappyStop(){
+  flappyRunning=false;cancelAnimationFrame(flappyRaf);
+  document.removeEventListener('keydown',flappyKeyDown);
+}
+function flappyFlap(){
+  if(!flappyStarted){flappyStarted=true;}
+  flappyBird.vy=FLAPPY_JUMP;
+  SFX.play('pongHit');
+}
+function flappyRestart(){
+  flappyScore=0; flappyStarted=false;
+  flappyBird={x:flappyW*0.28,y:flappyH*0.45,vy:0,r:14};
+  flappyPipes=[]; flappyFrames=0;
+  flappyRunning=true;
+  cancelAnimationFrame(flappyRaf);
+  flappyRaf=requestAnimationFrame(flappyLoop);
+  flappyUpdateScore();
+}
+function flappySpawnPipe(){
+  const minY=80,maxY=flappyH-FLAPPY_GAP-80;
+  const topH=minY+Math.random()*(maxY-minY);
+  flappyPipes.push({x:flappyW,topH,passed:false});
+}
+function flappyLoop(){
+  if(!flappyRunning)return;
+  const canvas=document.getElementById('flappy-canvas');
+  if(!canvas){flappyRunning=false;return;}
+  if(flappyStarted){
+    flappyBird.vy+=FLAPPY_GRAVITY;
+    flappyBird.y+=flappyBird.vy;
+    flappyFrames++;
+    if(flappyFrames%90===0)flappySpawnPipe();
+    for(let p of flappyPipes){p.x-=FLAPPY_SPEED;}
+    flappyPipes=flappyPipes.filter(p=>p.x>-FLAPPY_PIPE_W-10);
+    // Score
+    for(let p of flappyPipes){
+      if(!p.passed&&p.x+FLAPPY_PIPE_W<flappyBird.x){p.passed=true;flappyScore++;flappyUpdateScore();SFX.play('pongScore');}
+    }
+    // Collision
+    const b=flappyBird;
+    if(b.y+b.r>flappyH||b.y-b.r<0){flappyDie();return;}
+    for(let p of flappyPipes){
+      const inX=b.x+b.r>p.x&&b.x-b.r<p.x+FLAPPY_PIPE_W;
+      if(inX&&(b.y-b.r<p.topH||b.y+b.r>p.topH+FLAPPY_GAP)){flappyDie();return;}
+    }
+  }
+  flappyDraw(canvas);
+  flappyRaf=requestAnimationFrame(flappyLoop);
+}
+function flappyDie(){
+  flappyRunning=false;
+  if(flappyScore>flappyHi)flappyHi=saveHi('flappy',flappyScore);
+  flappyUpdateScore();
+  const canvas=document.getElementById('flappy-canvas');
+  flappyDraw(canvas);
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,flappyH/2-44,flappyW,88);
+  ctx.fillStyle='#f0ede8';ctx.font='bold 16px sans-serif';ctx.textAlign='center';
+  ctx.fillText('💥 Игра окончена!',flappyW/2,flappyH/2-12);
+  ctx.fillText('Тапни чтобы снова',flappyW/2,flappyH/2+16);
+  canvas.onclick=()=>{canvas.onclick=null;canvas.ontouchstart=e=>{e.preventDefault();flappyFlap();};canvas.onclick=flappyFlap;flappyRestart();};
+  canvas.ontouchstart=e=>{e.preventDefault();canvas.ontouchstart=null;canvas.onclick=null;canvas.onclick=flappyFlap;canvas.ontouchstart=e2=>{e2.preventDefault();flappyFlap();};flappyRestart();};
+}
+function flappyDraw(canvas){
+  const ctx=canvas.getContext('2d');
+  const accent=getAccent();
+  // Sky
+  const skyGrad=ctx.createLinearGradient(0,0,0,flappyH);
+  skyGrad.addColorStop(0,'#0d1b2a');skyGrad.addColorStop(1,'#162032');
+  ctx.fillStyle=skyGrad;ctx.fillRect(0,0,flappyW,flappyH);
+  // Ground
+  ctx.fillStyle='#2a1f0e';ctx.fillRect(0,flappyH-24,flappyW,24);
+  ctx.fillStyle='#3d2e14';ctx.fillRect(0,flappyH-24,flappyW,4);
+  // Pipes
+  for(const p of flappyPipes){
+    const grad=ctx.createLinearGradient(p.x,0,p.x+FLAPPY_PIPE_W,0);
+    grad.addColorStop(0,'#2d6a2d');grad.addColorStop(0.5,'#3e9e3e');grad.addColorStop(1,'#2d6a2d');
+    ctx.fillStyle=grad;
+    ctx.fillRect(p.x,0,FLAPPY_PIPE_W,p.topH);
+    ctx.fillRect(p.x,p.topH+FLAPPY_GAP,FLAPPY_PIPE_W,flappyH-p.topH-FLAPPY_GAP);
+    // Pipe caps
+    ctx.fillStyle='#4ab84a';
+    ctx.fillRect(p.x-4,p.topH-18,FLAPPY_PIPE_W+8,18);
+    ctx.fillRect(p.x-4,p.topH+FLAPPY_GAP,FLAPPY_PIPE_W+8,18);
+  }
+  // Bird
+  const b=flappyBird;
+  const angle=Math.min(Math.PI/4,Math.max(-Math.PI/5,b.vy*0.05));
+  ctx.save();ctx.translate(b.x,b.y);ctx.rotate(angle);
+  // Body
+  ctx.shadowColor=accent;ctx.shadowBlur=12;
+  ctx.fillStyle=accent;ctx.beginPath();ctx.ellipse(0,0,b.r,b.r*0.85,0,0,Math.PI*2);ctx.fill();
+  // Eye
+  ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(b.r*0.4,-b.r*0.2,b.r*0.32,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#222';ctx.beginPath();ctx.arc(b.r*0.5,-b.r*0.15,b.r*0.15,0,Math.PI*2);ctx.fill();
+  // Wing
+  ctx.fillStyle=accent+'bb';ctx.beginPath();ctx.ellipse(-b.r*0.2,b.r*0.1,b.r*0.55,b.r*0.3,flappyStarted?Math.sin(flappyFrames*0.3)*0.4:0,0,Math.PI*2);ctx.fill();
+  // Beak
+  ctx.fillStyle='#f5a623';ctx.beginPath();ctx.moveTo(b.r*0.7,0);ctx.lineTo(b.r*1.3,b.r*0.15);ctx.lineTo(b.r*0.7,b.r*0.3);ctx.closePath();ctx.fill();
+  ctx.restore();
+  // Score HUD
+  ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(0,0,flappyW,38);
+  ctx.fillStyle='#f0ede8';ctx.font='bold 20px sans-serif';ctx.textAlign='center';
+  ctx.fillText(flappyScore,flappyW/2,26);
+  if(!flappyStarted){
+    ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(0,flappyH/2-30,flappyW,60);
+    ctx.fillStyle='#f0ede8';ctx.font='bold 15px sans-serif';ctx.textAlign='center';
+    ctx.fillText('🐦 Тапни чтобы начать!',flappyW/2,flappyH/2+7);
+  }
+}
+function flappyUpdateScore(){
+  const el=document.getElementById('flappy-score-label');if(!el)return;
+  el.textContent='Счёт: '+flappyScore+' • Рекорд: '+flappyHi;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🔢 2048 (v2.6.0) ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+const G2048_COLORS={0:'#1f1f1f',2:'#3a3a3a',4:'#4a3820',8:'#7c4010',16:'#a04a10',32:'#c45a0a',
+  64:'#e07020',128:'#d4a020',256:'#c8b030',512:'#b0c040',1024:'#60b060',2048:'#30a030'};
+const G2048_TC={0:'#555',2:'#ccc',4:'#ddb',8:'#fff',16:'#fff',32:'#fff',64:'#fff',
+  128:'#fff',256:'#fff',512:'#fff',1024:'#fff',2048:'#fff'};
+let g2048Grid=[],g2048Score=0,g2048Hi=0,g2048Over=false;
+let g2048SwX=0,g2048SwY=0;
+
+function g2048Init(){
+  g2048Hi=getHi('2048');
+  g2048Restart();
+  const board=document.getElementById('g2048-board');
+  board.ontouchstart=e=>{e.preventDefault();g2048SwX=e.touches[0].clientX;g2048SwY=e.touches[0].clientY;};
+  board.ontouchend=e=>{
+    e.preventDefault();
+    const dx=e.changedTouches[0].clientX-g2048SwX,dy=e.changedTouches[0].clientY-g2048SwY;
+    if(Math.abs(dx)<20&&Math.abs(dy)<20)return;
+    if(Math.abs(dx)>Math.abs(dy))g2048Move(dx>0?'right':'left');
+    else g2048Move(dy>0?'down':'up');
+  };
+  document.addEventListener('keydown',g2048Key);
+}
+function g2048Key(e){
+  const map={'ArrowLeft':'left','ArrowRight':'right','ArrowUp':'up','ArrowDown':'down'};
+  if(map[e.key]){e.preventDefault();g2048Move(map[e.key]);}
+}
+function g2048Stop(){document.removeEventListener('keydown',g2048Key);}
+function g2048Restart(){
+  g2048Grid=Array(4).fill(null).map(()=>Array(4).fill(0));
+  g2048Score=0;g2048Over=false;
+  g2048Spawn();g2048Spawn();
+  g2048Render();g2048UpdateScore();
+}
+function g2048Spawn(){
+  const empty=[];
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++)if(g2048Grid[r][c]===0)empty.push([r,c]);
+  if(!empty.length)return;
+  const [r,c]=empty[Math.floor(Math.random()*empty.length)];
+  g2048Grid[r][c]=Math.random()<0.9?2:4;
+}
+function g2048Slide(row){
+  let a=row.filter(v=>v);
+  for(let i=0;i<a.length-1;i++){if(a[i]===a[i+1]){a[i]*=2;g2048Score+=a[i];a.splice(i+1,1);i++;}}
+  while(a.length<4)a.push(0);
+  return a;
+}
+function g2048Move(dir){
+  if(g2048Over)return;
+  let changed=false;
+  const prev=g2048Grid.map(r=>[...r]);
+  if(dir==='left'){for(let r=0;r<4;r++){const n=g2048Slide(g2048Grid[r]);if(n.join()!==g2048Grid[r].join()){g2048Grid[r]=n;changed=true;}}}
+  else if(dir==='right'){for(let r=0;r<4;r++){const n=g2048Slide([...g2048Grid[r]].reverse()).reverse();if(n.join()!==g2048Grid[r].join()){g2048Grid[r]=n;changed=true;}}}
+  else if(dir==='up'){for(let c=0;c<4;c++){const col=[0,1,2,3].map(r=>g2048Grid[r][c]);const n=g2048Slide(col);n.forEach((v,r)=>{if(v!==g2048Grid[r][c]){g2048Grid[r][c]=v;changed=true;}});}}
+  else if(dir==='down'){for(let c=0;c<4;c++){const col=[0,1,2,3].map(r=>g2048Grid[r][c]);const n=g2048Slide([...col].reverse()).reverse();n.forEach((v,r)=>{if(v!==g2048Grid[r][c]){g2048Grid[r][c]=v;changed=true;}});}}
+  if(changed){
+    if(g2048Score>g2048Hi)g2048Hi=saveHi('2048',g2048Score);
+    g2048Spawn();g2048Render();g2048UpdateScore();SFX.play('pongHit');
+    // Check game over
+    const hasMoves=g2048Grid.some((row,r)=>row.some((v,c)=>{
+      if(v===0)return true;
+      if(c<3&&v===g2048Grid[r][c+1])return true;
+      if(r<3&&v===g2048Grid[r+1][c])return true;
+      return false;
+    }));
+    if(!hasMoves){g2048Over=true;toast('🔢 Игра окончена! '+g2048Score+' очков');}
+  }
+}
+function g2048Render(){
+  const board=document.getElementById('g2048-board');if(!board)return;
+  board.innerHTML='';
+  const cellSize=Math.floor((Math.min(300,window.innerWidth*0.85)-3*8)/4);
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++){
+    const v=g2048Grid[r][c];
+    const cell=document.createElement('div');
+    const bg=G2048_COLORS[Math.min(v,2048)]||'#208020';
+    const tc=G2048_TC[Math.min(v,2048)]||'#fff';
+    const fs=v<100?22:v<1000?17:13;
+    cell.style.cssText=`width:${cellSize}px;height:${cellSize}px;border-radius:8px;background:${bg};
+      display:flex;align-items:center;justify-content:center;
+      font-family:'JetBrains Mono',monospace;font-size:${fs}px;font-weight:800;color:${tc};
+      transition:background .12s;box-shadow:0 2px 8px rgba(0,0,0,.3);`;
+    cell.textContent=v||'';
+    board.appendChild(cell);
+  }
+}
+function g2048UpdateScore(){
+  const el=document.getElementById('g2048-score-label');if(!el)return;
+  el.textContent='Счёт: '+g2048Score+' • Рекорд: '+g2048Hi;
 }
 </script>
