@@ -250,78 +250,53 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .diff-btn.active{background:color-mix(in srgb,var(--accent) 20%,transparent);border-color:var(--accent);color:var(--accent)}
 .diff-btn:active{transform:scale(.95)}
 
-/* ── Liquid Glass Theme ── */
-[data-theme="glass"] {
-  --glass-blur: blur(18px) saturate(180%);
-  --glass-border: rgba(255,255,255,0.18);
-  --glass-shadow: 0 8px 32px rgba(80,120,255,0.15);
-  --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-}
+/* ── Liquid Glass Theme (оптимизированная) ── */
+/* backdrop-filter только на chrome-элементах, без анимаций, без box-shadow на каждой карточке */
 [data-theme="glass"] body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
+  /* Статичный градиент — никакой анимации hue-rotate */
   background:
-    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(120,80,255,0.38) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 60% at 80% 70%, rgba(0,180,255,0.32) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 40% at 60% 10%, rgba(255,100,180,0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(120,80,255,0.30) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 80% 70%, rgba(0,160,255,0.25) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 60% 10%, rgba(255,100,180,0.15) 0%, transparent 60%),
     #0a0f1e;
-  animation: glassBlobs 14s ease-in-out infinite alternate;
+  /* Без animation — главный источник постоянной GPU-нагрузки убран */
 }
-@keyframes glassBlobs {
-  0%   { filter: hue-rotate(0deg); }
-  50%  { filter: hue-rotate(30deg); }
-  100% { filter: hue-rotate(-20deg); }
-}
-[data-theme="glass"] .screen,
+/* blur только на шапке и навигации — 2 слоя вместо десятков */
 [data-theme="glass"] .hdr,
 [data-theme="glass"] .bottom-nav,
 [data-theme="glass"] .sched-header {
-  background: rgba(10,15,30,0.5) !important;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: rgba(10,15,30,0.65) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
+/* Карточки — просто полупрозрачный фон, без backdrop-filter */
 [data-theme="glass"] .list-item,
 [data-theme="glass"] .pair-card,
 [data-theme="glass"] .bell-card,
 [data-theme="glass"] .settings-row,
 [data-theme="glass"] .last-group-btn,
 [data-theme="glass"] .theme-card {
-  background: rgba(255,255,255,0.08) !important;
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  border-color: rgba(255,255,255,0.16) !important;
-  box-shadow: 0 4px 24px rgba(80,120,255,0.12), inset 0 1px 0 rgba(255,255,255,0.12) !important;
-  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1),
-              background 0.3s ease,
-              box-shadow 0.3s ease !important;
+  background: rgba(255,255,255,0.09) !important;
+  border-color: rgba(255,255,255,0.14) !important;
 }
 [data-theme="glass"] .list-item:active,
 [data-theme="glass"] .pair-card:active,
 [data-theme="glass"] .theme-card:active,
 [data-theme="glass"] .last-group-btn:active {
-  transform: scale(0.96) !important;
-  background: rgba(255,255,255,0.13) !important;
-}
-[data-theme="glass"] .btn {
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1),
-              box-shadow 0.3s ease !important;
-}
-[data-theme="glass"] .btn:active {
-  transform: scale(0.95) !important;
+  background: rgba(255,255,255,0.15) !important;
 }
 [data-theme="glass"] .btn-accent {
-  background: rgba(160,196,255,0.22) !important;
-  border: 1.5px solid rgba(160,196,255,0.4);
+  background: rgba(160,196,255,0.28) !important;
+  border: 1.5px solid rgba(160,196,255,0.45);
   color: #fff !important;
-  box-shadow: 0 4px 24px rgba(120,160,255,0.3), inset 0 1px 0 rgba(255,255,255,0.2) !important;
 }
 [data-theme="glass"] .btn-accent2 {
-  background: rgba(123,159,255,0.22) !important;
-  border: 1.5px solid rgba(123,159,255,0.35);
+  background: rgba(123,159,255,0.28) !important;
+  border: 1.5px solid rgba(123,159,255,0.4);
   color: #fff !important;
 }
 [data-theme="glass"] .btn-surface {
@@ -334,15 +309,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   border: 1.5px solid rgba(160,196,255,0.3);
   color: #a0c4ff !important;
 }
-[data-theme="glass"] .nav-item .nav-icon {
-  transition: transform 0.5s cubic-bezier(0.34,1.56,0.64,1) !important;
-}
 [data-theme="glass"] .nav-item.active .nav-icon {
-  filter: drop-shadow(0 0 8px rgba(160,196,255,0.7));
-}
-[data-theme="glass"] .screen {
-  transition: opacity 0.28s cubic-bezier(0.4,0,0.2,1),
-              transform 0.38s cubic-bezier(0.34,1.2,0.64,1) !important;
+  filter: drop-shadow(0 0 6px rgba(160,196,255,0.6));
 }
 [data-theme="glass"] .inp {
   background: rgba(255,255,255,0.07) !important;
@@ -350,34 +318,22 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 }
 [data-theme="glass"] .inp:focus {
   border-color: rgba(160,196,255,0.6) !important;
-  box-shadow: 0 0 0 3px rgba(160,196,255,0.14) !important;
+  box-shadow: 0 0 0 3px rgba(160,196,255,0.12) !important;
 }
 [data-theme="glass"] .pair-card.is-now {
-  background: rgba(160,196,255,0.13) !important;
-  border-color: rgba(160,196,255,0.45) !important;
-  box-shadow: 0 0 28px rgba(120,160,255,0.22), inset 0 1px 0 rgba(255,255,255,0.15) !important;
-}
-[data-theme="glass"] .now-badge {
-  background: rgba(160,196,255,0.35) !important;
-  backdrop-filter: blur(8px);
+  background: rgba(160,196,255,0.14) !important;
+  border-color: rgba(160,196,255,0.4) !important;
 }
 [data-theme="glass"] .toast {
-  background: rgba(20,30,60,0.82) !important;
-  backdrop-filter: blur(20px) !important;
+  background: rgba(20,30,60,0.90) !important;
   border-color: rgba(255,255,255,0.15) !important;
 }
 [data-theme="glass"] .ripple {
   background: rgba(160,196,255,0.28) !important;
 }
-[data-theme="glass"] .egg-overlay,
-[data-theme="glass"] .ota-overlay .ota-sheet {
-  backdrop-filter: blur(24px) saturate(200%);
-  -webkit-backdrop-filter: blur(24px) saturate(200%);
-}
 [data-theme="glass"] .list-item.selected {
-  background: rgba(160,196,255,0.18) !important;
-  border-color: rgba(160,196,255,0.55) !important;
-  box-shadow: 0 0 20px rgba(120,160,255,0.25), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+  background: rgba(160,196,255,0.16) !important;
+  border-color: rgba(160,196,255,0.5) !important;
 }
 
 /* ── Easter Egg (overlay) ── */
@@ -523,48 +479,76 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
   font-size:12px;color:var(--muted);text-align:center;font-family:'JetBrains Mono',monospace
 }
 /* ── Приветствие (Sber-style) ── */
+/* ── Приветствие (анимированное) ── */
 .greeting-overlay{
   position:fixed;inset:0;z-index:9999;
-  display:none; /* старт скрытым — JS управляет показом */
+  display:none;
   flex-direction:column;align-items:center;justify-content:center;
   background:var(--bg);
   will-change:transform,opacity;
 }
 .greeting-overlay.greet-show{
   display:flex;
-  animation:greet-enter .35s cubic-bezier(.4,0,.2,1) forwards;
+  animation:greet-enter .3s cubic-bezier(.4,0,.2,1) forwards;
 }
 .greeting-overlay.greet-hide{
   display:flex;
   animation:greet-leave .42s cubic-bezier(.4,0,.2,1) forwards;
 }
 @keyframes greet-enter{
-  from{opacity:0;transform:scale(.94)}
-  to{opacity:1;transform:scale(1)}
+  from{opacity:0;}
+  to{opacity:1;}
 }
 @keyframes greet-leave{
   from{opacity:1;transform:translateY(0)}
-  to{opacity:0;transform:translateY(-28px)}
+  to{opacity:0;transform:translateY(-22px)}
 }
-.greet-logo{
-  width:72px;height:72px;border-radius:22px;
-  background:var(--accent);
-  display:flex;align-items:center;justify-content:center;
-  font-size:34px;
-  box-shadow:0 8px 32px color-mix(in srgb,var(--accent) 45%,transparent);
-  margin-bottom:22px;
-  animation:greet-logo-pulse 1.8s ease-in-out infinite;
+/* Логотип — canvas с анимацией рисовки */
+#greet-logo-canvas{
+  display:block;
+  margin-bottom:26px;
+  border-radius:22px;
+  opacity:0;
+  animation:greet-logo-in .4s cubic-bezier(.34,1.4,.64,1) .1s forwards;
+  filter:drop-shadow(0 0 24px var(--accent,#e87722));
 }
-@keyframes greet-logo-pulse{
-  0%,100%{box-shadow:0 8px 32px color-mix(in srgb,var(--accent) 45%,transparent)}
-  50%{box-shadow:0 12px 48px color-mix(in srgb,var(--accent) 65%,transparent),0 0 80px color-mix(in srgb,var(--accent) 25%,transparent)}
+@keyframes greet-logo-in{
+  from{opacity:0;transform:scale(.6) rotate(-8deg);}
+  to{opacity:1;transform:scale(1) rotate(0deg);}
 }
-.greet-main{font-size:26px;font-weight:800;color:var(--text);letter-spacing:-.02em;text-align:center;}
-.greet-sub{font-size:13px;color:var(--muted);margin-top:8px;letter-spacing:.01em;text-align:center;}
+/* Буквы основного текста */
+.greet-main{
+  font-size:28px;font-weight:800;color:var(--text);
+  letter-spacing:-.02em;text-align:center;
+  line-height:1.15;min-height:36px;
+}
+.greet-char{
+  display:inline-block;
+  opacity:0;
+  animation:greet-char-in .38s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes greet-char-in{
+  0%{opacity:0;transform:translateY(18px) scale(.5);filter:blur(6px);}
+  55%{opacity:1;filter:blur(0);}
+  100%{opacity:1;transform:translateY(0) scale(1);filter:blur(0);}
+}
+/* Подзаголовок */
+.greet-sub{
+  font-size:13px;color:var(--muted);margin-top:10px;
+  letter-spacing:.01em;text-align:center;
+  opacity:0;
+  animation:greet-sub-in .4s ease .05s forwards;
+}
+@keyframes greet-sub-in{
+  from{opacity:0;transform:translateY(8px);}
+  to{opacity:1;transform:translateY(0);}
+}
 .greet-time{
   position:absolute;bottom:52px;
   font-family:'JetBrains Mono',monospace;font-size:13px;
   color:var(--muted);letter-spacing:.08em;
+  opacity:0;
+  animation:greet-sub-in .4s ease .2s forwards;
 }
 
 /* ── Секретная CMD-консоль ── */
@@ -756,7 +740,7 @@ body.shaking{animation:app-shake .45s ease;}
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div onclick="eggTap()" style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:2px 0">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">2.9 — Android</div>
+        <div class="item-sub" id="app-version-str">2.9.1 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -790,11 +774,11 @@ body.shaking{animation:app-shake .45s ease;}
 <canvas id="matrix-canvas"></canvas>
 <canvas id="snow-canvas" style="display:none"></canvas>
 
-<!-- ══ Приветствие (Sber-style) ══ -->
-<div id="greeting-overlay" class="greeting-overlay">
-  <div class="greet-logo" id="greet-logo">📅</div>
-  <div class="greet-main" id="greet-main">Расписание</div>
-  <div class="greet-sub" id="greet-sub">колледжа</div>
+<!-- ══ Приветствие ══ -->
+<div id="greeting-overlay" class="greeting-overlay" onclick="skipGreeting()">
+  <canvas id="greet-logo-canvas" width="80" height="80"></canvas>
+  <div class="greet-main" id="greet-main"></div>
+  <div class="greet-sub" id="greet-sub"></div>
   <div class="greet-time" id="greet-time"></div>
 </div>
 
@@ -1314,7 +1298,10 @@ const THEMES={
   'purple': {name:'Фиолет',   ico:'🫐', vars:{'--bg':'#0e0b1a','--surface':'#151025','--surface2':'#1c1630','--surface3':'#251e3d','--accent':'#a78bfa','--accent2':'#7c3aed','--text':'#ede9fe','--muted':'#7060a0'},sw:['#0e0b1a','#a78bfa','#7c3aed']},
   'sunset': {name:'Закат',    ico:'🌅', vars:{'--bg':'#0f0a00','--surface':'#1a1000','--surface2':'#241800','--surface3':'#302200','--accent':'#ff6b35','--accent2':'#c94a10','--text':'#fff3ee','--muted':'#7a5040'},sw:['#0f0a00','#ff6b35','#c94a10']},
   'bw':     {name:'Ч/Б',      ico:'⬜', vars:{'--bg':'#000','--surface':'#111','--surface2':'#1c1c1c','--surface3':'#2a2a2a','--accent':'#ffffff','--accent2':'#cccccc','--text':'#ffffff','--muted':'#666666'},sw:['#000','#fff','#888']},
-  'glass':  {name:'Liquid Glass', ico:'🫧', vars:{'--bg':'#0a0f1e','--surface':'rgba(255,255,255,0.07)','--surface2':'rgba(255,255,255,0.11)','--surface3':'rgba(255,255,255,0.18)','--accent':'#a0c4ff','--accent2':'#7b9fff','--text':'#f0f4ff','--muted':'rgba(180,190,220,0.7)'},sw:['#0a0f1e','#a0c4ff','#7b9fff']},
+  'ocean':  {name:'Океан',    ico:'🌊', vars:{'--bg':'#020d18','--surface':'#071828','--surface2':'#0d2238','--surface3':'#132c48','--accent':'#00c8ff','--accent2':'#0080c0','--text':'#d6f4ff','--muted':'#4a7a95'},sw:['#020d18','#00c8ff','#0080c0']},
+  'candy':  {name:'Конфета',  ico:'🍬', vars:{'--bg':'#120010','--surface':'#1c0018','--surface2':'#280022','--surface3':'#360030','--accent':'#ff4dc4','--accent2':'#a800ff','--text':'#ffe6f9','--muted':'#8a5080'},sw:['#120010','#ff4dc4','#a800ff']},
+  'mono':   {name:'Серый',    ico:'🩶', vars:{'--bg':'#0e0e0e','--surface':'#181818','--surface2':'#232323','--surface3':'#2e2e2e','--accent':'#c0c0c0','--accent2':'#888888','--text':'#eeeeee','--muted':'#666666'},sw:['#0e0e0e','#c0c0c0','#888']},
+  'glass':  {name:'Liquid Glass', ico:'🫧', hidden:true, vars:{'--bg':'#0a0f1e','--surface':'rgba(255,255,255,0.07)','--surface2':'rgba(255,255,255,0.11)','--surface3':'rgba(255,255,255,0.18)','--accent':'#a0c4ff','--accent2':'#7b9fff','--text':'#f0f4ff','--muted':'rgba(180,190,220,0.7)'},sw:['#0a0f1e','#a0c4ff','#7b9fff']},
   'light':  {name:'Светлая',  ico:'☀️', vars:{'--bg':'#f4f4f4','--surface':'#fff','--surface2':'#ebebeb','--surface3':'#d8d8d8','--accent':'#e87722','--accent2':'#c45f0a','--text':'#111','--muted':'#888'},sw:['#f4f4f4','#e87722','#c45f0a']},
 };
 
@@ -1839,6 +1826,10 @@ const ICON_VARIANTS = {
   purple:  {label:'Фиолет',     ico:'🫐', bg:'#0e0b1a', accent:'#a78bfa', accent2:'#7c3aed', style:'glow-purple'},
   forest:  {label:'Лес',        ico:'🌿', bg:'#0b1a10', accent:'#4caf7d', accent2:'#2d8653', style:'glow-green'},
   gold:    {label:'Золото',     ico:'✨', bg:'#100e00', accent:'#f5c518', accent2:'#c9a000', style:'glow-gold'},
+  bw:      {label:'Ч/Б',        ico:'⬜', bg:'#000000', accent:'#ffffff', accent2:'#888888', style:'glow-bw'},
+  ocean:   {label:'Океан',      ico:'🌊', bg:'#020d18', accent:'#00c8ff', accent2:'#0080c0', style:'glow-ocean'},
+  candy:   {label:'Конфета',    ico:'🍬', bg:'#120010', accent:'#ff4dc4', accent2:'#a800ff', style:'glow-candy'},
+  rose:    {label:'Розовый',    ico:'🌸', bg:'#1a0d12', accent:'#f472b6', accent2:'#db2777', style:'glow-rose'},
   glass:   {label:'Стекло',     ico:'🫧', bg:'#0a0f1e', accent:'#a0c4ff', accent2:'#7b9fff', style:'glass'},
 };
 
@@ -1872,6 +1863,22 @@ function drawIconPreview(canvas, variant) {
   } else if (t.style === 'glow-gold') {
     const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
     g.addColorStop(0, '#1f1a00'); g.addColorStop(1, '#100e00');
+    ctx.fillStyle = g;
+  } else if (t.style === 'glow-bw') {
+    const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
+    g.addColorStop(0, '#2a2a2a'); g.addColorStop(1, '#000000');
+    ctx.fillStyle = g;
+  } else if (t.style === 'glow-ocean') {
+    const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
+    g.addColorStop(0, '#052240'); g.addColorStop(1, '#020d18');
+    ctx.fillStyle = g;
+  } else if (t.style === 'glow-candy') {
+    const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
+    g.addColorStop(0, '#300025'); g.addColorStop(1, '#120010');
+    ctx.fillStyle = g;
+  } else if (t.style === 'glow-rose') {
+    const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
+    g.addColorStop(0, '#3a1028'); g.addColorStop(1, '#1a0d12');
     ctx.fillStyle = g;
   } else if (t.style === 'glass') {
     const g = ctx.createLinearGradient(0,0,size,size);
@@ -2017,6 +2024,7 @@ function renderThemeGrid(){
     const g=document.getElementById(gid); if(!g) return;
     g.innerHTML='';
     Object.entries(THEMES).forEach(([key,t])=>{
+      if(t.hidden) return; // Скрытые темы (напр. Liquid Glass) — только через CMD: /theme glass
       const c=document.createElement('div');c.className='theme-card'+(S.theme===key?' selected':'');
       c.innerHTML=`
         <div class="theme-swatch">${t.sw.map(cl=>`<div class="swatch" style="background:${cl}"></div>`).join('')}</div>
@@ -2421,7 +2429,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='2.9';
+const APP_VERSION='2.9.1';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -2449,25 +2457,137 @@ function showGreeting(){
   const hh=String(now.getHours()).padStart(2,'0');
   const mm=String(now.getMinutes()).padStart(2,'0');
 
-  // Обновляем контент новыми ID
-  const logo=document.getElementById('greet-logo');
+  // ── Анимированный логотип (canvas) ──
+  const cv=document.getElementById('greet-logo-canvas');
+  if(cv){
+    const accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#e87722';
+    const size=80;
+    cv.width=size; cv.height=size;
+    const ctx=cv.getContext('2d');
+
+    // Фон с закруглёнными углами
+    const drawBg=()=>{
+      const bg=getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()||'#161616';
+      ctx.clearRect(0,0,size,size);
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(0,0,size,size,18);
+      else ctx.rect(0,0,size,size);
+      ctx.fillStyle=bg;
+      ctx.fill();
+      // Свечение-ореол
+      const grd=ctx.createRadialGradient(size*.5,size*.5,size*.1,size*.5,size*.5,size*.55);
+      grd.addColorStop(0,accent+'33');
+      grd.addColorStop(1,'transparent');
+      ctx.fillStyle=grd;
+      ctx.fillRect(0,0,size,size);
+    };
+
+    // Параметры ЧК-логотипа
+    const cx=size*.5, cy=size*.5;
+    const cr=size*.2, kx=cx+size*.06;
+    const kh=cr*.95, lw=size*.085;
+
+    // Считаем общую длину всех путей для анимации рисовки
+    // C: дуга радиуса cr от 0.28π до 1.72π → угол 1.44π
+    const arcLen=cr*Math.PI*1.44;
+    // K: вертикаль + 2 диагонали
+    const kVLen=kh*2;
+    const kD1Len=Math.hypot(kh*.7, kh*.92);
+    const kD2Len=Math.hypot(kh*.75, kh*.92);
+    const totalLen=arcLen+kVLen+kD1Len+kD2Len;
+
+    let startTime=null;
+    const duration=700; // мс
+    function animateLogo(ts){
+      if(!startTime) startTime=ts;
+      const p=Math.min((ts-startTime)/duration,1);
+      const ease=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2; // easeInOut
+      const drawn=ease*totalLen;
+
+      drawBg();
+      ctx.strokeStyle=accent;
+      ctx.lineWidth=lw;
+      ctx.lineCap='round';
+      ctx.lineJoin='round';
+      ctx.shadowColor=accent;
+      ctx.shadowBlur=size*.14;
+
+      let rem=drawn;
+
+      // — C —
+      if(rem>0){
+        const seg=Math.min(rem,arcLen);
+        const endAngle=Math.PI*.28+seg/cr;
+        ctx.beginPath();
+        ctx.arc(cx-size*.04,cy,cr,Math.PI*.28,Math.min(endAngle,Math.PI*1.72));
+        ctx.stroke();
+        rem-=seg;
+      }
+      // — K вертикаль —
+      if(rem>0){
+        const seg=Math.min(rem,kVLen);
+        ctx.beginPath();
+        ctx.moveTo(kx,cy-kh);
+        ctx.lineTo(kx,cy-kh+seg);
+        ctx.stroke();
+        rem-=seg;
+      }
+      // — K верхняя диагональ —
+      if(rem>0){
+        const seg=Math.min(rem,kD1Len);
+        const t2=seg/kD1Len;
+        ctx.beginPath();
+        ctx.moveTo(kx,cy-kh*.08);
+        ctx.lineTo(kx+kh*.7*t2,cy-kh*t2);
+        ctx.stroke();
+        rem-=seg;
+      }
+      // — K нижняя диагональ —
+      if(rem>0){
+        const seg=Math.min(rem,kD2Len);
+        const t2=seg/kD2Len;
+        ctx.beginPath();
+        ctx.moveTo(kx,cy-kh*.08);
+        ctx.lineTo(kx+kh*.75*t2,cy-kh*.08+kh*1.08*t2);
+        ctx.stroke();
+      }
+      ctx.shadowBlur=0;
+      if(p<1) requestAnimationFrame(animateLogo);
+    }
+    drawBg();
+    requestAnimationFrame(animateLogo);
+  }
+
+  // ── Текст: буква за буквой ──
   const main=document.getElementById('greet-main');
   const sub=document.getElementById('greet-sub');
   const time=document.getElementById('greet-time');
-  if(logo) logo.textContent=g.icon;
-  if(main) main.textContent=g.greet;
-  if(sub)  sub.textContent=g.sub;
-  if(time) time.textContent=hh+':'+mm;
 
-  // Показываем с анимацией входа
+  // Сбрасываем старые анимации
+  if(main) main.innerHTML='';
+  if(sub){sub.textContent=g.sub; sub.style.animation='none'; sub.offsetHeight; sub.style.animation='';}
+  if(time){time.textContent=hh+':'+mm; time.style.animation='none'; time.offsetHeight; time.style.animation='';}
+
+  if(main){
+    const text=g.greet;
+    const baseDelay=180; // первая буква появляется через 180мс
+    const charStep=52;   // между буквами
+    Array.from(text).forEach((ch,i)=>{
+      const sp=document.createElement('span');
+      sp.className='greet-char';
+      sp.textContent=ch==='' ? '\u00A0' : ch;
+      sp.style.animationDelay=(baseDelay+i*charStep)+'ms';
+      main.appendChild(sp);
+    });
+  }
+
+  // Показываем
   ov.classList.remove('greet-hide','greet-show');
   ov.style.display='flex';
-  // Принудительный reflow чтобы анимация сработала
   ov.offsetHeight;
   ov.classList.add('greet-show');
 
-  // Sber-style: пауза 1.8 сек, потом плавный уход
-  setTimeout(skipGreeting, 1900);
+  setTimeout(skipGreeting, 2400);
 }
 
 function skipGreeting(){
@@ -2615,8 +2735,8 @@ function cmdExec(raw){
       else cmdPrint('info','Файлов в кэше: '+Object.keys(FILE_CACHE).length+'.  /cache clear — для очистки.');
       break;
     case '/theme':
-      if(arg==='list'){Object.entries(THEMES).forEach(([k,t])=>cmdPrint(S.theme===k?'ok':'out','  '+(k+(S.theme===k?' ✓':'')).padEnd(15)+t.name));}
-      else if(arg&&THEMES[arg]){applyTheme(arg);cmdPrint('ok','Тема: '+THEMES[arg].name);}
+      if(arg==='list'){Object.entries(THEMES).forEach(([k,t])=>cmdPrint(S.theme===k?'ok':'out','  '+(k+(S.theme===k?' ✓':'')+(t.hidden?' [скрытая]':'')).padEnd(20)+t.name));}
+      else if(arg&&THEMES[arg]){applyTheme(arg);cmdPrint('ok','Тема: '+THEMES[arg].name+(THEMES[arg].hidden?' (скрытая — оптимизированная версия)':''));}
       else if(arg)cmdPrint('err','Тема "'+arg+'" не найдена. /theme list');
       else cmdPrint('info','Тема: '+S.theme+'.  /theme list или /theme <name>');
       break;
@@ -5317,8 +5437,8 @@ function snowStop(){
 let _discoTimer=null;
 function discoStart(){
   document.body.classList.add('disco-mode');
-  // Случайно меняем тему каждые 600мс
-  const themeKeys=Object.keys(THEMES||{});
+  // Случайно меняем тему каждые 600мс (скрытые темы — исключены)
+  const themeKeys=Object.keys(THEMES||{}).filter(k=>!THEMES[k].hidden);
   if(themeKeys.length>1){
     let ti=0;
     _discoTimer=setInterval(()=>{
