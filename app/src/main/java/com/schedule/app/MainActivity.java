@@ -427,7 +427,9 @@ public class MainActivity extends Activity {
                 pkg + ".IconRose",
                 pkg + ".IconSunset",
                 pkg + ".IconBw",
-                pkg + ".IconLight"
+                pkg + ".IconLight",
+                pkg + ".IconCandy",
+                pkg + ".IconOcean"
             };
             final String target;
             switch (icon) {
@@ -445,6 +447,8 @@ public class MainActivity extends Activity {
                 case "sunset": target = pkg + ".IconSunset"; break;
                 case "bw":     target = pkg + ".IconBw";     break;
                 case "light":  target = pkg + ".IconLight";  break;
+                case "candy":  target = pkg + ".IconCandy";  break;
+                case "ocean":  target = pkg + ".IconOcean";  break;
                 default:       target = pkg + ".IconOrange"; break;
             }
 

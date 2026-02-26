@@ -185,6 +185,37 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 }
 .last-group-btn:active{transform:scale(.97)}
 
+/* Спиннер загрузки */
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-spinner{
+  display:inline-block;width:16px;height:16px;
+  border:2.5px solid rgba(255,255,255,.25);
+  border-top-color:currentColor;border-radius:50%;
+  animation:spin .7s linear infinite;vertical-align:middle;
+  margin-right:8px;flex-shrink:0
+}
+.last-group-btn.loading{opacity:.75;pointer-events:none}
+.last-group-btn .btn-label{display:inline}
+/* Анимация скачивания в sched-body */
+.sched-loading{
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:64px 20px;gap:18px
+}
+.sched-loading-circle{
+  width:48px;height:48px;
+  border:3.5px solid var(--surface3);
+  border-top-color:var(--accent);border-radius:50%;
+  animation:spin .8s linear infinite
+}
+.sched-loading-dots{display:flex;gap:6px;align-items:center}
+.sched-loading-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--accent);
+  animation:dotPulse 1.2s ease-in-out infinite;
+}
+.sched-loading-dot:nth-child(2){animation-delay:.2s}
+.sched-loading-dot:nth-child(3){animation-delay:.4s}
+@keyframes dotPulse{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+
 .toast{
   position:fixed;bottom:calc(24px + var(--safe-bot));
   left:50%;transform:translateX(-50%) translateY(80px);
@@ -797,9 +828,12 @@ body.disco-mode{animation:disco-pulse 1s ease-in-out infinite;}
     <!-- Приложение / OTA -->
     <div class="section-label">Приложение</div>
     <div class="list-item" style="cursor:default;margin-bottom:8px">
-      <div onclick="eggTap()" style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:2px 0">
+      <div id="egg-tap-zone"
+        onclick="eggTap()"
+        ontouchstart="eggTap()"
+        style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">2.9.7 — Android</div>
+        <div class="item-sub" id="app-version-str">2.9.9 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -1893,6 +1927,8 @@ const ICON_VARIANTS = {
   sunset:  {label:'Закат',      ico:'🌅', bg:'#0f0a00', accent:'#ff6b35', accent2:'#c94a10', style:'flat'},
   bw:      {label:'Ч/Б',        ico:'⬜', bg:'#000000', accent:'#ffffff', accent2:'#888888', style:'flat'},
   light:   {label:'Светлая',    ico:'☀️', bg:'#f4f4f4', accent:'#e87722', accent2:'#c45f0a', style:'flat'},
+  candy:   {label:'Конфетка',   ico:'🍭', bg:'#1A0A12', accent:'#FF4DA6', accent2:'#d91a75', style:'flat'},
+  ocean:   {label:'Океан',      ico:'🌊', bg:'#0A1520', accent:'#00B4D8', accent2:'#0077B6', style:'flat'},
 };
 
 // Draw CK icon preview on a canvas element
@@ -2268,7 +2304,16 @@ function updateLastGroupBtn(){
 }
 async function jumpToLastGroup(){
   if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
-  await loadSchedule(S.lastGroup);
+  const btn=document.getElementById('last-group-btn');
+  const origText=btn.textContent;
+  btn.classList.add('loading');
+  btn.innerHTML=`<span class="loading-spinner"></span><span class="btn-label">Загружаю...</span>`;
+  try{
+    await loadSchedule(S.lastGroup);
+  } finally {
+    btn.classList.remove('loading');
+    btn.textContent=origText;
+  }
 }
 
 // ══ ЗАГРУЗКА ══
@@ -2356,7 +2401,14 @@ function renderGroupList(groups){
     const item=document.createElement('div');
     item.className='list-item'+(S.lastGroup===g?' selected':'');
     item.innerHTML=`<span class="item-name">${g}</span>`;
-    item.onclick=()=>loadSchedule(g);list.appendChild(item);
+    item.onclick=()=>{
+      // Показываем визуальный отклик — спиннер в строке
+      list.querySelectorAll('.list-item').forEach(el=>el.classList.remove('selected'));
+      item.classList.add('selected');
+      item.innerHTML=`<span class="item-name">${g}</span><span class="loading-spinner" style="opacity:.6"></span>`;
+      loadSchedule(g);
+    };
+    list.appendChild(item);
   });
 }
 function filterGroups(q){
@@ -2411,7 +2463,17 @@ async function loadSchedule(group){
   S.lastGroup=group;saveLocal();updateLastGroupBtn();
   document.getElementById('sched-group-name').textContent=group;
   document.getElementById('sched-date').textContent='';
-  document.getElementById('sched-body').innerHTML='<div style="text-align:center;padding:50px;color:var(--muted)">Обрабатываю...</div>';
+  // Красивая анимация загрузки
+  document.getElementById('sched-body').innerHTML=
+    `<div class="sched-loading">
+      <div class="sched-loading-circle"></div>
+      <div style="color:var(--muted);font-size:13px;font-weight:500">Загружаю расписание…</div>
+      <div class="sched-loading-dots">
+        <div class="sched-loading-dot"></div>
+        <div class="sched-loading-dot"></div>
+        <div class="sched-loading-dot"></div>
+      </div>
+    </div>`;
   try{
     const buf=await getFileBuf();
     const{sched,hdr}=parseDoc(buf,group);
@@ -2476,7 +2538,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='2.9.8';
+const APP_VERSION='2.9.9';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -3359,13 +3421,19 @@ function clearCacheAndReload() {
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 
 // ══ СИСТЕМА ПАСХАЛОК v1.9.0 ══
-let _eggTaps = 0, _eggTimer = null;
+let _eggTaps = 0, _eggTimer = null, _eggLastTouch = 0;
 
 function eggTap() {
+  // Защита от двойного срабатывания touchstart + onclick
+  const now = Date.now();
+  if (now - _eggLastTouch < 350) return;
+  _eggLastTouch = now;
+
   _eggTaps++;
   clearTimeout(_eggTimer);
   if (_eggTaps >= 5) { _eggTaps = 0; eggOpen(); return; }
   if (_eggTaps === 2) toast('🤔 Продолжай...');
+  if (_eggTaps === 4) toast('🔥 Ещё раз!');
   _eggTimer = setTimeout(() => { _eggTaps = 0; }, 1500);
 }
 
