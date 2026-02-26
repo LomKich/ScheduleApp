@@ -100,6 +100,8 @@ public class MainActivity extends Activity {
     private void setupWebView() {
         // Аппаратное ускорение
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        // Фон WebView в цвет сплэша чтобы не было белой вспышки
+        webView.setBackgroundColor(0xFF0D0D0D);
 
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);
@@ -119,6 +121,10 @@ public class MainActivity extends Activity {
         ws.setDatabaseEnabled(true);
         // Геолокация не нужна — отключаем
         ws.setGeolocationEnabled(false);
+        // Ускорение рендера: отключаем safe browsing для локальных файлов
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            ws.setSafeBrowsingEnabled(false);
+        }
         // Отключаем полосу прокрутки WebView
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
@@ -414,7 +420,14 @@ public class MainActivity extends Activity {
                 pkg + ".IconPurple",
                 pkg + ".IconForest",
                 pkg + ".IconGold",
-                pkg + ".IconGlass"
+                pkg + ".IconGlass",
+                pkg + ".IconWin11",
+                pkg + ".IconPixel",
+                pkg + ".IconAero",
+                pkg + ".IconRose",
+                pkg + ".IconSunset",
+                pkg + ".IconBw",
+                pkg + ".IconLight"
             };
             final String target;
             switch (icon) {
@@ -425,6 +438,13 @@ public class MainActivity extends Activity {
                 case "forest": target = pkg + ".IconForest"; break;
                 case "gold":   target = pkg + ".IconGold";   break;
                 case "glass":  target = pkg + ".IconGlass";  break;
+                case "win11":  target = pkg + ".IconWin11";  break;
+                case "pixel":  target = pkg + ".IconPixel";  break;
+                case "aero":   target = pkg + ".IconAero";   break;
+                case "rose":   target = pkg + ".IconRose";   break;
+                case "sunset": target = pkg + ".IconSunset"; break;
+                case "bw":     target = pkg + ".IconBw";     break;
+                case "light":  target = pkg + ".IconLight";  break;
                 default:       target = pkg + ".IconOrange"; break;
             }
 
