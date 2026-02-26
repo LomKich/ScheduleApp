@@ -2136,19 +2136,44 @@ function filterGroups(q){
 
 // ══ РАСПИСАНИЕ ══
 // Разбирает строку "Никитина Ю.В.к.17(2)" на имя преподавателя и кабинет
+// Разбирает строку вида "Фамилия И.О.к.21(1)" на компоненты
 function parseTeacherLine(line){
-  // Формат: Фамилия И.О.к.NN(N) — инициалы всегда Х.Х. (заглавная.заглавная.)
-  // Пробуем разбить по паттерну "Фамилия И.О." и "к.NN"
-  const m=line.match(/^(.*?[А-ЯЁа-яёA-Za-z]\.[А-ЯЁA-Z]\.)(\s*к\.\S+.*)?$/u);
-  if(m){
-    return{teacher:m[1].trim(),cabinet:(m[2]||'').trim()};
-  }
-  // Запасной вариант: разбить по "к."
+  // Ищем паттерн: к.NN(N) или к.NN
   const ki=line.search(/к\.\d/);
-  if(ki>0){
-    return{teacher:line.slice(0,ki).trim(),cabinet:line.slice(ki).trim()};
+  if(ki<0)return{teacher:line.trim(),cabinetNum:'',korpus:''};
+  const teacher=line.slice(0,ki).trim();
+  const cabPart=line.slice(ki); // "к.21(1)" или "к.21"
+  const numM=cabPart.match(/к\.(\d+)/);
+  const korpM=cabPart.match(/\((\d)\)/);
+  return{
+    teacher,
+    cabinetNum:numM?numM[1]:'',
+    korpus:korpM?korpM[1]:''
+  };
+}
+
+// Формирует HTML для строки деталей пары (преподаватель + кабинет + корпус)
+function renderDetailLine(line){
+  const p=parseTeacherLine(line);
+  if(!p.cabinetNum)return`<span>${line}</span>`;
+  let html=`<span>${p.teacher}</span>`;
+  html+=`<br><span>кабинет ${p.cabinetNum}</span>`;
+  if(p.korpus)html+=`<br><span>корпус ${p.korpus}</span>`;
+  return html;
+}
+
+// Пытается отделить преподавателя+кабинет, если они слиты с названием предмета в одну строку
+// Например: "Основы алгоритмизации и программирования Кубасова В.В.к.21(1)"
+function splitSubjectAndTeacher(subjectLine){
+  // Паттерн: за текстом предмета идёт Фамилия (одно/два слова) И.О. (два инициала с точками)
+  // Дополнительно может идти к.NN(N)
+  const m=subjectLine.match(
+    /^(.+?)\s+([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+)?\s+[А-ЯЁ]\.[А-ЯЁ]\.(к\.\d+(?:\(\d\))?)?)$/u
+  );
+  if(m&&m[1].trim().length>2){
+    return{subject:m[1].trim(),teacherStr:m[2].trim()};
   }
-  return{teacher:line,cabinet:''};
+  return null;
 }
 async function loadSchedule(group){
   if(!S.selectedFile){toast('Выбери файл');return;}
@@ -2168,7 +2193,11 @@ async function loadSchedule(group){
 }
 function renderSchedule(group,hdr,sched,filename){
   document.getElementById('sched-group-name').textContent=group;
-  document.getElementById('sched-date').textContent=hdr.replace('Расписание занятий на ','').trim()||'';
+  // Очищаем заголовок — вырезаем только читаемую часть (дата + неделя)
+  const rawDate=hdr.replace('Расписание занятий на ','').trim();
+  // Оставляем только кириллицу, цифры, скобки, пробелы, точки — убираем мусор
+  const cleanDate=rawDate.replace(/[^\u0400-\u04FF\d\s.,()]/g,'').replace(/\s{2,}/g,' ').trim();
+  document.getElementById('sched-date').textContent=cleanDate||'';
   const isMon=filename.toUpperCase().includes('ПОНЕДЕЛЬНИК');
   const bell=isMon?BELL_MON:BELL_TUE;
   const now=new Date(),nowMin=now.getHours()*60+now.getMinutes();
@@ -2184,7 +2213,12 @@ function renderSchedule(group,hdr,sched,filename){
       isNow=nowMin>=startMin&&nowMin<=endMin;
       if(!isNow){const diff=startMin-nowMin;isNext=diff>0&&diff<=30;}
     }
-    const lines=lesson?lesson.split('\n').map(l=>l.trim()).filter(Boolean):[];
+    let lines=lesson?lesson.split('\n').map(l=>l.trim()).filter(Boolean):[];
+    // Если преподаватель и кабинет слиты с названием предмета в одну строку — разделяем
+    if(lines.length>0){
+      const split=splitSubjectAndTeacher(lines[0]);
+      if(split)lines=[split.subject,split.teacherStr,...lines.slice(1)];
+    }
     const isEmpty=!lines.length;
     const card=document.createElement('div');
     card.className='pair-card'+(isEmpty?'':' has-subject')+(isNow?' is-now':isNext?' is-next':'');
@@ -2198,7 +2232,10 @@ function renderSchedule(group,hdr,sched,filename){
       const[s1,e1,s2,e2]=b;
       timesHtml=`<div class="pair-times"><div class="pair-time-row"><span class="pair-time-val">${s1} – ${e1}</span><span class="pair-time-tag">${s2?'1 урок':'60 мин'}</span></div>${s2?`<div class="pair-time-row"><span class="pair-time-val">${s2} – ${e2}</span><span class="pair-time-tag">2 урок</span></div>`:''}</div>`;
     }
-    card.innerHTML=`<div class="pair-top"><div class="pair-num">${roman}</div><div class="pair-subject-wrap"><div class="pair-subject${isEmpty?' empty':''}">${isEmpty?'Окно':lines[0]}</div>${badge}</div>${remain}</div>${timesHtml}${lines.length>1?`<div class="pair-details">${lines.slice(1).map(l=>{const p=parseTeacherLine(l);return p.cabinet?`${p.teacher}<br><span style="color:var(--muted)">${p.cabinet}</span>`:l;}).join('<br>')}</div>`:''}`;
+    const detailsHtml=lines.length>1
+      ?`<div class="pair-details">${lines.slice(1).map(l=>renderDetailLine(l)).join('<br>')}</div>`
+      :'';
+    card.innerHTML=`<div class="pair-top"><div class="pair-num">${roman}</div><div class="pair-subject-wrap"><div class="pair-subject${isEmpty?' empty':''}">${isEmpty?'Окно':lines[0]}</div>${badge}</div>${remain}</div>${timesHtml}${detailsHtml}`;
     body.appendChild(card);
   }
 }
