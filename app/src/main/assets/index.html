@@ -1248,7 +1248,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.1.2 — Android</div>
+        <div class="item-sub" id="app-version-str">3.1.3 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2616,8 +2616,8 @@ function onNativeBgImagePicked(dataUrl){
     toast('❌ Неверный формат изображения');
     return;
   }
-  // Проверяем размер (~10 МБ = ~13.3 МБ base64)
-  if(dataUrl.length > 14 * 1024 * 1024){
+  // Проверяем размер (~10 МБ = ~13.3 МБ base64, с запасом ставим 20МБ)
+  if(dataUrl.length > 20 * 1024 * 1024){
     toast('⚠️ Изображение слишком большое, выбери поменьше');
     return;
   }
@@ -3084,7 +3084,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='3.1.2';
+const APP_VERSION='3.1.3';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();

@@ -48,6 +48,8 @@ public class MainActivity extends Activity {
     private AppLogger              log;
     // Колбэк для file chooser (фон приложения)
     private ValueCallback<Uri[]>   fileChooserCallback = null;
+    // Флаг: true когда пикер открыт через нативный JS-мост (не через <input type="file">)
+    private boolean                isNativeBgPick = false;
 
     private final ServiceConnection vpnConnection = new ServiceConnection() {
         @Override
@@ -240,13 +242,14 @@ public class MainActivity extends Activity {
         } else if (requestCode == VPN_REQUEST_CODE) {
             log.w(TAG, "VPN разрешение отклонено");
         } else if (requestCode == IMAGE_PICK_CODE) {
-            // Обработка выбранного изображения для фона
-            if (fileChooserCallback == null) return;
+            // ─── Общая логика чтения изображения ───
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
                 Uri uri = data.getData();
-                log.i(TAG, "Изображение выбрано: " + uri);
-                // Конвертируем в base64 в фоновом потоке, затем передаём в JS
+                log.i(TAG, "Изображение выбрано: " + uri + " | нативный режим: " + isNativeBgPick);
                 final Uri finalUri = uri;
+                final boolean wasNativePick = isNativeBgPick;
+                isNativeBgPick = false;
+
                 new Thread(() -> {
                     try {
                         InputStream is = getContentResolver().openInputStream(finalUri);
@@ -258,36 +261,51 @@ public class MainActivity extends Activity {
                         byte[] rawBytes = baos.toByteArray();
 
                         // Конвертируем любой формат (HEIC/HEIF/BMP/WEBP/и т.д.) в JPEG
-                        // через BitmapFactory, чтобы WebView мог отображать фон без проблем
                         byte[] bytes;
                         String mime;
                         android.graphics.Bitmap bitmap =
                             android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.length);
                         if (bitmap != null) {
+                            // Масштабируем до разумного размера (макс. 1920px по длинной стороне)
+                            // чтобы base64 не превышал ~10 МБ лимит WebView
+                            final int MAX_SIDE = 1920;
+                            int w = bitmap.getWidth(), h = bitmap.getHeight();
+                            if (w > MAX_SIDE || h > MAX_SIDE) {
+                                float scale = Math.min((float) MAX_SIDE / w, (float) MAX_SIDE / h);
+                                int nw = Math.round(w * scale), nh = Math.round(h * scale);
+                                android.graphics.Bitmap scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, nw, nh, true);
+                                bitmap.recycle();
+                                bitmap = scaled;
+                                log.i(TAG, "Изображение уменьшено: " + w + "x" + h + " → " + nw + "x" + nh);
+                            }
                             ByteArrayOutputStream jpegOut = new ByteArrayOutputStream();
-                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, jpegOut);
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, jpegOut);
                             bitmap.recycle();
                             bytes = jpegOut.toByteArray();
                             mime = "image/jpeg";
                             log.i(TAG, "Изображение сконвертировано в JPEG, размер: " + bytes.length + " байт");
                         } else {
-                            // Fallback: передаём как есть, определяем MIME через ContentResolver
                             bytes = rawBytes;
                             mime = getContentResolver().getType(finalUri);
                             if (mime == null || !mime.startsWith("image/")) mime = "image/jpeg";
-                            log.w(TAG, "BitmapFactory не смог декодировать, используем raw bytes, mime=" + mime);
+                            log.w(TAG, "BitmapFactory не смог декодировать, mime=" + mime);
                         }
 
                         String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
                         String dataUrl = "data:" + mime + ";base64," + b64;
-
-                        // Передаём в JS через evaluateJavascript
                         final String jsDataUrl = dataUrl;
+
                         runOnUiThread(() -> {
-                            // Закрываем file chooser (передаём uri обратно)
-                            fileChooserCallback.onReceiveValue(new Uri[]{finalUri});
-                            fileChooserCallback = null;
-                            // Вызываем JS-функцию с base64 данными
+                            if (!wasNativePick && fileChooserCallback != null) {
+                                // Путь через <input type="file"> — сначала закрываем file chooser
+                                fileChooserCallback.onReceiveValue(new Uri[]{finalUri});
+                                fileChooserCallback = null;
+                            } else if (fileChooserCallback != null) {
+                                // Нативный путь, но fileChooserCallback случайно остался — очищаем
+                                fileChooserCallback.onReceiveValue(null);
+                                fileChooserCallback = null;
+                            }
+                            // Передаём изображение в JS в обоих случаях
                             String escaped = jsDataUrl.replace("\\", "\\\\").replace("'", "\\'");
                             webView.evaluateJavascript(
                                 "if(typeof onNativeBgImagePicked==='function')onNativeBgImagePicked('" + escaped + "')",
@@ -297,6 +315,7 @@ public class MainActivity extends Activity {
                         });
                     } catch (Exception e) {
                         log.e(TAG, "Ошибка чтения изображения: " + e.getMessage());
+                        isNativeBgPick = false;
                         runOnUiThread(() -> {
                             if (fileChooserCallback != null) {
                                 fileChooserCallback.onReceiveValue(null);
@@ -310,9 +329,13 @@ public class MainActivity extends Activity {
                     }
                 }).start();
             } else {
+                // Пользователь отменил выбор
                 log.i(TAG, "Выбор изображения отменён");
-                fileChooserCallback.onReceiveValue(null);
-                fileChooserCallback = null;
+                isNativeBgPick = false;
+                if (fileChooserCallback != null) {
+                    fileChooserCallback.onReceiveValue(null);
+                    fileChooserCallback = null;
+                }
             }
         }
     }
@@ -605,6 +628,7 @@ public class MainActivity extends Activity {
                     fileChooserCallback.onReceiveValue(null);
                     fileChooserCallback = null;
                 }
+                isNativeBgPick = true; // помечаем: результат идёт напрямую в onNativeBgImagePicked
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 intent.setType("image/*");
@@ -614,6 +638,7 @@ public class MainActivity extends Activity {
                         IMAGE_PICK_CODE
                     );
                 } catch (Exception e) {
+                    isNativeBgPick = false;
                     log.e(TAG, "pickImageForBackground error: " + e.getMessage());
                     webView.evaluateJavascript(
                         "if(typeof toast==='function')toast('❌ Не удалось открыть галерею')",
