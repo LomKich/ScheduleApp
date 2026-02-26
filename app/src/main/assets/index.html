@@ -746,7 +746,7 @@ body.shaking{animation:app-shake .45s ease;}
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div onclick="eggTap()" style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:2px 0">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">2.9.4 — Android</div>
+        <div class="item-sub" id="app-version-str">2.9.2 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -1108,9 +1108,6 @@ body.shaking{animation:app-shake .45s ease;}
 </div>
 
 <script>
-// ── Глобальные переменные состояния (объявлены вверху, чтобы избежать TDZ) ──
-let _discoRaf=null,_discoHue=0;
-
 // ══ ПОЛИФИЛ AbortSignal.timeout ══
 // AbortSignal.timeout появился в Chrome 103 (2022).
 // На Android с устаревшим WebView его нет — без полифила приложение крашит.
@@ -2463,7 +2460,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='2.9.4';
+const APP_VERSION='2.9.2';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -5538,6 +5535,7 @@ function snowStop(){
 }
 
 // ── 🕺 ДИСКО ──
+let _discoRaf=null,_discoHue=0;
 function discoStart(){
   if(_discoRaf)return;
   document.body.classList.add('disco-mode');
