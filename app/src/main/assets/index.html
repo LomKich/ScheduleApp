@@ -997,14 +997,14 @@ body.shaking{animation:app-shake .45s ease;}
 body.disco-mode #disco-overlay{display:block;}
 
 @keyframes disco-rgb{
-  0%   {background:hsl(0,100%,55%);   opacity:.55}
-  14%  {background:hsl(50,100%,55%);  opacity:.50}
-  28%  {background:hsl(110,100%,50%); opacity:.55}
-  42%  {background:hsl(185,100%,55%); opacity:.50}
-  57%  {background:hsl(240,100%,65%); opacity:.58}
-  71%  {background:hsl(290,100%,60%); opacity:.52}
-  85%  {background:hsl(330,100%,60%); opacity:.55}
-  100% {background:hsl(360,100%,55%); opacity:.55}
+  0%   {background:hsl(0,100%,55%);   opacity:calc(.55 * var(--disco-intensity,1))}
+  14%  {background:hsl(50,100%,55%);  opacity:calc(.50 * var(--disco-intensity,1))}
+  28%  {background:hsl(110,100%,50%); opacity:calc(.55 * var(--disco-intensity,1))}
+  42%  {background:hsl(185,100%,55%); opacity:calc(.50 * var(--disco-intensity,1))}
+  57%  {background:hsl(240,100%,65%); opacity:calc(.58 * var(--disco-intensity,1))}
+  71%  {background:hsl(290,100%,60%); opacity:calc(.52 * var(--disco-intensity,1))}
+  85%  {background:hsl(330,100%,60%); opacity:calc(.55 * var(--disco-intensity,1))}
+  100% {background:hsl(360,100%,55%); opacity:calc(.55 * var(--disco-intensity,1))}
 }
 body.disco-mode #disco-overlay{animation:disco-rgb 3s linear infinite;}
 
@@ -1023,10 +1023,10 @@ body.disco-mode #disco-overlay{animation:disco-rgb 3s linear infinite;}
 
 /* Вспышки на всём теле */
 @keyframes disco-pulse{
-  0%,100%{filter:brightness(1)    saturate(1);}
-  25%    {filter:brightness(1.2)  saturate(1.8) hue-rotate(0deg);}
-  50%    {filter:brightness(0.9)  saturate(1.5) hue-rotate(60deg);}
-  75%    {filter:brightness(1.25) saturate(2.0) hue-rotate(30deg);}
+  0%,100%{filter:brightness(1)    saturate(calc(1   + var(--disco-intensity,1)*0));}
+  25%    {filter:brightness(calc(1 + var(--disco-intensity,1)*.2))  saturate(calc(1 + var(--disco-intensity,1)*.8))  hue-rotate(0deg);}
+  50%    {filter:brightness(calc(1 - var(--disco-intensity,1)*.1))  saturate(calc(1 + var(--disco-intensity,1)*.5))  hue-rotate(60deg);}
+  75%    {filter:brightness(calc(1 + var(--disco-intensity,1)*.25)) saturate(calc(1 + var(--disco-intensity,1)*1.0)) hue-rotate(30deg);}
 }
 body.disco-mode{animation:disco-pulse 3s ease-in-out infinite;}
 
@@ -1211,7 +1211,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     </div>
     <button class="btn btn-surface" onclick="pickBgImage()" style="margin-bottom:6px">🖼 Загрузить фон (PNG / JPG)</button>
     <button id="remove-bg-btn" class="btn btn-danger" onclick="removeBgImage()" style="display:none;margin-bottom:6px">🗑 Удалить фон</button>
-    <input type="file" id="bg-file-input" accept="image/png,image/jpeg,image/jpg" style="display:none" onchange="onBgFileChosen(event)">
+    <input type="file" id="bg-file-input" accept="image/*,image/png,image/jpeg,image/jpg,image/gif,image/webp,image/bmp,image/heic,image/heif,image/avif,.png,.jpg,.jpeg,.gif,.webp,.bmp,.heic,.heif,.avif" style="display:none" onchange="onBgFileChosen(event)">
     <div class="sep"></div>
 
     <!-- Звук -->
@@ -1248,7 +1248,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.1.1 — Android</div>
+        <div class="item-sub" id="app-version-str">3.1.2 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2629,7 +2629,7 @@ function onNativeBgImagePicked(dataUrl){
 function onBgFileChosen(e){
   const file=e.target.files && e.target.files[0];
   if(!file) return;
-  if(!file.type.startsWith('image/')) { toast('Выбери PNG или JPG файл'); return; }
+  if(!file.type.startsWith('image/')) { toast('Выбери файл изображения'); return; }
   if(file.size > 10*1024*1024) { toast('Файл слишком большой (макс. 10 МБ)'); return; }
   const reader=new FileReader();
   reader.onload=function(ev){
@@ -3084,7 +3084,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='3.1.1';
+const APP_VERSION='3.1.2';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -3201,7 +3201,7 @@ const CMD_HELP=[
   ['/sound',        'вкл/выкл звуки  |  on|off'],
   ['/matrix',       'вкл/выкл Матрицу  |  on|off'],
   ['/snow',         'вкл/выкл снег  |  on|off'],
-  ['/disco',        'вкл/выкл RGB диско  |  on|off'],
+  ['/disco',        'вкл/выкл RGB диско  |  on|off|contrast <0-100>'],
   ['/glass',        'вкл/выкл Liquid Glass  |  on|off'],
   ['/shake',        'встряхнуть апп'],
   ['/time',         'сколько времени приложение работает'],
@@ -3328,10 +3328,21 @@ function cmdExec(raw){
       else{snowStop();cmdPrint('ok','🌤 Снег остановлен.');}
     } break;
     case '/disco': {
+      if(arg==='contrast'||arg==='intensity'){
+        const val=parseInt(parts[2]);
+        if(isNaN(val)||val<0||val>100){cmdPrint('err','Укажи значение 0..100. Пример: /disco contrast 60');break;}
+        const sec2=loadSecret();sec2.discoIntensity=val;saveSecret(sec2);
+        discoApplyIntensity(val);
+        cmdPrint('ok','🎨 Интенсивность диско: '+val+'%'+(val===0?' (почти незаметно)':val<=40?' (мягкий режим)':val>=90?' (МАКСИМУМ 🔥)':''));
+        if(!_discoActive){cmdPrint('info','Диско сейчас выключено. Включи: /disco on');}
+        break;
+      }
       if(arg==='on'||(arg!=='off'&&!_discoActive)){
         discoStart();
+        const sec2=loadSecret();
         cmdPrint('warn','🕺 DISCO MODE ACTIVATED — ВЕЧЕРИНКА НАЧАЛАСЬ');
         cmdPrint('warn','💃 🎵 🎶 🪩 🔊 🎉 🌈 ✨ 🕺');
+        cmdPrint('info','Интенсивность: '+(sec2.discoIntensity!=null?sec2.discoIntensity:100)+'%  (/disco contrast <0-100>)');
       } else {
         discoStop();cmdPrint('ok','😴 Дискотека закончилась. Уборщики пришли.');
       }
@@ -3861,6 +3872,7 @@ showGreeting();
 // ══ Восстанавливаем состояние секретных команд ══
 (function restoreSecretState(){
   const sec=loadSecret();
+  if(sec.discoIntensity!=null) discoApplyIntensity(sec.discoIntensity);
   if(sec.disco){discoStart();}
   if(sec.snow){snowStart();}
   // /sound восстанавливается через S.muted в loadLocal()
@@ -6280,11 +6292,16 @@ function snowStop(){
 
 // ── 🕺 ДИСКО — чистый RGB без смены тем ──
 // _discoActive объявлен в начале файла
+function discoApplyIntensity(val){
+  // val: 0..100, default 100
+  const v = Math.max(0, Math.min(100, val||100));
+  document.documentElement.style.setProperty('--disco-intensity', (v/100).toFixed(2));
+}
 function discoStart(){
   _discoActive=true;
   document.body.classList.add('disco-mode');
-  // Сохраняем состояние
   const sec=loadSecret();sec.disco=true;saveSecret(sec);
+  discoApplyIntensity(sec.discoIntensity!=null?sec.discoIntensity:100);
 }
 function discoStop(){
   _discoActive=false;

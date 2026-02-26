@@ -255,11 +255,28 @@ public class MainActivity extends Activity {
                         int n;
                         while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
                         is.close();
-                        byte[] bytes = baos.toByteArray();
+                        byte[] rawBytes = baos.toByteArray();
 
-                        // Определяем MIME тип
-                        String mime = getContentResolver().getType(finalUri);
-                        if (mime == null) mime = "image/jpeg";
+                        // Конвертируем любой формат (HEIC/HEIF/BMP/WEBP/и т.д.) в JPEG
+                        // через BitmapFactory, чтобы WebView мог отображать фон без проблем
+                        byte[] bytes;
+                        String mime;
+                        android.graphics.Bitmap bitmap =
+                            android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.length);
+                        if (bitmap != null) {
+                            ByteArrayOutputStream jpegOut = new ByteArrayOutputStream();
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, jpegOut);
+                            bitmap.recycle();
+                            bytes = jpegOut.toByteArray();
+                            mime = "image/jpeg";
+                            log.i(TAG, "Изображение сконвертировано в JPEG, размер: " + bytes.length + " байт");
+                        } else {
+                            // Fallback: передаём как есть, определяем MIME через ContentResolver
+                            bytes = rawBytes;
+                            mime = getContentResolver().getType(finalUri);
+                            if (mime == null || !mime.startsWith("image/")) mime = "image/jpeg";
+                            log.w(TAG, "BitmapFactory не смог декодировать, используем raw bytes, mime=" + mime);
+                        }
 
                         String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
                         String dataUrl = "data:" + mime + ";base64," + b64;
