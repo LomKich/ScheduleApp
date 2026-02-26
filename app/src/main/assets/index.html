@@ -833,7 +833,7 @@ body.disco-mode{animation:disco-pulse 1s ease-in-out infinite;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">2.9.9 — Android</div>
+        <div class="item-sub" id="app-version-str">2.9.10 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -1168,6 +1168,10 @@ body.disco-mode{animation:disco-pulse 1s ease-in-out infinite;}
 </div>
 
 <script>
+// ══ Глобальные переменные — объявлены в начале во избежание TDZ ══
+var _otaApkUrl = '', _otaVersion = '';
+var _eggTaps = 0, _eggTimer = null, _eggLastTouch = 0;
+var _discoActive = false;
 // ══ ПОЛИФИЛ AbortSignal.timeout ══
 // AbortSignal.timeout появился в Chrome 103 (2022).
 // На Android с устаревшим WebView его нет — без полифила приложение крашит.
@@ -2538,7 +2542,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='2.9.9';
+const APP_VERSION='2.9.10';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -3221,8 +3225,7 @@ showGreeting();
 // ── Автопроверка при запуске отключена — проверка вручную через кнопку в настройках ──
 
 // ── Состояние OTA ──
-let _otaApkUrl = '';
-let _otaVersion = '';
+// _otaApkUrl и _otaVersion объявлены в начале файла
 
 function otaOpen(version, apkUrl, notes) {
   _otaApkUrl = apkUrl;
@@ -3421,7 +3424,7 @@ function clearCacheAndReload() {
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 
 // ══ СИСТЕМА ПАСХАЛОК v1.9.0 ══
-let _eggTaps = 0, _eggTimer = null, _eggLastTouch = 0;
+// _eggTaps, _eggTimer, _eggLastTouch объявлены в начале файла
 
 function eggTap() {
   // Защита от двойного срабатывания touchstart + onclick
@@ -5623,7 +5626,7 @@ function snowStop(){
 }
 
 // ── 🕺 ДИСКО — чистый RGB без смены тем ──
-let _discoActive=false;
+// _discoActive объявлен в начале файла
 function discoStart(){
   _discoActive=true;
   document.body.classList.add('disco-mode');
