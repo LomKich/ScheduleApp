@@ -694,18 +694,38 @@ body.glass-mode .ota-overlay .ota-sheet {
   box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.45), 0 20px 60px rgba(0,0,0,0.4) !important;
 }
 
-/* ── Custom background ── */
-body.custom-bg-active {
-  background-size: cover !important;
-  background-position: center !important;
-  background-attachment: fixed !important;
-  background-repeat: no-repeat !important;
+/* ── Custom background layer ── */
+#bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+#bg-layer.active { opacity: 1; }
+/* Когда фон активен — убираем background тела, чтобы bg-layer просвечивал */
+body.custom-bg-active,
+html:has(body.custom-bg-active) {
+  background-color: transparent !important;
+}
+body.custom-bg-active .screen:not(#s-home) {
+  background: rgba(0,0,0,0.25) !important;
+}
+body.custom-bg-active #s-home {
+  background: transparent !important;
 }
 body.custom-bg-active .hdr,
 body.custom-bg-active .bottom-nav {
   background: rgba(0,0,0,0.42) !important;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+}
+body.custom-bg-active.glass-mode .screen:not(#s-home) {
+  background: rgba(0,0,0,0.18) !important;
 }
 body.custom-bg-active.glass-mode .hdr,
 body.custom-bg-active.glass-mode .bottom-nav {
@@ -968,29 +988,85 @@ body.custom-bg-active.glass-mode .bottom-nav {
 #snow-canvas{position:fixed;inset:0;z-index:8;pointer-events:none;}
 @keyframes app-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
 body.shaking{animation:app-shake .45s ease;}
-/* ── Диско: RGB overlay поверх интерфейса, без смены тем ── */
+/* ── Диско: насыщенный RGB-режим ── */
 #disco-overlay{
   position:fixed;inset:0;z-index:900;pointer-events:none;
-  display:none;mix-blend-mode:color;opacity:0;
+  display:none;opacity:0;
+  mix-blend-mode:screen;
 }
 body.disco-mode #disco-overlay{display:block;}
+
 @keyframes disco-rgb{
-  0%   {background:hsl(0,90%,50%);   opacity:.22}
-  16%  {background:hsl(60,90%,50%);  opacity:.18}
-  33%  {background:hsl(120,90%,50%); opacity:.22}
-  50%  {background:hsl(180,90%,50%); opacity:.18}
-  66%  {background:hsl(240,90%,50%); opacity:.22}
-  83%  {background:hsl(300,90%,50%); opacity:.18}
-  100% {background:hsl(360,90%,50%); opacity:.22}
+  0%   {background:hsl(0,100%,55%);   opacity:.55}
+  14%  {background:hsl(50,100%,55%);  opacity:.50}
+  28%  {background:hsl(110,100%,50%); opacity:.55}
+  42%  {background:hsl(185,100%,55%); opacity:.50}
+  57%  {background:hsl(240,100%,65%); opacity:.58}
+  71%  {background:hsl(290,100%,60%); opacity:.52}
+  85%  {background:hsl(330,100%,60%); opacity:.55}
+  100% {background:hsl(360,100%,55%); opacity:.55}
 }
-body.disco-mode #disco-overlay{animation:disco-rgb 2s linear infinite;}
+body.disco-mode #disco-overlay{animation:disco-rgb 3s linear infinite;}
+
+/* Второй оверлей — противофазный блик */
+#disco-overlay::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 70% 60% at 50% 50%, rgba(255,255,255,0.18) 0%, transparent 70%);
+  animation:disco-spot 5s ease-in-out infinite alternate;
+}
+@keyframes disco-spot{
+  0%  {transform:translate(-30%,-20%) scale(1.2);}
+  33% {transform:translate(25%, 15%) scale(0.9);}
+  66% {transform:translate(-15%, 30%) scale(1.1);}
+  100%{transform:translate(30%,-25%) scale(1.3);}
+}
+
+/* Вспышки на всём теле */
 @keyframes disco-pulse{
-  0%,100%{filter:brightness(1)}
-  50%{filter:brightness(1.08)}
+  0%,100%{filter:brightness(1)    saturate(1);}
+  25%    {filter:brightness(1.2)  saturate(1.8) hue-rotate(0deg);}
+  50%    {filter:brightness(0.9)  saturate(1.5) hue-rotate(60deg);}
+  75%    {filter:brightness(1.25) saturate(2.0) hue-rotate(30deg);}
 }
-body.disco-mode{animation:disco-pulse 1s ease-in-out infinite;}
+body.disco-mode{animation:disco-pulse 3s ease-in-out infinite;}
+
+/* Карточки пульсируют контуром */
+@keyframes disco-card-glow{
+  0%,100%{box-shadow:0 0 8px  2px hsl(0,100%,60%);}
+  33%    {box-shadow:0 0 14px 4px hsl(120,100%,55%);}
+  66%    {box-shadow:0 0 12px 3px hsl(240,100%,70%);}
+}
+body.disco-mode .pair-card,
+body.disco-mode .list-item,
+body.disco-mode .btn-accent{
+  animation:disco-card-glow 3s linear infinite!important;
+}
+
+/* Текст переливается */
+@keyframes disco-text{
+  0%  {color:hsl(0,100%,80%);}
+  25% {color:hsl(90,100%,75%);}
+  50% {color:hsl(200,100%,80%);}
+  75% {color:hsl(300,100%,80%);}
+  100%{color:hsl(360,100%,80%);}
+}
+body.disco-mode .hdr-title,
+body.disco-mode .item-name,
+body.disco-mode .pair-subject,
+body.disco-mode .hero-title{
+  animation:disco-text 4s linear infinite!important;
+}
+
+/* Нижняя панель мигает */
+@keyframes disco-nav{
+  0%,100%{background:rgba(255,0,100,0.35)!important;}
+  33%    {background:rgba(0,255,120,0.35)!important;}
+  66%    {background:rgba(50,100,255,0.40)!important;}
+}
+body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 </style>
 <body>
+<div id="bg-layer"></div>
 
 <!-- ГЛАВНАЯ -->
 <div class="screen active" id="s-home">
@@ -1172,7 +1248,7 @@ body.disco-mode{animation:disco-pulse 1s ease-in-out infinite;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.1 — Android</div>
+        <div class="item-sub" id="app-version-str">3.1.1 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2022,7 +2098,8 @@ let allGroups=[];
 const _mem={};
 const stor={
   get(k){try{return localStorage.getItem(k);}catch(e){return _mem[k]||null;}},
-  set(k,v){try{localStorage.setItem(k,v);}catch(e){_mem[k]=v;}}
+  set(k,v){try{localStorage.setItem(k,v);}catch(e){_mem[k]=v;}},
+  del(k){try{localStorage.removeItem(k);}catch(e){delete _mem[k];}}
 };
 function loadLocal(){
   try{
@@ -2033,7 +2110,8 @@ function loadLocal(){
     if(S.theme==='glass'){S.theme='orange';S.liquidGlass=true;}
     else S.liquidGlass=d.liquidGlass||false;
     S.liquidGlassOpt=d.liquidGlassOpt||false;
-    S.customBg=d.customBg||'';
+    // Фон грузим из отдельного ключа
+    S.customBg = stor.get('sched_bg') || '';
     S.url=d.url||DEFAULT_URL;
     S.dns=d.dns||'system';
     S.customDns=d.customDns||'';
@@ -2050,12 +2128,23 @@ function loadLocal(){
   }catch(e){}
 }
 function saveLocal(){
+  // Основные настройки — без тяжёлого base64 фона
   stor.set('sched',JSON.stringify({
     group:S.lastGroup,theme:S.theme,url:S.url,
     dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy,proxyProvider:S.proxyProvider,
     appIcon:S.appIcon,liquidGlass:S.liquidGlass,liquidGlassOpt:S.liquidGlassOpt,
-    customBg:S.customBg
+    hasBg: !!S.customBg
   }));
+  // Фон хранится отдельно (может быть >1МБ base64)
+  try {
+    if(S.customBg) stor.set('sched_bg', S.customBg);
+    else stor.del('sched_bg');
+  } catch(e) {
+    // Если квота превышена — уведомляем пользователя
+    toast('⚠️ Не удалось сохранить фон: изображение слишком большое');
+    S.customBg = '';
+    applyCustomBg();
+  }
 }
 
 // ══ ПРОКСИ ══
@@ -2485,12 +2574,19 @@ function toggleGlassOpt(){
 
 /* ── Custom Background ── */
 function applyCustomBg(){
-  const body=document.body;
+  const layer = document.getElementById('bg-layer');
+  const body  = document.body;
   if(S.customBg){
-    body.style.backgroundImage='url('+S.customBg+')';
+    if(layer){
+      layer.style.backgroundImage = 'url(' + S.customBg + ')';
+      layer.classList.add('active');
+    }
     body.classList.add('custom-bg-active');
   } else {
-    body.style.backgroundImage='';
+    if(layer){
+      layer.style.backgroundImage = '';
+      layer.classList.remove('active');
+    }
     body.classList.remove('custom-bg-active');
   }
   updateBgUI();
@@ -2988,7 +3084,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='3.1';
+const APP_VERSION='3.1.1';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -3096,16 +3192,17 @@ function getHi(game){return loadHiScores()[game]||0;}
 // ══ CMD-КОНСОЛЬ ══
 const CMD_HELP=[
   ['/help',         'показать этот список'],
-  ['/greeting',     'on|off — вкл/выкл приветствие'],
+  ['/greeting',     'вкл/выкл приветствие  |  on|off'],
   ['/hiscores',     'рекорды мини-игр  |  reset — сбросить'],
   ['/version',      'информация о версии'],
   ['/group',        'текущая группа и файл'],
   ['/cache',        '[clear] — кэш файлов'],
   ['/theme',        'list|<n> — список тем или сменить'],
-  ['/sound',        'on|off — звуки'],
-  ['/matrix',       'on|off — режим Матрицы'],
-  ['/snow',         'on|off — снег (сохраняется)'],
-  ['/disco',        'on|off — RGB диско (сохраняется)'],
+  ['/sound',        'вкл/выкл звуки  |  on|off'],
+  ['/matrix',       'вкл/выкл Матрицу  |  on|off'],
+  ['/snow',         'вкл/выкл снег  |  on|off'],
+  ['/disco',        'вкл/выкл RGB диско  |  on|off'],
+  ['/glass',        'вкл/выкл Liquid Glass  |  on|off'],
   ['/shake',        'встряхнуть апп'],
   ['/time',         'сколько времени приложение работает'],
   ['/optimize',     'ядерная оптимизация памяти 🚀'],
@@ -3176,11 +3273,12 @@ function cmdExec(raw){
   const sec=loadSecret();
   switch(cmd){
     case '/help': cmdPrintHelp(); break;
-    case '/greeting':
-      if(arg==='off'){sec.greetingOff=true;saveSecret(sec);cmdPrint('ok','Приветствие отключено.');}
-      else if(arg==='on'){delete sec.greetingOff;saveSecret(sec);cmdPrint('ok','Приветствие включено.');}
-      else cmdPrint('err','Использование: /greeting on|off');
-      break;
+    case '/greeting': {
+      const sec2=loadSecret();
+      const greetOn = !sec2.greetingOff;
+      if(arg==='off'||(arg!=='on'&&greetOn)){sec2.greetingOff=true;saveSecret(sec2);cmdPrint('ok','Приветствие выключено.');}
+      else{delete sec2.greetingOff;saveSecret(sec2);cmdPrint('ok','Приветствие включено.');}
+    } break;
     case '/hiscores':{
       const GAME_NAMES={snake:'Змейка',pong:'Пинг-понг',tetris:'Тетрис',dino:'Динозаврик',
         blockblast:'Block Blast',breakout:'Арканоид',bubbles:'Пузыри',flappy:'Флаппи птица','2048':'2048'};
@@ -3214,26 +3312,37 @@ function cmdExec(raw){
       else if(arg)cmdPrint('err','Тема "'+arg+'" не найдена. /theme list');
       else cmdPrint('info','Тема: '+S.theme+'.  /theme list или /theme <name>');
       break;
-    case '/sound':
-      if(arg==='off'){S.muted=true;saveLocal();updateMuteLabel();cmdPrint('ok','Звук выключен.');}
-      else if(arg==='on'){S.muted=false;saveLocal();updateMuteLabel();cmdPrint('ok','Звук включён.');}
-      else cmdPrint('err','Использование: /sound on|off');
-      break;
-    case '/matrix':
-      if(arg==='on'){matrixStart();cmdPrint('ok','Добро пожаловать в Матрицу. Красная таблетка принята.');}
-      else if(arg==='off'){matrixStop();cmdPrint('ok','Матрица отключена.');}
-      else cmdPrint('err','Использование: /matrix on|off');
-      break;
-    case '/snow':
-      if(arg==='on'){snowStart();cmdPrint('ok','❄️ Снег пошёл!');}
-      else if(arg==='off'){snowStop();cmdPrint('ok','Снег остановлен.');}
-      else cmdPrint('err','Использование: /snow on|off');
-      break;
-    case '/disco':
-      if(arg==='on'){discoStart();cmdPrint('warn','🕺 DISCO MODE ACTIVATED');}
-      else if(arg==='off'){discoStop();cmdPrint('ok','Дискотека закончилась.');}
-      else cmdPrint('err','Использование: /disco on|off');
-      break;
+    case '/sound': {
+      const nowMuted = !!S.muted;
+      if(arg==='on'||(arg!=='off'&&nowMuted)){S.muted=false;saveLocal();updateMuteLabel();cmdPrint('ok','🔊 Звук включён.');}
+      else{S.muted=true;saveLocal();updateMuteLabel();cmdPrint('ok','🔇 Звук выключен.');}
+    } break;
+    case '/matrix': {
+      const matrixOn = document.getElementById('matrix-canvas').classList.contains('active');
+      if(arg==='on'||(arg!=='off'&&!matrixOn)){matrixStart();cmdPrint('ok','🟩 Матрица активирована. Красная таблетка принята.');}
+      else{matrixStop();cmdPrint('ok','Матрица отключена.');}
+    } break;
+    case '/snow': {
+      const snowOn = document.getElementById('snow-canvas').style.display!=='none';
+      if(arg==='on'||(arg!=='off'&&!snowOn)){snowStart();cmdPrint('ok','❄️ Снег пошёл!');}
+      else{snowStop();cmdPrint('ok','🌤 Снег остановлен.');}
+    } break;
+    case '/disco': {
+      if(arg==='on'||(arg!=='off'&&!_discoActive)){
+        discoStart();
+        cmdPrint('warn','🕺 DISCO MODE ACTIVATED — ВЕЧЕРИНКА НАЧАЛАСЬ');
+        cmdPrint('warn','💃 🎵 🎶 🪩 🔊 🎉 🌈 ✨ 🕺');
+      } else {
+        discoStop();cmdPrint('ok','😴 Дискотека закончилась. Уборщики пришли.');
+      }
+    } break;
+    case '/glass': {
+      if(arg==='on'||(arg!=='off'&&!S.liquidGlass)){
+        S.liquidGlass=true;applyGlassMode(true);cmdPrint('ok','🫧 Liquid Glass включён.');
+      } else {
+        S.liquidGlass=false;S.liquidGlassOpt=false;applyGlassMode(true);cmdPrint('ok','Liquid Glass выключен.');
+      }
+    } break;
     case '/shake':
       cmdPrint('warn','💥 ВАУ!');
       document.body.classList.remove('shaking');
