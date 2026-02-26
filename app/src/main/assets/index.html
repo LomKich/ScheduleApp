@@ -1482,7 +1482,13 @@ function getCells(ab){
     // Это исключает мусорные расширенные кириллические символы (Ђ U+0402, Ѐ U+0400 и т.п.)
     const clean = c
       .replace(/\r/g,'\n')
+<<<<<<< HEAD
       .replace(/[^\x09\x0A\x20-\x7E\u0401\u0410-\u044F\u0451«»№]/g,'')
+=======
+      // Строгая фильтрация: оставляем только ASCII-printable + кириллицу + спецсимволы русского
+      // Это устраняет КНК-символы и прочий бинарный мусор, который проходил через старый fallback
+      .replace(/[^\x09\x0A\x20-\x7E\u0400-\u04FF«»№]/g,'')
+>>>>>>> 33c87adbb6823be2ddddc83506b6c2f5fbe840e5
       // Убираем строки где >60% символов — нечитаемые (бинарный мусор)
       .split('\n')
       .map(line => {
@@ -2325,6 +2331,7 @@ async function loadSchedule(group){
 }
 function renderSchedule(group,hdr,sched,filename){
   document.getElementById('sched-group-name').textContent=group;
+<<<<<<< HEAD
   const cleanDate=formatScheduleDate(hdr);
   document.getElementById('sched-date').textContent=cleanDate||'';
   // Проверяем совпадение даты расписания с сегодняшней
@@ -2335,6 +2342,13 @@ function renderSchedule(group,hdr,sched,filename){
     const sd=new Date(+dateM[3],+dateM[2]-1,+dateM[1]);
     isToday=(sd.getFullYear()===today.getFullYear()&&sd.getMonth()===today.getMonth()&&sd.getDate()===today.getDate());
   }
+=======
+  // Очищаем заголовок — вырезаем только читаемую часть (дата + неделя)
+  const rawDate=hdr.replace('Расписание занятий на ','').trim();
+  // Оставляем только кириллицу, цифры, скобки, пробелы, точки — убираем мусор
+  const cleanDate=rawDate.replace(/[^\u0400-\u04FF\d\s.,()]/g,'').replace(/\s{2,}/g,' ').trim();
+  document.getElementById('sched-date').textContent=cleanDate||'';
+>>>>>>> 33c87adbb6823be2ddddc83506b6c2f5fbe840e5
   const isMon=filename.toUpperCase().includes('ПОНЕДЕЛЬНИК');
   const bell=isMon?BELL_MON:BELL_TUE;
   const nowMin=today.getHours()*60+today.getMinutes();
