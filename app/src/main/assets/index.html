@@ -2527,6 +2527,14 @@ const CMD_HELP=[
   ['/shake',        'встряхнуть апп'],
   ['/time',         'сколько времени приложение работает'],
   ['/exit',         'закрыть консоль'],
+  ['/uwu',          'активировать UwU-режим 🥺'],
+  ['/gpt',          'спросить нейросеть 🤖'],
+  ['/coffee',       'заварить кофе ☕'],
+  ['/homework',     'сделать домашнее задание 📚'],
+  ['/absent',       '<имя> — записать как отсутствующего 🙈'],
+  ['/hack',         'взломать пентагон 💻'],
+  ['/grade',        'поставить оценку (только 5)'],
+  ['/summon',       'вызвать декана 😱'],
 ];
 function cmdOpen(){
   const ov=document.getElementById('cmd-overlay');
@@ -2650,6 +2658,101 @@ function cmdExec(raw){
       cmdPrint('out','Выход...');
       setTimeout(cmdClose,500);
       break;
+    case '/uwu': {
+      const uwuPhrases=['UwU заwезён, сенпай замечен OwO','*виляет хвостиком* расписание уже не страшное nyaa~','тебе нужна помощь, чтобы не опоздать на пару? (≧◡≦)','все пары отменены! ...нет, это не так (｡•́︿•̀｡)'];
+      const uwuFaces=['(ᵔᴥᵔ)','(◕‿◕✿)','(｡◕‿◕｡)','ʕ•ᴥ•ʔ','(≧◡≦)','UwU','OwO'];
+      const face=uwuFaces[Math.floor(Math.random()*uwuFaces.length)];
+      const phrase=uwuPhrases[Math.floor(Math.random()*uwuPhrases.length)];
+      cmdPrint('ok',face+' '+phrase);
+      // Временно искажаем все тексты в приложении на UwU-манер
+      document.body.style.fontFamily="'Comic Sans MS', cursive";
+      cmdPrint('warn','⚠️ Шрифт переключён в UwU-режим на 10 секунд');
+      setTimeout(()=>{document.body.style.fontFamily='';cmdPrint('ok','UwU-режим деактивирован. Грустно (｡•́︿•̀｡)');},10000);
+    } break;
+    case '/gpt': {
+      const userQ=(parts.slice(1).join(' ')||'').trim();
+      if(!userQ){cmdPrint('err','Использование: /gpt <вопрос>');break;}
+      cmdPrint('info','🤖 Обрабатываю запрос...');
+      const gptAnswers=[
+        'Согласно моим обширным обучающим данным, ответ — 42.',
+        'Это интересный вопрос! Но сначала скажи мне три факта о себе.',
+        'Я не могу помочь с этим. Зато могу написать стихотворение про расписание!',
+        'Анализирую... Анализирую... Вы слышали про ChatGPT-4o?',
+        'ERROR 402: недостаточно токенов. Пополни баланс 💳',
+        'Согласно последним исследованиям MIT, лучше спросить преподавателя.',
+        'Ответ прост: это зависит от контекста, предпосылок, условий, парадигмы и времени суток.',
+      ];
+      setTimeout(()=>{
+        cmdPrint('ok','🤖 GPT: '+gptAnswers[Math.floor(Math.random()*gptAnswers.length)]);
+      },1200+Math.random()*800);
+    } break;
+    case '/coffee': {
+      const steps=['☕ Ищу кофемашину...','💧 Наливаю воду...','🫘 Засыпаю зерна...','🔥 Нагреваю...','✨ Готово!'];
+      let i=0;
+      const brew=setInterval(()=>{
+        cmdPrint(i<steps.length-1?'info':'ok',steps[i]);
+        i++;
+        if(i>=steps.length){
+          clearInterval(brew);
+          cmdPrint('warn','☕ Кофе готов! Только он виртуальный. Сходи за настоящим :(');
+        }
+      },600);
+    } break;
+    case '/homework': {
+      const subjects=['математика','физика','история','русский язык','информатика','химия'];
+      cmdPrint('info','📚 Запускаю алгоритм выполнения ДЗ...');
+      const subj=subjects[Math.floor(Math.random()*subjects.length)];
+      setTimeout(()=>cmdPrint('info','📖 Открываю учебник по теме: '+subj+'...'),700);
+      setTimeout(()=>cmdPrint('info','🔍 Сканирую интернет на предмет ответов...'),1400);
+      setTimeout(()=>cmdPrint('warn','⚠️ Найдено 47 готовых решений, но все неправильные.'),2200);
+      setTimeout(()=>cmdPrint('err','❌ КРИТИЧЕСКАЯ ОШИБКА: мозг студента не найден. Придётся думать самому.'),3000);
+      setTimeout(()=>cmdPrint('ok','💡 Совет: попробуй открыть учебник. Говорят, там ответы.'),3800);
+    } break;
+    case '/absent': {
+      const name=(parts.slice(1).join(' ')||'Кто-то').trim();
+      cmdPrint('info','🙈 Записываю '+name+' как отсутствующего...');
+      setTimeout(()=>cmdPrint('ok','✅ '+name+' официально "болен". Причина: ОРЗ, ОРВИ, и ещё 3 буквы.'),800);
+      setTimeout(()=>cmdPrint('warn','📋 Журнал обновлён. Или нет. Это всё равно ничего не меняет.'),1500);
+    } break;
+    case '/hack': {
+      const steps2=[
+        'Инициализация хакерского режима...',
+        'Подключение к серверам Пентагона... 1.2.3.4:80',
+        'Обход файрволла... ████████░░ 80%',
+        'Загрузка вирусов... malware.exe, sudo.bat',
+        'Взлом шифрования SHA-9999...',
+        '> ACCESS GRANTED to... ой.',
+      ];
+      let si=0;
+      document.getElementById('cmd-body').style.color='#00ff41';
+      const hackInterval=setInterval(()=>{
+        cmdPrint('ok',steps2[si++]);
+        if(si>=steps2.length){
+          clearInterval(hackInterval);
+          setTimeout(()=>{
+            cmdPrint('err','❌ Пентагон отозвал приглашение. Причина: ты студент.'),
+            document.getElementById('cmd-body').style.color='';
+          },1000);
+        }
+      },550);
+    } break;
+    case '/grade': {
+      const gradeNames=['алгебра','физическая культура','история','инфа','черчение'];
+      const subj2=gradeNames[Math.floor(Math.random()*gradeNames.length)];
+      cmdPrint('info','📝 Открываю электронный журнал...');
+      setTimeout(()=>cmdPrint('info','✏️ Ставлю оценку по предмету: '+subj2+'...'),800);
+      setTimeout(()=>cmdPrint('warn','🔒 ДОСТУП ЗАПРЕЩЁН. Только преподаватели могут ставить оценки.'),1600);
+      setTimeout(()=>cmdPrint('err','Хотя... если бы мог, поставил бы тебе 5. Честно.'),2400);
+    } break;
+    case '/summon': {
+      cmdPrint('warn','😱 ВЫЗОВ ДЕКАНА...');
+      matrixStart();
+      setTimeout(()=>{
+        matrixStop();
+        cmdPrint('ok','✨ Декан вызван... и сразу ушёл на собрание.');
+        cmdPrint('info','Попробуй снова через 3-4 учебных часа.');
+      },4000);
+    } break;
     default:
       cmdPrint('err','"'+cmd+'" не найдена. Введи /help');
   }
@@ -5230,7 +5333,9 @@ function discoStop(){
   // Восстанавливаем исходную тему
   applyTheme(S.theme);
 }
-</script> (v2.6.0) ─────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🐦 ФЛАППИ ПТИЦА (v2.6.0) ─────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
 let flappyRaf=null,flappyRunning=false,flappyStarted=false;
 let flappyW=0,flappyH=0,flappyScore=0,flappyHi=0;
