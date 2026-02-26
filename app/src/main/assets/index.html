@@ -740,7 +740,7 @@ body.shaking{animation:app-shake .45s ease;}
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div onclick="eggTap()" style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:2px 0">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">2.9.1 — Android</div>
+        <div class="item-sub" id="app-version-str">2.8 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -1820,17 +1820,17 @@ function base64ToArrayBuffer(b64) {
 
 // ══ ИКОНКА ПРИЛОЖЕНИЯ ══
 const ICON_VARIANTS = {
-  orange:  {label:'Оранжевая',  ico:'🟠', bg:'#0d0d0d', accent:'#e87722', accent2:'#c45f0a', style:'gradient-warm'},
-  amoled:  {label:'AMOLED',     ico:'⚫', bg:'#000000', accent:'#00e5ff', accent2:'#0088aa', style:'glow-cyan'},
-  samek:   {label:'СаМеК',      ico:'🔵', bg:'#10388A', accent:'#7FBBFF', accent2:'#4a7fd4', style:'gradient-blue'},
-  purple:  {label:'Фиолет',     ico:'🫐', bg:'#0e0b1a', accent:'#a78bfa', accent2:'#7c3aed', style:'glow-purple'},
-  forest:  {label:'Лес',        ico:'🌿', bg:'#0b1a10', accent:'#4caf7d', accent2:'#2d8653', style:'glow-green'},
-  gold:    {label:'Золото',     ico:'✨', bg:'#100e00', accent:'#f5c518', accent2:'#c9a000', style:'glow-gold'},
-  bw:      {label:'Ч/Б',        ico:'⬜', bg:'#000000', accent:'#ffffff', accent2:'#888888', style:'glow-bw'},
-  ocean:   {label:'Океан',      ico:'🌊', bg:'#020d18', accent:'#00c8ff', accent2:'#0080c0', style:'glow-ocean'},
-  candy:   {label:'Конфета',    ico:'🍬', bg:'#120010', accent:'#ff4dc4', accent2:'#a800ff', style:'glow-candy'},
-  rose:    {label:'Розовый',    ico:'🌸', bg:'#1a0d12', accent:'#f472b6', accent2:'#db2777', style:'glow-rose'},
-  glass:   {label:'Стекло',     ico:'🫧', bg:'#0a0f1e', accent:'#a0c4ff', accent2:'#7b9fff', style:'glass'},
+  orange:  {label:'Оранжевая',  ico:'🟠', bg:'#0d0d0d', surface:'#2a1800', accent:'#e87722', accent2:'#c45f0a', style:'gradient-warm'},
+  amoled:  {label:'AMOLED',     ico:'⚫', bg:'#000000', surface:'#001a22', accent:'#00e5ff', accent2:'#0088aa', style:'glow-cyan'},
+  samek:   {label:'СаМеК',      ico:'🔵', bg:'#10388A', surface:'#0a1e4a', accent:'#7FBBFF', accent2:'#4a7fd4', style:'gradient-blue'},
+  purple:  {label:'Фиолет',     ico:'🫐', bg:'#0e0b1a', surface:'#1a0f35', accent:'#a78bfa', accent2:'#7c3aed', style:'glow-purple'},
+  forest:  {label:'Лес',        ico:'🌿', bg:'#0b1a10', surface:'#0f2a18', accent:'#4caf7d', accent2:'#2d8653', style:'glow-green'},
+  gold:    {label:'Золото',     ico:'✨', bg:'#100e00', surface:'#1f1a00', accent:'#f5c518', accent2:'#c9a000', style:'glow-gold'},
+  bw:      {label:'Ч/Б',        ico:'⬜', bg:'#000000', surface:'#111111', accent:'#ffffff', accent2:'#888888', style:'glow-bw'},
+  ocean:   {label:'Океан',      ico:'🌊', bg:'#020d18', surface:'#052240', accent:'#00c8ff', accent2:'#0080c0', style:'glow-ocean'},
+  candy:   {label:'Конфета',    ico:'🍬', bg:'#120010', surface:'#300025', accent:'#ff4dc4', accent2:'#a800ff', style:'glow-candy'},
+  rose:    {label:'Розовый',    ico:'🌸', bg:'#1a0d12', surface:'#3a1028', accent:'#f472b6', accent2:'#db2777', style:'glow-rose'},
+  glass:   {label:'Стекло',     ico:'🫧', bg:'#0a0f1e', surface:'#1a2040', accent:'#a0c4ff', accent2:'#7b9fff', style:'glass'},
 };
 
 // Draw CK icon preview on a canvas element
@@ -1842,43 +1842,43 @@ function drawIconPreview(canvas, variant) {
   // Background
   if (t.style === 'gradient-warm') {
     const g = ctx.createRadialGradient(size*0.5,size*0.35,0, size*0.5,size*0.5,size*0.7);
-    g.addColorStop(0, '#2a1800'); g.addColorStop(1, '#0d0d0d');
+    g.addColorStop(0, t.surface||'#2a1800'); g.addColorStop(1, t.bg||'#0d0d0d');
     ctx.fillStyle = g;
   } else if (t.style === 'gradient-blue') {
     const g = ctx.createLinearGradient(0, 0, size, size);
-    g.addColorStop(0, '#0a1e4a'); g.addColorStop(1, '#10388A');
+    g.addColorStop(0, t.surface||'#0a1e4a'); g.addColorStop(1, t.bg||'#10388A');
     ctx.fillStyle = g;
   } else if (t.style === 'glow-cyan') {
     const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.6);
-    g.addColorStop(0, '#001a22'); g.addColorStop(1, '#000000');
+    g.addColorStop(0, t.surface||'#001a22'); g.addColorStop(1, t.bg||'#000000');
     ctx.fillStyle = g;
   } else if (t.style === 'glow-purple') {
     const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
-    g.addColorStop(0, '#1a0f35'); g.addColorStop(1, '#0e0b1a');
+    g.addColorStop(0, t.surface||'#1a0f35'); g.addColorStop(1, t.bg||'#0e0b1a');
     ctx.fillStyle = g;
   } else if (t.style === 'glow-green') {
     const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
-    g.addColorStop(0, '#0f2a18'); g.addColorStop(1, '#0b1a10');
+    g.addColorStop(0, t.surface||'#0f2a18'); g.addColorStop(1, t.bg||'#0b1a10');
     ctx.fillStyle = g;
   } else if (t.style === 'glow-gold') {
     const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
-    g.addColorStop(0, '#1f1a00'); g.addColorStop(1, '#100e00');
+    g.addColorStop(0, t.surface||'#1f1a00'); g.addColorStop(1, t.bg||'#100e00');
     ctx.fillStyle = g;
   } else if (t.style === 'glow-bw') {
     const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
-    g.addColorStop(0, '#2a2a2a'); g.addColorStop(1, '#000000');
+    g.addColorStop(0, t.surface||'#2a2a2a'); g.addColorStop(1, t.bg||'#000000');
     ctx.fillStyle = g;
   } else if (t.style === 'glow-ocean') {
     const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
-    g.addColorStop(0, '#052240'); g.addColorStop(1, '#020d18');
+    g.addColorStop(0, t.surface||'#052240'); g.addColorStop(1, t.bg||'#020d18');
     ctx.fillStyle = g;
   } else if (t.style === 'glow-candy') {
     const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
-    g.addColorStop(0, '#300025'); g.addColorStop(1, '#120010');
+    g.addColorStop(0, t.surface||'#300025'); g.addColorStop(1, t.bg||'#120010');
     ctx.fillStyle = g;
   } else if (t.style === 'glow-rose') {
     const g = ctx.createRadialGradient(size*0.5,size*0.4,0, size*0.5,size*0.5,size*0.65);
-    g.addColorStop(0, '#3a1028'); g.addColorStop(1, '#1a0d12');
+    g.addColorStop(0, t.surface||'#3a1028'); g.addColorStop(1, t.bg||'#1a0d12');
     ctx.fillStyle = g;
   } else if (t.style === 'glass') {
     const g = ctx.createLinearGradient(0,0,size,size);
@@ -2429,7 +2429,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='2.9.1';
+const APP_VERSION='2.8';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -2457,29 +2457,40 @@ function showGreeting(){
   const hh=String(now.getHours()).padStart(2,'0');
   const mm=String(now.getMinutes()).padStart(2,'0');
 
-  // ── Анимированный логотип (canvas) ──
+  // ── Анимированный логотип (canvas) — цвета из выбранной иконки ──
   const cv=document.getElementById('greet-logo-canvas');
   if(cv){
-    const accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#e87722';
+    // Берём цвета выбранной иконки (или fallback на тему)
+    const iconKey = S.appIcon || 'orange';
+    const iconData = ICON_VARIANTS[iconKey] || ICON_VARIANTS['orange'];
+    const accent = iconData.accent;
+    const bgColor = iconData.bg;
+    const surfColor = iconData.surface || iconData.bg;
+
     const size=80;
     cv.width=size; cv.height=size;
     const ctx=cv.getContext('2d');
 
-    // Фон с закруглёнными углами
+    // Фон: мини-градиент как на реальной иконке
     const drawBg=()=>{
-      const bg=getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()||'#161616';
       ctx.clearRect(0,0,size,size);
+      // Rounded rect
       ctx.beginPath();
       if(ctx.roundRect) ctx.roundRect(0,0,size,size,18);
-      else ctx.rect(0,0,size,size);
-      ctx.fillStyle=bg;
-      ctx.fill();
-      // Свечение-ореол
-      const grd=ctx.createRadialGradient(size*.5,size*.5,size*.1,size*.5,size*.5,size*.55);
-      grd.addColorStop(0,accent+'33');
-      grd.addColorStop(1,'transparent');
-      ctx.fillStyle=grd;
-      ctx.fillRect(0,0,size,size);
+      else { ctx.moveTo(18,0);ctx.arcTo(size,0,size,size,18);ctx.arcTo(size,size,0,size,18);ctx.arcTo(0,size,0,0,18);ctx.arcTo(0,0,size,0,18); }
+      // Radial gradient fill
+      const grd=ctx.createRadialGradient(size*.5,size*.4,0,size*.5,size*.5,size*.65);
+      // parse hex to rgb inline
+      const h2r=h=>{const v=parseInt(h.replace('#',''),16);return[(v>>16)&255,(v>>8)&255,v&255];};
+      const sc=h2r(surfColor), bc=h2r(bgColor), ac=h2r(accent);
+      grd.addColorStop(0,`rgb(${sc[0]},${sc[1]},${sc[2]})`);
+      grd.addColorStop(1,`rgb(${bc[0]},${bc[1]},${bc[2]})`);
+      ctx.fillStyle=grd; ctx.fill();
+      // Accent glow blob
+      const g2=ctx.createRadialGradient(size*.5,size*.5,0,size*.5,size*.5,size*.32);
+      g2.addColorStop(0,`rgba(${ac[0]},${ac[1]},${ac[2]},0.18)`);
+      g2.addColorStop(1,'transparent');
+      ctx.fillStyle=g2; ctx.fillRect(0,0,size,size);
     };
 
     // Параметры ЧК-логотипа
@@ -2487,21 +2498,19 @@ function showGreeting(){
     const cr=size*.2, kx=cx+size*.06;
     const kh=cr*.95, lw=size*.085;
 
-    // Считаем общую длину всех путей для анимации рисовки
-    // C: дуга радиуса cr от 0.28π до 1.72π → угол 1.44π
+    // Длины путей для анимации рисовки
     const arcLen=cr*Math.PI*1.44;
-    // K: вертикаль + 2 диагонали
     const kVLen=kh*2;
-    const kD1Len=Math.hypot(kh*.7, kh*.92);
-    const kD2Len=Math.hypot(kh*.75, kh*.92);
+    const kD1Len=Math.hypot(kh*.7,kh*.92);
+    const kD2Len=Math.hypot(kh*.75,kh*1.08);
     const totalLen=arcLen+kVLen+kD1Len+kD2Len;
 
     let startTime=null;
-    const duration=700; // мс
+    const duration=700;
     function animateLogo(ts){
       if(!startTime) startTime=ts;
       const p=Math.min((ts-startTime)/duration,1);
-      const ease=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2; // easeInOut
+      const ease=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
       const drawn=ease*totalLen;
 
       drawBg();
@@ -2510,39 +2519,35 @@ function showGreeting(){
       ctx.lineCap='round';
       ctx.lineJoin='round';
       ctx.shadowColor=accent;
-      ctx.shadowBlur=size*.14;
+      ctx.shadowBlur=size*.15;
 
       let rem=drawn;
-
-      // — C —
+      // C дуга
       if(rem>0){
         const seg=Math.min(rem,arcLen);
         const endAngle=Math.PI*.28+seg/cr;
         ctx.beginPath();
         ctx.arc(cx-size*.04,cy,cr,Math.PI*.28,Math.min(endAngle,Math.PI*1.72));
-        ctx.stroke();
-        rem-=seg;
+        ctx.stroke(); rem-=seg;
       }
-      // — K вертикаль —
+      // K вертикаль
       if(rem>0){
         const seg=Math.min(rem,kVLen);
         ctx.beginPath();
         ctx.moveTo(kx,cy-kh);
         ctx.lineTo(kx,cy-kh+seg);
-        ctx.stroke();
-        rem-=seg;
+        ctx.stroke(); rem-=seg;
       }
-      // — K верхняя диагональ —
+      // K верхняя диаг
       if(rem>0){
         const seg=Math.min(rem,kD1Len);
         const t2=seg/kD1Len;
         ctx.beginPath();
         ctx.moveTo(kx,cy-kh*.08);
         ctx.lineTo(kx+kh*.7*t2,cy-kh*t2);
-        ctx.stroke();
-        rem-=seg;
+        ctx.stroke(); rem-=seg;
       }
-      // — K нижняя диагональ —
+      // K нижняя диаг
       if(rem>0){
         const seg=Math.min(rem,kD2Len);
         const t2=seg/kD2Len;
