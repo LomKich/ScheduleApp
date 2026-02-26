@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.net.VpnService;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -16,6 +17,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -35,14 +37,17 @@ import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
 
-    private static final String TAG             = "MainActivity";
-    private static final int    VPN_REQUEST_CODE = 1001;
+    private static final String TAG              = "MainActivity";
+    private static final int    VPN_REQUEST_CODE  = 1001;
+    private static final int    IMAGE_PICK_CODE   = 1002;
 
-    private WebView           webView;
-    private SharedPreferences prefs;
-    private DnsVpnService     vpnService;
-    private boolean           vpnBound = false;
-    private AppLogger         log;
+    private WebView                webView;
+    private SharedPreferences      prefs;
+    private DnsVpnService          vpnService;
+    private boolean                vpnBound = false;
+    private AppLogger              log;
+    // Колбэк для file chooser (фон приложения)
+    private ValueCallback<Uri[]>   fileChooserCallback = null;
 
     private final ServiceConnection vpnConnection = new ServiceConnection() {
         @Override
@@ -141,6 +146,34 @@ public class MainActivity extends Activity {
                 log.js(cm.messageLevel().name(), cm.message(), cm.sourceId(), cm.lineNumber());
                 return true;
             }
+
+            // ─── Нативный файловый пикер для <input type="file"> ───
+            @Override
+            public boolean onShowFileChooser(WebView webView,
+                                             ValueCallback<Uri[]> filePathCallback,
+                                             FileChooserParams fileChooserParams) {
+                // Если предыдущий колбэк не закрыт — отменяем его
+                if (fileChooserCallback != null) {
+                    fileChooserCallback.onReceiveValue(null);
+                    fileChooserCallback = null;
+                }
+                fileChooserCallback = filePathCallback;
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("image/*");
+                try {
+                    startActivityForResult(
+                        Intent.createChooser(intent, "Выбери изображение"),
+                        IMAGE_PICK_CODE
+                    );
+                } catch (Exception e) {
+                    log.e(TAG, "onShowFileChooser error: " + e.getMessage());
+                    fileChooserCallback.onReceiveValue(null);
+                    fileChooserCallback = null;
+                    return false;
+                }
+                return true;
+            }
         });
 
         webView.setWebViewClient(new WebViewClient() {
@@ -206,6 +239,64 @@ public class MainActivity extends Activity {
             startVpnService();
         } else if (requestCode == VPN_REQUEST_CODE) {
             log.w(TAG, "VPN разрешение отклонено");
+        } else if (requestCode == IMAGE_PICK_CODE) {
+            // Обработка выбранного изображения для фона
+            if (fileChooserCallback == null) return;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                Uri uri = data.getData();
+                log.i(TAG, "Изображение выбрано: " + uri);
+                // Конвертируем в base64 в фоновом потоке, затем передаём в JS
+                final Uri finalUri = uri;
+                new Thread(() -> {
+                    try {
+                        InputStream is = getContentResolver().openInputStream(finalUri);
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        byte[] buf = new byte[16384];
+                        int n;
+                        while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
+                        is.close();
+                        byte[] bytes = baos.toByteArray();
+
+                        // Определяем MIME тип
+                        String mime = getContentResolver().getType(finalUri);
+                        if (mime == null) mime = "image/jpeg";
+
+                        String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                        String dataUrl = "data:" + mime + ";base64," + b64;
+
+                        // Передаём в JS через evaluateJavascript
+                        final String jsDataUrl = dataUrl;
+                        runOnUiThread(() -> {
+                            // Закрываем file chooser (передаём uri обратно)
+                            fileChooserCallback.onReceiveValue(new Uri[]{finalUri});
+                            fileChooserCallback = null;
+                            // Вызываем JS-функцию с base64 данными
+                            String escaped = jsDataUrl.replace("\\", "\\\\").replace("'", "\\'");
+                            webView.evaluateJavascript(
+                                "if(typeof onNativeBgImagePicked==='function')onNativeBgImagePicked('" + escaped + "')",
+                                null
+                            );
+                            log.i(TAG, "Фон передан в JS, размер: " + bytes.length + " байт");
+                        });
+                    } catch (Exception e) {
+                        log.e(TAG, "Ошибка чтения изображения: " + e.getMessage());
+                        runOnUiThread(() -> {
+                            if (fileChooserCallback != null) {
+                                fileChooserCallback.onReceiveValue(null);
+                                fileChooserCallback = null;
+                            }
+                            webView.evaluateJavascript(
+                                "if(typeof toast==='function')toast('❌ Не удалось прочитать изображение')",
+                                null
+                            );
+                        });
+                    }
+                }).start();
+            } else {
+                log.i(TAG, "Выбор изображения отменён");
+                fileChooserCallback.onReceiveValue(null);
+                fileChooserCallback = null;
+            }
         }
     }
 
@@ -482,6 +573,36 @@ public class MainActivity extends Activity {
                     })
                     .setNegativeButton("Отмена", null)
                     .show();
+            });
+        }
+
+        /**
+         * Открывает системный пикер изображений для выбора фона.
+         * Результат возвращается через JS-функцию onNativeBgImagePicked(dataUrl)
+         */
+        @JavascriptInterface
+        public void pickImageForBackground() {
+            log.i(TAG, "pickImageForBackground");
+            runOnUiThread(() -> {
+                if (fileChooserCallback != null) {
+                    fileChooserCallback.onReceiveValue(null);
+                    fileChooserCallback = null;
+                }
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("image/*");
+                try {
+                    startActivityForResult(
+                        Intent.createChooser(intent, "Выбери фоновое изображение"),
+                        IMAGE_PICK_CODE
+                    );
+                } catch (Exception e) {
+                    log.e(TAG, "pickImageForBackground error: " + e.getMessage());
+                    webView.evaluateJavascript(
+                        "if(typeof toast==='function')toast('❌ Не удалось открыть галерею')",
+                        null
+                    );
+                }
             });
         }
 

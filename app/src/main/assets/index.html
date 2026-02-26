@@ -281,157 +281,417 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Geolog
 .diff-btn.active{background:color-mix(in srgb,var(--accent) 20%,transparent);border-color:var(--accent);color:var(--accent)}
 .diff-btn:active{transform:scale(.95)}
 
-/* ── Liquid Glass Mode (works with any theme) ── */
+/* ═══════════════════════════════════════════════════════════════
+   iOS 26 LIQUID GLASS — точное воспроизведение Apple design language
+   Ключевые принципы:
+   · Frosted translucency  — backdrop-filter blur + saturate
+   · Specular highlight    — яркая белая полоска сверху (отражение)
+   · Refraction tint       — полупрозрачный градиент, имитирующий преломление
+   · Layered depth         — тени с мягким свечением, без жёстких границ
+   · Spring physics        — cubic-bezier отскок при нажатии
+   · Pill geometry         — сильно скруглённые элементы
+═══════════════════════════════════════════════════════════════ */
+
 body.glass-mode {
-  --glass-blur: blur(18px) saturate(180%);
-  --glass-blur-opt: blur(8px) saturate(140%);
-  --glass-border: rgba(255,255,255,0.18);
-  --glass-shadow: 0 8px 32px rgba(80,120,255,0.15);
-  --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --gb: blur(28px) saturate(200%) brightness(1.05);
+  --gb-opt: blur(10px) saturate(150%);
+  --gb-cards: blur(20px) saturate(180%);
+  --gb-cards-opt: blur(6px) saturate(130%);
+  --gspring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --gease:   cubic-bezier(0.4, 0, 0.2, 1);
+  /* Specular: верхний блик стекла */
+  --g-spec-top: inset 0 1.5px 0 rgba(255,255,255,0.55);
+  /* Refraction: нижний внутренний контур */
+  --g-refract-bot: inset 0 -1px 0 rgba(255,255,255,0.12);
+  /* Outer glow accent */
+  --g-glow: 0 2px 20px rgba(0,0,0,0.18);
 }
+
+/* ── Animated wallpaper blobs ── */
 body.glass-mode::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 60% 50% at 20% 20%, color-mix(in srgb, var(--accent) 35%, transparent) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 60% at 80% 70%, color-mix(in srgb, var(--accent2) 28%, transparent) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 40% at 60% 10%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 55% at 15% 18%,  color-mix(in srgb, var(--accent)  42%, transparent) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 65% at 82% 72%,  color-mix(in srgb, var(--accent2) 36%, transparent) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 40% at 55%  8%,  color-mix(in srgb, var(--accent)  22%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse 38% 50% at 90% 30%,  color-mix(in srgb, var(--accent2) 18%, transparent) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 35% at 10% 80%,  color-mix(in srgb, var(--accent)  15%, transparent) 0%, transparent 55%),
     var(--bg);
-  animation: glassBlobs 14s ease-in-out infinite alternate;
+  animation: lgBlobs 18s ease-in-out infinite alternate;
+  will-change: filter;
 }
-body.glass-mode.glass-optimized::before {
-  animation: none;
+body.glass-mode.glass-optimized::before { animation: none; }
+@keyframes lgBlobs {
+  0%   { filter: hue-rotate(0deg)   brightness(1);    }
+  33%  { filter: hue-rotate(22deg)  brightness(1.04); }
+  66%  { filter: hue-rotate(-15deg) brightness(0.97); }
+  100% { filter: hue-rotate(35deg)  brightness(1.02); }
 }
-@keyframes glassBlobs {
-  0%   { filter: hue-rotate(0deg); }
-  50%  { filter: hue-rotate(30deg); }
-  100% { filter: hue-rotate(-20deg); }
+
+/* ── Screens ── */
+body.glass-mode #s-home { background: transparent !important; }
+
+body.glass-mode .screen:not(#s-home) {
+  background: color-mix(in srgb, var(--bg) 55%, transparent) !important;
+  backdrop-filter: var(--gb);
+  -webkit-backdrop-filter: var(--gb);
+  transition: opacity 0.28s var(--gease), transform 0.38s var(--gspring) !important;
 }
-body.glass-mode .screen {
-  background: transparent !important;
+body.glass-mode.glass-optimized .screen:not(#s-home) {
+  backdrop-filter: var(--gb-opt) !important;
+  -webkit-backdrop-filter: var(--gb-opt) !important;
+  transition: opacity 0.15s ease !important;
 }
-body.glass-mode .hdr,
-body.glass-mode .bottom-nav,
+
+/* ── Header (Navigation Bar) — iOS 26 style ── */
+body.glass-mode .hdr {
+  background: color-mix(in srgb, var(--bg) 40%, transparent) !important;
+  backdrop-filter: var(--gb);
+  -webkit-backdrop-filter: var(--gb);
+  /* specular + refract */
+  box-shadow:
+    var(--g-spec-top),
+    var(--g-refract-bot),
+    0 1px 0 rgba(255,255,255,0.08),
+    0 4px 24px rgba(0,0,0,0.14) !important;
+  border-bottom: none !important;
+}
+body.glass-mode.glass-optimized .hdr {
+  backdrop-filter: var(--gb-opt) !important;
+  -webkit-backdrop-filter: var(--gb-opt) !important;
+}
+
+/* ── Bottom Tab Bar — iOS 26 style: floating pill ── */
+body.glass-mode .bottom-nav {
+  background: color-mix(in srgb, var(--bg) 38%, transparent) !important;
+  backdrop-filter: var(--gb);
+  -webkit-backdrop-filter: var(--gb);
+  border-top: 1px solid rgba(255,255,255,0.14) !important;
+  /* Specular highlight across top edge */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.5),
+    inset 0 2px 12px rgba(255,255,255,0.06),
+    0 -2px 20px rgba(0,0,0,0.12) !important;
+}
+body.glass-mode.glass-optimized .bottom-nav {
+  backdrop-filter: var(--gb-opt) !important;
+  -webkit-backdrop-filter: var(--gb-opt) !important;
+}
+body.glass-mode .nav-item {
+  color: rgba(255,255,255,0.55) !important;
+  transition: color 0.3s var(--gspring) !important;
+}
+body.glass-mode .nav-item.active { color: var(--accent) !important; }
+body.glass-mode .nav-item .nav-icon {
+  transition: transform 0.5s var(--gspring), filter 0.3s ease !important;
+}
+body.glass-mode .nav-item:active .nav-icon { transform: scale(0.88) !important; }
+body.glass-mode .nav-item.active .nav-icon {
+  transform: scale(1.18) !important;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 80%, transparent));
+}
+
+/* ── Schedule section header ── */
 body.glass-mode .sched-header {
-  background: rgba(10,15,30,0.5) !important;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: color-mix(in srgb, var(--bg) 44%, transparent) !important;
+  backdrop-filter: var(--gb);
+  -webkit-backdrop-filter: var(--gb);
+  box-shadow: var(--g-spec-top), var(--g-refract-bot), 0 2px 12px rgba(0,0,0,0.1) !important;
 }
-body.glass-mode.glass-optimized .hdr,
-body.glass-mode.glass-optimized .bottom-nav,
-body.glass-mode.glass-optimized .sched-header {
-  backdrop-filter: var(--glass-blur-opt) !important;
-  -webkit-backdrop-filter: var(--glass-blur-opt) !important;
-}
+
+/* ═══ GLASS MATERIAL — карточки, панели, строки iOS 26 ═══ */
+/* Базовый «material» — многослойное стекло с бликом и преломлением */
 body.glass-mode .list-item,
 body.glass-mode .pair-card,
 body.glass-mode .bell-card,
 body.glass-mode .settings-row,
 body.glass-mode .last-group-btn,
-body.glass-mode .theme-card {
-  background: rgba(255,255,255,0.08) !important;
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  border-color: rgba(255,255,255,0.16) !important;
-  box-shadow: 0 4px 24px color-mix(in srgb, var(--accent) 12%, transparent), inset 0 1px 0 rgba(255,255,255,0.12) !important;
-  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1),
-              background 0.3s ease,
-              box-shadow 0.3s ease !important;
+body.glass-mode .theme-card,
+body.glass-mode .proxy-card,
+body.glass-mode .diff-btn {
+  position: relative;
+  background: rgba(255,255,255,0.09) !important;
+  backdrop-filter: var(--gb-cards);
+  -webkit-backdrop-filter: var(--gb-cards);
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  box-shadow:
+    /* specular highlight сверху */
+    inset 0 1.5px 0 rgba(255,255,255,0.50),
+    /* refraction bottom edge */
+    inset 0 -1px 0 rgba(255,255,255,0.10),
+    /* боковые внутренние контуры (эффект толщины стекла) */
+    inset 1px 0 0 rgba(255,255,255,0.08),
+    inset -1px 0 0 rgba(255,255,255,0.08),
+    /* внешняя тень глубины */
+    0 4px 20px rgba(0,0,0,0.16),
+    0 1px 6px rgba(0,0,0,0.10) !important;
+  overflow: hidden;
+  transition:
+    transform  0.38s var(--gspring),
+    background 0.25s var(--gease),
+    box-shadow 0.25s var(--gease) !important;
 }
+
+/* Gradient refraction overlay — имитирует преломление как у Apple */
+body.glass-mode .list-item::after,
+body.glass-mode .pair-card::after,
+body.glass-mode .bell-card::after,
+body.glass-mode .settings-row::after,
+body.glass-mode .last-group-btn::after,
+body.glass-mode .theme-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    168deg,
+    rgba(255,255,255,0.13) 0%,
+    rgba(255,255,255,0.04) 35%,
+    transparent 60%,
+    rgba(0,0,0,0.04) 100%
+  );
+  z-index: 0;
+}
+
 body.glass-mode.glass-optimized .list-item,
 body.glass-mode.glass-optimized .pair-card,
 body.glass-mode.glass-optimized .bell-card,
 body.glass-mode.glass-optimized .settings-row,
 body.glass-mode.glass-optimized .last-group-btn,
-body.glass-mode.glass-optimized .theme-card {
+body.glass-mode.glass-optimized .theme-card,
+body.glass-mode.glass-optimized .proxy-card,
+body.glass-mode.glass-optimized .diff-btn {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   transition: none !important;
 }
+body.glass-mode.glass-optimized .list-item::after,
+body.glass-mode.glass-optimized .pair-card::after,
+body.glass-mode.glass-optimized .bell-card::after,
+body.glass-mode.glass-optimized .settings-row::after,
+body.glass-mode.glass-optimized .last-group-btn::after,
+body.glass-mode.glass-optimized .theme-card::after { display:none; }
+
+/* Press / active states — spring bounce */
 body.glass-mode .list-item:active,
 body.glass-mode .pair-card:active,
 body.glass-mode .theme-card:active,
-body.glass-mode .last-group-btn:active {
-  transform: scale(0.96) !important;
-  background: rgba(255,255,255,0.13) !important;
+body.glass-mode .last-group-btn:active,
+body.glass-mode .proxy-card:active {
+  transform: scale(0.972) !important;
+  background: rgba(255,255,255,0.14) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.65),
+    inset 0 -1px 0 rgba(255,255,255,0.12),
+    0 2px 10px rgba(0,0,0,0.10) !important;
 }
+
+/* Selected highlight */
+body.glass-mode .list-item.selected {
+  background: color-mix(in srgb, var(--accent) 20%, rgba(255,255,255,0.08)) !important;
+  border-color: color-mix(in srgb, var(--accent) 55%, rgba(255,255,255,0.18)) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.55),
+    inset 0 -1px 0 rgba(255,255,255,0.10),
+    0 0 24px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 4px 16px rgba(0,0,0,0.14) !important;
+}
+body.glass-mode .theme-card.selected {
+  background: color-mix(in srgb, var(--accent) 18%, rgba(255,255,255,0.09)) !important;
+  border-color: color-mix(in srgb, var(--accent) 60%, rgba(255,255,255,0.2)) !important;
+}
+body.glass-mode .diff-btn.active {
+  background: color-mix(in srgb, var(--accent) 22%, rgba(255,255,255,0.1)) !important;
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent) !important;
+}
+
+/* Currently active pair */
+body.glass-mode .pair-card.is-now {
+  background: color-mix(in srgb, var(--accent) 16%, rgba(255,255,255,0.09)) !important;
+  border-color: color-mix(in srgb, var(--accent) 50%, rgba(255,255,255,0.18)) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.55),
+    inset 0 -1px 0 rgba(255,255,255,0.12),
+    0 0 32px color-mix(in srgb, var(--accent) 28%, transparent),
+    0 4px 20px rgba(0,0,0,0.16) !important;
+}
+
+/* ═══ BUTTONS — iOS 26 pill glass buttons ═══ */
 body.glass-mode .btn {
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1),
-              box-shadow 0.3s ease !important;
+  position: relative;
+  border-radius: 100px !important;   /* pill shape как в iOS 26 */
+  overflow: hidden;
+  backdrop-filter: var(--gb-cards);
+  -webkit-backdrop-filter: var(--gb-cards);
+  transition:
+    transform  0.36s var(--gspring),
+    box-shadow 0.25s var(--gease),
+    background 0.2s  var(--gease) !important;
+}
+body.glass-mode .btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    175deg,
+    rgba(255,255,255,0.22) 0%,
+    rgba(255,255,255,0.06) 40%,
+    transparent 70%
+  );
+  z-index: 1;
+}
+body.glass-mode .btn:active {
+  transform: scale(0.94) !important;
 }
 body.glass-mode.glass-optimized .btn {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  border-radius: 100px !important;
+  transition: transform 0.2s ease !important;
 }
-body.glass-mode .btn:active { transform: scale(0.95) !important; }
+body.glass-mode.glass-optimized .btn::after { display: none; }
+
+/* Accent button */
 body.glass-mode .btn-accent {
-  background: color-mix(in srgb, var(--accent) 22%, transparent) !important;
-  border: 1.5px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 28%, rgba(255,255,255,0.06)) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, rgba(255,255,255,0.3)) !important;
   color: #fff !important;
-  box-shadow: 0 4px 24px color-mix(in srgb, var(--accent) 30%, transparent), inset 0 1px 0 rgba(255,255,255,0.2) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.45),
+    inset 0 -1px 0 rgba(0,0,0,0.08),
+    0 4px 24px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 1px 6px rgba(0,0,0,0.12) !important;
 }
 body.glass-mode .btn-accent2 {
-  background: color-mix(in srgb, var(--accent2) 22%, transparent) !important;
-  border: 1.5px solid color-mix(in srgb, var(--accent2) 35%, transparent);
+  background: color-mix(in srgb, var(--accent2) 28%, rgba(255,255,255,0.06)) !important;
+  border: 1px solid color-mix(in srgb, var(--accent2) 50%, rgba(255,255,255,0.28)) !important;
   color: #fff !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.40),
+    inset 0 -1px 0 rgba(0,0,0,0.08),
+    0 4px 20px color-mix(in srgb, var(--accent2) 35%, transparent),
+    0 1px 5px rgba(0,0,0,0.10) !important;
 }
+
+/* Surface / neutral button */
 body.glass-mode .btn-surface {
-  background: rgba(255,255,255,0.09) !important;
-  border: 1.5px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.10) !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
   color: var(--text) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.45),
+    inset 0 -1px 0 rgba(255,255,255,0.06),
+    0 3px 14px rgba(0,0,0,0.14) !important;
 }
 body.glass-mode .btn-surface3 {
-  background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
-  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, rgba(255,255,255,0.08)) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, rgba(255,255,255,0.2)) !important;
   color: var(--accent) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.40),
+    inset 0 -1px 0 rgba(255,255,255,0.06),
+    0 3px 14px color-mix(in srgb, var(--accent) 20%, transparent) !important;
 }
-body.glass-mode .nav-item .nav-icon {
-  transition: transform 0.5s cubic-bezier(0.34,1.56,0.64,1) !important;
+body.glass-mode .btn-success {
+  background: rgba(74,158,92,0.28) !important;
+  border: 1px solid rgba(74,158,92,0.50) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.40),
+    0 4px 16px rgba(74,158,92,0.30) !important;
 }
-body.glass-mode .nav-item.active .nav-icon {
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 70%, transparent));
+body.glass-mode .btn-danger {
+  background: rgba(201,79,79,0.28) !important;
+  border: 1px solid rgba(201,79,79,0.50) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.35),
+    0 4px 16px rgba(201,79,79,0.28) !important;
 }
-body.glass-mode .screen {
-  transition: opacity 0.28s cubic-bezier(0.4,0,0.2,1),
-              transform 0.38s cubic-bezier(0.34,1.2,0.64,1) !important;
+
+/* ── Toggle switch — стеклянный вариант iOS ── */
+body.glass-mode .toggle-switch {
+  background: rgba(255,255,255,0.18) !important;
+  border: 1px solid rgba(255,255,255,0.28) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.45),
+    inset 0 2px 6px rgba(0,0,0,0.14),
+    0 2px 8px rgba(0,0,0,0.12) !important;
 }
-body.glass-mode.glass-optimized .screen { transition: opacity 0.15s ease !important; }
+body.glass-mode .toggle-switch.on {
+  background: var(--accent) !important;
+  border-color: color-mix(in srgb, var(--accent) 70%, rgba(255,255,255,0.4)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.50),
+    0 2px 12px color-mix(in srgb, var(--accent) 50%, transparent),
+    0 0 20px color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+body.glass-mode .toggle-switch::after {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.30) !important;
+}
+
+/* ── Input fields ── */
 body.glass-mode .inp {
   background: rgba(255,255,255,0.07) !important;
-  border-color: rgba(255,255,255,0.15) !important;
+  border: 1px solid rgba(255,255,255,0.16) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 2px 8px rgba(0,0,0,0.10) !important;
 }
 body.glass-mode .inp:focus {
-  border-color: color-mix(in srgb, var(--accent) 60%, transparent) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent) !important;
+  background: rgba(255,255,255,0.10) !important;
+  border-color: color-mix(in srgb, var(--accent) 65%, rgba(255,255,255,0.25)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.20),
+    0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent),
+    0 0 16px color-mix(in srgb, var(--accent) 18%, transparent) !important;
 }
-body.glass-mode .pair-card.is-now {
-  background: color-mix(in srgb, var(--accent) 13%, transparent) !important;
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent) !important;
-  box-shadow: 0 0 28px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 1px 0 rgba(255,255,255,0.15) !important;
-}
-body.glass-mode .now-badge {
-  background: color-mix(in srgb, var(--accent) 35%, transparent) !important;
-  backdrop-filter: blur(8px);
-}
+
+/* ── Toast notification — стеклянная плашка ── */
 body.glass-mode .toast {
-  background: rgba(20,30,60,0.82) !important;
-  backdrop-filter: blur(20px) !important;
-  border-color: rgba(255,255,255,0.15) !important;
+  background: color-mix(in srgb, var(--bg) 50%, rgba(20,20,30,0.5)) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  border: 1px solid rgba(255,255,255,0.20) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.40),
+    0 8px 32px rgba(0,0,0,0.25) !important;
 }
-body.glass-mode .ripple { background: color-mix(in srgb, var(--accent) 28%, transparent) !important; }
-body.glass-mode .egg-overlay,
+
+/* ── Ripple ── */
+body.glass-mode .ripple {
+  background: radial-gradient(circle, rgba(255,255,255,0.35) 0%, transparent 70%) !important;
+}
+
+/* ── Now badge ── */
+body.glass-mode .now-badge {
+  background: color-mix(in srgb, var(--accent) 40%, rgba(255,255,255,0.1)) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+
+/* ── Section labels ── */
+body.glass-mode .section-label {
+  text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/* ── Overlays ── */
+body.glass-mode .egg-overlay {
+  background: color-mix(in srgb, var(--bg) 70%, transparent) !important;
+  backdrop-filter: blur(30px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(200%) !important;
+}
 body.glass-mode .ota-overlay .ota-sheet {
-  backdrop-filter: blur(24px) saturate(200%);
-  -webkit-backdrop-filter: blur(24px) saturate(200%);
-}
-body.glass-mode .list-item.selected {
-  background: color-mix(in srgb, var(--accent) 18%, transparent) !important;
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent) !important;
-  box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 25%, transparent), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+  background: color-mix(in srgb, var(--bg) 55%, rgba(20,20,30,0.4)) !important;
+  backdrop-filter: blur(30px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(200%) !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.45), 0 20px 60px rgba(0,0,0,0.4) !important;
 }
 
 /* ── Custom background ── */
@@ -443,19 +703,19 @@ body.custom-bg-active {
 }
 body.custom-bg-active .hdr,
 body.custom-bg-active .bottom-nav {
-  background: rgba(0,0,0,0.45) !important;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: rgba(0,0,0,0.42) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 body.custom-bg-active.glass-mode .hdr,
 body.custom-bg-active.glass-mode .bottom-nav {
-  background: rgba(0,0,0,0.3) !important;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: rgba(0,0,0,0.28) !important;
+  backdrop-filter: var(--gb) !important;
+  -webkit-backdrop-filter: var(--gb) !important;
 }
 
-/* Legacy: keep data-theme=glass working */
-[data-theme="glass"] body::before { animation: glassBlobs 14s ease-in-out infinite alternate; }
+/* Legacy fallback */
+[data-theme="glass"] body::before { animation: lgBlobs 18s ease-in-out infinite alternate; }
 
 /* ── Easter Egg (overlay) ── */
 .egg-overlay{
@@ -912,7 +1172,7 @@ body.disco-mode{animation:disco-pulse 1s ease-in-out infinite;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.0 — Android</div>
+        <div class="item-sub" id="app-version-str">3.1 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2244,8 +2504,31 @@ function updateBgUI(){
   if(removeBtn) removeBtn.style.display = S.customBg ? '' : 'none';
 }
 function pickBgImage(){
-  const inp=document.getElementById('bg-file-input');
-  if(inp) inp.click();
+  // На Android — используем нативный пикер (обходит проблему доступа к файлам)
+  if(window.Android && window.Android.pickImageForBackground){
+    window.Android.pickImageForBackground();
+  } else {
+    // Браузер / десктоп — обычный file input
+    const inp=document.getElementById('bg-file-input');
+    if(inp) inp.click();
+  }
+}
+
+// Колбэк вызывается из Java после выбора изображения
+function onNativeBgImagePicked(dataUrl){
+  if(!dataUrl || !dataUrl.startsWith('data:image')){
+    toast('❌ Неверный формат изображения');
+    return;
+  }
+  // Проверяем размер (~10 МБ = ~13.3 МБ base64)
+  if(dataUrl.length > 14 * 1024 * 1024){
+    toast('⚠️ Изображение слишком большое, выбери поменьше');
+    return;
+  }
+  S.customBg = dataUrl;
+  saveLocal();
+  applyCustomBg();
+  toast('🖼 Фон применён');
 }
 function onBgFileChosen(e){
   const file=e.target.files && e.target.files[0];
@@ -2705,7 +2988,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='3.0';
+const APP_VERSION='3.1';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
