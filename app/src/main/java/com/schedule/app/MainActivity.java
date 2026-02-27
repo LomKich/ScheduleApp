@@ -498,39 +498,48 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String nativeFetch(String urlStr) {
             log.i(TAG, "nativeFetch: " + urlStr);
+            return nativeFetchInternal(urlStr, buildProxy());
+        }
+
+        /**
+         * Нативное скачивание файла без CORS — возвращает JSON: {ok, base64, error?}
+         * base64 — содержимое файла в Base64, декодируется в JS в ArrayBuffer.
+         */
+        @JavascriptInterface
+        public String nativeDownloadBase64(String urlStr) {
+            log.i(TAG, "nativeDownloadBase64: " + urlStr);
+            return nativeDownloadBase64Internal(urlStr, buildProxy());
+        }
+
+        /**
+         * Установить SOCKS5 прокси (например, от Telegram).
+         * Вызов: Android.setSocksProxy('proxy.example.com', 1080, 'user', 'pass')
+         * Для сброса: Android.setSocksProxy('', 0, '', '')
+         */
+        @JavascriptInterface
+        public void setSocksProxy(String host, int port, String username, String password) {
+            log.i(TAG, "setSocksProxy host=" + host + " port=" + port);
+            prefs.edit()
+                .putString("proxy_host", host)
+                .putInt("proxy_port", port)
+                .putString("proxy_user", username != null ? username : "")
+                .putString("proxy_pass", password != null ? password : "")
+                .apply();
+        }
+
+        /**
+         * Получить текущие настройки прокси — JSON: {host, port, user}
+         */
+        @JavascriptInterface
+        public String getProxySettings() {
             try {
-                URL url = new URL(urlStr);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp/1.0");
-                conn.setRequestProperty("Accept", "application/json");
-                conn.setInstanceFollowRedirects(true);
-                int status = conn.getResponseCode();
-                InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                byte[] tmp = new byte[8192];
-                int n;
-                while ((n = is.read(tmp)) != -1) baos.write(tmp, 0, n);
-                is.close();
-                conn.disconnect();
-                String body = baos.toString(StandardCharsets.UTF_8.name());
-                JSONObject res = new JSONObject();
-                res.put("ok", status >= 200 && status < 300);
-                res.put("status", status);
-                res.put("body", body);
-                return res.toString();
+                JSONObject obj = new JSONObject();
+                obj.put("host", prefs.getString("proxy_host", ""));
+                obj.put("port", prefs.getInt("proxy_port", 0));
+                obj.put("user", prefs.getString("proxy_user", ""));
+                return obj.toString();
             } catch (Exception e) {
-                log.e(TAG, "nativeFetch error: " + e.getMessage());
-                try {
-                    JSONObject err = new JSONObject();
-                    err.put("ok", false);
-                    err.put("status", 0);
-                    err.put("body", "");
-                    err.put("error", e.getMessage());
-                    return err.toString();
-                } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
+                return "{}";
             }
         }
 
@@ -646,52 +655,6 @@ public class MainActivity extends Activity {
                     );
                 }
             });
-        }
-
-        /**
-         * Нативное скачивание файла без CORS — возвращает JSON: {ok, base64, error?}
-         * base64 — содержимое файла в Base64, декодируется в JS в ArrayBuffer.
-         */
-        @JavascriptInterface
-        public String nativeDownloadBase64(String urlStr) {
-            log.i(TAG, "nativeDownloadBase64: " + urlStr);
-            try {
-                URL url = new URL(urlStr);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setConnectTimeout(30000);
-                conn.setReadTimeout(30000);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp/1.0");
-                conn.setInstanceFollowRedirects(true);
-                int status = conn.getResponseCode();
-                if (status < 200 || status >= 300) {
-                    conn.disconnect();
-                    JSONObject err = new JSONObject();
-                    err.put("ok", false);
-                    err.put("error", "HTTP " + status);
-                    return err.toString();
-                }
-                InputStream is = conn.getInputStream();
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                byte[] tmp = new byte[16384];
-                int n;
-                while ((n = is.read(tmp)) != -1) baos.write(tmp, 0, n);
-                is.close();
-                conn.disconnect();
-                String b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
-                JSONObject res = new JSONObject();
-                res.put("ok", true);
-                res.put("base64", b64);
-                return res.toString();
-            } catch (Exception e) {
-                log.e(TAG, "nativeDownloadBase64 error: " + e.getMessage());
-                try {
-                    JSONObject err = new JSONObject();
-                    err.put("ok", false);
-                    err.put("error", e.getMessage());
-                    return err.toString();
-                } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
-            }
         }
 
         /**
@@ -834,6 +797,113 @@ public class MainActivity extends Activity {
                 return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
             } catch (Exception e) {
                 return "1.5.0";
+            }
+        }
+
+        // ─── Прокси-хелперы ────────────────────────────────────────────────────
+
+        /** Строит java.net.Proxy из сохранённых настроек (SOCKS5 или NO_PROXY). */
+        private java.net.Proxy buildProxy() {
+            String host = prefs.getString("proxy_host", "");
+            int    port = prefs.getInt("proxy_port", 0);
+            if (host == null || host.isEmpty() || port <= 0) {
+                return java.net.Proxy.NO_PROXY;
+            }
+            log.i(TAG, "buildProxy SOCKS5 " + host + ":" + port);
+            java.net.InetSocketAddress addr = new java.net.InetSocketAddress(host, port);
+            java.net.Proxy proxy = new java.net.Proxy(java.net.Proxy.Type.SOCKS, addr);
+
+            // Если задан пользователь — регистрируем Authenticator
+            String user = prefs.getString("proxy_user", "");
+            String pass = prefs.getString("proxy_pass", "");
+            if (user != null && !user.isEmpty()) {
+                final String fu = user, fp = pass != null ? pass : "";
+                java.net.Authenticator.setDefault(new java.net.Authenticator() {
+                    @Override
+                    protected java.net.PasswordAuthentication getPasswordAuthentication() {
+                        return new java.net.PasswordAuthentication(fu, fp.toCharArray());
+                    }
+                });
+            }
+            return proxy;
+        }
+
+        /** nativeFetch с поддержкой прокси. */
+        private String nativeFetchInternal(String urlStr, java.net.Proxy proxy) {
+            try {
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection(proxy);
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp/1.0");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setInstanceFollowRedirects(true);
+                int status = conn.getResponseCode();
+                InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] tmp = new byte[8192];
+                int n;
+                while ((n = is.read(tmp)) != -1) baos.write(tmp, 0, n);
+                is.close();
+                conn.disconnect();
+                String body = baos.toString(StandardCharsets.UTF_8.name());
+                JSONObject res = new JSONObject();
+                res.put("ok", status >= 200 && status < 300);
+                res.put("status", status);
+                res.put("body", body);
+                return res.toString();
+            } catch (Exception e) {
+                log.e(TAG, "nativeFetchInternal error: " + e.getMessage());
+                try {
+                    JSONObject err = new JSONObject();
+                    err.put("ok", false);
+                    err.put("status", 0);
+                    err.put("body", "");
+                    err.put("error", e.getMessage());
+                    return err.toString();
+                } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
+            }
+        }
+
+        /** nativeDownloadBase64 с поддержкой прокси. */
+        private String nativeDownloadBase64Internal(String urlStr, java.net.Proxy proxy) {
+            try {
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection(proxy);
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(30000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp/1.0");
+                conn.setInstanceFollowRedirects(true);
+                int status = conn.getResponseCode();
+                if (status < 200 || status >= 300) {
+                    conn.disconnect();
+                    JSONObject err = new JSONObject();
+                    err.put("ok", false);
+                    err.put("error", "HTTP " + status);
+                    return err.toString();
+                }
+                InputStream is = conn.getInputStream();
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] tmp = new byte[16384];
+                int n;
+                while ((n = is.read(tmp)) != -1) baos.write(tmp, 0, n);
+                is.close();
+                conn.disconnect();
+                String b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+                JSONObject res = new JSONObject();
+                res.put("ok", true);
+                res.put("base64", b64);
+                return res.toString();
+            } catch (Exception e) {
+                log.e(TAG, "nativeDownloadBase64Internal error: " + e.getMessage());
+                try {
+                    JSONObject err = new JSONObject();
+                    err.put("ok", false);
+                    err.put("error", e.getMessage());
+                    return err.toString();
+                } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
             }
         }
 
