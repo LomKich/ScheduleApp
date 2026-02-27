@@ -967,9 +967,67 @@ body.custom-bg-active.glass-optimized.preblur-ready #file-section .btn {
   -webkit-backdrop-filter: none !important;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   BLUR OFF — пользователь выключил blur для обычного режима
+   Элементы становятся просто тёмными полупрозрачными панелями
+   ══════════════════════════════════════════════════════════════════ */
+body.custom-bg-active.bg-blur-off .list-item,
+body.custom-bg-active.bg-blur-off .last-group-btn,
+body.custom-bg-active.bg-blur-off #file-section .btn,
+body.custom-bg-active.bg-blur-off .hero-card,
+body.custom-bg-active.bg-blur-off .hdr,
+body.custom-bg-active.bg-blur-off .bottom-nav {
+  background-image: none !important;
+  background-color: rgba(0,0,0,0.52) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 
+/* ══════════════════════════════════════════════════════════════════
+   LIVE BLUR CANVAS — glass-mode + custom bg
+   Canvas рендерится в 1/4 разрешения и отображается на весь экран.
+   Элементы поверх него — полупрозрачные, чтобы просвечивал blur.
+   ══════════════════════════════════════════════════════════════════ */
 
-/* Legacy fallback */
+/* Активируем live canvas в glass-mode + custom bg */
+body.glass-mode.custom-bg-active #live-blur-canvas {
+  display: block !important;
+}
+/* Когда canvas готов — показываем */
+body.glass-mode.custom-bg-active.liveblur-ready #live-blur-canvas {
+  opacity: 1 !important;
+}
+
+/* Glass-mode + custom bg: карточки видят live canvas сквозь себя */
+body.glass-mode.custom-bg-active .list-item,
+body.glass-mode.custom-bg-active .pair-card,
+body.glass-mode.custom-bg-active .bell-card,
+body.glass-mode.custom-bg-active .settings-row,
+body.glass-mode.custom-bg-active .last-group-btn,
+body.glass-mode.custom-bg-active .theme-card,
+body.glass-mode.custom-bg-active .proxy-card,
+body.glass-mode.custom-bg-active .diff-btn {
+  /* Тёмный tint поверх live canvas — no pre-blurred-bg, no backdrop-filter */
+  background-image: none !important;
+  background-color: rgba(0, 0, 0, 0.22) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body.glass-mode.custom-bg-active .hero-card {
+  background-image: none !important;
+  background-color: rgba(0, 0, 0, 0.28) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* hdr/nav в glass + custom bg: тоже просвечивает через live canvas */
+body.glass-mode.custom-bg-active .hdr,
+body.glass-mode.custom-bg-active .bottom-nav {
+  background-image: none !important;
+  background-color: rgba(0, 0, 0, 0.30) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 [data-theme="glass"] body::before { animation: lgBlobs 18s ease-in-out infinite alternate; }
 
 /* ── Easter Egg (overlay) ── */
@@ -1302,6 +1360,9 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 </style>
 <body>
 <div id="bg-layer"></div>
+<!-- Live blur canvas: рендерится в 1/4 разрешения, CSS масштабирует до 100vw×100vh.
+     Активен только в glass-mode + custom bg. StackBlur каждый кадр через rAF. -->
+<canvas id="live-blur-canvas" style="display:none;position:fixed;inset:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;image-rendering:auto;opacity:0;transition:opacity 0.3s ease;"></canvas>
 
 <!-- ГЛАВНАЯ -->
 <div class="screen active" id="s-home">
@@ -1441,6 +1502,14 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <button class="btn btn-surface" onclick="pickBgImage()" style="margin-bottom:6px">🖼 Загрузить фон (PNG / JPG)</button>
     <button id="remove-bg-btn" class="btn btn-danger" onclick="removeBgImage()" style="display:none;margin-bottom:6px">🗑 Удалить фон</button>
     <input type="file" id="bg-file-input" accept="image/*,image/png,image/jpeg,image/jpg,image/gif,image/webp,image/bmp,image/heic,image/heif,image/avif,.png,.jpg,.jpeg,.gif,.webp,.bmp,.heic,.heif,.avif" style="display:none" onchange="onBgFileChosen(event)">
+    <!-- Тоггл блюра для обычного режима (без liquid glass) -->
+    <div id="bg-blur-row" style="display:none;border-top:1px solid rgba(255,255,255,.07);padding:12px 16px;margin-top:4px;background:var(--surface);border-radius:var(--rb);align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:13px;font-weight:600">🌫 Блюр на элементах</div>
+        <div class="settings-row-sub">Размытый фон под кнопками (pre-blur, не влияет на FPS). Если лагает — выключи</div>
+      </div>
+      <div id="bg-blur-toggle" class="toggle-switch" onclick="toggleBgBlur()" style="flex-shrink:0"></div>
+    </div>
     <div class="sep"></div>
 
     <!-- Звук -->
@@ -1477,7 +1546,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.1.7 — Android</div>
+        <div class="item-sub" id="app-version-str">3.1.8 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2330,7 +2399,8 @@ const S={
   theme:'orange',dns:'system',customDns:'',dpi:'general',
   customProxy:'',proxyProvider:'allorigins',
   appIcon:'orange',liquidGlass:false,liquidGlassOpt:false,customBg:'',
-  customBgBlurred:'' // кэш pre-blurred версии фона (не сохраняется в localStorage)
+  customBgBlurred:'',  // кэш pre-blurred версии фона (не сохраняется в localStorage)
+  customBgBlurEnabled:true // вкл/выкл blur для обычного режима (с custom bg, без glass)
 };
 const FILE_CACHE={};
 let allGroups=[];
@@ -2350,6 +2420,7 @@ function loadLocal(){
     if(S.theme==='glass'){S.theme='orange';S.liquidGlass=true;}
     else S.liquidGlass=d.liquidGlass||false;
     S.liquidGlassOpt=d.liquidGlassOpt||false;
+    S.customBgBlurEnabled = (d.customBgBlurEnabled !== false); // default true
     // Фон грузим из отдельного ключа
     S.customBg = stor.get('sched_bg') || '';
     S.url=d.url||DEFAULT_URL;
@@ -2373,6 +2444,7 @@ function saveLocal(){
     group:S.lastGroup,theme:S.theme,url:S.url,
     dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy,proxyProvider:S.proxyProvider,
     appIcon:S.appIcon,liquidGlass:S.liquidGlass,liquidGlassOpt:S.liquidGlassOpt,
+    customBgBlurEnabled:S.customBgBlurEnabled,
     hasBg: !!S.customBg
   }));
   // Фон хранится отдельно (может быть >1МБ base64)
@@ -2800,6 +2872,9 @@ function applyGlassMode(save){
   if(got) got.classList.toggle('on', !!S.liquidGlassOpt);
   // Показываем строку оптимизации если есть хоть какой-то блюр (glass ИЛИ кастомный фон)
   if(optRow) optRow.style.display = blurActive ? 'flex' : 'none';
+  // Управление live blur canvas (только glass + custom bg)
+  if(S.liquidGlass && S.customBg) startLiveBlur();
+  else stopLiveBlur();
   if(save) saveLocal();
 }
 function toggleGlassMode(){
@@ -2815,6 +2890,23 @@ function toggleGlassOpt(){
   applyGlassMode(true);
   toast(S.liquidGlassOpt ? '⚡ Оптимизация блюра включена' : 'Оптимизация блюра выключена');
 }
+
+/* ── Blur toggle для обычного режима (без glass) ── */
+function toggleBgBlur(){
+  S.customBgBlurEnabled = !S.customBgBlurEnabled;
+  applyBgBlurState();
+  saveLocal();
+  toast(S.customBgBlurEnabled ? '🌫 Блюр включён' : 'Блюр выключен');
+}
+function applyBgBlurState(){
+  document.body.classList.toggle('bg-blur-off', !S.customBgBlurEnabled);
+  const tog = document.getElementById('bg-blur-toggle');
+  const row = document.getElementById('bg-blur-row');
+  if(tog) tog.classList.toggle('on', !!S.customBgBlurEnabled);
+  // Показываем только когда custom bg есть И не в glass-mode
+  if(row) row.style.display = (S.customBg && !S.liquidGlass) ? 'flex' : 'none';
+}
+
 
 /* ── Custom Background ── */
 function applyCustomBg(){
@@ -2852,6 +2944,7 @@ function applyCustomBg(){
   }
   // Обновляем видимость тоггла оптимизации (он нужен и при кастомном фоне)
   applyGlassMode(false);
+  applyBgBlurState();
   updateBgUI();
 }
 function updateBgUI(){
@@ -2887,6 +2980,7 @@ function onNativeBgImagePicked(dataUrl){
   S.customBg = dataUrl;
   S.customBgBlurred = ''; // сбрасываем кэш — пересчитаем для нового фото
   saveLocal();
+  resetLiveBlur(); // сброс live blur — перезагрузит новое фото
   applyCustomBg();
   toast('🖼 Фон применён');
 }
@@ -2900,6 +2994,7 @@ function onBgFileChosen(e){
     S.customBg=ev.target.result;
     S.customBgBlurred=''; // сбрасываем кэш pre-blur
     saveLocal();
+    resetLiveBlur();
     applyCustomBg();
     toast('🖼 Фон применён');
   };
@@ -2912,9 +3007,141 @@ function removeBgImage(){
   S.customBgBlurred='';
   document.documentElement.style.removeProperty('--pre-blurred-bg');
   document.body.classList.remove('preblur-ready');
+  stopLiveBlur();
   saveLocal();
   applyCustomBg();
   toast('Фон удалён');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🎬 LIVE BLUR ENGINE (glass-mode + custom bg) ─────────────────
+//
+// Принцип: StackBlur каждый кадр на 1/4 разрешении.
+//
+// Почему это быстро:
+//  • Canvas: screen.width/4 × screen.height/4 ≈ ~97×200 px = ~20 000 пикселей
+//  • StackBlur O(n) = ~20 000 операций — менее 2мс на кадр на Android
+//  • CSS масштабирует canvas до 100vw×100vh — браузерный upscale "бесплатный"
+//  • Нет backdrop-filter ни на одном элементе — 0 compositor layers = 0 GPU per frame
+//  • Элементы просто полупрозрачные поверх canvas — рендер без GPU
+//
+// Цикл: rAF → drawImage(bgImg) → stackBlurRGB → следующий кадр
+// ══════════════════════════════════════════════════════════════════
+let _liveBlurRaf  = null;   // rAF handle
+let _liveBlurImg  = null;   // Image объект с фоном
+let _liveBlurCvs  = null;   // offscreen canvas (маленький — 1/4 размера)
+let _liveBlurCtx  = null;   // его ctx
+let _liveBlurOut  = null;   // visible canvas в DOM
+let _liveBlurOutCtx = null; // его ctx
+let _liveBlurW    = 0;
+let _liveBlurH    = 0;
+let _liveBlurReady = false;
+
+function _liveBlurInit(){
+  const SW = window.screen.width  || 390;
+  const SH = window.screen.height || 844;
+
+  // 1/4 разрешение — рабочий canvas (маленький, не в DOM)
+  const CW = Math.max(4, Math.round(SW / 4));
+  const CH = Math.max(4, Math.round(SH / 4));
+
+  if(_liveBlurW === CW && _liveBlurH === CH && _liveBlurCvs) return true; // уже инит
+
+  _liveBlurW = CW; _liveBlurH = CH;
+  _liveBlurCvs = document.createElement('canvas');
+  _liveBlurCvs.width  = CW;
+  _liveBlurCvs.height = CH;
+  _liveBlurCtx = _liveBlurCvs.getContext('2d', { willReadFrequently: true });
+  _liveBlurCtx.imageSmoothingEnabled = true;
+  _liveBlurCtx.imageSmoothingQuality = 'low'; // быстро
+
+  _liveBlurOut = document.getElementById('live-blur-canvas');
+  if(!_liveBlurOut) return false;
+  // Выходной canvas — тоже 1/4, CSS растягивает до 100vw×100vh
+  _liveBlurOut.width  = CW;
+  _liveBlurOut.height = CH;
+  _liveBlurOutCtx = _liveBlurOut.getContext('2d');
+  _liveBlurOutCtx.imageSmoothingEnabled = true;
+  return true;
+}
+
+function _liveBlurLoadImg(callback){
+  if(!S.customBg) { callback(null); return; }
+  if(_liveBlurImg && _liveBlurImg.src === S.customBg) { callback(_liveBlurImg); return; }
+  const img = new Image();
+  img.onload  = () => { _liveBlurImg = img; callback(img); };
+  img.onerror = () => callback(null);
+  img.src = S.customBg;
+}
+
+// Cover-fit для прямоугольника dst
+function _coverFit(iw, ih, dw, dh){
+  const ar  = iw / ih;
+  const sar = dw / dh;
+  let fw, fh, fx, fy;
+  if(ar > sar){ fh = dh; fw = fh * ar; fx = (dw - fw) / 2; fy = 0; }
+  else         { fw = dw; fh = fw / ar; fx = 0; fy = (dh - fh) / 2; }
+  return {fx, fy, fw, fh};
+}
+
+// Один кадр live blur
+function _liveBlurFrame(){
+  if(!_liveBlurCvs || !_liveBlurOut || !_liveBlurImg) return;
+
+  const CW = _liveBlurW, CH = _liveBlurH;
+  const ctx = _liveBlurCtx;
+
+  // 1) Рисуем background с cover-fit в 1/4 разрешении
+  const {fx, fy, fw, fh} = _coverFit(_liveBlurImg.naturalWidth, _liveBlurImg.naturalHeight, CW, CH);
+  ctx.clearRect(0, 0, CW, CH);
+  ctx.drawImage(_liveBlurImg, fx, fy, fw, fh);
+
+  // 2) StackBlur radius=7 (точно как Telegram Utilities.blurBitmap(bmp, 7))
+  const px = ctx.getImageData(0, 0, CW, CH);
+  stackBlurRGB(px.data, CW, CH, 7);
+  ctx.putImageData(px, 0, 0);
+
+  // 3) Копируем на видимый canvas
+  _liveBlurOutCtx.drawImage(_liveBlurCvs, 0, 0);
+
+  // Показываем canvas при первом готовом кадре
+  if(!_liveBlurReady){
+    _liveBlurReady = true;
+    document.body.classList.add('liveblur-ready');
+  }
+
+  _liveBlurRaf = requestAnimationFrame(_liveBlurFrame);
+}
+
+function startLiveBlur(){
+  if(_liveBlurRaf) return; // уже работает
+  if(!_liveBlurInit()) return;
+
+  _liveBlurReady = false;
+  _liveBlurLoadImg(function(img){
+    if(!img) return;
+    _liveBlurRaf = requestAnimationFrame(_liveBlurFrame);
+  });
+}
+
+function stopLiveBlur(){
+  if(_liveBlurRaf){
+    cancelAnimationFrame(_liveBlurRaf);
+    _liveBlurRaf = null;
+  }
+  _liveBlurReady = false;
+  _liveBlurImg = null; // сбрасываем кэш — при следующем старте перечитаем
+  document.body.classList.remove('liveblur-ready');
+  const cvs = document.getElementById('live-blur-canvas');
+  if(cvs){ cvs.style.opacity='0'; }
+}
+
+// Сбросить live blur (при смене фото)
+function resetLiveBlur(){
+  stopLiveBlur();
+  _liveBlurCvs = null; _liveBlurCtx = null;
+  _liveBlurW = 0; _liveBlurH = 0;
+  if(S.liquidGlass && S.customBg) startLiveBlur();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -3272,7 +3499,7 @@ function showScreen(id, dir='forward'){
   const prev=document.getElementById(cur), next=document.getElementById(id);
   // При открытии экрана тем — рендерим темы и иконки заранее
   if(id==='s-themes'){renderThemeGrid();renderIconGrid();}
-  if(id==='s-settings'){updateBgUI();applyGlassMode(false);}
+  if(id==='s-settings'){updateBgUI();applyGlassMode(false);applyBgBlurState();}
   cur=id; _pendingScreenId=id;
   const go=()=>{
     if(_pendingScreenId!==id)return; // если уже другой переход — пропускаем
@@ -3541,7 +3768,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='3.1.7';
+const APP_VERSION='3.1.8';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -4304,6 +4531,7 @@ loadLocal();
 applyTheme(S.theme);
 applyGlassMode(false);
 applyCustomBg();
+applyBgBlurState();
 updateBgUI();
 updateMuteLabel();
 // Логируем инициализацию
