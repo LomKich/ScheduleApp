@@ -78,7 +78,7 @@ body{background:#000;overflow:hidden;width:100vw;height:100vh;font-family:'Couri
 /* ── Touch Controls ── */
 #ctrl{position:fixed;inset:0;z-index:30;pointer-events:none}
 #lpad{position:absolute;left:0;bottom:0;width:48%;height:55%;pointer-events:all;opacity:0}
-#rpad{position:absolute;right:0;bottom:0;width:52%;height:60%;pointer-events:all;opacity:0}
+#rpad{position:absolute;right:0;top:0;width:52%;height:60%;pointer-events:all;opacity:0;touch-action:none}
 .vjoy{
   position:absolute;border-radius:50%;pointer-events:none;display:none;
   width:90px;height:90px;margin:-45px;
@@ -94,18 +94,18 @@ body{background:#000;overflow:hidden;width:100vw;height:100vh;font-family:'Couri
 }
 .btn:active{transform:scale(.88)}
 #btn-fire{
-  right:16px;bottom:180px;width:72px;height:72px;
+  right:16px;bottom:16px;width:72px;height:72px;
   background:rgba(220,30,0,0.9);border:3px solid #ff4400;
   color:#fff;font-size:28px;
   box-shadow:0 0 20px rgba(255,50,0,0.6);
 }
 #btn-jump{
-  right:100px;bottom:180px;width:54px;height:54px;
+  right:100px;bottom:16px;width:54px;height:54px;
   background:rgba(80,80,180,0.85);border:2px solid #88aaff;
   color:#fff;font-size:22px;
 }
 #btn-wpn{
-  right:16px;bottom:260px;width:46px;height:46px;
+  right:16px;bottom:100px;width:46px;height:46px;
   background:rgba(100,80,0,0.85);border:2px solid #cc9900;
   color:#fff;font-size:13px;border-radius:10px;
 }
@@ -702,7 +702,7 @@ const input = {
 let lpadTouch = null, lpadOX = 0, lpadOY = 0;
 let rpadActive = false, rpadId = -1, rpadLX = 0, rpadLY = 0;
 let pcMouseDown = false, pcLastX = 0, pcLastY = 0, pointerLocked = false;
-const LOOK_SENS = 0.003;
+const LOOK_SENS = 0.0015;
 
 function initControls() {
   const lpad = document.getElementById('lpad');

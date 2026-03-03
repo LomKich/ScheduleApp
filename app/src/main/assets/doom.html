@@ -35,13 +35,13 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Je
   display:block
 }
 .doom-ctrl-area{position:absolute;pointer-events:all;opacity:0;touch-action:none;user-select:none;-webkit-user-select:none}
-#doom-lpad{left:0;top:0;width:48%;height:72%;bottom:auto;touch-action:none}
+#doom-lpad{left:0;top:0;width:48%;height:56%;bottom:auto;touch-action:none}
 #doom-lpad::after{
   content:'🕹 MOVE';position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
   color:rgba(255,255,255,0.3);font-size:11px;font-weight:700;letter-spacing:.05em;
   pointer-events:none;
 }
-#doom-rpad{right:0;top:0;width:52%;height:72%;touch-action:none}
+#doom-rpad{right:0;top:0;width:52%;height:56%;touch-action:none}
 #doom-rpad::after{
   content:'👆 LOOK';position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
   color:rgba(255,255,255,0.3);font-size:11px;font-weight:700;letter-spacing:.05em;
@@ -49,7 +49,7 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Je
 }
 #doom-lpad,#doom-rpad{opacity:1}
 #doom-btn-fire{
-  position:absolute;right:16px;bottom:80px;
+  position:absolute;right:16px;bottom:16px;
   width:72px;height:72px;border-radius:50%;
   background:rgba(200,0,0,0.92);border:3px solid #ff3300;
   color:#fff;font-size:26px;font-weight:900;
@@ -60,7 +60,7 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Je
   z-index:10001
 }
 #doom-btn-use{
-  position:absolute;right:110px;bottom:88px;
+  position:absolute;right:110px;bottom:24px;
   width:56px;height:56px;border-radius:50%;
   background:rgba(0,100,200,0.88);border:2px solid #0088ff;
   color:#fff;font-size:13px;font-weight:700;
@@ -71,7 +71,7 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Je
   z-index:10001
 }
 #doom-btn-wpn{
-  position:absolute;right:110px;bottom:158px;
+  position:absolute;right:110px;bottom:106px;
   width:48px;height:48px;border-radius:10px;
   background:rgba(80,80,0,0.88);border:2px solid #cccc00;
   color:#fff;font-size:12px;font-weight:700;

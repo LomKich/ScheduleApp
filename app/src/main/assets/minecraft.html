@@ -17,7 +17,7 @@ body{background:#87CEEB;overflow:hidden;width:100vw;height:100vh;touch-action:no
 #crosshair::after{top:50%;left:0;height:2px;width:100%;margin-top:-1px}
 
 /* HUD bottom */
-#hud{position:fixed;bottom:0;left:0;right:0;pointer-events:none;z-index:20}
+#hud{position:fixed;bottom:0;left:0;right:0;pointer-events:none;z-index:35}
 
 /* Hotbar */
 #hotbar{
@@ -40,7 +40,7 @@ body{background:#87CEEB;overflow:hidden;width:100vw;height:100vh;touch-action:no
 /* Touch controls */
 #ctrl{position:fixed;inset:0;z-index:30;pointer-events:none}
 #lpad{position:absolute;left:0;bottom:0;width:45%;height:52%;pointer-events:all;opacity:0}
-#rpad{position:absolute;right:0;bottom:0;width:55%;height:70%;pointer-events:all;opacity:0}
+#rpad{position:absolute;right:0;top:0;width:55%;height:65%;pointer-events:all;opacity:0}
 .vjoy{
   position:absolute;border-radius:50%;pointer-events:none;display:none;
   width:90px;height:90px;transform:translate(-50%,-50%);
@@ -341,15 +341,30 @@ function buildChunkMesh(cx, cz){
       const r=((faceCol>>16)&0xff)/255;
       const g=((faceCol>>8)&0xff)/255;
       const b=(faceCol&0xff)/255;
-      // Простое ambient occlusion: низ темнее, верх светлее, бока средние
-      const ao=face.side==='bot'?0.6:face.side==='top'?1.0:0.80;
-
-      for(const c of face.corners){
-        // c[] — это ±0.5 от центра блока
-        positions.push(bx+c[0], by+c[1], bz_+c[2]);
-        colors.push(r*ao, g*ao, b*ao);
+      // Направленное освещение граней (как ранний Minecraft)
+      const faceLight=face.side==='top'?1.0:face.side==='bot'?0.5:face.dir[0]!==0?0.72:0.80;
+      // Ambient Occlusion по вершинам (алгоритм Notch, Minecraft Beta 1.8)
+      const [fdx,fdy,fdz]=face.dir;
+      const aoV=face.corners.map(c=>{
+        const sx=(fdx===0)?Math.sign(c[0]):0;
+        const sy=(fdy===0)?Math.sign(c[1]):0;
+        const sz=(fdz===0)?Math.sign(c[2]):0;
+        const e1=!isTrans(getBlock(wx+fdx+sx,wy+fdy+sy,wz+fdz));
+        const e2=!isTrans(getBlock(wx+fdx,   wy+fdy+sy,wz+fdz+sz));
+        const cr=!isTrans(getBlock(wx+fdx+sx,wy+fdy+sy,wz+fdz+sz));
+        if(e1&&e2) return 0.0;
+        return [1.0,0.75,0.50,0.25][e1+e2+cr];
+      });
+      // Анизотропное разбиение — убирает тёмные полосы
+      const flip=(aoV[0]+aoV[2])<(aoV[1]+aoV[3]);
+      for(let ci=0;ci<4;ci++){
+        const c=face.corners[ci];
+        const light=faceLight*aoV[ci];
+        positions.push(bx+c[0],by+c[1],bz_+c[2]);
+        colors.push(r*light,g*light,b*light);
       }
-      indices.push(vi,vi+1,vi+2, vi,vi+2,vi+3);
+      if(!flip) indices.push(vi,vi+1,vi+2,vi,vi+2,vi+3);
+      else      indices.push(vi+1,vi+2,vi+3,vi,vi+1,vi+3);
       vi+=4;
     }
   }
