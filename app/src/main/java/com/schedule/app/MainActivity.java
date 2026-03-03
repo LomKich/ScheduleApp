@@ -3,6 +3,7 @@ package com.schedule.app;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.pm.ActivityInfo;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -115,6 +116,9 @@ public class MainActivity extends Activity {
         ws.setDomStorageEnabled(true);
         ws.setAllowFileAccess(true);
         ws.setAllowContentAccess(true);
+        // Разрешаем iframe-ам из file:// загружать другие локальные файлы (doom.html, minecraft.html, quake.html)
+        ws.setAllowFileAccessFromFileURLs(true);
+        ws.setAllowUniversalAccessFromFileURLs(true);
         // Агрессивное кэширование — страница грузится из кэша, обновляется только при изменениях
         ws.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
@@ -653,6 +657,22 @@ public class MainActivity extends Activity {
                         "if(typeof toast==='function')toast('❌ Не удалось открыть галерею')",
                         null
                     );
+                }
+            });
+        }
+
+        /**
+         * Переключает ориентацию экрана для DOOM и других игр
+         * orientation: "landscape" | "portrait"
+         */
+        @JavascriptInterface
+        public void setOrientation(String orientation) {
+            log.i(TAG, "JS→setOrientation: " + orientation);
+            runOnUiThread(() -> {
+                if ("landscape".equals(orientation)) {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                } else {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
                 }
             });
         }

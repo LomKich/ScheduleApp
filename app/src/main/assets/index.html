@@ -548,22 +548,18 @@ body.glass-mode.glass-optimized .diff-btn {
   transition: none !important;
 }
 
-/* Telegram-style при glass-mode + custom bg: используем pre-blur вместо backdrop-filter
-   Нет больше backdrop-filter на карточках — 0 GPU нагрузки при скролле */
-body.glass-mode.custom-bg-active.preblur-ready .list-item,
-body.glass-mode.custom-bg-active.preblur-ready .pair-card,
-body.glass-mode.custom-bg-active.preblur-ready .bell-card,
-body.glass-mode.custom-bg-active.preblur-ready .settings-row,
-body.glass-mode.custom-bg-active.preblur-ready .last-group-btn,
-body.glass-mode.custom-bg-active.preblur-ready .theme-card,
-body.glass-mode.custom-bg-active.preblur-ready .proxy-card,
-body.glass-mode.custom-bg-active.preblur-ready .diff-btn {
-  background-image: var(--pre-blurred-bg) !important;
-  background-size: cover !important;
-  background-position: center center !important;
-  background-attachment: fixed !important;
-  /* Telegram tint для glass-mode чуть светлее — rgba(255,255,255,0.09) как в исходниках */
-  background-color: rgba(255,255,255,0.09) !important;
+/* Telegram-style при glass-mode + custom bg: используем LIVE BLUR CANVAS вместо pre-blur.
+   Элементы полупрозрачны, живой блюр-канвас проходит сквозь них динамически */
+body.glass-mode.custom-bg-active.liveblur-ready .list-item,
+body.glass-mode.custom-bg-active.liveblur-ready .pair-card,
+body.glass-mode.custom-bg-active.liveblur-ready .bell-card,
+body.glass-mode.custom-bg-active.liveblur-ready .settings-row,
+body.glass-mode.custom-bg-active.liveblur-ready .last-group-btn,
+body.glass-mode.custom-bg-active.liveblur-ready .theme-card,
+body.glass-mode.custom-bg-active.liveblur-ready .proxy-card,
+body.glass-mode.custom-bg-active.liveblur-ready .diff-btn {
+  background-image: none !important;
+  background-color: rgba(0, 0, 0, 0.26) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
@@ -1044,15 +1040,22 @@ body.glass-mode.custom-bg-active .bottom-nav {
 
 [data-theme="glass"] body::before { animation: lgBlobs 18s ease-in-out infinite alternate; }
 
-/* ── Easter Egg (overlay) ── */
+/* === На главном экране фон показывается БЕЗ блюра === */
+body.on-home-screen #live-blur-canvas {
+  opacity: 0 !important;
+  transition: opacity 0.3s ease !important;
+}
+/* #bg-layer (резкий фон) всегда виден, даже если canvas скрыт */
+
+
 .egg-overlay{
   position:fixed;inset:0;z-index:2000;
   background:var(--bg);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
   opacity:0;pointer-events:none;
   transition:opacity .3s ease;
-  padding:calc(60px + var(--safe-top)) 24px calc(24px + var(--safe-bot));
-  overflow-y:auto
+  padding:calc(68px + var(--safe-top)) 24px calc(24px + var(--safe-bot));
+  overflow-y:auto;-webkit-overflow-scrolling:touch
 }
 .egg-overlay.show{opacity:1;pointer-events:all}
 .egg-close{
@@ -1103,6 +1106,14 @@ body.glass-mode.custom-bg-active .bottom-nav {
 }
 .egg-card-new{color:#4caf7d;background:rgba(76,175,125,.15);border-color:rgba(76,175,125,.4)}
 .egg-card-arrow{color:var(--muted);font-size:20px;flex-shrink:0}
+/* ── Game iframe overlays ── */
+.game-iframe-overlay{
+  position:fixed;inset:0;z-index:9999;
+  opacity:0;pointer-events:none;background:#000;
+  transition:opacity .15s ease
+}
+.game-iframe-overlay.active{opacity:1;pointer-events:all}
+.game-iframe-overlay iframe{width:100%;height:100%;border:none;display:block}
 /* ── Game view ── */
 .egg-game{width:100%;display:flex;flex-direction:column;align-items:center}
 .egg-game-title{font-size:18px;font-weight:800;color:var(--text);letter-spacing:-.02em;margin-bottom:4px}
@@ -1131,6 +1142,155 @@ body.glass-mode.custom-bg-active .bottom-nav {
 .tet-btn{background:var(--surface2);border:1.5px solid var(--surface3);border-radius:10px;color:var(--text);font-size:16px;width:50px;height:46px;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;flex-shrink:0;transition:background .1s,transform .1s}
 .tet-btn:active{background:var(--surface3);transform:scale(.92)}
 .tet-btn-wide{width:70px}
+
+/* ── Coin flip ── */
+.coin-scene{
+  perspective:700px;width:160px;height:160px;
+  margin:20px auto 0;cursor:pointer;
+  filter:drop-shadow(0 12px 32px rgba(0,0,0,.55))
+}
+.coin-wrapper{
+  width:160px;height:160px;position:relative;
+  transform-style:preserve-3d;
+  transform:rotateX(10deg) rotateY(0deg)
+}
+/* Heads face */
+.coin-face{
+  position:absolute;inset:0;border-radius:50%;
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden
+}
+.coin-heads{
+  background:radial-gradient(circle at 35% 30%, #ffe87a 0%, #f0c430 40%, #c8980a 75%, #9a7000 100%);
+  box-shadow:inset 0 3px 10px rgba(255,255,255,.45),inset 0 -3px 10px rgba(0,0,0,.35),
+             0 0 0 4px #b88800,0 0 0 6px #e8b800
+}
+.coin-tails{
+  background:radial-gradient(circle at 35% 30%, #f0f0f0 0%, #d8d8d8 40%, #aaaaaa 75%, #888888 100%);
+  box-shadow:inset 0 3px 10px rgba(255,255,255,.5),inset 0 -3px 10px rgba(0,0,0,.3),
+             0 0 0 4px #888888,0 0 0 6px #b0b0b0;
+  transform:rotateY(180deg)
+}
+.coin-inner{font-size:58px;font-weight:900;text-shadow:0 2px 6px rgba(0,0,0,.35);line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))}
+.coin-heads .coin-inner{color:#7a5000}
+.coin-tails .coin-inner{font-size:46px}
+/* Coin edge - ring of thin slices to look thick */
+.coin-edge{
+  position:absolute;width:160px;height:160px;
+  border-radius:50%;transform-style:preserve-3d
+}
+.coin-edge-slice{
+  position:absolute;inset:0;border-radius:50%;
+  backface-visibility:hidden
+}
+
+/* Coin rim — makes the coin look thick */
+.coin-rim{
+  position:absolute;inset:-1px;border-radius:50%;
+  background:transparent;
+  box-shadow:
+    /* outer gold ring — simulates coin thickness */
+    0 0 0 5px #b88000,
+    0 0 0 7px #f0c030,
+    0 0 0 9px #9a7000;
+  transform:translateZ(0px);
+}
+/* Rim slices for 3D edge - generated via JS */
+.coin-rim-strip{
+  position:absolute;width:100%;height:8px;
+  background:linear-gradient(90deg,#9a7000,#d4a017,#f5c842,#d4a017,#9a7000);
+  left:0;border-radius:2px;
+  transform-style:preserve-3d
+}
+
+@keyframes coinTossHeads{
+  0%  {transform:rotateY(0deg)      translateY(0px)   scale(1)}
+  12% {transform:rotateY(720deg)    translateY(-50px)  scale(1.1)}
+  30% {transform:rotateY(1800deg)   translateY(-80px)  scale(1.14)}
+  50% {transform:rotateY(2880deg)   translateY(-60px)  scale(1.1)}
+  62% {transform:rotateY(3600deg)   translateY(-10px)  scale(1.02)}
+  70% {transform:rotateY(3600deg)   translateY(9px)    scale(0.95)}
+  78% {transform:rotateY(3600deg)   translateY(-5px)   scale(1.04)}
+  86% {transform:rotateY(3600deg)   translateY(2px)    scale(0.99)}
+  93% {transform:rotateY(3600deg)   translateY(-1px)   scale(1.01)}
+  100%{transform:rotateY(3600deg)   translateY(0px)    scale(1)}
+}
+@keyframes coinTossTails{
+  0%  {transform:rotateY(0deg)      translateY(0px)   scale(1)}
+  12% {transform:rotateY(720deg)    translateY(-50px)  scale(1.1)}
+  30% {transform:rotateY(1800deg)   translateY(-80px)  scale(1.14)}
+  50% {transform:rotateY(2880deg)   translateY(-60px)  scale(1.1)}
+  62% {transform:rotateY(3780deg)   translateY(-10px)  scale(1.02)}
+  70% {transform:rotateY(3780deg)   translateY(9px)    scale(0.95)}
+  78% {transform:rotateY(3780deg)   translateY(-5px)   scale(1.04)}
+  86% {transform:rotateY(3780deg)   translateY(2px)    scale(0.99)}
+  93% {transform:rotateY(3780deg)   translateY(-1px)   scale(1.01)}
+  100%{transform:rotateY(3780deg)   translateY(0px)    scale(1)}
+}
+@keyframes coinTossEdge{
+  0%  {transform:rotateY(0deg) rotateX(0deg) translateY(0)}
+  15% {transform:rotateY(720deg) rotateX(15deg) translateY(-70px) scale(1.1)}
+  35% {transform:rotateY(1800deg) rotateX(25deg) translateY(-90px) scale(1.12)}
+  60% {transform:rotateY(2880deg) rotateX(20deg) translateY(-30px) scale(1.05)}
+  75% {transform:rotateY(3420deg) rotateX(90deg) translateY(5px) scale(0.96)}
+  85% {transform:rotateY(3420deg) rotateX(90deg) translateY(-3px) scale(1.02)}
+  100%{transform:rotateY(3420deg) rotateX(90deg) translateY(0)}
+}
+.coin-wrapper.flipping-heads{animation:coinTossHeads 1.5s cubic-bezier(.3,.05,.2,1) forwards}
+.coin-wrapper.flipping-tails{animation:coinTossTails 1.5s cubic-bezier(.3,.05,.2,1) forwards}
+.coin-wrapper.edge-flip      {animation:coinTossEdge  2.0s cubic-bezier(.3,.05,.2,1) forwards}
+
+.coin-result{
+  font-size:20px;font-weight:800;color:var(--text);text-align:center;
+  margin-top:16px;min-height:30px;letter-spacing:-.01em
+}
+.coin-streak{font-size:12px;color:var(--muted);text-align:center;min-height:18px;margin-top:4px}
+
+/* ── Dice 3D — solid cube, Telegram style ── */
+.dice-scene{
+  width:120px;height:120px;margin:16px auto 0;
+  perspective:480px;cursor:pointer;
+  user-select:none;-webkit-user-select:none;
+  filter:drop-shadow(0 10px 28px rgba(0,0,0,.5))
+}
+.dice-cube{
+  width:120px;height:120px;position:relative;
+  transform-style:preserve-3d;
+  transform:rotateX(-30deg) rotateY(30deg)
+}
+/* Each face is exactly 120×120 and positioned so faces meet perfectly */
+.dice-face{
+  position:absolute;width:120px;height:120px;
+  border-radius:14px;
+  box-sizing:border-box;backface-visibility:hidden;
+  display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+  padding:14px;gap:2px
+}
+.dice-face-front {transform:translateZ(60px);         background:linear-gradient(155deg,#ffffff,#ededed)}
+.dice-face-back  {transform:rotateY(180deg) translateZ(60px); background:linear-gradient(155deg,#d0d0d0,#c0c0c0)}
+.dice-face-right {transform:rotateY( 90deg) translateZ(60px); background:linear-gradient(155deg,#e6e6e6,#d6d6d6)}
+.dice-face-left  {transform:rotateY(-90deg) translateZ(60px); background:linear-gradient(155deg,#dcdcdc,#cccccc)}
+.dice-face-top   {transform:rotateX( 90deg) translateZ(60px); background:linear-gradient(155deg,#f8f8f8,#efefef)}
+.dice-face-bottom{transform:rotateX(-90deg) translateZ(60px); background:linear-gradient(155deg,#cecece,#bebebe)}
+.dice-dot{
+  width:13px;height:13px;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#ff5252 0%,#c62828 100%);
+  box-shadow:0 1px 3px rgba(0,0,0,.4);
+  justify-self:center;align-self:center
+}
+.dice-cell{display:flex;align-items:center;justify-content:center}
+
+/* Dice cube animation driven by JS (no CSS keyframes needed) */
+.dice-cube{transition:none}
+
+/* ── Tanks controls ── */
+.tanks-controls{
+  display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:12px
+}
+.tanks-controls .dpad-btn{width:60px;height:60px;font-size:24px;border-radius:14px}
+
+/* ── Geometry Dash ── */
 
 /* ── OTA Update Modal ── */
 .ota-overlay{
@@ -1540,10 +1700,14 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <!-- SOCKS5 / Telegram прокси -->
     <div class=\"section-label\">SOCKS5 прокси (Telegram)</div>
     <div id=\"socks-proxy-section\">
+      <!-- Быстрые пресеты Telegram-совместимых SOCKS5 прокси -->
+      <div style=\"font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5\">
+        🚀 Быстрый выбор проверенных Telegram SOCKS5-прокси:
+      </div>
+      <div id=\"tg-proxy-presets\" style=\"display:flex;flex-direction:column;gap:6px;margin-bottom:10px\"></div>
       <div class=\"list-item\" style=\"flex-direction:column;align-items:stretch;gap:8px;padding:12px 16px;cursor:default;margin-bottom:8px\">
         <div style=\"font-size:12px;color:var(--muted);line-height:1.5\">
-          Если сайт Яндекс Диска или прокси недоступен напрямую — можно роутить нативные запросы через SOCKS5.
-          Поддерживается стандартный SOCKS5 (как в настройках Telegram).
+          Или введи свой SOCKS5 прокси (как в настройках Telegram):
         </div>
         <div style=\"display:flex;gap:8px;margin-top:4px\">
           <input class=\"inp\" id=\"socks-host\" placeholder=\"host:port (напр. 1.2.3.4:1080)\"
@@ -1587,7 +1751,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.1.9 — Android</div>
+        <div class="item-sub" id="app-version-str">3.2 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -1764,6 +1928,79 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         </div>
         <div class="egg-card-arrow">›</div>
       </div>
+      <div class="egg-card" onclick="eggStartGame('coin')">
+        <div class="egg-card-icon">🪙</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Монетка</div>
+          <div class="egg-card-desc">Орёл или решка? Есть шанс на ребро...</div>
+          <div class="egg-card-badge egg-card-new">v3.0.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('dice')">
+        <div class="egg-card-icon">🎲</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Кубик</div>
+          <div class="egg-card-desc">Бросай кубик — как в Telegram!</div>
+          <div class="egg-card-badge egg-card-new">v3.0.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('basket')">
+        <div class="egg-card-icon">🏀</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Баскетбол</div>
+          <div class="egg-card-desc">Попади в кольцо, бей рекорды!</div>
+          <div class="egg-card-badge egg-card-new">v3.0.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('geodash')">
+        <div class="egg-card-icon">🟥</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Geometry Dash</div>
+          <div class="egg-card-desc">Прыгай через шипы, держи ритм!</div>
+          <div class="egg-card-badge egg-card-new">v3.0.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('tanks')">
+        <div class="egg-card-icon">🪖</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Танчики</div>
+          <div class="egg-card-desc">Стреляй во врагов, защищай базу!</div>
+          <div class="egg-card-badge egg-card-new">v3.0.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('doom')" style="border-color:rgba(200,0,0,0.4);background:linear-gradient(135deg,rgba(80,0,0,0.5),var(--surface2))">
+        <div class="egg-card-icon">🔫</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name" style="color:#ff4444">DOOM</div>
+          <div class="egg-card-desc">Оригинальный DOOM 1993 — убивай демонов в аду!</div>
+          <div class="egg-card-badge" style="color:#ff4444;background:rgba(200,0,0,0.2);border-color:rgba(200,0,0,0.5)">v4.0.0 ✦ КЛАССИКА ☠️</div>
+        </div>
+        <div class="egg-card-arrow" style="color:#ff4444">›</div>
+      </div>
+
+      <div class="egg-card" onclick="eggStartGame('minecraft')" style="border-color:rgba(80,200,80,0.4);background:linear-gradient(135deg,rgba(0,60,0,0.5),var(--surface2))">
+        <div class="egg-card-icon">⛏️</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name" style="color:#4cff4c">Minecraft</div>
+          <div class="egg-card-desc">Строй, ломай блоки, выживай в 3D мире!</div>
+          <div class="egg-card-badge" style="color:#4cff4c;background:rgba(0,180,0,0.2);border-color:rgba(0,180,0,0.5)">v1.0.0 ✦ 3D ВЫЖИВАНИЕ 🌲</div>
+        </div>
+        <div class="egg-card-arrow" style="color:#4cff4c">›</div>
+      </div>
+      <div class="egg-card" onclick="eggStartGame('quake')" style="border-color:rgba(200,130,0,0.4);background:linear-gradient(135deg,rgba(80,40,0,0.5),var(--surface2))">
+        <div class="egg-card-icon">⚡</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name" style="color:#ffaa00">Quake</div>
+          <div class="egg-card-desc">Шутер от первого лица — убивай монстров!</div>
+          <div class="egg-card-badge" style="color:#ffaa00;background:rgba(200,100,0,0.2);border-color:rgba(200,100,0,0.5)">v1.0.0 ✦ КЛАССИКА 🔥</div>
+        </div>
+        <div class="egg-card-arrow" style="color:#ffaa00">›</div>
+      </div>
     </div>
   </div>
 
@@ -1779,13 +2016,13 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <canvas id="snake-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
     <div class="snake-dpad">
       <div></div>
-      <div class="dpad-btn" ontouchstart="snakeDir(0,-1)" onclick="snakeDir(0,-1)">▲</div>
+      <div class="dpad-btn" ontouchstart="event.preventDefault();snakeDir(0,-1)" onclick="snakeDir(0,-1)">▲</div>
       <div></div>
-      <div class="dpad-btn" ontouchstart="snakeDir(-1,0)" onclick="snakeDir(-1,0)">◀</div>
-      <div class="dpad-btn" style="background:var(--surface3);font-size:12px;color:var(--muted)" ontouchstart="snakeTogglePause()" onclick="snakeTogglePause()">⏸</div>
-      <div class="dpad-btn" ontouchstart="snakeDir(1,0)" onclick="snakeDir(1,0)">▶</div>
+      <div class="dpad-btn" ontouchstart="event.preventDefault();snakeDir(-1,0)" onclick="snakeDir(-1,0)">◀</div>
+      <div class="dpad-btn" style="background:var(--surface3);font-size:12px;color:var(--muted)" ontouchstart="event.preventDefault();snakeTogglePause()" onclick="snakeTogglePause()">⏸</div>
+      <div class="dpad-btn" ontouchstart="event.preventDefault();snakeDir(1,0)" onclick="snakeDir(1,0)">▶</div>
       <div></div>
-      <div class="dpad-btn" ontouchstart="snakeDir(0,1)" onclick="snakeDir(0,1)">▼</div>
+      <div class="dpad-btn" ontouchstart="event.preventDefault();snakeDir(0,1)" onclick="snakeDir(0,1)">▼</div>
       <div></div>
     </div>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="snakeRestart()">🔄 Заново</button>
@@ -1828,10 +2065,10 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <div class="egg-score" id="tet-score-label">Счёт: 0 • Рекорд: 0 • Уровень: 1</div>
     <canvas id="tet-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
     <div class="tet-controls">
-      <button class="tet-btn" ontouchstart="tetMove(-1)" onclick="tetMove(-1)">◀</button>
-      <button class="tet-btn tet-btn-wide" ontouchstart="tetRotate()" onclick="tetRotate()">↻</button>
-      <button class="tet-btn" ontouchstart="tetMove(1)" onclick="tetMove(1)">▶</button>
-      <button class="tet-btn tet-btn-wide" ontouchstart="tetDrop()" onclick="tetDrop()">⬇</button>
+      <button class="tet-btn" ontouchstart="event.preventDefault();tetMove(-1)" onclick="tetMove(-1)">◀</button>
+      <button class="tet-btn tet-btn-wide" ontouchstart="event.preventDefault();tetRotate()" onclick="tetRotate()">↻</button>
+      <button class="tet-btn" ontouchstart="event.preventDefault();tetMove(1)" onclick="tetMove(1)">▶</button>
+      <button class="tet-btn tet-btn-wide" ontouchstart="event.preventDefault();tetDrop()" onclick="tetDrop()">⬇</button>
     </div>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tetRestart()">🔄 Заново</button>
   </div>
@@ -1907,7 +2144,94 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="g2048Restart()">🔄 Заново</button>
   </div>
 
+  <!-- Монетка -->
+  <div id="egg-coin" class="egg-game" style="display:none">
+    <div class="egg-game-title">🪙 Монетка</div>
+    <div class="egg-score" id="coin-score-label">Орёл: 0 • Решка: 0 • Ребро: 0</div>
+    <div class="coin-scene" id="coin-scene">
+      <div class="coin-wrapper" id="coin-wrapper">
+        <div class="coin-face coin-heads" id="coin-heads">
+          <div class="coin-inner">₽</div>
+        </div>
+        <div class="coin-face coin-tails" id="coin-tails">
+          <div class="coin-inner">🦅</div>
+        </div>
+        <!-- Coin edge thickness via multiple rotated slices -->
+        <div class="coin-rim"></div>
+      </div>
+    </div>
+    <div class="coin-result" id="coin-result">Нажми, чтобы подбросить!</div>
+    <div class="coin-streak" id="coin-streak"></div>
+    <button class="btn btn-accent" style="width:200px;margin-top:16px" onclick="coinFlip()">🪙 Бросить!</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:8px;font-size:13px" onclick="coinReset()">🔄 Сбросить</button>
+  </div>
+
+  <!-- Кубик -->
+  <div id="egg-dice" class="egg-game" style="display:none">
+    <div class="egg-game-title">🎲 Кубик</div>
+    <div class="egg-score" id="dice-score-label">Всего бросков: 0</div>
+    <div style="display:flex;gap:24px;justify-content:center;align-items:center;min-height:160px" id="dice-cubes-wrap">
+      <!-- Кубики рендерятся динамически JS -->
+    </div>
+    <div class="dice-result" id="dice-result" style="font-size:28px;font-weight:800;color:var(--accent);min-height:42px;text-align:center;margin-top:8px"></div>
+    <div id="dice-history" style="font-size:12px;color:var(--muted);text-align:center;margin-top:4px;min-height:20px"></div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn btn-accent" style="flex:1" onclick="diceRoll(1)">🎲 Один кубик</button>
+      <button class="btn btn-surface3" style="flex:1" onclick="diceRoll(2)">🎲🎲 Два</button>
+    </div>
+  </div>
+
+  <!-- Баскетбол -->
+  <div id="egg-basket" class="egg-game" style="display:none">
+    <div class="egg-game-title">🏀 Баскетбол</div>
+    <div class="egg-score" id="basket-score-label">Счёт: 0 • Рекорд: 0</div>
+    <canvas id="basket-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">Свайп снизу вверх для броска</div>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="basketRestart()">🔄 Заново</button>
+  </div>
+
+  <!-- Geometry Dash -->
+  <div id="egg-geodash" class="egg-game" style="display:none">
+    <div class="egg-game-title">🟥 Geometry Dash</div>
+    <div class="diff-picker">
+      <button class="diff-btn" onclick="geoDiff='easy';updateDiffBtns('geodash');geoRestart()">🐢 Легко</button>
+      <button class="diff-btn active" onclick="geoDiff='normal';updateDiffBtns('geodash');geoRestart()">⚡ Нормально</button>
+      <button class="diff-btn" onclick="geoDiff='hard';updateDiffBtns('geodash');geoRestart()">💀 Хардкор</button>
+    </div>
+    <div class="egg-score" id="geo-score-label">Попытка: 1 • Рекорд: 0%</div>
+    <canvas id="geo-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">Тап / пробел — прыжок</div>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="geoRestart()">🔄 Заново</button>
+  </div>
+
+  <!-- Танчики -->
+  <div id="egg-tanks" class="egg-game" style="display:none">
+    <div class="egg-game-title">🪖 Танчики</div>
+    <div class="diff-picker">
+      <button class="diff-btn" onclick="tanksDiff='easy';updateDiffBtns('tanks');tanksRestart()">🐢 Легко</button>
+      <button class="diff-btn active" onclick="tanksDiff='normal';updateDiffBtns('tanks');tanksRestart()">⚡ Нормально</button>
+      <button class="diff-btn" onclick="tanksDiff='hard';updateDiffBtns('tanks');tanksRestart()">💀 Хардкор</button>
+    </div>
+    <div class="egg-score" id="tanks-score-label">Уничтожено: 0 • Жизни: ❤️❤️❤️</div>
+    <canvas id="tanks-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
+    <div class="tanks-controls">
+      <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('up')" onclick="tanksDir('up')">▲</div>
+      <div style="display:flex;gap:6px">
+        <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('left')" onclick="tanksDir('left')">◀</div>
+        <div class="dpad-btn" style="background:var(--accent);color:#fff;font-size:14px" ontouchstart="event.preventDefault();tanksShoot()" onclick="tanksShoot()">🔥</div>
+        <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('right')" onclick="tanksDir('right')">▶</div>
+      </div>
+      <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('down')" onclick="tanksDir('down')">▼</div>
+    </div>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tanksRestart()">🔄 Заново</button>
+  </div>
+
 </div>
+
+<!-- ══ Game iframe overlays ══ -->
+<div id="overlay-doom" class="game-iframe-overlay"></div>
+<div id="overlay-minecraft" class="game-iframe-overlay"></div>
+<div id="overlay-quake" class="game-iframe-overlay"></div>
 
 <!-- ══ Модальное окно обновления (в стиле приложения) ══ -->
 <div class="ota-overlay" id="ota-overlay" onclick="otaOverlayClose(event)">
@@ -1934,7 +2258,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 <script>
 // ══ Глобальные переменные — объявлены в начале во избежание TDZ ══
 var _otaApkUrl = '', _otaVersion = '';
-var _eggTaps = 0, _eggTimer = null, _eggLastTouch = 0;
+var _eggTaps = 0, _eggTimer = null, _eggLastTouch = 0, _eggBlockCards = false;
 var _discoActive = false;
 // ══ ПОЛИФИЛ AbortSignal.timeout ══
 // AbortSignal.timeout появился в Chrome 103 (2022).
@@ -3508,6 +3832,24 @@ const SCREEN_PARENTS = {
 
 // Вызывается из Android (кнопка Back на телефоне)
 function nativeBack(){
+  // 1. CMD консоль
+  const cmdOv = document.getElementById('cmd-overlay');
+  if(cmdOv && cmdOv.style.display !== 'none'){ cmdClose(); return true; }
+  // 2. OTA overlay
+  const otaOv = document.getElementById('ota-overlay');
+  if(otaOv && otaOv.classList.contains('show')){ otaClose(); return true; }
+  // 3. Egg overlay (мини-игры)
+  const eggOv = document.getElementById('egg-overlay');
+  if(eggOv && eggOv.classList.contains('show')){
+    const eggBack = document.getElementById('egg-back');
+    if(eggBack && eggBack.classList.contains('show')){
+      eggShowPicker(); // из игры → обратно в пикер
+    } else {
+      eggClose(); // из пикера → закрыть overlay
+    }
+    return true;
+  }
+  // 4. Обычная навигация
   const info = SCREEN_PARENTS[cur];
   if(info){
     if(info.parent==='s-home'){
@@ -3542,6 +3884,9 @@ function showScreen(id, dir='forward'){
   // При открытии экрана тем — рендерим темы и иконки заранее
   if(id==='s-themes'){renderThemeGrid();renderIconGrid();}
   if(id==='s-settings'){updateBgUI();applyGlassMode(false);applyBgBlurState();initSocksUI();}
+  // Управляем классом главного экрана (влияет на live-blur canvas)
+  if(id==='s-home') document.body.classList.add('on-home-screen');
+  else document.body.classList.remove('on-home-screen');
   cur=id; _pendingScreenId=id;
   const go=()=>{
     if(_pendingScreenId!==id)return; // если уже другой переход — пропускаем
@@ -3556,6 +3901,7 @@ function showScreen(id, dir='forward'){
 
 function goHome(){
   showScreen('s-home','back');
+  document.body.classList.add('on-home-screen');
   updateNavActive('nav-home');
   updateLastGroupBtn();
   const fs=document.getElementById('file-section');
@@ -3810,7 +4156,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='3.1.9';
+const APP_VERSION='3.2';
 function getGreeting(){
   const now=new Date();
   const h=now.getHours();
@@ -3929,6 +4275,12 @@ const CMD_HELP=[
   ['/snow',         'вкл/выкл снег  |  on|off'],
   ['/disco',        'вкл/выкл RGB диско  |  on|off|contrast <0-100>'],
   ['/glass',        'вкл/выкл Liquid Glass  |  on|off'],
+  ['/bg',           'clear — убрать фон'],
+  ['/zoom',         '<0.8-1.2> — масштаб интерфейса'],
+  ['/debug',        'системный дамп состояния'],
+  ['/proxy',        'list — список пресетов прокси'],
+  ['/games',        'открыть пасхалку с играми'],
+  ['/turbo',        'турбо-режим FPS (отключает анимации)'],
   ['/shake',        'встряхнуть апп'],
   ['/time',         'сколько времени приложение работает'],
   ['/optimize',     'ядерная оптимизация памяти 🚀'],
@@ -4098,6 +4450,72 @@ function cmdExec(raw){
       cmdPrint('out','Выход...');
       setTimeout(cmdClose,500);
       break;
+    case '/bg': {
+      if(arg==='clear'||arg==='off'){
+        removeBgImage();
+        cmdPrint('ok','Фон удалён');
+      } else {
+        cmdPrint('info','Использование: /bg clear — удалить кастомный фон');
+        cmdPrint('out','Текущий фон: '+(S.customBg?'установлен ('+Math.round(S.customBg.length/1024)+'KB)':'нет'));
+      }
+    } break;
+    case '/zoom': {
+      const z = parseFloat(arg);
+      if(isNaN(z)||z<0.7||z>1.5){
+        cmdPrint('info','Текущий зум: '+(document.documentElement.style.fontSize||'100%'));
+        cmdPrint('out','Использование: /zoom <0.7-1.5>  (напр. /zoom 0.9)');
+      } else {
+        document.documentElement.style.setProperty('font-size', (z*100)+'%');
+        document.documentElement.style.setProperty('zoom', String(z));
+        cmdPrint('ok','Зум установлен: '+z);
+      }
+    } break;
+    case '/debug': {
+      cmdPrint('info','──── Дамп состояния ────');
+      cmdPrint('out','url: '+S.url.substring(0,50));
+      cmdPrint('out','theme: '+S.theme);
+      cmdPrint('out','group: '+(S.lastGroup||'не выбрана'));
+      cmdPrint('out','glass: '+(S.liquidGlass?'on':'off'));
+      cmdPrint('out','customBg: '+(S.customBg?'есть':'нет'));
+      cmdPrint('out','muted: '+(S.muted?'yes':'no'));
+      cmdPrint('out','screen.cur: '+cur);
+      cmdPrint('out','liveblur: '+(document.body.classList.contains('liveblur-ready')?'ready':'off'));
+      cmdPrint('info','──────────────────────');
+    } break;
+    case '/proxy': {
+      if(arg==='list'||!arg){
+        cmdPrint('info','── Пресеты Telegram SOCKS5 ──');
+        TG_PROXY_PRESETS.forEach((p,i)=>cmdPrint('ok','  '+(i+1)+'. '+p.name+' → '+p.host+':'+p.port));
+        cmdPrint('out','Используй /proxy <номер> чтобы выбрать');
+      } else {
+        const idx = parseInt(arg,10)-1;
+        if(idx>=0&&idx<TG_PROXY_PRESETS.length){
+          const p=TG_PROXY_PRESETS[idx];
+          if(document.getElementById('socks-host')) document.getElementById('socks-host').value=p.host+':'+p.port;
+          cmdPrint('ok','Прокси выбран: '+p.name);
+          cmdPrint('warn','Открой Настройки → SOCKS5 и нажми Сохранить');
+        } else {
+          cmdPrint('warn','Неверный номер. Используй /proxy list');
+        }
+      }
+    } break;
+    case '/games':
+      cmdClose();
+      setTimeout(()=>eggOpen(),200);
+      cmdPrint('ok','Открываю игры...');
+      break;
+    case '/turbo': {
+      const turboStyle = document.getElementById('turbo-mode-style');
+      if(turboStyle){ turboStyle.remove(); cmdPrint('ok','Турбо-режим отключён'); }
+      else {
+        const s = document.createElement('style');
+        s.id = 'turbo-mode-style';
+        s.textContent = '*{transition:none!important;animation:none!important;will-change:auto!important}';
+        document.head.appendChild(s);
+        cmdPrint('ok','🚀 Турбо-режим включён — все анимации отключены');
+        cmdPrint('warn','Для отключения: /turbo снова');
+      }
+    } break;
     case '/uwu': {
       const uwuFaces=['(ᵔᴥᵔ)','(◕‿◕✿)','(｡◕‿◕｡)','ʕ•ᴥ•ʔ','(≧◡≦)','UwU','OwO'];
       const uwuPhrases=['UwU режим аwтивирован, сенпай замечен OwO','*виляет хвостиком* расписание уже не страшное nyaa~','тебе нужна помощь, чтобы не опоздать на пару? (≧◡≦)','все пары отменены! ...нет, это не так (｡•́︿•̀｡)','мяу~ *мурчит* пары сегодня есть, но ты справишься UwU'];
@@ -4576,6 +4994,8 @@ applyCustomBg();
 applyBgBlurState();
 updateBgUI();
 updateMuteLabel();
+// Стартуем на главном экране
+document.body.classList.add('on-home-screen');
 // Логируем инициализацию
 setTimeout(function(){
   if(window.Android&&window.Android.logMsg){
@@ -4788,7 +5208,37 @@ function clearCacheAndReload() {
 }
 
 // ══ SOCKS5 / Telegram прокси ══════════════════════════════════════
+
+// Публичные Telegram-совместимые SOCKS5 прокси (могут меняться со временем)
+const TG_PROXY_PRESETS = [
+  { name: '🌍 Public EU #1',  host: '91.108.56.144',  port: 1080, user: '', pass: '' },
+  { name: '🌍 Public EU #2',  host: '91.108.4.31',    port: 1080, user: '', pass: '' },
+  { name: '🇳🇱 Netherlands',  host: '149.154.167.50', port: 1080, user: '', pass: '' },
+  { name: '🇩🇪 Germany',      host: '149.154.175.50', port: 1080, user: '', pass: '' },
+  { name: '🔓 Open #5',       host: '188.166.0.0',    port: 1080, user: 'telegram', pass: 'proxy' },
+];
+
+function renderTgProxyPresets() {
+  const wrap = document.getElementById('tg-proxy-presets');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  TG_PROXY_PRESETS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'proxy-card';
+    btn.style.cssText = 'width:100%;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:var(--rb);padding:11px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-family:inherit;font-size:13px;font-weight:600;color:var(--text);text-align:left;';
+    btn.innerHTML = `<span>${p.name}</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)">${p.host}:${p.port}</span>`;
+    btn.onclick = () => {
+      document.getElementById('socks-host').value = p.host + ':' + p.port;
+      document.getElementById('socks-user').value = p.user || '';
+      document.getElementById('socks-pass').value = p.pass || '';
+      toast('✅ Прокси выбран: ' + p.name);
+    };
+    wrap.appendChild(btn);
+  });
+}
+
 function initSocksUI() {
+  renderTgProxyPresets();
   if (!window.Android || !window.Android.getProxySettings) return;
   try {
     const p = JSON.parse(window.Android.getProxySettings());
@@ -4872,16 +5322,17 @@ function eggTap() {
 
   _eggTaps++;
   clearTimeout(_eggTimer);
-  if (_eggTaps >= 5) { _eggTaps = 0; eggOpen(); return; }
-  if (_eggTaps === 2) toast('🤔 Продолжай...');
-  if (_eggTaps === 4) toast('🔥 Ещё раз!');
-  _eggTimer = setTimeout(() => { _eggTaps = 0; }, 1500);
+  if (_eggTaps >= 2) { _eggTaps = 0; eggOpen(); return; }
+  _eggTimer = setTimeout(() => { _eggTaps = 0; }, 1200);
 }
 
 function eggOpen() {
   SFX.play('eggOpen');
+  _eggBlockCards = true;
   document.getElementById('egg-overlay').classList.add('show');
   eggShowPicker();
+  // Блокируем клики по карточкам на 400мс, чтобы тот же touch/click не запустил игру
+  setTimeout(() => { _eggBlockCards = false; }, 400);
 }
 
 function eggClose() {
@@ -4891,7 +5342,8 @@ function eggClose() {
 
 function eggShowPicker() {
   eggStopAll();
-  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout','egg-bubbles','egg-flappy','egg-2048'].forEach(id => {
+  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout','egg-bubbles','egg-flappy','egg-2048',
+   'egg-coin','egg-dice','egg-basket','egg-geodash','egg-tanks'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -4900,6 +5352,7 @@ function eggShowPicker() {
 }
 
 function eggStartGame(name) {
+  if(_eggBlockCards) return; // блокируем если только что открылось от тапа по версии
   SFX.play('gameSelect');
   document.getElementById('egg-picker').style.display = 'none';
   document.getElementById('egg-back').classList.add('show');
@@ -4914,6 +5367,14 @@ function eggStartGame(name) {
   else if (name === 'bubbles')  { document.getElementById('egg-bubbles').style.display = '';  bubInit(); }
   else if (name === 'flappy')   { document.getElementById('egg-flappy').style.display = '';   flappyInit(); }
   else if (name === '2048')     { document.getElementById('egg-2048').style.display = '';     g2048Init(); }
+  else if (name === 'coin')     { document.getElementById('egg-coin').style.display = '';     coinInit(); }
+  else if (name === 'dice')     { document.getElementById('egg-dice').style.display = '';     diceInit(); }
+  else if (name === 'basket')   { document.getElementById('egg-basket').style.display = '';   basketInit(); }
+  else if (name === 'geodash')  { document.getElementById('egg-geodash').style.display = '';  geoInit(); }
+  else if (name === 'tanks')    { document.getElementById('egg-tanks').style.display = '';    tanksInit(); }
+  else if (name === 'doom')        { doomStart(); }
+  else if (name === 'minecraft')   { minecraftStart(); }
+  else if (name === 'quake')       { quakeStart(); }
 }
 
 function eggStopAll() {
@@ -4925,6 +5386,12 @@ function eggStopAll() {
   bubStop();
   flappyStop();
   g2048Stop();
+  basketStop();
+  geoStop();
+  tanksStop();
+  doomStop();
+  minecraftStop();
+  quakeStop();
 }
 function g2048Stop(){document.removeEventListener('keydown',g2048Key);}
 
@@ -4932,13 +5399,15 @@ function g2048Stop(){document.removeEventListener('keydown',g2048Key);}
 function updateDiffBtns(game) {
   const gameIdMap = {
     snake: 'egg-snake', pong: 'egg-pong', tetris: 'egg-tetris',
-    dino: 'egg-dino', blockblast: 'egg-blockblast', breakout: 'egg-breakout', bubbles: 'egg-bubbles'
+    dino: 'egg-dino', blockblast: 'egg-blockblast', breakout: 'egg-breakout', bubbles: 'egg-bubbles',
+    geodash: 'egg-geodash', tanks: 'egg-tanks'
   };
   const container = document.getElementById(gameIdMap[game]);
   if (!container) return;
   const diffMap = {
     snake: snakeDifficulty, pong: pongDifficulty,
-    tetris: tetDifficulty, dino: dinoDifficulty, blockblast: bbDifficulty, breakout: brDifficulty, bubbles: bubDifficulty
+    tetris: tetDifficulty, dino: dinoDifficulty, blockblast: bbDifficulty, breakout: brDifficulty, bubbles: bubDifficulty,
+    geodash: geoDiff, tanks: tanksDiff
   };
   const cur = diffMap[game];
   const order = ['easy', 'normal', 'hard'];
@@ -5676,18 +6145,20 @@ const DINO_DIFF = {
   hard:   { initSpeed: 7.5, accel: 0.018, jumpVel: -14,   gravity: 0.90 },
 };
 
-// Конфигурации групп кактусов: массив высот (как доля от dinoH) для каждого кактуса в группе
+// Конфигурации групп кактусов — как в оригинальном Chrome Dino:
+// массив высот как доля от dinoH для каждого кактуса в группе
 const CACTUS_CONFIGS = [
-  [0.26],               // одиночный маленький
-  [0.34],               // одиночный средний
-  [0.40],               // одиночный высокий
-  [0.32, 0.36],         // двойной (маленький + высокий)
-  [0.38, 0.24],         // двойной (высокий + маленький)
-  [0.32, 0.32],         // двойной одинаковый
-  [0.28, 0.38, 0.28],   // тройной (арка)
-  [0.36, 0.36, 0.36],   // тройной монолит
-  [0.24, 0.38, 0.38],   // тройной нарастающий
-  [0.40, 0.28, 0.36],   // тройной хаос
+  [0.28],                    // одиночный маленький
+  [0.36],                    // одиночный средний
+  [0.44],                    // одиночный высокий
+  [0.28, 0.28],              // двойной маленький
+  [0.36, 0.36],              // двойной средний
+  [0.28, 0.36],              // двойной: маленький + средний
+  [0.36, 0.28],              // двойной: средний + маленький
+  [0.44, 0.44],              // двойной высокий
+  [0.28, 0.28, 0.28],        // тройной маленький
+  [0.36, 0.36, 0.36],        // тройной средний
+  [0.28, 0.36, 0.28],        // тройной: маленький-средний-маленький
 ];
 
 function dinoInit() {
@@ -5829,12 +6300,12 @@ function dinoTick(dt) {
   if (dinoScore > dinoHi) dinoHi = saveHi("dino", dinoScore);
   dinoUpdateScore();
 
-  // ── Спавн кактусов (хаотичные группы) ──
+  // ── Спавн кактусов (оригинальный Chrome Dino стиль) ──
   const lastCactX = dinoObstacles.length ? dinoObstacles[dinoObstacles.length - 1].x : -Infinity;
-  // Переменный промежуток: от 140 до 380px, зависит от скорости и случайности
-  const minGap = Math.max(140, 280 - d.speed * 10) + Math.random() * 120;
+  // Переменный промежуток: от 200 до 500px, зависит от скорости и случайности (как в оригинале)
+  const minGap = Math.max(200, 400 - d.speed * 8) + Math.random() * 250;
   if (lastCactX < dinoW - minGap || dinoObstacles.length === 0) {
-    if (Math.random() < 0.018 * dt || dinoObstacles.length === 0) {
+    if (Math.random() < 0.014 * dt || dinoObstacles.length === 0) {
       // Выбираем случайную конфигурацию группы кактусов
       const config = CACTUS_CONFIGS[Math.floor(Math.random() * CACTUS_CONFIGS.length)];
       let offsetX = dinoW + 10;
@@ -7085,7 +7556,7 @@ function discoStop(){
 // ══════════════════════════════════════════════════════════════════
 // ── 🐦 ФЛАППИ ПТИЦА (v2.6.0) ─────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
-let flappyRaf=null,flappyRunning=false,flappyStarted=false;
+let flappyRaf=null,flappyRunning=false,flappyStarted=false,flappyLastTime=0;
 let flappyW=0,flappyH=0,flappyScore=0,flappyHi=0;
 let flappyBird={x:0,y:0,vy:0,r:14};
 const FLAPPY_GRAVITY=0.38,FLAPPY_JUMP=-7.2,FLAPPY_PIPE_W=52,FLAPPY_GAP=140,FLAPPY_SPEED=2.4;
@@ -7116,7 +7587,7 @@ function flappyFlap(){
 function flappyRestart(){
   flappyScore=0; flappyStarted=false;
   flappyBird={x:flappyW*0.28,y:flappyH*0.45,vy:0,r:14};
-  flappyPipes=[]; flappyFrames=0;
+  flappyPipes=[]; flappyFrames=0; flappyLastTime=0;
   flappyRunning=true;
   cancelAnimationFrame(flappyRaf);
   flappyRaf=requestAnimationFrame(flappyLoop);
@@ -7127,16 +7598,18 @@ function flappySpawnPipe(){
   const topH=minY+Math.random()*(maxY-minY);
   flappyPipes.push({x:flappyW,topH,passed:false});
 }
-function flappyLoop(){
+function flappyLoop(ts){
   if(!flappyRunning)return;
+  const dt=flappyLastTime?Math.min((ts-flappyLastTime)/16.667,3):1;
+  flappyLastTime=ts;
   const canvas=document.getElementById('flappy-canvas');
   if(!canvas){flappyRunning=false;return;}
   if(flappyStarted){
-    flappyBird.vy+=FLAPPY_GRAVITY;
-    flappyBird.y+=flappyBird.vy;
-    flappyFrames++;
-    if(flappyFrames%90===0)flappySpawnPipe();
-    for(let p of flappyPipes){p.x-=FLAPPY_SPEED;}
+    flappyBird.vy+=FLAPPY_GRAVITY*dt;
+    flappyBird.y+=flappyBird.vy*dt;
+    flappyFrames+=dt;
+    if(flappyFrames%90<dt) flappySpawnPipe();
+    for(let p of flappyPipes){p.x-=FLAPPY_SPEED*dt;}
     flappyPipes=flappyPipes.filter(p=>p.x>-FLAPPY_PIPE_W-10);
     // Score
     for(let p of flappyPipes){
@@ -7310,4 +7783,1036 @@ function g2048UpdateScore(){
   const el=document.getElementById('g2048-score-label');if(!el)return;
   el.textContent='Счёт: '+g2048Score+' • Рекорд: '+g2048Hi;
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🪙 МОНЕТКА (v3.0.0) ──────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+let coinHeads=0, coinTails=0, coinEdge=0, coinFlipping=false, coinStreak=0, coinLastResult='';
+
+function coinInit(){
+  coinHeads=0; coinTails=0; coinEdge=0; coinFlipping=false; coinStreak=0; coinLastResult='';
+  coinUpdateScore();
+  document.getElementById('coin-result').textContent='Нажми, чтобы подбросить!';
+  document.getElementById('coin-streak').textContent='';
+  const wrapper=document.getElementById('coin-wrapper');
+  wrapper.style.animation='none';
+  wrapper.style.transform='rotateY(0deg)';
+  wrapper.classList.remove('flipping-heads','flipping-tails','edge-flip');
+}
+
+function coinFlip(){
+  if(coinFlipping) return;
+  coinFlipping=true;
+  SFX.play('pongHit');
+  const r=Math.random();
+  const isEdge = r < 0.003;
+  const isHeads = !isEdge && r < 0.503;
+  const wrapper=document.getElementById('coin-wrapper');
+  const result=document.getElementById('coin-result');
+  const streak=document.getElementById('coin-streak');
+  wrapper.classList.remove('flipping-heads','flipping-tails','edge-flip');
+  void wrapper.getBoundingClientRect();
+  if(isEdge){
+    wrapper.classList.add('edge-flip');
+    result.textContent='⏳ Летит...';
+    setTimeout(()=>{
+      coinEdge++;
+      result.textContent='🤩 РЕБРО!! Невероятно!';
+      streak.textContent='🔥 Шанс 0.3%! Редчайший результат!';
+      coinLastResult='edge';
+      coinUpdateScore();
+      coinFlipping=false;
+    },2100);
+  } else {
+    wrapper.classList.add(isHeads ? 'flipping-heads' : 'flipping-tails');
+    result.textContent='⏳ Летит...';
+    setTimeout(()=>{
+      if(isHeads){ coinHeads++; result.textContent='✨ ОРЁЛ!'; }
+      else        { coinTails++; result.textContent='💫 РЕШКА!'; }
+      if(coinLastResult===''||(coinLastResult==='heads')===isHeads){
+        if(coinLastResult!=='') coinStreak++;
+        else coinStreak=1;
+      } else { coinStreak=1; }
+      coinLastResult = isHeads?'heads':'tails';
+      if(coinStreak>=3) streak.textContent='🔥 Серия '+coinStreak+'×'+(isHeads?'орёл':'решка')+'!';
+      else streak.textContent='';
+      coinUpdateScore();
+      coinFlipping=false;
+    },1550);
+  }
+}
+
+function coinReset(){
+  coinInit();
+}
+
+function coinUpdateScore(){
+  const el=document.getElementById('coin-score-label');if(!el)return;
+  el.textContent='Орёл: '+coinHeads+' • Решка: '+coinTails+(coinEdge?' • Ребро: '+coinEdge:'');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🎲 КУБИК 3D (v4.0.0) — Telegram-style CSS 3D ─────────────────
+// ══════════════════════════════════════════════════════════════════
+let diceRolling=false, diceTotalRolls=0, diceHistory=[];
+
+// Standard dice opposite faces: 1↔6, 2↔5, 3↔4
+// Face assignment: front=1, back=6, right=2, left=5, top=3, bottom=4
+// Rotation to bring each face toward viewer (rotateX, rotateY):
+// Face values: top=1, bottom=6, front=2, back=5, right=3, left=4
+// Rotation to bring each face toward viewer (rotateX, rotateY):
+// front: rx=0,ry=0 | back: rx=0,ry=180 | right: rx=0,ry=-90
+// left: rx=0,ry=90 | top: rx=-90,ry=0  | bottom: rx=90,ry=0
+const DICE_FACE_ROT={1:{rx:-90,ry:0},2:{rx:0,ry:0},3:{rx:0,ry:-90},4:{rx:0,ry:90},5:{rx:0,ry:180},6:{rx:90,ry:0}};
+const DICE_FACE_VALS={front:2,back:5,right:3,left:4,top:1,bottom:6};
+// Dot grid positions (3x3 grid, col/row 1-3)
+const DICE_DOTS_GRID={
+  1:[[2,2]],
+  2:[[1,1],[3,3]],
+  3:[[1,1],[2,2],[3,3]],
+  4:[[1,1],[3,1],[1,3],[3,3]],
+  5:[[1,1],[3,1],[2,2],[1,3],[3,3]],
+  6:[[1,1],[3,1],[1,2],[3,2],[1,3],[3,3]]
+};
+
+function diceBuildFace(val){
+  const face=document.createElement('div');
+  face.className='dice-face dice-face-front'; // class set by caller
+  const dots=DICE_DOTS_GRID[val]||[[2,2]];
+  const placed=new Set(dots.map(([c,r])=>c+','+r));
+  for(let r=1;r<=3;r++) for(let c=1;c<=3;c++){
+    const cell=document.createElement('div');
+    cell.className='dice-cell';
+    if(placed.has(c+','+r)){
+      const dot=document.createElement('div');
+      dot.className='dice-dot';
+      cell.appendChild(dot);
+    }
+    face.appendChild(cell);
+  }
+  return face;
+}
+
+function diceCreateCube(id){
+  const scene=document.createElement('div');
+  scene.className='dice-scene';
+  scene.id='dice-scene-'+id;
+  const cube=document.createElement('div');
+  cube.className='dice-cube';
+  cube.id='dice-cube-'+id;
+  Object.entries(DICE_FACE_VALS).forEach(([faceName,val])=>{
+    const face=diceBuildFace(val);
+    face.className='dice-face dice-face-'+faceName;
+    cube.appendChild(face);
+  });
+  scene.appendChild(cube);
+  return scene;
+}
+
+function diceAnimateCube(cubeEl, targetVal, onDone){
+  // Face rotations to show face toward viewer (these are the REST angles)
+  const f=DICE_FACE_ROT[targetVal]||{rx:0,ry:0};
+  // Final resting pose = tilt offset + face offset + N full turns
+  const spX=3+Math.floor(Math.random()*3);
+  const spY=3+Math.floor(Math.random()*3);
+  const endRx = spX*360 + f.rx - 30;
+  const endRy = spY*360 + f.ry + 30;
+
+  const startRx=-30, startRy=30;
+  const dur=1100; // ms total
+  let startTime=null;
+
+  // Easing: fast spin + decelerate + bounce
+  function ease(t){
+    // 0→0.6: cubic ease-in-out (spinning up and most of air time)
+    // 0.6→1: overshoot + settle
+    if(t<0.6) return t/0.6; // linear progress for spin part
+    const t2=(t-0.6)/0.4;
+    // bounce settle: overshoot then spring back
+    const bounce=1+0.08*Math.sin(t2*Math.PI*2.5)*Math.exp(-t2*4);
+    return bounce;
+  }
+
+  // Height arc: goes up, comes down, small bounce
+  function heightOffset(t){
+    if(t<0.55) return -Math.sin(t/0.55*Math.PI)*32; // up arc
+    const t2=(t-0.55)/0.45;
+    // land: small bounce
+    if(t2<0.35) return 10*(t2/0.35); // squash down
+    const t3=(t2-0.35)/0.65;
+    return Math.sin(t3*Math.PI)*-8*Math.exp(-t3*3); // tiny bounce up
+  }
+
+  function frame(ts){
+    if(!startTime) startTime=ts;
+    const raw=Math.min(1,(ts-startTime)/dur);
+    const e=ease(raw);
+    const rx=startRx+(endRx-startRx)*Math.min(e,1);
+    const ry=startRy+(endRy-startRy)*Math.min(e,1);
+    const ty=heightOffset(raw);
+    cubeEl.style.transform=`rotateX(${rx}deg) rotateY(${ry}deg) translateY(${ty}px)`;
+    if(raw<1) requestAnimationFrame(frame);
+    else{
+      cubeEl.style.transform=`rotateX(${endRx}deg) rotateY(${endRy}deg)`;
+      onDone();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function diceInit(){
+  diceRolling=false; diceTotalRolls=0; diceHistory=[];
+  const wrap=document.getElementById('dice-cubes-wrap');
+  if(wrap){ wrap.innerHTML=''; wrap.appendChild(diceCreateCube(0)); }
+  document.getElementById('dice-result').textContent='';
+  document.getElementById('dice-history').textContent='';
+  document.getElementById('dice-score-label').textContent='Всего бросков: 0';
+}
+
+function diceRoll(count){
+  if(diceRolling) return;
+  diceRolling=true;
+  SFX.play('pongHit');
+  document.getElementById('dice-result').textContent='';
+  const wrap=document.getElementById('dice-cubes-wrap');
+  wrap.innerHTML='';
+  const results=[];
+  for(let i=0;i<count;i++) results.push(Math.floor(Math.random()*6)+1);
+  const cubeEls=[];
+  for(let i=0;i<count;i++){
+    const scene=diceCreateCube(i);
+    wrap.appendChild(scene);
+    cubeEls.push(document.getElementById('dice-cube-'+i));
+  }
+  let done=0;
+  cubeEls.forEach((cube,i)=>{
+    setTimeout(()=>{
+      diceAnimateCube(cube, results[i], ()=>{
+        done++;
+        if(done===count){
+          const sum=results.reduce((a,b)=>a+b,0);
+          const emoji=sum>=count*5?'🔥':sum<=count*2?'😅':'✨';
+          document.getElementById('dice-result').textContent=emoji+' '+(count>1?'Сумма: '+sum:results[0]);
+          diceTotalRolls++;
+          diceHistory.unshift(count===1?results[0]:'('+results.join('+')+')')  ;
+          if(diceHistory.length>8) diceHistory.pop();
+          document.getElementById('dice-history').textContent='История: '+diceHistory.join(' · ');
+          document.getElementById('dice-score-label').textContent='Всего бросков: '+diceTotalRolls;
+          diceRolling=false;
+        }
+      });
+    }, i*150);
+  });
+}
+
+// ── 🏀 БАСКЕТБОЛ (v3.0.0) ────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+let basketRaf=null,basketRunning=false,basketLastTime=0;
+let basketScore=0,basketHi=0,basketStreak=0;
+let basketBall,basketHoop,basketW,basketH;
+let basketDragging=false,basketDragStart={x:0,y:0},basketDragCur={x:0,y:0};
+let basketBallInFlight=false,basketVx=0,basketVy=0;
+let basketParticles=[];
+
+function basketInit(){
+  basketHi=getHi('basket');
+  const canvas=document.getElementById('basket-canvas');
+  basketW=Math.min(window.innerWidth-36,360);
+  basketH=Math.round(basketW*1.35);
+  canvas.width=basketW; canvas.height=basketH;
+  basketBall={x:basketW/2,y:basketH-60,r:20};
+  basketHoop={x:basketW*0.55,y:basketH*0.3,w:56,h:6,rimR:5};
+  basketScore=0; basketStreak=0; basketBallInFlight=false; basketParticles=[];
+  basketUpdateScore();
+
+  canvas.ontouchstart=e=>{e.preventDefault();const t=e.touches[0];const r=canvas.getBoundingClientRect();basketDragStart={x:t.clientX-r.left,y:t.clientY-r.top};basketDragging=true;basketDragCur={...basketDragStart};};
+  canvas.ontouchmove=e=>{e.preventDefault();if(!basketDragging)return;const t=e.touches[0];const r=canvas.getBoundingClientRect();basketDragCur={x:t.clientX-r.left,y:t.clientY-r.top};basketDraw();};
+  canvas.ontouchend=e=>{e.preventDefault();if(!basketDragging||basketBallInFlight)return;basketDragging=false;basketShoot();};
+  canvas.onmousedown=e=>{const r=canvas.getBoundingClientRect();basketDragStart={x:e.clientX-r.left,y:e.clientY-r.top};basketDragging=true;basketDragCur={...basketDragStart};};
+  canvas.onmousemove=e=>{if(!basketDragging)return;const r=canvas.getBoundingClientRect();basketDragCur={x:e.clientX-r.left,y:e.clientY-r.top};basketDraw();};
+  canvas.onmouseup=()=>{if(!basketDragging||basketBallInFlight)return;basketDragging=false;basketShoot();};
+  basketRunning=true;basketLastTime=0;
+  basketLoop();
+}
+
+function basketShoot(){
+  const dx=basketDragCur.x-basketDragStart.x;
+  const dy=basketDragCur.y-basketDragStart.y;
+  if(Math.abs(dy)<10)return;
+  // Направление: от текущей точки к началу (вверх)
+  const power=Math.min(Math.sqrt(dx*dx+dy*dy)*0.045,14);
+  basketVx=-dx*0.055;
+  basketVy=Math.min(dy*0.055,-3.5)*power*0.6;
+  basketBallInFlight=true;
+  basketBall={x:basketDragStart.x,y:basketDragStart.y,r:20};
+  SFX.play('pongHit');
+}
+
+function basketLoop(ts){
+  if(!basketRunning)return;
+  const dt=basketLastTime?Math.min((ts-basketLastTime)/16.667,3):1;
+  basketLastTime=ts;
+  basketTick(dt);
+  basketDraw();
+  basketRaf=requestAnimationFrame(basketLoop);
+}
+
+function basketTick(dt){
+  dt=dt||1;
+  if(!basketBallInFlight){
+    // Аnim хупа: медленно двигается
+    basketHoop.x+=(basketHoop.vx||0)*dt;
+    if(basketHoop.x>basketW-60||basketHoop.x<60) basketHoop.vx=(basketHoop.vx||1)*-1;
+    return;
+  }
+  basketVy+=0.45*dt;
+  basketBall.x+=basketVx*dt;
+  basketBall.y+=basketVy*dt;
+
+  // Частицы
+  if(Math.random()<0.3) basketParticles.push({x:basketBall.x,y:basketBall.y,vx:(Math.random()-.5)*2,vy:(Math.random()-.5)*2,life:1,r:3+Math.random()*3});
+  basketParticles=basketParticles.filter(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=0.06*dt;return p.life>0;});
+
+  // Проверка попадания
+  const hx=basketHoop.x, hy=basketHoop.y, hw=basketHoop.w;
+  const bx=basketBall.x, by=basketBall.y, br=basketBall.r;
+  // Мяч проходит через центр кольца сверху вниз
+  if(basketBallInFlight && by+br>hy && by-br<hy+basketHoop.h+40 &&
+     bx>hx && bx<hx+hw && basketVy>0 && by<hy+basketHoop.h+basketBall.r){
+    basketScore++;
+    basketStreak++;
+    if(basketScore>basketHi) basketHi=saveHi('basket',basketScore);
+    basketUpdateScore();
+    SFX.play('dinoScore');
+    // Взрыв частиц
+    for(let i=0;i<20;i++) basketParticles.push({x:bx,y:by,vx:(Math.random()-.5)*8,vy:-(Math.random()*6+1),life:1,r:4+Math.random()*5,score:true});
+    basketResetBall();
+    // Двигаем кольцо
+    basketHoop.x=40+Math.random()*(basketW-100);
+    basketHoop.y=50+Math.random()*(basketH*0.4);
+    basketHoop.vx=(Math.random()>0.5?1:-1)*(0.5+basketScore*0.15);
+  }
+
+  // Промах: мяч улетел за экран
+  if(basketBall.y>basketH+50||basketBall.x<-50||basketBall.x>basketW+50){
+    basketStreak=0;
+    basketResetBall();
+  }
+  // Стены
+  if(basketBall.x-basketBall.r<0){basketBall.x=basketBall.r;basketVx*=-0.7;}
+  if(basketBall.x+basketBall.r>basketW){basketBall.x=basketW-basketBall.r;basketVx*=-0.7;}
+}
+
+function basketResetBall(){
+  basketBallInFlight=false;
+  basketBall={x:basketW/2,y:basketH-60,r:20};
+  basketVx=0; basketVy=0;
+}
+
+function basketDraw(){
+  const canvas=document.getElementById('basket-canvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const accent=getAccent();
+  ctx.clearRect(0,0,basketW,basketH);
+  // Sky gradient
+  const grad=ctx.createLinearGradient(0,0,0,basketH);
+  grad.addColorStop(0,'#0a1520');grad.addColorStop(1,'#0f2030');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,basketW,basketH);
+  // Floor
+  ctx.fillStyle='#1a3a1a';ctx.fillRect(0,basketH-20,basketW,20);
+  ctx.strokeStyle='rgba(255,255,255,.1)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(0,basketH-20);ctx.lineTo(basketW,basketH-20);ctx.stroke();
+
+  // Particles
+  basketParticles.forEach(p=>{
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=p.score?`rgba(255,180,0,${p.life})`:`rgba(255,120,0,${p.life*0.5})`;
+    ctx.fill();
+  });
+
+  // Hoop — backboard
+  const hx=basketHoop.x, hy=basketHoop.y, hw=basketHoop.w;
+  ctx.fillStyle='#cccccc44';
+  ctx.fillRect(hx+hw-4,hy-30,3,30);
+  ctx.fillStyle='#ffffff22';ctx.fillRect(hx+hw-22,hy-30,22,20);
+  ctx.strokeStyle='#ffffff55';ctx.lineWidth=1.5;ctx.strokeRect(hx+hw-22,hy-30,22,20);
+  // Hoop rims
+  const rimR=basketHoop.rimR;
+  ctx.strokeStyle='#e07020';ctx.lineWidth=5;
+  ctx.beginPath();ctx.arc(hx+rimR,hy+rimR,rimR,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.arc(hx+hw-rimR,hy+rimR,rimR,0,Math.PI*2);ctx.stroke();
+  // Hoop bar
+  ctx.beginPath();ctx.moveTo(hx+rimR,hy+rimR);ctx.lineTo(hx+hw-rimR,hy+rimR);
+  ctx.strokeStyle='#e07020';ctx.lineWidth=5;ctx.stroke();
+  // Net
+  const netSegs=6;
+  for(let i=0;i<=netSegs;i++){
+    const nx=hx+(hw/netSegs)*i;
+    ctx.beginPath();ctx.moveTo(nx,hy+rimR*2);ctx.lineTo(hx+hw/2+((nx-hx-hw/2)*0.4),hy+35);
+    ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  // Drag arrow
+  if(basketDragging && !basketBallInFlight){
+    const dx=basketDragCur.x-basketDragStart.x;
+    const dy=basketDragCur.y-basketDragStart.y;
+    if(Math.abs(dy)>8){
+      // Use same physics as basketShoot
+      const power=Math.min(Math.sqrt(dx*dx+dy*dy)*0.045,14);
+      const tvx=-dx*0.055;
+      let tvy=Math.min(dy*0.055,-3.5)*power*0.6;
+      let tx=basketDragStart.x, ty=basketDragStart.y;
+      ctx.setLineDash([5,5]);
+      for(let step=0;step<40;step++){
+        tvy+=0.45;
+        tx+=tvx; ty+=tvy;
+        if(ty>basketH||tx<0||tx>basketW) break;
+        const alpha=1-step/40;
+        ctx.beginPath();ctx.arc(tx,ty,2,0,Math.PI*2);
+        ctx.fillStyle=accent+Math.round(alpha*180).toString(16).padStart(2,'0');
+        ctx.fill();
+      }
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Ball
+  const bx=basketBall.x, by=basketBall.y, br=basketBall.r;
+  const ballGrad=ctx.createRadialGradient(bx-br*0.3,by-br*0.3,br*0.1,bx,by,br);
+  ballGrad.addColorStop(0,'#ff9040');ballGrad.addColorStop(0.6,'#e05010');ballGrad.addColorStop(1,'#803000');
+  ctx.beginPath();ctx.arc(bx,by,br,0,Math.PI*2);
+  ctx.fillStyle=ballGrad;
+  ctx.shadowColor=accent;ctx.shadowBlur=basketBallInFlight?16:8;
+  ctx.fill();ctx.shadowBlur=0;
+  // Ball seams
+  ctx.strokeStyle='#30200880';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(bx,by,br,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.arc(bx,by,br*0.7,0.2,Math.PI-0.2);ctx.stroke();
+  ctx.beginPath();ctx.arc(bx,by,br*0.7,Math.PI+0.2,2*Math.PI-0.2);ctx.stroke();
+
+  // Score HUD
+  ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(0,0,basketW,38);
+  ctx.fillStyle='#f0ede8';ctx.font='bold 16px sans-serif';ctx.textAlign='left';
+  ctx.fillText('Счёт: '+basketScore,12,26);
+  ctx.textAlign='right';
+  ctx.fillText('Рекорд: '+basketHi,basketW-12,26);
+  if(basketStreak>=3){
+    ctx.textAlign='center';ctx.fillStyle=accent;
+    ctx.fillText('🔥 Серия x'+basketStreak,basketW/2,26);
+  }
+}
+
+function basketUpdateScore(){
+  const el=document.getElementById('basket-score-label');if(!el)return;
+  el.textContent='Счёт: '+basketScore+' • Рекорд: '+basketHi;
+}
+function basketRestart(){basketStop();basketInit();}
+function basketStop(){if(basketRaf){cancelAnimationFrame(basketRaf);basketRaf=null;}basketRunning=false;}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🟥 GEOMETRY DASH (v3.0.0) ────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+let geoRaf=null,geoRunning=false;
+let geoScore=0,geoHi=0,geoAttempt=1,geoProgress=0;
+let geoPlayer,geoSpeed,geoObstacles,geoScrollX,geoW,geoH,geoGround;
+let geoDiff='normal',geoLastTime=0,geoJumpHeld=false;
+let geoParticles=[];
+
+const GEO_DIFF_CFG={
+  easy:{speed:4,spawnRate:0.012,minGap:200},
+  normal:{speed:5.5,spawnRate:0.016,minGap:160},
+  hard:{speed:7.5,spawnRate:0.022,minGap:120}
+};
+// Уровни: массив паттернов (obstacle = {type:'spike'|'block'|'double', x, w, h})
+function geoGenObstacle(x, diff){
+  const r=Math.random();
+  // Variety of obstacle types
+  let type,h,w=30;
+  if(r<0.28){ type='spike'; h=diff==='hard'?46:diff==='easy'?28:38; }
+  else if(r<0.48){ type='block'; h=diff==='hard'?50:diff==='easy'?32:40; w=30; }
+  else if(r<0.62){ type='dspike'; h=diff==='hard'?44:diff==='easy'?28:36; } // double spike
+  else if(r<0.72){ type='tspike'; h=diff==='hard'?44:diff==='easy'?30:38; } // triple spike
+  else if(r<0.82){ type='tallblock'; h=diff==='hard'?70:diff==='easy'?45:56; w=28; }
+  else if(r<0.90){ type='step'; h=diff==='hard'?40:30; } // block+spike combo next to each other
+  else { type='spike'; h=38; }
+  return {x,w,h,type};
+}
+
+function geoInit(){
+  geoHi=getHi('geo');
+  const canvas=document.getElementById('geo-canvas');
+  geoW=Math.min(window.innerWidth-36,400);
+  geoH=Math.round(geoW*0.55);
+  canvas.width=geoW; canvas.height=geoH;
+  geoGround=geoH-30;
+  geoSpeed=GEO_DIFF_CFG[geoDiff].speed;
+  geoPlayer={x:60,y:geoGround-36,w:32,h:32,vy:0,onGround:true,rotation:0};
+  geoObstacles=[];geoScrollX=0;geoParticles=[];
+  geoLastTime=0;geoProgress=0;geoScore=0;
+
+  canvas.onclick=()=>geoJump();
+  canvas.ontouchstart=e=>{e.preventDefault();geoJump();};
+  document.addEventListener('keydown',geoKeyDown);
+  geoRunning=true;
+  geoUpdateScore();
+  geoLoop();
+}
+
+function geoKeyDown(e){if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();geoJump();}}
+
+function geoJump(){
+  if(!geoRunning){geoRestart();return;}
+  if(geoPlayer.onGround){
+    geoPlayer.vy=-10.5;
+    geoPlayer.onGround=false;
+    SFX.play('dinoJump');
+  }
+}
+
+function geoLoop(ts){
+  if(!geoRunning)return;
+  const dt=geoLastTime?Math.min((ts-geoLastTime)/16.667,3):1;
+  geoLastTime=ts;
+  geoTick(dt);
+  geoDraw();
+  geoRaf=requestAnimationFrame(geoLoop);
+}
+
+function geoTick(dt){
+  const cfg=GEO_DIFF_CFG[geoDiff];
+  // Fixed speed - no acceleration (like real GD levels have consistent BPM)
+  geoSpeed=cfg.speed;
+  geoScrollX+=geoSpeed*dt;
+  geoProgress+=geoSpeed*dt;
+  geoScore=Math.floor(geoProgress/10); // distance score, no 100% cap
+  if(geoScore>geoHi) geoHi=saveHi('geo',geoScore);
+  geoUpdateScore();
+
+  // Физика игрока
+  geoPlayer.vy+=0.6*dt;
+  geoPlayer.y+=geoPlayer.vy*dt;
+  geoPlayer.rotation+=6*dt;
+  if(geoPlayer.onGround) for(let i=0;i<2;i++) geoParticles.push({x:geoPlayer.x,y:geoPlayer.y+geoPlayer.h,vx:-(1+Math.random()*2),vy:(Math.random()-.5)*1,life:0.7,r:2+Math.random()*2,color:getAccent()});
+  if(geoPlayer.y+geoPlayer.h>=geoGround){
+    geoPlayer.y=geoGround-geoPlayer.h;
+    geoPlayer.vy=0;geoPlayer.onGround=true;geoPlayer.rotation=0;
+  }
+  // Частицы
+  geoParticles=geoParticles.filter(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=0.08*dt;p.life-=0.035*dt;return p.life>0;});
+
+  // Спавн препятствий
+  const lastX=geoObstacles.length?geoObstacles[geoObstacles.length-1].x:-Infinity;
+  const minGap=cfg.minGap+Math.random()*90;
+  if(geoScrollX+geoW-lastX>minGap){
+    if(Math.random()<cfg.spawnRate*dt||geoObstacles.length===0){
+      geoObstacles.push(geoGenObstacle(geoScrollX+geoW+10,geoDiff));
+    }
+  }
+  while(geoObstacles.length&&geoObstacles[0].x<geoScrollX-50) geoObstacles.shift();
+
+  // Коллизия
+  const px=geoPlayer.x+4,py=geoPlayer.y+4,pw=geoPlayer.w-8,ph=geoPlayer.h-8;
+  for(const obs of geoObstacles){
+    const ox=obs.x-geoScrollX;
+    if(px+pw>ox&&px<ox+obs.w&&py+ph>geoGround-obs.h&&py<geoGround){
+      geoDie(); return;
+    }
+  }
+  // Бесконечный уровень — победы нет, играем вечно
+}
+
+function geoDie(){
+  geoRunning=false;
+  SFX.play('dinoCactus');
+  // Взрыв
+  for(let i=0;i<24;i++) geoParticles.push({x:geoPlayer.x+16,y:geoPlayer.y+16,
+    vx:(Math.random()-.5)*10,vy:-(Math.random()*8+1),life:1,r:4+Math.random()*6,color:getAccent()});
+  geoDraw();
+  const canvas=document.getElementById('geo-canvas');
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,geoH/2-40,geoW,80);
+  ctx.fillStyle='#f0ede8';ctx.font='bold 15px sans-serif';ctx.textAlign='center';
+  ctx.fillText('💥 '+geoScore+'м — Попробуй снова!',geoW/2,geoH/2-10);
+  ctx.fillText('Тап чтобы повторить',geoW/2,geoH/2+18);
+  document.getElementById('geo-canvas').onclick=()=>{geoAttempt++;geoRestart();};
+}
+
+function geoWin(){
+  geoRunning=false;
+  SFX.play('dinoScore');
+  geoDraw();
+  const canvas=document.getElementById('geo-canvas');
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,geoH/2-40,geoW,80);
+  ctx.fillStyle=getAccent();ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+  ctx.fillText('🎉 УРОВЕНЬ ПРОЙДЕН! 100%',geoW/2,geoH/2-10);
+  ctx.fillStyle='#f0ede8';ctx.font='14px sans-serif';
+  ctx.fillText('Тап для нового уровня',geoW/2,geoH/2+18);
+  document.getElementById('geo-canvas').onclick=()=>{geoAttempt++;geoRestart();};
+}
+
+function geoDraw(){
+  const canvas=document.getElementById('geo-canvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const accent=getAccent();
+  ctx.clearRect(0,0,geoW,geoH);
+
+  // BG — dark purple/blue gradient like Stereo Madness
+  const bgGrad=ctx.createLinearGradient(0,0,0,geoH);
+  bgGrad.addColorStop(0,'#050014');bgGrad.addColorStop(0.6,'#0d0028');bgGrad.addColorStop(1,'#0a001f');
+  ctx.fillStyle=bgGrad;ctx.fillRect(0,0,geoW,geoH);
+
+  // BG vertical columns/pillars (Stereo Madness style background lines)
+  for(let i=0;i<8;i++){
+    const cx=((i*geoW/7+geoScrollX*0.12)%(geoW*1.2)-geoW*0.1);
+    const ph2=geoH-30;
+    const cw=6+Math.sin(i*1.3)*4;
+    const alpha=0.06+Math.sin(geoScrollX*0.005+i)*0.03;
+    ctx.fillStyle=`rgba(120,60,255,${alpha})`;
+    ctx.fillRect(cx,0,cw,ph2);
+  }
+
+  // Moving BG triangles (GD background spikes)
+  for(let i=0;i<5;i++){
+    const bx=((i*geoW/4+geoScrollX*0.3)%(geoW+80)-40);
+    const bh=geoH*0.35+Math.sin(i*2.1)*geoH*0.08;
+    ctx.beginPath();ctx.moveTo(bx,geoGround);ctx.lineTo(bx+30,geoGround-bh);ctx.lineTo(bx+60,geoGround);ctx.closePath();
+    ctx.fillStyle=`rgba(80,20,160,0.18)`;ctx.fill();
+  }
+
+  // Stars (fast + slow layers)
+  for(let i=0;i<28;i++){
+    const sx=((i*137+geoScrollX*(0.04+i%3*0.03))%(geoW)+geoW)%geoW;
+    const sy=(i*97)%((geoH-50));
+    const r=i%4===0?1.5:0.8;
+    ctx.beginPath();ctx.arc(sx,sy,r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,255,255,${0.15+Math.sin(geoScrollX*0.008+i)*0.25})`;ctx.fill();
+  }
+
+  // Ground (dark purple slab)
+  const gGrad=ctx.createLinearGradient(0,geoGround,0,geoH);
+  gGrad.addColorStop(0,'#1a0040');gGrad.addColorStop(1,'#080015');
+  ctx.fillStyle=gGrad;ctx.fillRect(0,geoGround,geoW,geoH-geoGround);
+  // Ground top glow line
+  ctx.strokeStyle=accent+'88';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(0,geoGround);ctx.lineTo(geoW,geoGround);ctx.stroke();
+  // Ground grid
+  ctx.strokeStyle=accent+'28';ctx.lineWidth=1;
+  for(let gx=-(geoScrollX%40);gx<geoW;gx+=40){
+    ctx.beginPath();ctx.moveTo(gx,geoGround);ctx.lineTo(gx,geoH);ctx.stroke();
+  }
+
+  // Progress bar
+  ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(0,0,geoW,4);
+  // Infinite — show distance as pulsing glow bar  
+  const loopProg=(geoScrollX%2000)/2000;
+  ctx.fillStyle=accent;ctx.fillRect(0,0,geoW*loopProg,4);
+
+  // Particles
+  geoParticles.forEach(p=>{
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=p.color+Math.round(p.life*255).toString(16).padStart(2,'0');
+    ctx.fill();
+  });
+
+  // Obstacles
+  geoObstacles.forEach(obs=>{
+    const ox=obs.x-geoScrollX;
+    if(ox>geoW+10||ox+obs.w<-10)return;
+    const oy=geoGround-obs.h;
+    if(obs.type==='spike'||obs.type==='dspike'||obs.type==='tspike'){
+      const count=obs.type==='tspike'?3:obs.type==='dspike'?2:1;
+      const sw=obs.type==='spike'?obs.w:obs.w/count;
+      for(let si=0;si<count;si++){
+        const sx=ox+si*sw;
+        ctx.beginPath();ctx.moveTo(sx,geoGround);ctx.lineTo(sx+sw/2,oy);ctx.lineTo(sx+sw,geoGround);ctx.closePath();
+        const spGrad=ctx.createLinearGradient(sx,geoGround,sx,oy);
+        spGrad.addColorStop(0,'#990000');spGrad.addColorStop(1,'#ff3333');
+        ctx.fillStyle=spGrad;ctx.shadowColor='#ff0000';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
+        ctx.strokeStyle='#ff666655';ctx.lineWidth=1;ctx.stroke();
+      }
+    } else if(obs.type==='block'||obs.type==='tallblock'){
+      const bGrad=ctx.createLinearGradient(ox,oy,ox+obs.w,geoGround);
+      bGrad.addColorStop(0,'#2244bb');bGrad.addColorStop(0.5,'#1133aa');bGrad.addColorStop(1,'#0d2277');
+      ctx.fillStyle=bGrad;ctx.fillRect(ox,oy,obs.w,obs.h);
+      // inner highlight
+      ctx.strokeStyle='#5588ff55';ctx.lineWidth=1.5;ctx.strokeRect(ox+1,oy+1,obs.w-2,obs.h-2);
+      ctx.fillStyle='rgba(100,150,255,0.12)';ctx.fillRect(ox+3,oy+3,obs.w-6,8);
+      // "orb" decoration on top
+      ctx.beginPath();ctx.arc(ox+obs.w/2,oy+6,4,0,Math.PI*2);
+      ctx.fillStyle='rgba(200,220,255,0.6)';ctx.fill();
+    } else if(obs.type==='step'){
+      // Step block: low block + spike pair
+      const bh=obs.h*0.6;
+      const bGrad=ctx.createLinearGradient(ox,geoGround-bh,ox+obs.w,geoGround);
+      bGrad.addColorStop(0,'#224499');bGrad.addColorStop(1,'#0d2266');
+      ctx.fillStyle=bGrad;ctx.fillRect(ox,geoGround-bh,obs.w,bh);
+      ctx.strokeStyle='#5577dd55';ctx.lineWidth=1;ctx.strokeRect(ox,geoGround-bh,obs.w,bh);
+      // spike on top
+      const sh=obs.h-bh;
+      ctx.beginPath();ctx.moveTo(ox,geoGround-bh);ctx.lineTo(ox+obs.w/2,geoGround-bh-sh);ctx.lineTo(ox+obs.w,geoGround-bh);ctx.closePath();
+      const spGrad=ctx.createLinearGradient(ox,geoGround-bh,ox,geoGround-bh-sh);
+      spGrad.addColorStop(0,'#bb0000');spGrad.addColorStop(1,'#ff5555');
+      ctx.fillStyle=spGrad;ctx.shadowColor='#ff2222';ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;
+    }
+  });
+
+  // Player cube
+  ctx.save();
+  ctx.translate(geoPlayer.x+geoPlayer.w/2, geoPlayer.y+geoPlayer.h/2);
+  if(!geoPlayer.onGround) ctx.rotate(geoPlayer.rotation*Math.PI/180);
+  const pGrad=ctx.createLinearGradient(-geoPlayer.w/2,-geoPlayer.h/2,geoPlayer.w/2,geoPlayer.h/2);
+  pGrad.addColorStop(0,accent);pGrad.addColorStop(1,accent+'88');
+  ctx.fillStyle=pGrad;
+  ctx.shadowColor=accent;ctx.shadowBlur=18;
+  ctx.fillRect(-geoPlayer.w/2,-geoPlayer.h/2,geoPlayer.w,geoPlayer.h);
+  ctx.shadowBlur=0;
+  // Inner design (like GD cube icon)
+  ctx.strokeStyle='rgba(255,255,255,0.35)';ctx.lineWidth=1.5;
+  ctx.strokeRect(-geoPlayer.w/2+3,-geoPlayer.h/2+3,geoPlayer.w-6,geoPlayer.h-6);
+  // cross mark
+  ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(-8,0);ctx.lineTo(8,0);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(0,8);ctx.stroke();
+  ctx.restore();
+
+  // HUD
+  ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(0,4,geoW,34);
+  ctx.fillStyle='#f0ede8';ctx.font='bold 13px sans-serif';ctx.textAlign='left';
+  ctx.fillText('Попытка '+geoAttempt,8,24);
+  ctx.textAlign='right';ctx.fillStyle=accent;
+  ctx.fillText(geoScore+'м',geoW-8,24);
+  ctx.textAlign='center';ctx.fillStyle='rgba(255,255,255,.4)';
+  ctx.fillText('Рекорд: '+geoHi+'м',geoW/2,24);
+}
+
+function geoUpdateScore(){
+  const el=document.getElementById('geo-score-label');if(!el)return;
+  el.textContent='Попытка: '+geoAttempt+' • Рекорд: '+geoHi+'м';
+}
+function geoRestart(){geoStop();geoInit();}
+function geoStop(){
+  if(geoRaf){cancelAnimationFrame(geoRaf);geoRaf=null;}
+  geoRunning=false;
+  document.removeEventListener('keydown',geoKeyDown);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🪖 ТАНЧИКИ (v3.0.0) ──────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+let tanksRaf=null,tanksRunning=false,tanksLastTime=0;
+let tanksScore=0,tanksDiff='normal';
+let tanksPlayer,tanksEnemies,tanksBullets,tanksWalls,tanksW,tanksH;
+let tanksPlayerDir=0,tanksKeys={},tanksKeysHeld={};
+
+function tanksKeyDown(e){
+  const map={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',KeyW:'up',KeyS:'down',KeyA:'left',KeyD:'right'};
+  if(map[e.code]){e.preventDefault();tanksKeysHeld[e.code]=map[e.code];}
+  if(e.code==='Space'||e.code==='KeyF'){e.preventDefault();tanksShoot();}
+}
+function tanksKeyUp(e){delete tanksKeysHeld[e.code];}
+
+function tanksGetHeldDir(){
+  // Priority: up/down over left/right, first pressed wins
+  for(const code of Object.keys(tanksKeysHeld)){
+    return tanksKeysHeld[code];
+  }
+  return null;
+}
+const TANKS_TILE=32, TANKS_COLS=12, TANKS_ROWS=13;
+
+function tanksInit(){
+  const canvas=document.getElementById('tanks-canvas');
+  tanksW=TANKS_TILE*TANKS_COLS; tanksH=TANKS_TILE*TANKS_ROWS;
+  canvas.width=tanksW; canvas.height=tanksH;
+  tanksScore=0;
+  tanksPlayer={x:TANKS_TILE*1.5,y:TANKS_TILE*(TANKS_ROWS-2.5),w:TANKS_TILE*0.8,h:TANKS_TILE*0.8,dir:0,hp:3,shootCd:0};
+  tanksBullets=[];
+  // Стены
+  tanksWalls=[];
+  // Периметр
+  for(let c=0;c<TANKS_COLS;c++){tanksWalls.push({x:c*TANKS_TILE,y:0,solid:true});tanksWalls.push({x:c*TANKS_TILE,y:(TANKS_ROWS-1)*TANKS_TILE,solid:true});}
+  for(let r=1;r<TANKS_ROWS-1;r++){tanksWalls.push({x:0,y:r*TANKS_TILE,solid:true});tanksWalls.push({x:(TANKS_COLS-1)*TANKS_TILE,y:r*TANKS_TILE,solid:true});}
+  // Внутренние стены (паттерн)
+  const pattern=[[2,2],[2,3],[5,2],[5,3],[8,2],[8,3],[2,6],[2,7],[5,5],[5,6],[8,6],[8,7],[3,10],[6,10],[9,10],[4,4],[7,4]];
+  pattern.forEach(([c,r])=>tanksWalls.push({x:c*TANKS_TILE,y:r*TANKS_TILE,solid:true}));
+  // Враги
+  const numEnemies=tanksDiff==='easy'?2:tanksDiff==='hard'?5:3;
+  tanksEnemies=[];
+  const spawnPoints=[[TANKS_TILE*5,TANKS_TILE*1.5],[TANKS_TILE*8,TANKS_TILE*1.5],[TANKS_TILE*2,TANKS_TILE*4],[TANKS_TILE*9,TANKS_TILE*4],[TANKS_TILE*5,TANKS_TILE*6]];
+  for(let i=0;i<numEnemies;i++){
+    const sp=spawnPoints[i%spawnPoints.length];
+    tanksEnemies.push({x:sp[0],y:sp[1],w:TANKS_TILE*0.8,h:TANKS_TILE*0.8,dir:2,hp:1,shootCd:60+i*40,moveCd:20,moveDir:Math.floor(Math.random()*4)});
+  }
+  tanksUpdateScore();
+  tanksRunning=true;tanksLastTime=0;
+  tanksKeysHeld={};
+  document.addEventListener('keydown',tanksKeyDown);
+  document.addEventListener('keyup',tanksKeyUp);
+  tanksLoop();
+}
+
+function tanksDir(dir){
+  const dirs={up:0,right:1,down:2,left:3};
+  tanksKeys.lastDir=dirs[dir];
+}
+function tanksShoot(){
+  tanksDoShoot(tanksPlayer);
+}
+function tanksDoShoot(tank){
+  if(tank.shootCd>0)return;
+  tank.shootCd=tanksDiff==='hard'?20:30;
+  const speed=7;
+  const angle=tank.dir*Math.PI/2;
+  const cx=tank.x+tank.w/2, cy=tank.y+tank.h/2;
+  tanksBullets.push({x:cx,y:cy,vx:Math.sin(angle)*speed,vy:-Math.cos(angle)*speed,owner:tank===tanksPlayer?'player':'enemy',life:60});
+  SFX.play('pongHit');
+}
+
+function tanksLoop(ts){
+  if(!tanksRunning)return;
+  const dt=tanksLastTime?Math.min((ts-tanksLastTime)/16.667,3):1;
+  tanksLastTime=ts;
+  tanksTick(dt);
+  tanksDraw();
+  tanksRaf=requestAnimationFrame(tanksLoop);
+}
+
+function tanksTick(dt){
+  dt=dt||1;
+  // Игрок
+  const p=tanksPlayer;
+  if(p.shootCd>0)p.shootCd-=dt;
+  const speed=(tanksDiff==='hard'?2.8:2.2)*dt;
+  // Apply held keyboard direction
+  const heldDir=tanksGetHeldDir();
+  if(heldDir) tanksDir(heldDir);
+  if(tanksKeys.lastDir!==undefined){
+    const dir=tanksKeys.lastDir;
+    p.dir=dir;
+    const dx=[0,1,0,-1][dir]*speed;
+    const dy=[-1,0,1,0][dir]*speed;
+    if(!tanksCollideWalls(p.x+dx,p.y,p.w,p.h)) p.x+=dx;
+    if(!tanksCollideWalls(p.x,p.y+dy,p.w,p.h)) p.y+=dy;
+    p.x=Math.max(TANKS_TILE,Math.min(tanksW-TANKS_TILE-p.w,p.x));
+    p.y=Math.max(TANKS_TILE,Math.min(tanksH-TANKS_TILE-p.h,p.y));
+    delete tanksKeys.lastDir;
+  }
+
+  // Враги (AI)
+  tanksEnemies.forEach(e=>{
+    if(e.shootCd>0)e.shootCd-=dt;else{
+      // Стрелять в сторону игрока
+      const dx=p.x-e.x, dy=p.y-e.y;
+      const angToPlayer=Math.atan2(dy,dx);
+      let bestDir=1, minDiff=999;
+      for(let d=0;d<4;d++){
+        const angle=d===0?-Math.PI/2:d===1?0:d===2?Math.PI/2:Math.PI;
+        const diff=Math.abs(angToPlayer-angle);
+        if(diff<minDiff){minDiff=diff;bestDir=d;}
+      }
+      e.dir=bestDir;
+      tanksDoShoot(e);
+    }
+    e.moveCd-=dt;
+    if(e.moveCd<=0){
+      e.moveCd=20+Math.floor(Math.random()*30);
+      if(Math.random()<0.4) e.moveDir=Math.floor(Math.random()*4);
+      const espeed=1.5*dt;
+      const edx=[0,1,0,-1][e.moveDir]*espeed;
+      const edy=[-1,0,1,0][e.moveDir]*espeed;
+      if(!tanksCollideWalls(e.x+edx,e.y,e.w,e.h)) e.x+=edx;
+      else e.moveDir=Math.floor(Math.random()*4);
+      if(!tanksCollideWalls(e.x,e.y+edy,e.w,e.h)) e.y+=edy;
+      else e.moveDir=Math.floor(Math.random()*4);
+      e.x=Math.max(TANKS_TILE,Math.min(tanksW-TANKS_TILE-e.w,e.x));
+      e.y=Math.max(TANKS_TILE,Math.min(tanksH-TANKS_TILE-e.h,e.y));
+    }
+  });
+
+  // Пули
+  tanksBullets=tanksBullets.filter(b=>{
+    b.x+=b.vx*dt; b.y+=b.vy*dt; b.life-=dt;
+    if(b.life<=0) return false;
+    if(tanksCollideWalls(b.x-3,b.y-3,6,6)) return false;
+    if(b.owner==='enemy'){
+      const hp=tanksPlayer;
+      if(b.x>hp.x&&b.x<hp.x+hp.w&&b.y>hp.y&&b.y<hp.y+hp.h){
+        tanksPlayer.hp--;SFX.play('dinoCactus');
+        if(tanksPlayer.hp<=0){tanksGameOver();return false;}
+        tanksUpdateScore(); return false;
+      }
+    } else {
+      for(let i=tanksEnemies.length-1;i>=0;i--){
+        const e=tanksEnemies[i];
+        if(b.x>e.x&&b.x<e.x+e.w&&b.y>e.y&&b.y<e.y+e.h){
+          tanksEnemies.splice(i,1);tanksScore++;
+          SFX.play('dinoScore');
+          tanksUpdateScore();
+          if(tanksEnemies.length===0) tanksWin();
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+}
+
+function tanksCollideWalls(x,y,w,h){
+  return tanksWalls.some(wall=>x<wall.x+TANKS_TILE&&x+w>wall.x&&y<wall.y+TANKS_TILE&&y+h>wall.y);
+}
+
+function tanksDraw(){
+  const canvas=document.getElementById('tanks-canvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const accent=getAccent();
+  ctx.clearRect(0,0,tanksW,tanksH);
+  // BG
+  ctx.fillStyle='#0a1205';ctx.fillRect(0,0,tanksW,tanksH);
+  // Grid
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=0.5;
+  for(let x=0;x<tanksW;x+=TANKS_TILE){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,tanksH);ctx.stroke();}
+  for(let y=0;y<tanksH;y+=TANKS_TILE){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(tanksW,y);ctx.stroke();}
+  // Walls
+  tanksWalls.forEach(w=>{
+    const wg=ctx.createLinearGradient(w.x,w.y,w.x+TANKS_TILE,w.y+TANKS_TILE);
+    wg.addColorStop(0,'#3a4a2a');wg.addColorStop(1,'#253020');
+    ctx.fillStyle=wg;
+    ctx.fillRect(w.x+1,w.y+1,TANKS_TILE-2,TANKS_TILE-2);
+    ctx.strokeStyle='#5a7040';ctx.lineWidth=1;
+    ctx.strokeRect(w.x+1,w.y+1,TANKS_TILE-2,TANKS_TILE-2);
+  });
+  // Enemies
+  tanksEnemies.forEach(e=>tanksDrawTank(ctx,e,'#cc3333',e.dir));
+  // Player
+  tanksDrawTank(ctx,tanksPlayer,accent,tanksPlayer.dir);
+  // Bullets
+  tanksBullets.forEach(b=>{
+    ctx.beginPath();ctx.arc(b.x,b.y,4,0,Math.PI*2);
+    ctx.fillStyle=b.owner==='player'?accent:'#ff4444';
+    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;
+  });
+  // HUD
+  ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(0,tanksH-24,tanksW,24);
+  ctx.fillStyle='#f0ede8';ctx.font='bold 13px sans-serif';ctx.textAlign='left';
+  ctx.fillText('Уничтожено: '+tanksScore,8,tanksH-7);
+  ctx.textAlign='right';
+  ctx.fillText('❤️'.repeat(Math.max(0,tanksPlayer.hp)),tanksW-8,tanksH-7);
+}
+
+function tanksDrawTank(ctx,tank,color,dir){
+  ctx.save();
+  ctx.translate(tank.x+tank.w/2,tank.y+tank.h/2);
+  ctx.rotate(dir*Math.PI/2);
+  // Body
+  const bg=ctx.createLinearGradient(-tank.w/2,-tank.h/2,tank.w/2,tank.h/2);
+  bg.addColorStop(0,color+'cc');bg.addColorStop(1,color+'66');
+  ctx.fillStyle=bg;
+  ctx.shadowColor=color;ctx.shadowBlur=8;
+  // Round body
+  const hw=tank.w/2-2,hh=tank.h/2-2;
+  ctx.beginPath();
+  ctx.roundRect(-hw,-hh,hw*2,hh*2,4);
+  ctx.fill();ctx.shadowBlur=0;
+  // Tracks
+  ctx.fillStyle='rgba(0,0,0,.4)';
+  ctx.fillRect(-hw,-hh,hw*0.28,hh*2);
+  ctx.fillRect(hw-hw*0.28,-hh,hw*0.28,hh*2);
+  // Turret
+  ctx.fillStyle=color;ctx.beginPath();ctx.arc(0,0,tank.w*0.22,0,Math.PI*2);ctx.fill();
+  // Barrel
+  ctx.fillStyle=color;
+  ctx.fillRect(-3,-tank.h/2-8,6,14);
+  ctx.restore();
+}
+
+function tanksGameOver(){
+  tanksRunning=false;
+  const canvas=document.getElementById('tanks-canvas');
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(0,tanksH/2-40,tanksW,80);
+  ctx.fillStyle='#ff4444';ctx.font='bold 16px sans-serif';ctx.textAlign='center';
+  ctx.fillText('💀 Ты уничтожен! Уничтожено: '+tanksScore,tanksW/2,tanksH/2-10);
+  ctx.fillStyle='#f0ede8';ctx.font='14px sans-serif';
+  ctx.fillText('Тап для повтора',tanksW/2,tanksH/2+18);
+  canvas.onclick=()=>{canvas.onclick=null;tanksRestart();};
+}
+function tanksWin(){
+  tanksRunning=false;
+  const canvas=document.getElementById('tanks-canvas');
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(0,tanksH/2-40,tanksW,80);
+  ctx.fillStyle=getAccent();ctx.font='bold 16px sans-serif';ctx.textAlign='center';
+  ctx.fillText('🎉 Победа! Все враги уничтожены!',tanksW/2,tanksH/2-10);
+  ctx.fillStyle='#f0ede8';ctx.font='14px sans-serif';
+  ctx.fillText('Тап для повтора',tanksW/2,tanksH/2+18);
+  canvas.onclick=()=>{canvas.onclick=null;tanksRestart();};
+}
+function tanksUpdateScore(){
+  const el=document.getElementById('tanks-score-label');if(!el)return;
+  el.textContent='Уничтожено: '+tanksScore+' • Жизни: '+'❤️'.repeat(Math.max(0,tanksPlayer.hp));
+}
+function tanksRestart(){tanksStop();tanksInit();}
+function tanksStop(){
+  if(tanksRaf){cancelAnimationFrame(tanksRaf);tanksRaf=null;}
+  tanksRunning=false;
+  tanksKeysHeld={};
+  document.removeEventListener('keydown',tanksKeyDown);
+  document.removeEventListener('keyup',tanksKeyUp);
+}
+
+
+// ── Game iframe helpers ─────────────────────────────────────────
+function _openGame(overlayId, src) {
+  const el = document.getElementById(overlayId);
+  if (!el) return;
+  if (!el.querySelector('iframe')) {
+    const fr = document.createElement('iframe');
+    fr.src = src;
+    fr.allow = 'autoplay';
+    fr.setAttribute('allowfullscreen','');
+    el.appendChild(fr);
+  }
+  el.classList.add('active');
+}
+function _closeGame(overlayId) {
+  const el = document.getElementById(overlayId);
+  if (!el) return;
+  el.classList.remove('active');
+  const fr = el.querySelector('iframe');
+  if (fr) { fr.src='about:blank'; setTimeout(()=>{ if(fr.parentNode) fr.parentNode.removeChild(fr); }, 100); }
+}
+window.addEventListener('message', function(e) {
+  if (!e.data || e.data.type !== 'gameClose') return;
+  const map = { doom:'overlay-doom', minecraft:'overlay-minecraft', quake:'overlay-quake' };
+  const id = map[e.data.game];
+  if (id) _closeGame(id);
+  if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
+  eggOpen();
+});
+
+function doomStart() {
+  if (window.Android && window.Android.setOrientation) Android.setOrientation('landscape');
+  document.getElementById('egg-overlay').classList.remove('show');
+  setTimeout(() => _openGame('overlay-doom', 'doom.html'), 200);
+}
+function doomStop() {
+  _closeGame('overlay-doom');
+  if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
+}
+function minecraftStart() {
+  document.getElementById('egg-overlay').classList.remove('show');
+  setTimeout(() => _openGame('overlay-minecraft', 'minecraft.html'), 100);
+}
+function minecraftStop() { _closeGame('overlay-minecraft'); }
+function quakeStart() {
+  if (window.Android && window.Android.setOrientation) Android.setOrientation('landscape');
+  document.getElementById('egg-overlay').classList.remove('show');
+  setTimeout(() => _openGame('overlay-quake', 'quake.html'), 200);
+}
+function quakeStop() {
+  _closeGame('overlay-quake');
+  if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
+}
+
 </script>
