@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0d0d0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Расписание">
-<title>Расписание колледжа</title>
+<meta name="apple-mobile-web-app-title" content="Педагогам">
+<title>Расписание — Учителя</title>
 <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Nunito:wght@300;400;600;700;800&family=Rubik:wght@300;400;500;600;700;800&family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -1614,13 +1614,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
   <div class="body">
     <div class="home-hero">
       <div class="hero-card">
-        <div class="hero-title" id="hero-title-text">колледж<br>расписание</div>
-      </div>
-    </div>
-    <div style="display:flex;justify-content:center;margin-top:4px">
-      <div class="mode-toggle">
-        <button class="mode-btn active" id="mode-btn-student" onclick="setMode('student')">📚 Ученики</button>
-        <button class="mode-btn" id="mode-btn-teacher" onclick="setMode('teacher')">👩‍🏫 Учителя</button>
+        <div class="hero-title">педагогам<br>расписание</div>
       </div>
     </div>
     <div id="last-group-wrap" class="hidden">
@@ -1634,7 +1628,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
       <div class="section-label">Файл расписания</div>
       <div class="list" id="file-list"></div>
       <div style="height:14px"></div>
-      <button class="btn btn-accent" id="go-to-groups-btn" onclick="goToGroups()">Выбрать группу →</button>
+      <button class="btn btn-accent" onclick="goToGroups()">Выбрать учителя →</button>
     </div>
     <div id="no-url-hint" class="hidden" style="text-align:center;padding:48px 20px">
       <div style="font-size:38px;margin-bottom:12px">⚙️</div>
@@ -1657,13 +1651,13 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 <div class="screen" id="s-groups">
   <div class="hdr">
     <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
-    <div><div class="hdr-title" id="groups-title">Выбор группы</div>
+    <div><div class="hdr-title" id="groups-title">Выбор учителя</div>
     <div class="hdr-sub" id="groups-sub"></div></div>
   </div>
   <div style="padding:12px 18px 0;flex-shrink:0">
     <div class="search-wrap">
       <span class="search-icon">🔍</span>
-      <input class="inp" id="group-search" placeholder="Найти группу..." oninput="filterGroups(this.value)">
+      <input class="inp" id="group-search" placeholder="Найти учителя..." oninput="filterGroups(this.value)" id="group-search">
     </div>
     <div class="status mt8" id="groups-status"></div>
     <div class="progress"><div class="progress-bar" id="groups-bar"></div></div>
@@ -1816,11 +1810,9 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <div class="section-label">Приложение</div>
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div id="egg-tap-zone"
-        onclick="eggTap()"
-        ontouchstart="eggTap()"
-        style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
+        style="cursor:default;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.3 — Android</div>
+        <div class="item-sub" id="app-version-str">3.3-T — Android (Учительская)</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -1873,7 +1865,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
   <div class="greet-logo" id="greet-logo">📅</div>
   <div class="greet-main" id="greet-main"></div>
   <div class="greet-divider"></div>
-  <div class="greet-sub" id="greet-sub">колледжа</div>
+  <div class="greet-sub" id="greet-sub">педагогам</div>
   <div class="greet-time" id="greet-time"></div>
 </div>
 
@@ -2829,6 +2821,7 @@ function parseDoc(ab,group){
   return{sched:[],hdr:''};
 }
 
+
 // ══ УЧИТЕЛЬСКИЕ ФУНКЦИИ ══
 
 // Регулярка для имени учителя: "Фамилия И.О." (возможно с двойной фамилией)
@@ -2938,7 +2931,7 @@ function parseDocForTeacher(ab, teacherName){
 // ══ СОСТОЯНИЕ ══
 const DEFAULT_URL='https://disk.yandex.ru/d/mjhoc7kysmQEuQ';
 const S={
-  url:DEFAULT_URL,files:[],selectedFile:null,lastGroup:'',lastTeacher:'',mode:'student',font:'Geologica',
+  url:DEFAULT_URL,files:[],selectedFile:null,lastGroup:'',lastTeacher:'',mode:'teacher',font:'Geologica',
   theme:'orange',dns:'system',customDns:'',dpi:'general',
   customProxy:'',proxyProvider:'allorigins',
   appIcon:'orange',liquidGlass:false,liquidGlassOpt:false,customBg:'',
@@ -2959,7 +2952,7 @@ function loadLocal(){
     const d=JSON.parse(stor.get('sched')||'{}');
     S.lastGroup=d.group||'';
     S.lastTeacher=d.teacher||'';
-    S.mode=d.mode||'student';
+    S.mode='teacher';
     S.font=d.font||'Geologica';
     if(S.font&&S.font!=='Geologica'){document.documentElement.style.setProperty('--app-font',"'"+S.font+"'");}
     S.theme=d.theme||'orange';
@@ -2988,7 +2981,7 @@ function loadLocal(){
 function saveLocal(){
   // Основные настройки — без тяжёлого base64 фона
   stor.set('sched',JSON.stringify({
-    group:S.lastGroup,teacher:S.lastTeacher||'',mode:S.mode||'student',theme:S.theme,font:S.font||'Geologica',url:S.url,
+    group:S.lastGroup,teacher:S.lastTeacher||'',mode:'teacher',theme:S.theme,font:S.font||'Geologica',url:S.url,
     dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy,proxyProvider:S.proxyProvider,
     appIcon:S.appIcon,liquidGlass:S.liquidGlass,liquidGlassOpt:S.liquidGlassOpt,
     customBgBlurEnabled:S.customBgBlurEnabled,
@@ -4100,12 +4093,10 @@ function updateNavActive(aid){['nav-home','nav-teachers','nav-bells','nav-settin
 // ══ ПОСЛЕДНЯЯ ГРУППА ══
 function updateLastGroupBtn(){
   const wrap=document.getElementById('last-group-wrap'),btn=document.getElementById('last-group-btn');
-  if(!wrap||!btn)return;
-  const val=(typeof S!=='undefined'&&S.mode==='teacher')?S.lastTeacher:S.lastGroup;
-  if(val){btn.textContent='▶ '+val;wrap.classList.remove('hidden');}
+  if(S.lastGroup){btn.textContent='▶ '+S.lastGroup;wrap.classList.remove('hidden');}
   else wrap.classList.add('hidden');
 }
-async function _origJumpToLastGroup_student(){
+async function jumpToLastGroup(){
   if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
   const btn=document.getElementById('last-group-btn');
   const origText=btn.textContent;
@@ -4184,21 +4175,8 @@ async function getFileBuf(){
 }
 
 // ══ ГРУППЫ ══
-async function goToGroups(){
-  if(!S.selectedFile){toast('Сначала выбери файл');return;}
-  showScreen('s-groups');
-  document.getElementById('groups-title').textContent=S.selectedFile.name;
-  document.getElementById('group-search').value='';
-  document.getElementById('group-list').innerHTML='';
-  setStatus('groups-status','Скачиваю...');setBar('groups-bar',20);
-  try{
-    const buf=await getFileBuf();
-    allGroups=detectGroups(buf);
-    setBar('groups-bar',100);setStatus('groups-status',`${allGroups.length} групп`);
-    setTimeout(()=>setBar('groups-bar',0),800);
-    renderGroupList(allGroups);
-  }catch(e){setBar('groups-bar',0);setStatus('groups-status','❌ '+e.message);}
-}
+async function goToGroups(){ return goToTeacherSearch(); }
+
 function renderGroupList(groups){
   const list=document.getElementById('group-list');list.innerHTML='';
   groups.forEach(g=>{
@@ -4261,13 +4239,12 @@ function splitSubjectAndTeacher(subjectLine){
   }
   return null;
 }
-async function loadSchedule(group){
+async function loadSchedule(teacher){
   if(!S.selectedFile){toast('Выбери файл');return;}
   showScreen('s-schedule');
-  S.lastGroup=group;saveLocal();updateLastGroupBtn();
-  document.getElementById('sched-group-name').textContent=group;
+  S.lastTeacher=teacher;saveLocal();updateLastGroupBtn();
+  document.getElementById('sched-group-name').textContent=teacher;
   document.getElementById('sched-date').textContent='';
-  // Красивая анимация загрузки
   document.getElementById('sched-body').innerHTML=
     `<div class="sched-loading">
       <div class="sched-loading-circle"></div>
@@ -4280,15 +4257,16 @@ async function loadSchedule(group){
     </div>`;
   try{
     const buf=await getFileBuf();
-    const{sched,hdr}=parseDoc(buf,group);
-    if(!sched.length)throw new Error(`Группа "${group}" не найдена`);
-    renderSchedule(group,hdr,sched,S.selectedFile.name);
+    const{entries,hdr}=parseDocForTeacher(buf,teacher);
+    if(!entries.length)throw new Error(`Учитель "${teacher}" не найден`);
+    renderTeacherSchedule(teacher,hdr,entries,S.selectedFile.name);
   }catch(e){
     document.getElementById('sched-body').innerHTML=`<div style="text-align:center;padding:50px;color:var(--danger)">❌ ${e.message}</div>`;
   }
 }
+// Alias — renderTeacherList вызывает это имя
+async function loadTeacherSchedule(teacher){ return loadSchedule(teacher); }
 function renderSchedule(group,hdr,sched,filename){
-  checkCurrentPairEnd();
   document.getElementById('sched-group-name').textContent=group;
   const cleanDate=formatScheduleDate(hdr);
   document.getElementById('sched-date').textContent=cleanDate||'';
@@ -4341,7 +4319,6 @@ function renderSchedule(group,hdr,sched,filename){
     card.innerHTML=`<div class="pair-top"><div class="pair-num">${roman}</div><div class="pair-subject-wrap"><div class="pair-subject${isEmpty?' empty':''}">${isEmpty?'Окно':lines[0]}</div>${badge}</div>${remain}</div>${timesHtml}${detailsHtml}`;
     body.appendChild(card);
   }
-  addNoteButtons(body, group);
 }
 
 // ══ ПРИВЕТСТВИЕ ══
@@ -4359,9 +4336,9 @@ function getGreeting(){
     if(h>=17&&h<22) return{greet:'Добрый вечер',icon:'🌆',sub:'Наслаждайся вечером 🎉'};
     return{greet:'Доброй ночи',icon:'🌙',sub:'Выходные — не повод не спать 😅'};
   }
-  if(h>=5&&h<12) return{greet:'Доброе утро',icon:'🌤',sub:'Хорошего учебного дня!'};
-  if(h>=12&&h<17) return{greet:'Добрый день',icon:'☀️',sub:'Успехов на парах!'};
-  if(h>=17&&h<22) return{greet:'Добрый вечер',icon:'🌇',sub:'Время отдохнуть.'};
+  if(h>=5&&h<12) return{greet:'Доброе утро',icon:'🌤',sub:'Хорошего рабочего дня!'};
+  if(h>=12&&h<17) return{greet:'Добрый день',icon:'☀️',sub:'Продуктивного дня, коллеги!'};
+  if(h>=17&&h<22) return{greet:'Добрый вечер',icon:'🌇',sub:'Заслуженный отдых!'};
   return{greet:'Доброй ночи',icon:'🌙',sub:'Не забудь поспать 😴'};
 }
 function showGreeting(){
@@ -4435,11 +4412,10 @@ function initSchedTapTrigger(){
   const el=document.getElementById('sched-header-tap');
   if(!el)return;
   el.addEventListener('click',e=>{
-    if(S.lastGroup!=='МПД-2-24')return;
     _schedTapCount++;
     clearTimeout(_schedTapTimer);
     _schedTapTimer=setTimeout(()=>{_schedTapCount=0;},800);
-    if(_schedTapCount>=4){_schedTapCount=0;clearTimeout(_schedTapTimer);SFX.play('themeSelect');cmdOpen();}
+    if(_schedTapCount>=7){_schedTapCount=0;clearTimeout(_schedTapTimer);SFX.play('themeSelect');cmdOpen();}
   });
 }
 
@@ -4511,7 +4487,7 @@ function cmdOpen(){
   cmdPrint('out','(c) Microsoft Corporation. Все права защищены.');
   cmdPrint('out','');
   cmdPrint('info','╔══════════════════════════════════════╗');
-  cmdPrint('info','║  Schedule App v'+APP_VERSION+'  Dev Console  ║');
+  cmdPrint('info','║  Schedule App v'+APP_VERSION+'-T  Dev Console ║');
   cmdPrint('info','╚══════════════════════════════════════╝');
   cmdPrint('out','');
   cmdPrintHelp();
@@ -5027,6 +5003,69 @@ function cmdExec(raw){
 }
 
 
+function renderTeacherSchedule(teacher, hdr, entries, filename){
+  document.getElementById('sched-group-name').textContent=teacher;
+  const cleanDate=formatScheduleDate(hdr);
+  document.getElementById('sched-date').textContent=cleanDate||'';
+  const dateM=hdr.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  const today=new Date();
+  let isToday=false;
+  if(dateM){
+    const sd=new Date(+dateM[3],+dateM[2]-1,+dateM[1]);
+    isToday=(sd.getFullYear()===today.getFullYear()&&sd.getMonth()===today.getMonth()&&sd.getDate()===today.getDate());
+  }
+  const isMon=filename.toUpperCase().includes('ПОНЕДЕЛЬНИК');
+  const isSat=filename.toUpperCase().includes('СУББОТ');
+  const bell=isMon?BELL_MON:isSat?BELL_SAT:BELL_TUE;
+  const nowMin=today.getHours()*60+today.getMinutes();
+  const body=document.getElementById('sched-body');
+  body.innerHTML='';
+
+  // Если пар нет — "Нет занятий"
+  const allPairs=['I','II','III','IV','V','VI'];
+  for(const roman of allPairs){
+    const pairEntries=entries.filter(e=>e.roman===roman);
+    const b=bell[roman];
+    let isNow=false,isNext=false;
+    if(isToday&&b&&b[0]){
+      const[sh,sm]=b[0].split(':').map(Number);
+      const endS=b[3]||b[1];
+      const[eh,em]=endS.split(':').map(Number);
+      const startMin=sh*60+sm,endMin=eh*60+em;
+      isNow=nowMin>=startMin&&nowMin<=endMin;
+      if(!isNow){const diff=startMin-nowMin;isNext=diff>0&&diff<=30;}
+    }
+    const isEmpty=pairEntries.length===0;
+    const card=document.createElement('div');
+    card.className='pair-card'+(isEmpty?'':' has-subject')+(isNow?' is-now':isNext?' is-next':'');
+    let badge='',remain='';
+    if(isNow){
+      badge='<span class="now-badge">● сейчас</span>';
+      if(b&&b[1]){const endS=b[3]||b[1];const[eh,em]=endS.split(':').map(Number);const diff=(eh*60+em)-nowMin;remain=`<div class="pair-remain">${diff<=0?'заканч.':diff+' мин'}</div>`;}
+    }else if(isNext){badge='<span class="now-badge next-badge">◎ скоро</span>';}
+    let timesHtml='';
+    if(b){
+      const[s1,e1,s2,e2]=b;
+      timesHtml=`<div class="pair-times"><div class="pair-time-row"><span class="pair-time-val">${s1} – ${e1}</span><span class="pair-time-tag">${s2?'1 урок':'60 мин'}</span></div>${s2?`<div class="pair-time-row"><span class="pair-time-val">${s2} – ${e2}</span><span class="pair-time-tag">2 урок</span></div>`:''}</div>`;
+    }
+    let detailsHtml='';
+    if(!isEmpty){
+      detailsHtml='<div class="pair-details">';
+      for(const e of pairEntries){
+        detailsHtml+=`<div style="margin-bottom:5px"><span style="font-weight:700;color:var(--text)">${e.group}</span>`;
+        if(e.subject) detailsHtml+=`<br><span>${e.subject}</span>`;
+        if(e.cabinet) detailsHtml+=`<br><span>кабинет ${e.cabinet}${e.korpus?' корп.'+e.korpus:''}</span>`;
+        detailsHtml+=`</div>`;
+      }
+      detailsHtml+='</div>';
+    }
+    const mainText=isEmpty?'Окно':pairEntries.map(e=>e.group).join(', ');
+    card.innerHTML=`<div class="pair-top"><div class="pair-num">${roman}</div><div class="pair-subject-wrap"><div class="pair-subject${isEmpty?' empty':''}">${mainText}</div>${badge}</div>${remain}</div>${timesHtml}${detailsHtml}`;
+    body.appendChild(card);
+  }
+}
+
+
 // ══ ШРИФТЫ ══
 const FONTS = [
   {id:'Geologica', name:'Geologica', sub:'Стандартный (по умолчанию)'},
@@ -5163,259 +5202,12 @@ function trackVisit(){
   }catch(e){}
 }
 
-function renderTeacherSchedule(teacher, hdr, entries, filename){
-  document.getElementById('sched-group-name').textContent=teacher;
-  const cleanDate=formatScheduleDate(hdr);
-  document.getElementById('sched-date').textContent=cleanDate||'';
-  const dateM=hdr.match(/(\d{2})\.(\d{2})\.(\d{4})/);
-  const today=new Date();
-  let isToday=false;
-  if(dateM){
-    const sd=new Date(+dateM[3],+dateM[2]-1,+dateM[1]);
-    isToday=(sd.getFullYear()===today.getFullYear()&&sd.getMonth()===today.getMonth()&&sd.getDate()===today.getDate());
-  }
-  const isMon=filename.toUpperCase().includes('ПОНЕДЕЛЬНИК');
-  const isSat=filename.toUpperCase().includes('СУББОТ');
-  const bell=isMon?BELL_MON:isSat?BELL_SAT:BELL_TUE;
-  const nowMin=today.getHours()*60+today.getMinutes();
-  const body=document.getElementById('sched-body');
-  body.innerHTML='';
 
-  // Если пар нет — "Нет занятий"
-  const allPairs=['I','II','III','IV','V','VI'];
-  for(const roman of allPairs){
-    const pairEntries=entries.filter(e=>e.roman===roman);
-    const b=bell[roman];
-    let isNow=false,isNext=false;
-    if(isToday&&b&&b[0]){
-      const[sh,sm]=b[0].split(':').map(Number);
-      const endS=b[3]||b[1];
-      const[eh,em]=endS.split(':').map(Number);
-      const startMin=sh*60+sm,endMin=eh*60+em;
-      isNow=nowMin>=startMin&&nowMin<=endMin;
-      if(!isNow){const diff=startMin-nowMin;isNext=diff>0&&diff<=30;}
-    }
-    const isEmpty=pairEntries.length===0;
-    const card=document.createElement('div');
-    card.className='pair-card'+(isEmpty?'':' has-subject')+(isNow?' is-now':isNext?' is-next':'');
-    let badge='',remain='';
-    if(isNow){
-      badge='<span class="now-badge">● сейчас</span>';
-      if(b&&b[1]){const endS=b[3]||b[1];const[eh,em]=endS.split(':').map(Number);const diff=(eh*60+em)-nowMin;remain=`<div class="pair-remain">${diff<=0?'заканч.':diff+' мин'}</div>`;}
-    }else if(isNext){badge='<span class="now-badge next-badge">◎ скоро</span>';}
-    let timesHtml='';
-    if(b){
-      const[s1,e1,s2,e2]=b;
-      timesHtml=`<div class="pair-times"><div class="pair-time-row"><span class="pair-time-val">${s1} – ${e1}</span><span class="pair-time-tag">${s2?'1 урок':'60 мин'}</span></div>${s2?`<div class="pair-time-row"><span class="pair-time-val">${s2} – ${e2}</span><span class="pair-time-tag">2 урок</span></div>`:''}</div>`;
-    }
-    let detailsHtml='';
-    if(!isEmpty){
-      detailsHtml='<div class="pair-details">';
-      for(const e of pairEntries){
-        detailsHtml+=`<div style="margin-bottom:5px"><span style="font-weight:700;color:var(--text)">${e.group}</span>`;
-        if(e.subject) detailsHtml+=`<br><span>${e.subject}</span>`;
-        if(e.cabinet) detailsHtml+=`<br><span>кабинет ${e.cabinet}${e.korpus?' корп.'+e.korpus:''}</span>`;
-        detailsHtml+=`</div>`;
-      }
-      detailsHtml+='</div>';
-    }
-    const mainText=isEmpty?'Окно':pairEntries.map(e=>e.group).join(', ');
-    card.innerHTML=`<div class="pair-top"><div class="pair-num">${roman}</div><div class="pair-subject-wrap"><div class="pair-subject${isEmpty?' empty':''}">${mainText}</div>${badge}</div>${remain}</div>${timesHtml}${detailsHtml}`;
-    body.appendChild(card);
-  }
-}
+// ══ РЕЖИМ УЧИТЕЛЯ (навигация) ══
+function setMode(m){} // teacher version always in teacher mode
 
-
-
-const FONTS = [
-  {id:'Geologica', name:'Geologica', sub:'Стандартный (по умолчанию)'},
-  {id:'Nunito',    name:'Nunito',    sub:'Мягкий, скруглённый'},
-  {id:'Rubik',     name:'Rubik',     sub:'Современный, геометричный'},
-  {id:'Manrope',   name:'Manrope',   sub:'Строгий, технологичный'},
-  {id:'Inter',     name:'Inter',     sub:'Читаемый, нейтральный'},
-  {id:'Montserrat',name:'Montserrat',sub:'Стильный, акцентный'},
-];
-function applyFont(fontId){
-  document.documentElement.style.setProperty('--app-font', "'" + fontId + "'");
-  S.font = fontId;
-  saveLocal();
-  renderFontPicker();
-}
-function renderFontPicker(){
-  const wrap = document.getElementById('font-picker');
-  if(!wrap) return;
-  wrap.innerHTML = '';
-  FONTS.forEach(f => {
-    const item = document.createElement('div');
-    item.className = 'list-item' + (S.font===f.id?' selected':'');
-    item.style.fontFamily = "'" + f.id + "',sans-serif";
-    item.innerHTML = `<div><div class="item-name">${f.name}</div><div class="item-sub">${f.sub}</div></div>${S.font===f.id?'<span style="color:var(--accent);font-size:18px">✓</span>':'<span class="item-arrow">›</span>'}`;
-    item.onclick = () => applyFont(f.id);
-    wrap.appendChild(item);
-  });
-}
-
-
-
-var _bellTapCount=0,_bellTapTimer=null;
-function bellNavTap(){
-  SFX.play('navBells');
-  navTo('s-bells','nav-bells');
-}
-function openLocalFilePicker(){
-  // Создаём временный input и сразу кликаем — работает на Android в WebView
-  const inp = document.createElement('input');
-  inp.type='file';
-  inp.accept='.doc,.docx';
-  inp.style.cssText='position:fixed;top:-9999px;left:-9999px;opacity:0';
-  document.body.appendChild(inp);
-  inp.addEventListener('change', function(e){
-    onLocalDocChosen(e);
-    document.body.removeChild(inp);
-  });
-  inp.click();
-}
-function onLocalDocChosen(event){
-  const file=event.target.files[0];
-  if(!file){return;}
-  const reader=new FileReader();
-  reader.onload=function(e){
-    const buf=e.target.result;
-    // Создаём псевдо-файловый объект
-    S.selectedFile={name:file.name,url:null,_localBuf:buf};
-    FILE_CACHE[file.name]=buf;
-    // Показываем в списке файлов
-    const fl=document.getElementById('file-list');
-    if(fl){
-      fl.innerHTML='';
-      const item=document.createElement('div');
-      item.className='list-item selected';
-      item.innerHTML=`<span class="item-name">📄 ${file.name}</span><span style="color:var(--accent);font-size:18px">✓</span>`;
-      fl.appendChild(item);
-    }
-    document.getElementById('file-section').classList.remove('hidden');
-    document.getElementById('home-status').textContent='';
-    toast('✅ Файл загружен: '+file.name);
-    navTo('s-home','nav-home');
-  };
-  reader.readAsArrayBuffer(file);
-  // reset input
-  event.target.value='';
-}
-
-
-
-function loadNotes(){try{return JSON.parse(stor.get('pair_notes')||'{}');}catch(e){return{};}}
-function saveNote(key,text){const n=loadNotes();if(text.trim())n[key]=text.trim();else delete n[key];stor.set('pair_notes',JSON.stringify(n));}
-function openNote(pairRoman,groupOrTeacher){
-  const key=groupOrTeacher+'::'+pairRoman;
-  const notes=loadNotes();
-  const existing=notes[key]||'';
-  const overlay=document.createElement('div');
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px';
-  overlay.innerHTML=`
-    <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;border:1.5px solid var(--surface3)">
-      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--accent)">📝 Заметка — пара ${pairRoman}</div>
-      <textarea id="note-ta" style="width:100%;height:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:10px;color:var(--text);font-family:inherit;font-size:13px;padding:10px;resize:none;outline:none" placeholder="Что-то важное к этой паре...">${existing}</textarea>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button onclick="saveNote('${key}',document.getElementById('note-ta').value);this.closest('[style]').remove();toast('💾 Заметка сохранена')" style="flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;cursor:pointer">Сохранить</button>
-        <button onclick="this.closest('[style]').remove()" style="padding:12px 16px;background:var(--surface2);color:var(--muted);border:none;border-radius:10px;font-family:inherit;cursor:pointer">✕</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  setTimeout(()=>document.getElementById('note-ta')?.focus(),50);
-}
-// Добавляем кнопку заметки к каждой паре в renderSchedule и renderTeacherSchedule
-function addNoteButtons(body, groupOrTeacher){
-  body.querySelectorAll('.pair-card.has-subject,.pair-card.is-now,.pair-card.is-next').forEach(card=>{
-    const roman=card.querySelector('.pair-num')?.textContent?.trim();
-    if(!roman)return;
-    const notes=loadNotes();
-    const key=groupOrTeacher+'::'+roman;
-    const hasNote=!!notes[key];
-    const btn=document.createElement('button');
-    btn.title='Заметка';
-    btn.style.cssText='position:absolute;top:10px;right:10px;background:'+(hasNote?'var(--accent)':'var(--surface3)')+';border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;z-index:2';
-    btn.textContent=hasNote?'📝':'＋';
-    btn.onclick=(e)=>{e.stopPropagation();openNote(roman,groupOrTeacher);};
-    card.style.position='relative';
-    card.appendChild(btn);
-  });
-}
-
-// ══ СЧЁТЧИК ПОСЕЩЕНИЙ ══
-function trackVisit(){
-  try{
-    const today=new Date().toDateString();
-    const data=JSON.parse(stor.get('visit_streak')||'{}');
-    if(data.last===today)return;
-    const prev=new Date(data.last||0);
-    const now=new Date();
-    const diffDays=Math.round((now-prev)/(1000*60*60*24));
-    data.streak=(diffDays===1?(data.streak||0)+1:1);
-    data.last=today;
-    data.total=(data.total||0)+1;
-    stor.set('visit_streak',JSON.stringify(data));
-    if(data.streak>1&&data.streak%5===0){
-      setTimeout(()=>toast('🔥 '+data.streak+' дней подряд! Так держать!'),2500);
-    }
-  }catch(e){}
-}
-
-
-
-// ══ РЕЖИМ (student / teacher) ══
 var allTeachers=[];
 
-function setMode(mode){
-  S.mode=mode;
-  saveLocal();
-  // Кнопки переключателя
-  document.getElementById('mode-btn-student')?.classList.toggle('active', mode==='student');
-  document.getElementById('mode-btn-teacher')?.classList.toggle('active', mode==='teacher');
-  // Заголовок hero
-  const ht=document.getElementById('hero-title-text');
-  if(ht) ht.innerHTML = mode==='teacher' ? 'педагогам<br>расписание' : 'колледж<br>расписание';
-  // Кнопка выбора
-  const gb=document.getElementById('go-to-groups-btn');
-  if(gb) gb.textContent = mode==='teacher' ? 'Выбрать учителя →' : 'Выбрать группу →';
-  // Быстрый запуск
-  updateLastGroupBtn();
-}
-
-function initModeUI(){
-  const m=S.mode||'student';
-  setMode(m);
-}
-
-// Перехватываем goToGroups — в зависимости от режима
-const _origGoToGroups = goToGroups;
-async function goToGroups(){
-  if(S.mode==='teacher'){
-    await goToTeacherList();
-  } else {
-    await _origGoToGroups();
-  }
-}
-
-// Учительский список (через кнопку на главной — в режиме учителей)
-async function goToTeacherList(){
-  if(!S.selectedFile){toast('Сначала выбери файл');return;}
-  showScreen('s-teachers');
-  document.getElementById('teachers-title').textContent='Выбор учителя';
-  document.getElementById('teacher-search').value='';
-  document.getElementById('teacher-list').innerHTML='';
-  setStatus('teachers-status','Скачиваю...');setBar('teachers-bar',20);
-  try{
-    const buf=await getFileBuf();
-    allTeachers=detectTeachers(buf);
-    setBar('teachers-bar',100);setStatus('teachers-status',`${allTeachers.length} учителей`);
-    setTimeout(()=>setBar('teachers-bar',0),800);
-    renderTeacherList(allTeachers);
-  }catch(e){setBar('teachers-bar',0);setStatus('teachers-status','❌ '+e.message);}
-}
-
-// Поиск учителя (через кнопку в нижней навигации — всегда доступно)
 async function goToTeacherSearch(){
   if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
   showScreen('s-teachers');
@@ -5456,55 +5248,27 @@ function filterTeachers(q){
   renderTeacherList(f?allTeachers.filter(t=>t.toUpperCase().includes(f)):allTeachers);
 }
 
-async function loadTeacherSchedule(teacher){
-  if(!S.selectedFile){toast('Выбери файл');return;}
-  showScreen('s-schedule');
-  S.lastTeacher=teacher;saveLocal();updateLastGroupBtn();
-  document.getElementById('sched-group-name').textContent=teacher;
-  document.getElementById('sched-date').textContent='';
-  document.getElementById('sched-body').innerHTML=
-    `<div class="sched-loading"><div class="sched-loading-circle"></div>
-     <div style="color:var(--muted);font-size:13px;font-weight:500">Загружаю расписание…</div>
-     <div class="sched-loading-dots"><div class="sched-loading-dot"></div><div class="sched-loading-dot"></div><div class="sched-loading-dot"></div></div></div>`;
-  try{
-    const buf=await getFileBuf();
-    const{entries,hdr}=parseDocForTeacher(buf,teacher);
-    if(!entries.length)throw new Error(`Учитель "${teacher}" не найден`);
-    renderTeacherSchedule(teacher,hdr,entries,S.selectedFile.name);
-  }catch(e){
-    document.getElementById('sched-body').innerHTML=`<div style="text-align:center;padding:50px;color:var(--danger)">❌ ${e.message}</div>`;
-  }
+function updateLastGroupBtn(){
+  const wrap=document.getElementById('last-group-wrap'),btn=document.getElementById('last-group-btn');
+  if(!wrap||!btn)return;
+  const val=S.lastTeacher||S.lastGroup;
+  if(val){btn.textContent='▶ '+val;wrap.classList.remove('hidden');}
+  else wrap.classList.add('hidden');
 }
 
-// Обновляем updateLastGroupBtn — в режиме учителей показывает последнего учителя
-
-// jumpToLastGroup — в режиме учителей идёт к учителю
 async function jumpToLastGroup(){
-  if(S.mode==='teacher'){
-    if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
-    const btn=document.getElementById('last-group-btn');
-    const origText=btn.textContent;
-    btn.classList.add('loading');
-    btn.innerHTML=`<span class="loading-spinner"></span><span class="btn-label">Загружаю...</span>`;
-    try{
-      await loadTeacherSchedule(S.lastTeacher);
-    }finally{
-      btn.classList.remove('loading');
-      btn.innerHTML=origText;
-    }
-  } else {
-    await _origJumpToLastGroup_student();
-  }
+  if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
+  const btn=document.getElementById('last-group-btn');
+  const origText=btn.textContent;
+  btn.classList.add('loading');
+  btn.innerHTML=`<span class="loading-spinner"></span><span class="btn-label">Загружаю...</span>`;
+  try{ await loadTeacherSchedule(S.lastTeacher||S.lastGroup); }
+  finally{ btn.classList.remove('loading'); btn.innerHTML=origText; }
 }
 
-// s-schedule — кнопка назад должна идти на правильный список
 function schedBack(){
   SFX.play('screenBack');
-  if(S.mode==='teacher'){
-    showScreen('s-teachers','back');
-  } else {
-    showScreen('s-groups','back');
-  }
+  showScreen('s-teachers','back');
 }
 
 
@@ -5597,11 +5361,11 @@ function getSpecialDateGreeting(){
 }
 
 // 🎲 Кнопка "Рандомная группа" — открывает случайную группу из списка
-function openRandomGroup(){
-  if(!allGroups||!allGroups.length){toast('Сначала загрузи файл расписания');return;}
-  const g=allGroups[Math.floor(Math.random()*allGroups.length)];
+function openRandomTeacher(){
+  if(!allTeachers||!allTeachers.length){toast('Сначала загрузи файл расписания');return;}
+  const g=allTeachers[Math.floor(Math.random()*allTeachers.length)];
   toast('🎲 Открываю: '+g);
-  setTimeout(()=>loadSchedule(g),300);
+  setTimeout(()=>loadTeacherSchedule(g),300);
 }
 
 // 🌈 Пасхалка — встряска телефона открывает рандомную группу (если доступен DeviceMotion)
@@ -5617,7 +5381,7 @@ function openRandomGroup(){
       if(now-shakeTs>3000){
         shakeTs=now;
         toast('📳 Потряс — открываю случайную группу!');
-        setTimeout(openRandomGroup,500);
+        setTimeout(openRandomTeacher,500);
       }
     }
   },{passive:true});
@@ -5807,7 +5571,7 @@ setTimeout(function(){
   }
 }, 300);
 renderBells();
-initModeUI();
+if(typeof initModeUI==='function')initModeUI();
 updateLastGroupBtn();
 updateNavActive('nav-home');
 updateThemeCurrentRow();
