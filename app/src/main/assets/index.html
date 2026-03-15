@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Расписание">
 <title>Расписание колледжа</title>
-<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Nunito:wght@300;400;600;700;800&family=Rubik:wght@300;400;500;600;700;800&family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Nunito:wght@300;400;600;700;800&family=Rubik:wght@300;400;500;600;700;800&family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800&family=Unbounded:wght@300;400;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Comfortaa:wght@300;400;600;700&family=Oxanium:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#0d0d0d;--surface:#161616;--surface2:#1f1f1f;--surface3:#2a2a2a;
@@ -269,33 +269,58 @@ body.custom-bg-active:not(.liveblur-ready) .hero-card{
 
 /* ── Тоггл режима (студент/учитель) ── */
 .mode-switch-wrap{
-  display:flex;align-items:center;justify-content:center;
-  gap:10px;margin:0 auto 16px;
+  display:flex;justify-content:center;margin:0 auto 16px;
 }
-.mode-switch-label{
-  font-size:12px;font-weight:700;color:var(--muted);
-  transition:color .2s;letter-spacing:.02em;
-  user-select:none;cursor:pointer;
+.mode-toggle-pill{
+  display:flex;
+  background:var(--surface2);
+  border:1.5px solid var(--surface3);
+  border-radius:100px;
+  padding:3px;
+  position:relative;
+  gap:0;
 }
-.mode-switch-label.active{color:var(--accent)}
-.mode-switch{
-  width:56px;height:30px;border-radius:100px;
-  background:var(--surface3);position:relative;
+.mode-toggle-pill::before{
+  content:'';
+  position:absolute;
+  top:3px;bottom:3px;
+  border-radius:100px;
+  background:var(--accent);
+  box-shadow:0 2px 12px color-mix(in srgb,var(--accent) 45%,transparent);
+  transition:
+    left .28s cubic-bezier(.34,1.3,.64,1),
+    width .28s cubic-bezier(.34,1.3,.64,1);
+  z-index:0;
+}
+.mode-toggle-pill.student::before{
+  left:3px;
+  width:var(--pill-student-w,80px);
+}
+.mode-toggle-pill.teacher::before{
+  left:calc(var(--pill-student-w,80px) + 3px);
+  width:var(--pill-teacher-w,80px);
+}
+.mode-pill-btn{
+  position:relative;z-index:1;
+  padding:8px 18px;
+  border-radius:100px;
+  border:none;
+  font-family:inherit;
+  font-size:13px;font-weight:700;
   cursor:pointer;
-  transition:background .25s cubic-bezier(.4,0,.2,1);
-  flex-shrink:0;
-  border:1.5px solid rgba(255,255,255,.07);
+  background:transparent;
+  color:var(--muted);
+  transition:color .2s;
+  white-space:nowrap;
+  letter-spacing:.01em;
+  user-select:none;
 }
-.mode-switch.teacher{background:var(--accent)}
-.mode-switch::after{
-  content:'';position:absolute;
-  width:22px;height:22px;border-radius:50%;
-  background:#fff;top:3px;left:3px;
-  transition:left .25s cubic-bezier(.34,1.4,.64,1),
-             box-shadow .2s;
-  box-shadow:0 1px 5px rgba(0,0,0,.35);
-}
-.mode-switch.teacher::after{left:27px}
+.mode-pill-btn.active{color:#fff}
+[data-theme="bw"] .mode-pill-btn.active,
+[data-theme="win11"] .mode-pill-btn.active,
+[data-theme="amoled"] .mode-pill-btn.active,
+[data-theme="pixel"] .mode-pill-btn.active,
+[data-theme="aero"] .mode-pill-btn.active{color:#000}
 
 
 /* ── Лог-вьюер ── */
@@ -321,6 +346,21 @@ body.custom-bg-active:not(.liveblur-ready) .hero-card{
 .log-entry.warn{color:#fa8}
 .log-entry.info{color:var(--muted)}
 .log-entry.ok{color:#4a9}
+
+
+/* ── Авто-контраст текста на акцентных кнопках ── */
+:root{--accent-text:#fff}
+body[data-theme="bw"]    {--accent-text:#000}
+body[data-theme="win11"] {--accent-text:#000}
+body[data-theme="amoled"]{--accent-text:#000}
+body[data-theme="pixel"] {--accent-text:#000}
+body[data-theme="aero"]  {--accent-text:#000}
+body[data-theme="light"] {--accent-text:#fff}
+body[data-theme="gold"]  {--accent-text:#000}
+body[data-theme="candy"] {--accent-text:#000}
+.btn-accent,.btn-accent2,.now-badge,.next-badge,
+.mode-toggle-pill::before ~ *,
+.mode-pill-btn.active{color:var(--accent-text) !important}
 
 /* ── Переключатель режима ── */
 .mode-toggle{
@@ -1674,9 +1714,10 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
       </div>
     </div>
     <div class="mode-switch-wrap">
-      <span class="mode-switch-label active" id="mode-label-student" onclick="setMode('student')">📚 Ученики</span>
-      <div class="mode-switch" id="mode-switch-knob" onclick="setMode(S.mode==='student'?'teacher':'student')"></div>
-      <span class="mode-switch-label" id="mode-label-teacher" onclick="setMode('teacher')">👩‍🏫 Учителя</span>
+      <div class="mode-toggle-pill student" id="mode-toggle-pill">
+        <button class="mode-pill-btn active" id="mode-btn-student" onclick="setMode('student')">📚 Ученики</button>
+        <button class="mode-pill-btn" id="mode-btn-teacher" onclick="setMode('teacher')">👩‍🏫 Учителя</button>
+      </div>
     </div>
     <div id="last-group-wrap" class="hidden">
       <div class="section-label">Быстрый запуск</div>
@@ -1875,7 +1916,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.4 — Android</div>
+        <div class="item-sub" id="app-version-str">3.5 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -4070,6 +4111,8 @@ const SCREEN_PARENTS = {
 
 // Вызывается из Android (кнопка Back на телефоне)
 function nativeBack(){
+  // 0. Заметка
+  if(_noteOverlay){closeNote();return true;}
   // 1. CMD консоль
   const cmdOv = document.getElementById('cmd-overlay');
   if(cmdOv && cmdOv.style.display !== 'none'){ cmdClose(); return true; }
@@ -4408,7 +4451,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='3.4';
+const APP_VERSION='3.5';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -5093,18 +5136,23 @@ function cmdExec(raw){
 
 // ══ ШРИФТЫ ══
 const FONTS = [
-  {id:'Geologica', name:'Geologica', sub:'Стандартный (по умолчанию)'},
-  {id:'Nunito',    name:'Nunito',    sub:'Мягкий, скруглённый'},
-  {id:'Rubik',     name:'Rubik',     sub:'Современный, геометричный'},
-  {id:'Manrope',   name:'Manrope',   sub:'Строгий, технологичный'},
-  {id:'Inter',     name:'Inter',     sub:'Читаемый, нейтральный'},
-  {id:'Montserrat',name:'Montserrat',sub:'Стильный, акцентный'},
+  {id:'Geologica',   name:'Geologica',    sub:'Стандартный (по умолчанию)', preview:'Расписание занятий'},
+  {id:'Nunito',      name:'Nunito',       sub:'Мягкий, скруглённый',        preview:'Расписание занятий'},
+  {id:'Rubik',       name:'Rubik',        sub:'Современный, геометричный',  preview:'Расписание занятий'},
+  {id:'Manrope',     name:'Manrope',      sub:'Строгий, технологичный',     preview:'Расписание занятий'},
+  {id:'Inter',       name:'Inter',        sub:'Читаемый, нейтральный',      preview:'Расписание занятий'},
+  {id:'Montserrat',  name:'Montserrat',   sub:'Стильный, акцентный',        preview:'Расписание занятий'},
+  {id:'Unbounded',   name:'Unbounded',    sub:'Широкий, брутальный',        preview:'РАСПИСАНИЕ'},
+  {id:'Space Grotesk',name:'Space Grotesk',sub:'Космический, техно',        preview:'Расписание'},
+  {id:'Comfortaa',   name:'Comfortaa',    sub:'Дружелюбный, округлый',      preview:'Расписание занятий'},
+  {id:'Oxanium',     name:'Oxanium',      sub:'Футуристичный, угловатый',   preview:'РАСПИСАНИЕ'},
 ];
 function applyFont(fontId){
   document.documentElement.style.setProperty('--app-font', "'" + fontId + "'");
   S.font = fontId;
   saveLocal();
   renderFontPicker();
+  // Обновляем превью-текст в карусели
 }
 function renderFontPicker(){
   const wrap = document.getElementById('font-picker');
@@ -5174,23 +5222,49 @@ function onLocalDocChosen(event){
 // ══ ЗАМЕТКИ К ПАРЕ ══
 function loadNotes(){try{return JSON.parse(stor.get('pair_notes')||'{}');}catch(e){return{};}}
 function saveNote(key,text){const n=loadNotes();if(text.trim())n[key]=text.trim();else delete n[key];stor.set('pair_notes',JSON.stringify(n));}
+let _noteOverlay = null;
 function openNote(pairRoman,groupOrTeacher){
+  closeNote(); // закрыть предыдущую если есть
   const key=groupOrTeacher+'::'+pairRoman;
   const notes=loadNotes();
   const existing=notes[key]||'';
   const overlay=document.createElement('div');
+  overlay.id='note-overlay';
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px';
-  overlay.innerHTML=`
-    <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;border:1.5px solid var(--surface3)">
-      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--accent)">📝 Заметка — пара ${pairRoman}</div>
-      <textarea id="note-ta" style="width:100%;height:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:10px;color:var(--text);font-family:inherit;font-size:13px;padding:10px;resize:none;outline:none" placeholder="Что-то важное к этой паре...">${existing}</textarea>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button onclick="saveNote('${key}',document.getElementById('note-ta').value);this.closest('[style]').remove();toast('💾 Заметка сохранена')" style="flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;cursor:pointer">Сохранить</button>
-        <button onclick="this.closest('[style]').remove()" style="padding:12px 16px;background:var(--surface2);color:var(--muted);border:none;border-radius:10px;font-family:inherit;cursor:pointer">✕</button>
-      </div>
-    </div>`;
+  // Закрытие по тапу на фон
+  overlay.addEventListener('click', e => { if(e.target===overlay) closeNote(); });
+  const sheet = document.createElement('div');
+  sheet.style.cssText='background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;border:1.5px solid var(--surface3)';
+  const title = document.createElement('div');
+  title.style.cssText='font-size:14px;font-weight:700;margin-bottom:12px;color:var(--accent)';
+  title.textContent='📝 Заметка — пара '+pairRoman;
+  const ta = document.createElement('textarea');
+  ta.id='note-ta';
+  ta.style.cssText='width:100%;height:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:10px;color:var(--text);font-family:inherit;font-size:13px;padding:10px;resize:none;outline:none;box-sizing:border-box';
+  ta.placeholder='Что-то важное к этой паре...';
+  ta.value=existing;
+  const btns = document.createElement('div');
+  btns.style.cssText='display:flex;gap:8px;margin-top:10px';
+  const saveBtn = document.createElement('button');
+  saveBtn.style.cssText='flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;cursor:pointer';
+  saveBtn.textContent='Сохранить';
+  saveBtn.onclick = () => { saveNote(key, ta.value); closeNote(); toast('💾 Заметка сохранена'); };
+  const closeBtn = document.createElement('button');
+  closeBtn.style.cssText='padding:12px 16px;background:var(--surface2);color:var(--muted);border:none;border-radius:10px;font-family:inherit;cursor:pointer;font-size:18px;font-weight:700';
+  closeBtn.textContent='✕';
+  closeBtn.onclick = closeNote;
+  btns.appendChild(saveBtn);
+  btns.appendChild(closeBtn);
+  sheet.appendChild(title);
+  sheet.appendChild(ta);
+  sheet.appendChild(btns);
+  overlay.appendChild(sheet);
   document.body.appendChild(overlay);
-  setTimeout(()=>document.getElementById('note-ta')?.focus(),50);
+  _noteOverlay = overlay;
+  setTimeout(()=>ta.focus(),50);
+}
+function closeNote(){
+  if(_noteOverlay){ _noteOverlay.remove(); _noteOverlay=null; }
 }
 // Добавляем кнопку заметки к каждой паре в renderSchedule и renderTeacherSchedule
 function addNoteButtons(body, groupOrTeacher){
@@ -5296,22 +5370,47 @@ function renderTeacherSchedule(teacher, hdr, entries, filename){
 function loadNotes(){try{return JSON.parse(stor.get('pair_notes')||'{}');}catch(e){return{};}}
 function saveNote(key,text){const n=loadNotes();if(text.trim())n[key]=text.trim();else delete n[key];stor.set('pair_notes',JSON.stringify(n));}
 function openNote(pairRoman,groupOrTeacher){
+  closeNote(); // закрыть предыдущую если есть
   const key=groupOrTeacher+'::'+pairRoman;
   const notes=loadNotes();
   const existing=notes[key]||'';
   const overlay=document.createElement('div');
+  overlay.id='note-overlay';
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px';
-  overlay.innerHTML=`
-    <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;border:1.5px solid var(--surface3)">
-      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--accent)">📝 Заметка — пара ${pairRoman}</div>
-      <textarea id="note-ta" style="width:100%;height:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:10px;color:var(--text);font-family:inherit;font-size:13px;padding:10px;resize:none;outline:none" placeholder="Что-то важное к этой паре...">${existing}</textarea>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button onclick="saveNote('${key}',document.getElementById('note-ta').value);this.closest('[style]').remove();toast('💾 Заметка сохранена')" style="flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;cursor:pointer">Сохранить</button>
-        <button onclick="this.closest('[style]').remove()" style="padding:12px 16px;background:var(--surface2);color:var(--muted);border:none;border-radius:10px;font-family:inherit;cursor:pointer">✕</button>
-      </div>
-    </div>`;
+  // Закрытие по тапу на фон
+  overlay.addEventListener('click', e => { if(e.target===overlay) closeNote(); });
+  const sheet = document.createElement('div');
+  sheet.style.cssText='background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;border:1.5px solid var(--surface3)';
+  const title = document.createElement('div');
+  title.style.cssText='font-size:14px;font-weight:700;margin-bottom:12px;color:var(--accent)';
+  title.textContent='📝 Заметка — пара '+pairRoman;
+  const ta = document.createElement('textarea');
+  ta.id='note-ta';
+  ta.style.cssText='width:100%;height:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:10px;color:var(--text);font-family:inherit;font-size:13px;padding:10px;resize:none;outline:none;box-sizing:border-box';
+  ta.placeholder='Что-то важное к этой паре...';
+  ta.value=existing;
+  const btns = document.createElement('div');
+  btns.style.cssText='display:flex;gap:8px;margin-top:10px';
+  const saveBtn = document.createElement('button');
+  saveBtn.style.cssText='flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;cursor:pointer';
+  saveBtn.textContent='Сохранить';
+  saveBtn.onclick = () => { saveNote(key, ta.value); closeNote(); toast('💾 Заметка сохранена'); };
+  const closeBtn = document.createElement('button');
+  closeBtn.style.cssText='padding:12px 16px;background:var(--surface2);color:var(--muted);border:none;border-radius:10px;font-family:inherit;cursor:pointer;font-size:18px;font-weight:700';
+  closeBtn.textContent='✕';
+  closeBtn.onclick = closeNote;
+  btns.appendChild(saveBtn);
+  btns.appendChild(closeBtn);
+  sheet.appendChild(title);
+  sheet.appendChild(ta);
+  sheet.appendChild(btns);
+  overlay.appendChild(sheet);
   document.body.appendChild(overlay);
-  setTimeout(()=>document.getElementById('note-ta')?.focus(),50);
+  _noteOverlay = overlay;
+  setTimeout(()=>ta.focus(),50);
+}
+function closeNote(){
+  if(_noteOverlay){ _noteOverlay.remove(); _noteOverlay=null; }
 }
 // Добавляем кнопку заметки к каждой паре в renderSchedule и renderTeacherSchedule
 function addNoteButtons(body, groupOrTeacher){
@@ -5338,12 +5437,22 @@ var allTeachers=[];
 function setMode(mode){
   S.mode=mode;
   saveLocal();
-  // Тоггл
-  const knob=document.getElementById('mode-switch-knob');
-  if(knob) knob.classList.toggle('teacher', mode==='teacher');
-  // Подписи
-  document.getElementById('mode-label-student')?.classList.toggle('active', mode==='student');
-  document.getElementById('mode-label-teacher')?.classList.toggle('active', mode==='teacher');
+  // Pill тоггл
+  const pill=document.getElementById('mode-toggle-pill');
+  if(pill){
+    pill.classList.toggle('student', mode==='student');
+    pill.classList.toggle('teacher', mode==='teacher');
+    // Вычисляем ширины кнопок для плавного сдвига
+    const btnS=document.getElementById('mode-btn-student');
+    const btnT=document.getElementById('mode-btn-teacher');
+    if(btnS&&btnT){
+      pill.style.setProperty('--pill-student-w', btnS.offsetWidth+'px');
+      pill.style.setProperty('--pill-teacher-w', btnT.offsetWidth+'px');
+    }
+  }
+  // Кнопки
+  document.getElementById('mode-btn-student')?.classList.toggle('active', mode==='student');
+  document.getElementById('mode-btn-teacher')?.classList.toggle('active', mode==='teacher');
   // Заголовок hero
   const ht=document.getElementById('hero-title-text');
   if(ht) ht.innerHTML = mode==='teacher' ? 'педагогам<br>расписание' : 'колледж<br>расписание';
@@ -5356,11 +5465,11 @@ function setMode(mode){
 
 function initModeUI(){
   const m=S.mode||'student';
-  setMode(m);
+  // Ждём рендер чтобы offsetWidth был доступен
+  requestAnimationFrame(()=>setMode(m));
 }
 
 // goToGroups теперь встроена в оригинальную функцию выше
-}
 
 // Учительский список (через кнопку на главной — в режиме учителей)
 async function goToTeacherList(){
@@ -5492,7 +5601,7 @@ function renderFontCarousel(){
     const slide = document.createElement('div');
     slide.className='font-carousel-slide'+(i===_fontIdx?' active':i<_fontIdx?' prev':' next');
     slide.style.fontFamily="'"+f.id+"',sans-serif";
-    slide.innerHTML=`<div class="font-carousel-name">${f.name}</div><div class="font-carousel-sub">${f.sub}</div>`;
+    slide.innerHTML=`<div class="font-carousel-name">${f.name}</div><div class="font-carousel-sub">${f.sub}</div><div style="font-size:13px;margin-top:4px;opacity:.7">${f.preview||'Расписание занятий'}</div>`;
     track.appendChild(slide);
     const dot = document.createElement('button');
     dot.className='font-dot'+(i===_fontIdx?' active':'');
@@ -5671,6 +5780,318 @@ window.addEventListener('unhandledrejection', e => {
 
 // Логируем ключевые события приложения
 const _origLoadFiles = null; // будет перехвачен после определения
+
+
+// ══ ДОПОЛНИТЕЛЬНЫЕ ФИШКИ ══
+
+// 🎯 Виджет "Следующий перерыв" на главном экране
+function getNextBreakInfo(){
+  const now=new Date();
+  const nowMin=now.getHours()*60+now.getMinutes();
+  const dow=now.getDay(); // 0=вс,6=сб
+  const bell=dow===1?BELL_MON:dow===6?BELL_SAT:BELL_TUE;
+  for(const[roman,times] of Object.entries(bell)){
+    if(!times[0])continue;
+    const[eh,em]=(times[3]||times[1]).split(':').map(Number);
+    const endMin=eh*60+em;
+    if(nowMin<endMin){
+      const[sh,sm]=times[0].split(':').map(Number);
+      const startMin=sh*60+sm;
+      if(nowMin>=startMin){
+        // Сейчас идёт пара — показываем конец
+        const left=endMin-nowMin;
+        return{type:'pair',roman,left,end:times[3]||times[1]};
+      }
+      if(nowMin<startMin){
+        const toStart=startMin-nowMin;
+        return{type:'break',roman,toStart,start:times[0]};
+      }
+    }
+  }
+  return null;
+}
+
+// 📌 Показываем инфо о текущей/следующей паре под hero-card
+function updateHeroWidget(){
+  let el=document.getElementById('hero-widget');
+  if(!el){
+    el=document.createElement('div');
+    el.id='hero-widget';
+    el.style.cssText='margin-top:12px;font-size:12px;color:var(--muted);text-align:center;font-family:var(--app-font,Geologica),sans-serif;letter-spacing:.01em;min-height:18px';
+    const hero=document.querySelector('.home-hero');
+    if(hero)hero.appendChild(el);
+  }
+  const info=getNextBreakInfo();
+  if(!info){el.textContent='';return;}
+  if(info.type==='pair'){
+    el.innerHTML=`⏱ Пара ${info.roman} заканчивается в <b style="color:var(--accent)">${info.end}</b> · осталось ${info.left} мин`;
+  } else {
+    el.innerHTML=`☕ До пары ${info.roman} осталось <b style="color:var(--accent)">${info.toStart} мин</b> (начало в ${info.start})`;
+  }
+}
+// Обновляем каждую минуту
+setInterval(updateHeroWidget, 60000);
+// После инита
+setTimeout(updateHeroWidget, 500);
+
+// 🌙 Ночной режим — автоматически снижает яркость после 22:00
+function checkNightMode(){
+  const h=new Date().getHours();
+  const isNight=(h>=22||h<6);
+  const sec=loadSecret();
+  if(isNight&&!sec.nightModeOff&&!document.getElementById('night-filter')){
+    const div=document.createElement('div');
+    div.id='night-filter';
+    div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.15);pointer-events:none;z-index:9998;transition:opacity .5s';
+    document.body.appendChild(div);
+  } else if(!isNight&&document.getElementById('night-filter')){
+    document.getElementById('night-filter').remove();
+  }
+}
+setInterval(checkNightMode,300000);
+setTimeout(checkNightMode,1000);
+
+
+
+// ══ БОНУСНЫЕ ФИШКИ (+10) ══
+
+// ① Счётчик пар за день — сколько пар осталось сегодня
+function getRemainingPairsToday(){
+  const now=new Date();
+  const nowMin=now.getHours()*60+now.getMinutes();
+  const dow=now.getDay();
+  const bell=dow===1?BELL_MON:dow===6?BELL_SAT:BELL_TUE;
+  let remaining=0;
+  for(const[,[s1]] of Object.entries(bell)){
+    if(!s1)continue;
+    const[h,m]=s1.split(':').map(Number);
+    if(h*60+m>nowMin)remaining++;
+  }
+  return remaining;
+}
+
+// ② "Случайный факт" в тосте — по команде /fact в CMD или кнопкой
+const RANDOM_FACTS=[
+  'Самая длинная лекция в истории длилась 54 часа. Студент не сдался.',
+  'Средний студент пьёт 3 чашки кофе в день. В сессию — 7.',
+  'Слово «дедлайн» изначально означало черту в тюрьме, за которой стреляли.',
+  'Исследования: 80% конспектов не перечитывается никогда.',
+  'Мозг запоминает лучше, если учиться перед сном. Не в 3 ночи перед экзаменом.',
+  'Первый в мире университет — Болонский, основан в 1088 году.',
+  'Средняя скорость записи — 30 слов в минуту. Преподаватели говорят быстрее.',
+  'Синдром самозванца испытывают 70% студентов. Ты не один.',
+  'Учёные доказали: перерывы каждые 25 минут повышают продуктивность на 40%.',
+  'Первая оценка в истории — поставлена в 1792 году в Кембридже.',
+  'В среднем студент теряет 3 ручки в семестр. Они попадают в параллельное измерение.',
+  'Если учиться 10000 часов — станешь экспертом. Это ~417 дней без сна.',
+];
+function showRandomFact(){
+  const f=RANDOM_FACTS[Math.floor(Math.random()*RANDOM_FACTS.length)];
+  // Показываем в большом тосте
+  const existing=document.getElementById('fact-toast');
+  if(existing)existing.remove();
+  const el=document.createElement('div');
+  el.id='fact-toast';
+  el.style.cssText='position:fixed;bottom:calc(80px + var(--safe-bot,0px));left:16px;right:16px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:16px;padding:16px;z-index:500;font-size:13px;line-height:1.5;color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.4);cursor:pointer';
+  el.innerHTML=`<div style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.1em;margin-bottom:6px">💡 СЛУЧАЙНЫЙ ФАКТ</div>${f}`;
+  el.onclick=()=>el.remove();
+  document.body.appendChild(el);
+  setTimeout(()=>el?.remove(),7000);
+}
+// Добавляем в CMD
+const _factCmd=['/fact','случайный факт 💡'];
+
+// ③ Погода в тосте по геолокации (без API — только через open-meteo)
+async function showWeatherToast(){
+  if(!navigator.geolocation){toast('❌ Геолокация недоступна');return;}
+  toast('📍 Определяю местоположение...');
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    try{
+      const{latitude:lat,longitude:lon}=pos.coords;
+      const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&wind_speed_unit=ms`;
+      const r=await fetch(url);
+      const d=await r.json();
+      const t=Math.round(d.current?.temperature_2m??0);
+      const code=d.current?.weather_code??0;
+      const icons=[[0,'☀️'],[1,'🌤'],[2,'⛅'],[3,'☁️'],[45,'🌫'],[48,'🌫'],[51,'🌦'],[61,'🌧'],[71,'🌨'],[80,'🌦'],[95,'⛈']];
+      const ico=(icons.find(([c])=>code<=c)||[,'🌡'])[1];
+      toast(`${ico} На улице ${t}°C`);
+    }catch(e){toast('❌ Не удалось получить погоду');}
+  },()=>toast('❌ Доступ к геолокации запрещён'));
+}
+
+// ④ Анти-скука таймер — напоминает встряхнуть себя если не было активности 30 мин
+let _lastActivity=Date.now();
+document.addEventListener('touchstart',()=>{_lastActivity=Date.now();},{passive:true});
+document.addEventListener('click',()=>{_lastActivity=Date.now();});
+setInterval(()=>{
+  const idle=Date.now()-_lastActivity;
+  if(idle>1800000&&document.getElementById('s-home')?.classList.contains('active')){
+    toast('👀 Давно не заходил в расписание. Не забудь проверить пары!');
+    _lastActivity=Date.now();
+  }
+},300000);
+
+// ⑤ Быстрое копирование расписания — зажать на карточке пары
+function copyPairToClipboard(roman,text){
+  const t=`${roman} пара: ${text}`;
+  if(navigator.clipboard){navigator.clipboard.writeText(t).then(()=>toast('📋 Пара скопирована'));}
+  else{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('📋 Скопировано');}
+}
+// Патчим addNoteButtons — добавляем долгое нажатие для копирования
+const _origAddNoteButtons=addNoteButtons;
+function addNoteButtons(body,groupOrTeacher){
+  _origAddNoteButtons(body,groupOrTeacher);
+  body.querySelectorAll('.pair-card.has-subject').forEach(card=>{
+    const subject=card.querySelector('.pair-subject')?.textContent||'';
+    const roman=card.querySelector('.pair-num')?.textContent?.trim()||'';
+    let pressTimer=null;
+    card.addEventListener('touchstart',()=>{pressTimer=setTimeout(()=>copyPairToClipboard(roman,subject),600);},{passive:true});
+    card.addEventListener('touchend',()=>clearTimeout(pressTimer),{passive:true});
+    card.addEventListener('touchmove',()=>clearTimeout(pressTimer),{passive:true});
+  });
+}
+
+// ⑥ Мини-статистика в настройках — сколько раз открывали приложение
+function getAppStats(){
+  try{
+    const v=JSON.parse(stor.get('visit_streak')||'{}');
+    return{total:v.total||0,streak:v.streak||0};
+  }catch(e){return{total:0,streak:0};}
+}
+// Показывается в CMD через /stats
+function showStats(){
+  const s=getAppStats();
+  const remaining=getRemainingPairsToday();
+  cmdPrint('info',`📊 Статистика приложения:`);
+  cmdPrint('ok', `  Открыто всего: ${s.total} раз`);
+  cmdPrint('ok', `  Стрик: ${s.streak} дней подряд 🔥`);
+  cmdPrint('ok', `  Пар осталось сегодня: ${remaining}`);
+  const notes=loadNotes();
+  cmdPrint('ok', `  Заметок к парам: ${Object.keys(notes).length}`);
+}
+
+// ⑦ "Режим фокуса" — скрывает всё кроме текущей пары
+let _focusMode=false;
+function toggleFocusMode(){
+  _focusMode=!_focusMode;
+  const cards=document.querySelectorAll('.pair-card');
+  cards.forEach(c=>{
+    if(_focusMode&&!c.classList.contains('is-now')&&!c.classList.contains('is-next')){
+      c.style.opacity='0.25';
+      c.style.transform='scale(0.97)';
+    } else {
+      c.style.opacity='';
+      c.style.transform='';
+    }
+  });
+  toast(_focusMode?'🎯 Режим фокуса: только текущая пара':'🎯 Режим фокуса выключен');
+}
+
+// ⑧ Генератор отмазки для пропуска пары
+const EXCUSES=[
+  'У меня внезапно разрядился телефон, а будильник стоял именно на нём.',
+  'Автобус уехал ровно тогда, когда я к нему подбежал.',
+  'Я был, но сидел так тихо, что меня не заметили.',
+  'Медицинские показания. Врач сказал "отдыхайте". Я послушался.',
+  'Готовился к следующей паре — она важнее.',
+  'Интернет подтвердил, что пара отменена. Интернет врал.',
+  'Застрял в лифте. В здании без лифта.',
+  'Бабушка. Всегда бабушка.',
+  'Я был там духовно.',
+  'Форс-мажор международного масштаба.',
+];
+function getExcuse(){
+  return EXCUSES[Math.floor(Math.random()*EXCUSES.length)];
+}
+
+// ⑨ Мини-тест "Знаешь ли ты своё расписание?" — угадай время пары
+let _quizActive=false;
+function startScheduleQuiz(){
+  if(_quizActive)return;
+  _quizActive=true;
+  const bells=Object.entries(BELL_TUE);
+  const idx=Math.floor(Math.random()*bells.length);
+  const[roman,[s1,e1]]=bells[idx];
+  const wrong1=`${String(parseInt(s1)+1).padStart(2,'0')}:${s1.split(':')[1]}`;
+  const wrong2=`${String(parseInt(s1)-1).padStart(2,'0')}:${s1.split(':')[1]}`;
+  const options=[s1,wrong1,wrong2].sort(()=>Math.random()-.5);
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px';
+  const sheet=document.createElement('div');
+  sheet.style.cssText='background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:360px;border:1.5px solid var(--surface3)';
+  sheet.innerHTML=`<div style="font-size:16px;font-weight:800;color:var(--accent);margin-bottom:16px">🧠 Знаешь расписание?</div><div style="font-size:14px;margin-bottom:18px">Когда начинается <b style="color:var(--accent)">пара ${roman}</b>?</div><div style="display:flex;flex-direction:column;gap:8px">${options.map(o=>`<button onclick="quizAnswer('${o}','${s1}',this.closest('div').parentElement.parentElement)" style="padding:13px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:12px;color:var(--text);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">${o}</button>`).join('')}</div>`;
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
+}
+function quizAnswer(chosen,correct,overlay){
+  _quizActive=false;
+  const btns=overlay.querySelectorAll('button');
+  btns.forEach(b=>{
+    b.disabled=true;
+    if(b.textContent===correct)b.style.background='var(--success,#4a9e5c)';
+    else if(b.textContent===chosen&&chosen!==correct)b.style.background='var(--danger,#c94f4f)';
+  });
+  setTimeout(()=>{overlay.remove();toast(chosen===correct?'✅ Правильно! Ты знаешь расписание 🎓':'❌ Неверно! Загляни в расписание почаще 😅');},800);
+}
+
+// ⑩ Мотивационные сообщения — в зависимости от дня недели
+const MOTIVATIONS={
+  1:['Понедельник — день тяжёлый, но ты справишься 💪','Неделя только началась — всё впереди!','С понедельника начинается новая версия тебя 🚀'],
+  2:['Вторник — уже не понедельник. Прогресс!','Ты пережил понедельник. Вторник — пустяки.'],
+  3:['Среда — экватор недели! Половина позади 🏆','В середине пути самое важное — не останавливаться.'],
+  4:['Четверг — почти пятница. Почти.','Один день до финиша. Держись!'],
+  5:['ПЯТНИЦА! 🎉 Ты дожил!','Последний рывок — и выходные твои!'],
+  6:['Суббота. Даже учёба в выходной — это сила.','Пока другие отдыхают, ты растёшь 📈'],
+  0:['Воскресенье. Заряжайся перед новой неделей 🔋','Отдохни сегодня — завтра в бой!'],
+};
+function getDayMotivation(){
+  const dow=new Date().getDay();
+  const arr=MOTIVATIONS[dow]||MOTIVATIONS[1];
+  return arr[Math.floor(Math.random()*arr.length)];
+}
+// Показываем мотивацию в приветствии если greet-sub доступен
+const _origShowGreeting=showGreeting;
+function showGreeting(){
+  _origShowGreeting();
+  setTimeout(()=>{
+    const sub=document.getElementById('greet-sub');
+    if(sub&&Math.random()<0.3){// 30% шанс показать мотивацию вместо стандартного
+      sub.textContent=getDayMotivation();
+    }
+  },100);
+}
+
+// Добавляем /fact, /stats, /excuse, /quiz, /focus, /weather в CMD
+const _extraCmds=[
+  ['/fact',    'случайный факт об учёбе 💡'],
+  ['/stats',   'статистика использования приложения 📊'],
+  ['/excuse',  'генератор отмазок от пары 😈'],
+  ['/quiz',    'тест на знание расписания 🧠'],
+  ['/focus',   'режим фокуса — выделить текущую пару 🎯'],
+  ['/weather', 'погода по геолокации 🌤'],
+];
+// Патчим CMD_HELP
+if(typeof CMD_HELP!=='undefined'){
+  _extraCmds.forEach(c=>{
+    if(!CMD_HELP.find(x=>x[0]===c[0]))CMD_HELP.push(c);
+  });
+}
+// Патчим cmdExec
+const _origCmdExec=cmdExec;
+function cmdExec(raw){
+  const parts=raw.trim().split(/\s+/),cmd=parts[0].toLowerCase();
+  switch(cmd){
+    case '/fact':    showRandomFact(); cmdPrint('ok','Показываю факт...'); break;
+    case '/stats':   showStats(); break;
+    case '/excuse':  cmdPrint('ok','📝 Твоя отмазка: «'+getExcuse()+'»'); break;
+    case '/quiz':    cmdClose();setTimeout(startScheduleQuiz,200); break;
+    case '/focus':   cmdClose();setTimeout(toggleFocusMode,200); break;
+    case '/weather': cmdClose();setTimeout(showWeatherToast,200); break;
+    default: _origCmdExec(raw);
+  }
+}
+
 
 // ══ ЗВОНКИ ══
 function renderBells(){
@@ -5861,6 +6282,11 @@ showGreeting();
 })();
 
 // ── Автопроверка при запуске отключена — проверка вручную через кнопку в настройках ──
+
+// ── Автопроверка OTA при запуске (через 5 сек) ──
+setTimeout(()=>{
+  checkOtaUpdate(true); // silent=true — не показывает тост если всё актуально
+}, 5000);
 
 // ── Состояние OTA ──
 // _otaApkUrl и _otaVersion объявлены в начале файла
