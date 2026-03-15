@@ -1862,9 +1862,15 @@ async function osuDetectBPM(audioBuffer) {
 function bubInit() {
   bubHi = getHi("bubbles");
   const canvas = document.getElementById('bub-canvas');
-  const w = Math.min(window.innerWidth - 36, 380);
+  // Overlay теперь fullscreen — вычисляем высоту с учётом UI-элементов сверху
+  const safeTop = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-top') || '0') || 0;
+  const topUi = safeTop + 50 + 36 + 28 + 38 + 28 + 16; // back + title + diff + audio + score
+  const botUi = 44 + 16; // restart button + padding
+  const availH = window.innerHeight - topUi - botUi;
+  const w = Math.min(window.innerWidth - 28, 400);
+  const h = Math.max(200, Math.min(availH, Math.round(w * 1.15)));
   canvas.width = w;
-  canvas.height = Math.round(w * 1.18);
+  canvas.height = h;
   bubW = canvas.width; bubH = canvas.height;
 
   // Setup tap handler

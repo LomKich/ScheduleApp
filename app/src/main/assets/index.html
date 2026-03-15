@@ -1717,7 +1717,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
   <div class="body">
     <div class="home-hero">
       <div class="hero-card">
-        <div class="hero-title" id="hero-title-text">колледж<br>расписание</div>
+        <div class="hero-title" id="hero-title-text" onclick="secretVersionTap()" ontouchstart="secretVersionTap()" style="cursor:default;user-select:none;-webkit-user-select:none">колледж<br>расписание</div>
       </div>
     </div>
     <div class="mode-switch-wrap">
@@ -1919,11 +1919,11 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <div class="section-label">Приложение</div>
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div id="egg-tap-zone"
-        onclick="eggTap();secretVersionTap()"
-        ontouchstart="eggTap();secretVersionTap()"
+        onclick="eggTap()"
+        ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.0 — Android</div>
+        <div class="item-sub" id="app-version-str">4.1 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2297,28 +2297,6 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="brRestart()">🔄 Заново</button>
   </div>
 
-  <!-- Пузыри -->
-  <div id="egg-bubbles" class="egg-game" style="display:none">
-    <div class="egg-game-title" style="color:#ff66aa;text-shadow:0 0 12px rgba(255,102,170,0.5)">🎵 osu! Режим</div>
-    <div class="diff-picker">
-      <button class="diff-btn" onclick="bubDifficulty='easy';updateDiffBtns('bubbles')">🐢 Easy</button>
-      <button class="diff-btn active" onclick="bubDifficulty='normal';updateDiffBtns('bubbles')">⚡ Normal</button>
-      <button class="diff-btn" onclick="bubDifficulty='hard';updateDiffBtns('bubbles')">💀 Hard</button>
-    </div>
-    <!-- Audio upload -->
-    <div style="width:100%;max-width:360px;margin:8px auto 0;display:flex;flex-direction:column;gap:6px">
-      <label id="bub-audio-label" style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:var(--rb);padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;color:var(--accent)">
-        <span style="font-size:18px">🎵</span>
-        <span>Загрузить аудио для ритм-режима</span>
-        <input type="file" accept="audio/*" style="display:none" onchange="osuLoadAudio(this.files[0])">
-      </label>
-      <div id="bub-audio-info" style="font-size:11px;color:var(--muted);text-align:center;min-height:16px">⬆️ Загрузи аудио для синхронизации с ритмом</div>
-    </div>
-    <div class="egg-score" id="bub-score-label" style="color:#ff66aa">Счёт: 0 • Рекорд: 0 • BPM: 120 • ❤️❤️❤️</div>
-    <canvas id="bub-canvas" style="border-radius:14px;border:1.5px solid rgba(255,102,170,0.3);margin-top:8px;display:block;touch-action:none;box-shadow:0 0 20px rgba(255,102,170,0.15)"></canvas>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bubRestart()">🔄 Restart</button>
-  </div>
-
   <!-- Флаппи птица -->
   <div id="egg-flappy" class="egg-game" style="display:none">
     <div class="egg-game-title">🐦 Флаппи птица</div>
@@ -2418,6 +2396,27 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tanksRestart()">🔄 Заново</button>
   </div>
 
+</div>
+
+<!-- ══ osu! Режим — полноэкранный оверлей на уровне body ══ -->
+<div id="egg-bubbles" style="display:none;position:fixed;inset:0;z-index:3500;background:var(--bg);flex-direction:column;align-items:center;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(var(--safe-top) + 50px) 14px calc(var(--safe-bot) + 16px)">
+  <!-- Кнопка назад -->
+  <button onclick="bubbleClose()" style="position:fixed;top:calc(var(--safe-top)+10px);left:12px;z-index:3501;width:36px;height:36px;border-radius:50%;background:var(--surface2);border:none;color:var(--accent);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4)">‹</button>
+  <div style="font-size:18px;font-weight:800;color:#ff66aa;text-shadow:0 0 14px rgba(255,102,170,0.55);margin-top:2px;letter-spacing:-.02em">🎵 osu! Режим</div>
+  <div class="diff-picker" style="margin:8px 0 4px">
+    <button class="diff-btn" onclick="bubDifficulty='easy';updateDiffBtns('bubbles')">🐢 Easy</button>
+    <button class="diff-btn active" onclick="bubDifficulty='normal';updateDiffBtns('bubbles')">⚡ Normal</button>
+    <button class="diff-btn" onclick="bubDifficulty='hard';updateDiffBtns('bubbles')">💀 Hard</button>
+  </div>
+  <!-- Загрузка аудио -->
+  <label style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:var(--rb);padding:9px 14px;cursor:pointer;font-size:12px;font-weight:600;color:var(--accent);width:100%;max-width:380px;margin-bottom:4px">
+    <span style="font-size:16px">🎵</span>
+    <span id="bub-audio-info">Загрузить аудио для ритм-режима</span>
+    <input type="file" accept="audio/*" style="display:none" onchange="osuLoadAudio(this.files[0])">
+  </label>
+  <div id="bub-score-label" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#ff66aa;margin:2px 0 6px;letter-spacing:.04em;text-align:center">Счёт: 0 • Рекорд: 0 • BPM: 120 • ❤️❤️❤️</div>
+  <canvas id="bub-canvas" style="border-radius:14px;border:1.5px solid rgba(255,102,170,0.35);display:block;touch-action:none;box-shadow:0 0 24px rgba(255,102,170,0.18);max-width:100%"></canvas>
+  <button class="btn btn-surface3" style="width:auto;padding:8px 20px;margin-top:10px;font-size:12px" onclick="bubRestart()">🔄 Restart</button>
 </div>
 
 <!-- ══ Game iframe overlays ══ -->
@@ -4479,7 +4478,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.0';
+const APP_VERSION='4.1';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -6543,7 +6542,7 @@ function eggClose() {
 
 function eggShowPicker() {
   eggStopAll();
-  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout','egg-bubbles','egg-flappy','egg-2048',
+  ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino','egg-blockblast','egg-breakout','egg-flappy','egg-2048',
    'egg-coin','egg-dice','egg-basket','egg-geodash','egg-tanks'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
@@ -6555,9 +6554,16 @@ function eggShowPicker() {
 function eggStartGame(name) {
   if(_eggBlockCards) return; // блокируем если только что открылось от тапа по версии
   SFX.play('gameSelect');
+  eggStopAll();
+  if (name === 'bubbles') {
+    // osu-режим — свой полноэкранный оверлей, не трогаем egg-overlay
+    const el = document.getElementById('egg-bubbles');
+    el.style.display = 'flex';
+    bubInit();
+    return;
+  }
   document.getElementById('egg-picker').style.display = 'none';
   document.getElementById('egg-back').classList.add('show');
-  eggStopAll();
   if (name === 'snake') { document.getElementById('egg-snake').style.display = ''; snakeInit(); }
   else if (name === 'ttt')  { document.getElementById('egg-ttt').style.display = ''; tttInit(); }
   else if (name === 'pong') { document.getElementById('egg-pong').style.display = ''; pongInit(); }
@@ -6565,7 +6571,6 @@ function eggStartGame(name) {
   else if (name === 'dino') { document.getElementById('egg-dino').style.display = ''; dinoInit(); }
   else if (name === 'blockblast') { document.getElementById('egg-blockblast').style.display = ''; bbInit(); }
   else if (name === 'breakout') { document.getElementById('egg-breakout').style.display = ''; brInit(); }
-  else if (name === 'bubbles')  { document.getElementById('egg-bubbles').style.display = '';  bubInit(); }
   else if (name === 'flappy')   { document.getElementById('egg-flappy').style.display = '';   flappyInit(); }
   else if (name === '2048')     { document.getElementById('egg-2048').style.display = '';     g2048Init(); }
   else if (name === 'coin')     { document.getElementById('egg-coin').style.display = '';     coinInit(); }
@@ -6577,6 +6582,14 @@ function eggStartGame(name) {
   else if (name === 'minecraft')   { minecraftStart(); }
 }
 
+// Закрыть osu-режим → вернуться в список игр
+function bubbleClose() {
+  bubStop();
+  const el = document.getElementById('egg-bubbles');
+  el.style.display = 'none';
+  eggOpen();
+}
+
 function eggStopAll() {
   snakeStop();
   pongStop();
@@ -6584,6 +6597,9 @@ function eggStopAll() {
   dinoStop();
   brStop();
   bubStop();
+  // Скрываем osu оверлей если был открыт
+  const bub = document.getElementById('egg-bubbles');
+  if (bub) bub.style.display = 'none';
   flappyStop();
   g2048Stop();
   basketStop();
@@ -6644,13 +6660,25 @@ function minecraftStop() {
 
 // ══════════════════════════════════════════════
 // 🔐 СЕКРЕТНЫЙ ASCII-ВИДЕОПЛЕЕР (33%/33%/33%)
-// Триггер: 7 тапов по версии приложения подряд
+// Триггер: 7 тапов по заголовку "колледж расписание" на главном экране
 // ══════════════════════════════════════════════
-let _secretTapCount = 0, _secretTapTimer = null;
+let _secretTapCount = 0, _secretTapTimer = null, _secretLastTs = 0;
 function secretVersionTap() {
+  // Защита от двойного срабатывания touchstart+click на одном тапе
+  const now = Date.now();
+  if (now - _secretLastTs < 350) return;
+  _secretLastTs = now;
+
   _secretTapCount++;
   clearTimeout(_secretTapTimer);
-  _secretTapTimer = setTimeout(() => { _secretTapCount = 0; }, 800);
+  _secretTapTimer = setTimeout(() => { _secretTapCount = 0; }, 1500);
+
+  // Лёгкий визуальный фидбек каждые 3 тапа
+  if (_secretTapCount === 3 || _secretTapCount === 5) {
+    const el = document.getElementById('hero-title-text');
+    if (el) { el.style.opacity = '0.6'; setTimeout(()=>{ el.style.opacity=''; }, 120); }
+  }
+
   if (_secretTapCount >= 7) {
     _secretTapCount = 0;
     clearTimeout(_secretTapTimer);
