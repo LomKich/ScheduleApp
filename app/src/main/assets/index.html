@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Расписание">
 <title>Расписание колледжа</title>
-<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Nunito:wght@300;400;600;700;800&family=Rubik:wght@300;400;500;600;700;800&family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800&family=Unbounded:wght@300;400;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Comfortaa:wght@300;400;600;700&family=Oxanium:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Nunito:wght@300;400;600;700;800&family=Rubik:wght@300;400;500;600;700;800&family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800&family=Unbounded:wght@300;400;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Comfortaa:wght@300;400;600;700&family=Oxanium:wght@300;400;600;700;800&family=Raleway:wght@300;400;500;600;700;800&family=Oswald:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Caveat:wght@400;500;600;700&family=Bebas+Neue&family=Exo+2:wght@300;400;500;600;700;800&family=Fira+Code:wght@300;400;500;600;700&family=Dela+Gothic+One&family=Righteous&family=Bangers&family=Russo+One&family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#0d0d0d;--surface:#161616;--surface2:#1f1f1f;--surface3:#2a2a2a;
@@ -134,9 +134,9 @@ body.custom-bg-active:not(.liveblur-ready) .hero-card{
   transition:transform .12s,box-shadow .12s
 }
 .btn:active{transform:scale(.97)}
-.btn-accent{background:var(--accent);color:#fff;box-shadow:0 4px 20px color-mix(in srgb,var(--accent) 35%,transparent)}
+.btn-accent{background:var(--accent);color:var(--btn-text,#fff);box-shadow:0 4px 20px color-mix(in srgb,var(--accent) 35%,transparent)}
 .btn-accent:active{box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 22%,transparent)}
-.btn-accent2{background:var(--accent2);color:#fff;box-shadow:0 4px 20px color-mix(in srgb,var(--accent2) 30%,transparent)}
+.btn-accent2{background:var(--accent2);color:var(--btn-text,#fff);box-shadow:0 4px 20px color-mix(in srgb,var(--accent2) 30%,transparent)}
 .btn-surface{background:var(--surface2);color:var(--text)}
 .btn-surface3{background:var(--surface3);color:var(--accent)}
 .btn-success{background:var(--success);color:#fff;box-shadow:0 4px 16px rgba(74,158,92,.25)}
@@ -149,11 +149,18 @@ body.custom-bg-active:not(.liveblur-ready) .hero-card{
   pointer-events:none
 }
 @keyframes ripple-anim{to{transform:scale(4);opacity:0}}
+/* Темы со светлым акцентом — текст кнопок #000 */
 [data-theme="bw"] .btn-accent,[data-theme="bw"] .btn-accent2,
+[data-theme="bw"] .btn-surface3,
 [data-theme="win11"] .btn-accent,[data-theme="win11"] .btn-accent2,
 [data-theme="amoled"] .btn-accent,[data-theme="amoled"] .btn-accent2,
 [data-theme="pixel"] .btn-accent,[data-theme="pixel"] .btn-accent2,
-[data-theme="aero"] .btn-accent,[data-theme="aero"] .btn-accent2{color:#000}
+[data-theme="aero"] .btn-accent,[data-theme="aero"] .btn-accent2,
+[data-theme="gold"] .btn-accent,[data-theme="gold"] .btn-accent2,
+[data-theme="candy"] .btn-accent,[data-theme="candy"] .btn-accent2{color:#000}
+/* Светлая тема — кнопки surface должны быть тёмными */
+[data-theme="light"] .btn-surface{background:#e0e0e0;color:#111}
+[data-theme="light"] .btn-surface3{background:#d0d0d0;color:var(--accent)}
 
 .status{font-size:12px;color:var(--muted);text-align:center;min-height:18px;line-height:18px}
 .progress{height:2px;background:var(--surface3);border-radius:1px;overflow:hidden;margin:6px 0}
@@ -1912,11 +1919,11 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <div class="section-label">Приложение</div>
     <div class="list-item" style="cursor:default;margin-bottom:8px">
       <div id="egg-tap-zone"
-        onclick="eggTap()"
-        ontouchstart="eggTap()"
+        onclick="eggTap();secretVersionTap()"
+        ontouchstart="eggTap();secretVersionTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.5 — Android</div>
+        <div class="item-sub" id="app-version-str">4.0 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -1945,6 +1952,17 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
       <div class="section-label" style="margin-top:16px;margin-bottom:8px">Иконка приложения</div>
       <div class="theme-grid" id="icon-grid-screen"></div>
     </div>
+
+    <!-- Шрифт приложения -->
+    <div class="section-label" style="margin-top:20px;margin-bottom:6px">Шрифт приложения</div>
+    <div class="font-carousel-preview" id="font-preview-text" style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:6px">Расписание занятий</div>
+    <div class="font-carousel">
+      <button class="font-carousel-arrow" onclick="fontCarouselStep(-1)">&#8249;</button>
+      <div class="font-carousel-track" id="font-carousel-track"></div>
+      <button class="font-carousel-arrow" onclick="fontCarouselStep(1)">&#8250;</button>
+    </div>
+    <div class="font-carousel-dots" id="font-carousel-dots"></div>
+    <button class="btn btn-accent" onclick="fontCarouselApply()" id="font-apply-btn" style="margin-bottom:4px">Применить шрифт</button>
   </div>
 </div>
 
@@ -2068,12 +2086,12 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         </div>
         <div class="egg-card-arrow">›</div>
       </div>
-      <div class="egg-card" onclick="eggStartGame('bubbles')">
-        <div class="egg-card-icon">🫧</div>
+      <div class="egg-card" onclick="eggStartGame('bubbles')" style="border-color:rgba(255,102,170,0.4);background:linear-gradient(135deg,rgba(60,0,30,0.5),var(--surface2))">
+        <div class="egg-card-icon">🎵</div>
         <div class="egg-card-body">
-          <div class="egg-card-name">Пузыри</div>
-          <div class="egg-card-desc">Лопай пузыри до того, как они исчезнут!</div>
-          <div class="egg-card-badge egg-card-new">v2.2.0 ✦ НОВАЯ</div>
+          <div class="egg-card-name" style="color:#ff66aa">osu! Mode</div>
+          <div class="egg-card-desc">Тапай кружки в ритм музыки — загрузи своё аудио!</div>
+          <div class="egg-card-badge egg-card-new" style="color:#ff66aa;background:rgba(255,102,170,0.15);border-color:rgba(255,102,170,0.4)">v3.0.0 ✦ BPM-ритм 🎶</div>
         </div>
         <div class="egg-card-arrow">›</div>
       </div>
@@ -2150,7 +2168,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         <div class="egg-card-arrow" style="color:#ff4444">›</div>
       </div>
 
-      <div class="egg-card" onclick="eggStartGame('minecraft')" style="border-color:rgba(80,200,80,0.4);background:linear-gradient(135deg,rgba(0,60,0,0.5),var(--surface2))">
+      <div class="egg-card" onclick="openMinecraftClassic()" style="border-color:rgba(80,200,80,0.4);background:linear-gradient(135deg,rgba(0,60,0,0.5),var(--surface2))">
         <div class="egg-card-icon">⛏️</div>
         <div class="egg-card-body">
           <div class="egg-card-name" style="color:#4cff4c">Minecraft</div>
@@ -2159,10 +2177,8 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         </div>
         <div class="egg-card-arrow" style="color:#4cff4c">›</div>
       </div>
-      <div class="egg-card" onclick="eggStartGame('quake')" style="border-color:rgba(200,130,0,0.4);background:linear-gradient(135deg,rgba(80,40,0,0.5),var(--surface2))">
-        <div class="egg-card-icon">⚡</div>
-        <div class="egg-card-body">
-          <div class="egg-card-name" style="color:#ffaa00">Quake</div>
+<div class="egg-card-body">
+          
           <div class="egg-card-desc">Шутер от первого лица — убивай монстров!</div>
           <div class="egg-card-badge" style="color:#ffaa00;background:rgba(200,100,0,0.2);border-color:rgba(200,100,0,0.5)">v1.0.0 ✦ КЛАССИКА 🔥</div>
         </div>
@@ -2283,15 +2299,24 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 
   <!-- Пузыри -->
   <div id="egg-bubbles" class="egg-game" style="display:none">
-    <div class="egg-game-title">🫧 Пузыри</div>
+    <div class="egg-game-title" style="color:#ff66aa;text-shadow:0 0 12px rgba(255,102,170,0.5)">🎵 osu! Режим</div>
     <div class="diff-picker">
-      <button class="diff-btn" onclick="bubDifficulty='easy';updateDiffBtns('bubbles')">🐢 Легко</button>
-      <button class="diff-btn active" onclick="bubDifficulty='normal';updateDiffBtns('bubbles')">⚡ Нормально</button>
-      <button class="diff-btn" onclick="bubDifficulty='hard';updateDiffBtns('bubbles')">💀 Хардкор</button>
+      <button class="diff-btn" onclick="bubDifficulty='easy';updateDiffBtns('bubbles')">🐢 Easy</button>
+      <button class="diff-btn active" onclick="bubDifficulty='normal';updateDiffBtns('bubbles')">⚡ Normal</button>
+      <button class="diff-btn" onclick="bubDifficulty='hard';updateDiffBtns('bubbles')">💀 Hard</button>
     </div>
-    <div class="egg-score" id="bub-score-label">Счёт: 0 • Рекорд: 0 • Жизни: ❤️❤️❤️</div>
-    <canvas id="bub-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bubRestart()">🔄 Заново</button>
+    <!-- Audio upload -->
+    <div style="width:100%;max-width:360px;margin:8px auto 0;display:flex;flex-direction:column;gap:6px">
+      <label id="bub-audio-label" style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:var(--rb);padding:10px 14px;cursor:pointer;font-size:13px;font-weight:600;color:var(--accent)">
+        <span style="font-size:18px">🎵</span>
+        <span>Загрузить аудио для ритм-режима</span>
+        <input type="file" accept="audio/*" style="display:none" onchange="osuLoadAudio(this.files[0])">
+      </label>
+      <div id="bub-audio-info" style="font-size:11px;color:var(--muted);text-align:center;min-height:16px">⬆️ Загрузи аудио для синхронизации с ритмом</div>
+    </div>
+    <div class="egg-score" id="bub-score-label" style="color:#ff66aa">Счёт: 0 • Рекорд: 0 • BPM: 120 • ❤️❤️❤️</div>
+    <canvas id="bub-canvas" style="border-radius:14px;border:1.5px solid rgba(255,102,170,0.3);margin-top:8px;display:block;touch-action:none;box-shadow:0 0 20px rgba(255,102,170,0.15)"></canvas>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bubRestart()">🔄 Restart</button>
   </div>
 
   <!-- Флаппи птица -->
@@ -2382,13 +2407,13 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <div class="egg-score" id="tanks-score-label">Уничтожено: 0 • Жизни: ❤️❤️❤️</div>
     <canvas id="tanks-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
     <div class="tanks-controls">
-      <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('up')" onclick="tanksDir('up')">▲</div>
+      <div class="dpad-btn" data-dir="up" ontouchstart="event.preventDefault();tanksDir('up')" onclick="tanksDir('up')">▲</div>
       <div style="display:flex;gap:6px">
-        <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('left')" onclick="tanksDir('left')">◀</div>
-        <div class="dpad-btn" style="background:var(--accent);color:#fff;font-size:14px" ontouchstart="event.preventDefault();tanksShoot()" onclick="tanksShoot()">🔥</div>
-        <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('right')" onclick="tanksDir('right')">▶</div>
+        <div class="dpad-btn" data-dir="left" ontouchstart="event.preventDefault();tanksDir('left')" onclick="tanksDir('left')">◀</div>
+        <div class="dpad-btn" style="background:var(--accent);color:#fff;font-size:14px" data-dir="shoot" ontouchstart="event.preventDefault();tanksShoot()" onclick="tanksShoot()">🔥</div>
+        <div class="dpad-btn" data-dir="right" ontouchstart="event.preventDefault();tanksDir('right')" onclick="tanksDir('right')">▶</div>
       </div>
-      <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('down')" onclick="tanksDir('down')">▼</div>
+      <div class="dpad-btn" data-dir="down" ontouchstart="event.preventDefault();tanksDir('down')" onclick="tanksDir('down')">▼</div>
     </div>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tanksRestart()">🔄 Заново</button>
   </div>
@@ -2398,7 +2423,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 <!-- ══ Game iframe overlays ══ -->
 <div id="overlay-doom" class="game-iframe-overlay"></div>
 <div id="overlay-minecraft" class="game-iframe-overlay"></div>
-<div id="overlay-quake" class="game-iframe-overlay"></div>
+<div id="overlay-ascii" class="game-iframe-overlay"></div>
 
 <!-- ══ Модальное окно обновления (в стиле приложения) ══ -->
 <div class="ota-overlay" id="ota-overlay" onclick="otaOverlayClose(event)">
@@ -2642,19 +2667,22 @@ document.addEventListener('click',function(e){
 
 // ══ ТЕМЫ ══
 const THEMES={
-  'orange': {name:'Колледж',  ico:'🟠', vars:{'--bg':'#0d0d0d','--surface':'#161616','--surface2':'#1f1f1f','--surface3':'#2a2a2a','--accent':'#e87722','--accent2':'#c45f0a','--text':'#f0ede8','--muted':'#6b6762'},sw:['#0d0d0d','#e87722','#c45f0a']},
-  'amoled': {name:'AMOLED',   ico:'⚫', vars:{'--bg':'#000','--surface':'#080808','--surface2':'#111','--surface3':'#1a1a1a','--accent':'#00e5ff','--accent2':'#00acc1','--text':'#fff','--muted':'#505050'},sw:['#000','#00e5ff','#00acc1']},
-  'win11':  {name:'Win 11',   ico:'🔵', vars:{'--bg':'#1a1a1a','--surface':'#222','--surface2':'#2d2d2d','--surface3':'#383838','--accent':'#60cdff','--accent2':'#0067c0','--text':'#fff','--muted':'#888'},sw:['#1a1a1a','#60cdff','#0067c0']},
-  'pixel':  {name:'Material', ico:'🟣', vars:{'--bg':'#191c1e','--surface':'#22272a','--surface2':'#2c3237','--surface3':'#373d44','--accent':'#7fcfff','--accent2':'#2f71d4','--text':'#e3e5e8','--muted':'#8e9099'},sw:['#191c1e','#7fcfff','#2f71d4']},
-  'aero':   {name:'Aero',     ico:'💎', vars:{'--bg':'#152030','--surface':'#1a2d44','--surface2':'#1f3755','--surface3':'#274466','--accent':'#7fd7ff','--accent2':'#00a8e8','--text':'#e8f4ff','--muted':'#7a9ab8'},sw:['#152030','#7fd7ff','#00a8e8']},
-  'forest': {name:'Лес',      ico:'🌿', vars:{'--bg':'#0b1a10','--surface':'#111f15','--surface2':'#182a1d','--surface3':'#213627','--accent':'#4caf7d','--accent2':'#2d8653','--text':'#e0f0e8','--muted':'#6a9076'},sw:['#0b1a10','#4caf7d','#2d8653']},
-  'rose':   {name:'Розовый',  ico:'🌸', vars:{'--bg':'#1a0d12','--surface':'#24111a','--surface2':'#2e1622','--surface3':'#3a1e2d','--accent':'#f472b6','--accent2':'#db2777','--text':'#fce7f3','--muted':'#9d6b80'},sw:['#1a0d12','#f472b6','#db2777']},
-  'gold':   {name:'Золото',   ico:'✨', vars:{'--bg':'#100e00','--surface':'#1a1700','--surface2':'#222000','--surface3':'#2e2a00','--accent':'#f5c518','--accent2':'#c9a000','--text':'#fff9e6','--muted':'#7a7050'},sw:['#100e00','#f5c518','#c9a000']},
-  'purple': {name:'Фиолет',   ico:'🫐', vars:{'--bg':'#0e0b1a','--surface':'#151025','--surface2':'#1c1630','--surface3':'#251e3d','--accent':'#a78bfa','--accent2':'#7c3aed','--text':'#ede9fe','--muted':'#7060a0'},sw:['#0e0b1a','#a78bfa','#7c3aed']},
-  'sunset': {name:'Закат',    ico:'🌅', vars:{'--bg':'#0f0a00','--surface':'#1a1000','--surface2':'#241800','--surface3':'#302200','--accent':'#ff6b35','--accent2':'#c94a10','--text':'#fff3ee','--muted':'#7a5040'},sw:['#0f0a00','#ff6b35','#c94a10']},
-  'bw':     {name:'Ч/Б',      ico:'⬜', vars:{'--bg':'#000','--surface':'#111','--surface2':'#1c1c1c','--surface3':'#2a2a2a','--accent':'#ffffff','--accent2':'#cccccc','--text':'#ffffff','--muted':'#666666'},sw:['#000','#fff','#888']},
-  'glass':  {name:'Liquid Glass', ico:'🫧', vars:{'--bg':'#0a0f1e','--surface':'rgba(255,255,255,0.07)','--surface2':'rgba(255,255,255,0.11)','--surface3':'rgba(255,255,255,0.18)','--accent':'#a0c4ff','--accent2':'#7b9fff','--text':'#f0f4ff','--muted':'rgba(180,190,220,0.7)'},sw:['#0a0f1e','#a0c4ff','#7b9fff']},
-  'light':  {name:'Светлая',  ico:'☀️', vars:{'--bg':'#f4f4f4','--surface':'#fff','--surface2':'#ebebeb','--surface3':'#d8d8d8','--accent':'#e87722','--accent2':'#c45f0a','--text':'#111','--muted':'#888'},sw:['#f4f4f4','#e87722','#c45f0a']},
+  'orange': {name:'Колледж',  ico:'🟠', vars:{'--bg':'#0d0d0d','--surface':'#161616','--surface2':'#1f1f1f','--surface3':'#2a2a2a','--accent':'#e87722','--accent2':'#c45f0a','--text':'#f0ede8','--muted':'#6b6762','--btn-text':'#fff'},sw:['#0d0d0d','#e87722','#c45f0a']},
+  'amoled': {name:'AMOLED',   ico:'⚫', vars:{'--bg':'#000','--surface':'#080808','--surface2':'#111','--surface3':'#1a1a1a','--accent':'#00e5ff','--accent2':'#00acc1','--text':'#fff','--muted':'#505050','--btn-text':'#000'},sw:['#000','#00e5ff','#00acc1']},
+  'win11':  {name:'Win 11',   ico:'🔵', vars:{'--bg':'#1a1a1a','--surface':'#222','--surface2':'#2d2d2d','--surface3':'#383838','--accent':'#60cdff','--accent2':'#0067c0','--text':'#fff','--muted':'#888','--btn-text':'#000'},sw:['#1a1a1a','#60cdff','#0067c0']},
+  'pixel':  {name:'Material', ico:'🟣', vars:{'--bg':'#191c1e','--surface':'#22272a','--surface2':'#2c3237','--surface3':'#373d44','--accent':'#7fcfff','--accent2':'#2f71d4','--text':'#e3e5e8','--muted':'#8e9099','--btn-text':'#000'},sw:['#191c1e','#7fcfff','#2f71d4']},
+  'aero':   {name:'Aero',     ico:'💎', vars:{'--bg':'#152030','--surface':'#1a2d44','--surface2':'#1f3755','--surface3':'#274466','--accent':'#7fd7ff','--accent2':'#00a8e8','--text':'#e8f4ff','--muted':'#7a9ab8','--btn-text':'#000'},sw:['#152030','#7fd7ff','#00a8e8']},
+  'forest': {name:'Лес',      ico:'🌿', vars:{'--bg':'#0b1a10','--surface':'#111f15','--surface2':'#182a1d','--surface3':'#213627','--accent':'#4caf7d','--accent2':'#2d8653','--text':'#e0f0e8','--muted':'#6a9076','--btn-text':'#fff'},sw:['#0b1a10','#4caf7d','#2d8653']},
+  'rose':   {name:'Розовый',  ico:'🌸', vars:{'--bg':'#1a0d12','--surface':'#24111a','--surface2':'#2e1622','--surface3':'#3a1e2d','--accent':'#f472b6','--accent2':'#db2777','--text':'#fce7f3','--muted':'#9d6b80','--btn-text':'#fff'},sw:['#1a0d12','#f472b6','#db2777']},
+  'gold':   {name:'Золото',   ico:'✨', vars:{'--bg':'#100e00','--surface':'#1a1700','--surface2':'#222000','--surface3':'#2e2a00','--accent':'#f5c518','--accent2':'#c9a000','--text':'#fff9e6','--muted':'#7a7050','--btn-text':'#000'},sw:['#100e00','#f5c518','#c9a000']},
+  'purple': {name:'Фиолет',   ico:'🫐', vars:{'--bg':'#0e0b1a','--surface':'#151025','--surface2':'#1c1630','--surface3':'#251e3d','--accent':'#a78bfa','--accent2':'#7c3aed','--text':'#ede9fe','--muted':'#7060a0','--btn-text':'#fff'},sw:['#0e0b1a','#a78bfa','#7c3aed']},
+  'sunset': {name:'Закат',    ico:'🌅', vars:{'--bg':'#0f0a00','--surface':'#1a1000','--surface2':'#241800','--surface3':'#302200','--accent':'#ff6b35','--accent2':'#c94a10','--text':'#fff3ee','--muted':'#7a5040','--btn-text':'#fff'},sw:['#0f0a00','#ff6b35','#c94a10']},
+  'bw':     {name:'Ч/Б',      ico:'⬜', vars:{'--bg':'#000','--surface':'#111','--surface2':'#1c1c1c','--surface3':'#2a2a2a','--accent':'#ffffff','--accent2':'#cccccc','--text':'#ffffff','--muted':'#666666','--btn-text':'#000'},sw:['#000','#fff','#888']},
+  'glass':  {name:'Liquid Glass', ico:'🫧', vars:{'--bg':'#0a0f1e','--surface':'rgba(255,255,255,0.07)','--surface2':'rgba(255,255,255,0.11)','--surface3':'rgba(255,255,255,0.18)','--accent':'#a0c4ff','--accent2':'#7b9fff','--text':'#f0f4ff','--muted':'rgba(180,190,220,0.7)','--btn-text':'#000'},sw:['#0a0f1e','#a0c4ff','#7b9fff']},
+  'light':  {name:'Светлая',  ico:'☀️', vars:{'--bg':'#f4f4f4','--surface':'#fff','--surface2':'#ebebeb','--surface3':'#d8d8d8','--accent':'#e87722','--accent2':'#c45f0a','--text':'#111','--muted':'#888','--btn-text':'#fff'},sw:['#f4f4f4','#e87722','#c45f0a']},
+  'candy':  {name:'Candy',    ico:'🍬', vars:{'--bg':'#0d0018','--surface':'#150024','--surface2':'#1e0033','--surface3':'#2a0044','--accent':'#ff88cc','--accent2':'#dd44aa','--text':'#ffe0f8','--muted':'#8855aa','--btn-text':'#000'},sw:['#0d0018','#ff88cc','#dd44aa']},
+  'ocean':  {name:'Океан',    ico:'🌊', vars:{'--bg':'#000d1a','--surface':'#001628','--surface2':'#002038','--surface3':'#002d4f','--accent':'#00c8ff','--accent2':'#0099cc','--text':'#d0f4ff','--muted':'#446677','--btn-text':'#000'},sw:['#000d1a','#00c8ff','#0099cc']},
+  'samek':  {name:'Самек',    ico:'🔥', vars:{'--bg':'#120008','--surface':'#1e0010','--surface2':'#2a001a','--surface3':'#380024','--accent':'#ff3366','--accent2':'#cc0044','--text':'#ffe0e8','--muted':'#882244','--btn-text':'#fff'},sw:['#120008','#ff3366','#cc0044']},
 };
 
 // ══ DNS провайдеры ══
@@ -4451,7 +4479,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='3.5';
+const APP_VERSION='4.0';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -4472,6 +4500,7 @@ function getGreeting(){
 }
 function showGreeting(){
   trackVisit();
+  setTimeout(()=>{try{var ms=document.getElementById('greet-sub');if(ms&&Math.random()<0.3)ms.textContent=getDayMotivation();}catch(e){}},250);
   const ov=document.getElementById('greeting-overlay');
   if(!ov)return;
   const stored=loadSecret();
@@ -5136,16 +5165,31 @@ function cmdExec(raw){
 
 // ══ ШРИФТЫ ══
 const FONTS = [
-  {id:'Geologica',   name:'Geologica',    sub:'Стандартный (по умолчанию)', preview:'Расписание занятий'},
-  {id:'Nunito',      name:'Nunito',       sub:'Мягкий, скруглённый',        preview:'Расписание занятий'},
-  {id:'Rubik',       name:'Rubik',        sub:'Современный, геометричный',  preview:'Расписание занятий'},
-  {id:'Manrope',     name:'Manrope',      sub:'Строгий, технологичный',     preview:'Расписание занятий'},
-  {id:'Inter',       name:'Inter',        sub:'Читаемый, нейтральный',      preview:'Расписание занятий'},
-  {id:'Montserrat',  name:'Montserrat',   sub:'Стильный, акцентный',        preview:'Расписание занятий'},
-  {id:'Unbounded',   name:'Unbounded',    sub:'Широкий, брутальный',        preview:'РАСПИСАНИЕ'},
-  {id:'Space Grotesk',name:'Space Grotesk',sub:'Космический, техно',        preview:'Расписание'},
-  {id:'Comfortaa',   name:'Comfortaa',    sub:'Дружелюбный, округлый',      preview:'Расписание занятий'},
-  {id:'Oxanium',     name:'Oxanium',      sub:'Футуристичный, угловатый',   preview:'РАСПИСАНИЕ'},
+  {id:'Geologica',         name:'Geologica',          sub:'Стандартный (по умолчанию)',  preview:'Расписание занятий'},
+  {id:'Nunito',            name:'Nunito',              sub:'Мягкий, скруглённый',         preview:'Расписание занятий'},
+  {id:'Rubik',             name:'Rubik',               sub:'Современный, геометричный',   preview:'Расписание занятий'},
+  {id:'Manrope',           name:'Manrope',             sub:'Строгий, технологичный',      preview:'Расписание занятий'},
+  {id:'Inter',             name:'Inter',               sub:'Читаемый, нейтральный',       preview:'Расписание занятий'},
+  {id:'Montserrat',        name:'Montserrat',          sub:'Стильный, акцентный',         preview:'Расписание занятий'},
+  {id:'Unbounded',         name:'Unbounded',           sub:'Широкий, брутальный',         preview:'РАСПИСАНИЕ'},
+  {id:'Space Grotesk',     name:'Space Grotesk',       sub:'Космический, техно',          preview:'Расписание'},
+  {id:'Comfortaa',         name:'Comfortaa',           sub:'Дружелюбный, округлый',       preview:'Расписание занятий'},
+  {id:'Oxanium',           name:'Oxanium',             sub:'Футуристичный, угловатый',    preview:'РАСПИСАНИЕ'},
+  {id:'Raleway',           name:'Raleway',             sub:'Элегантный, тонкий',          preview:'Расписание занятий'},
+  {id:'Oswald',            name:'Oswald',              sub:'Узкий, газетный',             preview:'РАСПИСАНИЕ'},
+  {id:'Outfit',            name:'Outfit',              sub:'Чистый, современный',         preview:'Расписание занятий'},
+  {id:'Syne',              name:'Syne',                sub:'Авангардный, дизайнерский',   preview:'Расписание'},
+  {id:'Plus Jakarta Sans', name:'Plus Jakarta Sans',   sub:'Свежий, деловой',             preview:'Расписание занятий'},
+  {id:'Caveat',            name:'Caveat',              sub:'Рукописный, живой',           preview:'Расписание занятий'},
+  {id:'Bebas Neue',        name:'Bebas Neue',          sub:'Полный, дерзкий',             preview:'РАСПИСАНИЕ'},
+  {id:'Exo 2',             name:'Exo 2',               sub:'Технологичный, sci-fi',       preview:'Расписание занятий'},
+  {id:'Fira Code',         name:'Fira Code',           sub:'Моно, программистский',       preview:'Расписание_01'},
+  {id:'Dela Gothic One',   name:'Dela Gothic One',     sub:'Жирный, японский гротеск',    preview:'РАСПИСАНИЕ'},
+  {id:'Righteous',         name:'Righteous',           sub:'Дерзкий, неоновый',           preview:'Расписание'},
+  {id:'Bangers',           name:'Bangers',             sub:'Комиксный, экспрессивный',    preview:'РАСПИСАНИЕ!'},
+  {id:'Russo One',         name:'Russo One',           sub:'Жёсткий, русский гротеск',    preview:'РАСПИСАНИЕ'},
+  {id:'Ubuntu',            name:'Ubuntu',              sub:'Открытый, Linux-стиль',       preview:'Расписание занятий'},
+  {id:'JetBrains Mono',    name:'JetBrains Mono',      sub:'Моношрифт, программистский',  preview:'Schedule_v3'},
 ];
 function applyFont(fontId){
   document.documentElement.style.setProperty('--app-font', "'" + fontId + "'");
@@ -5282,6 +5326,17 @@ function addNoteButtons(body, groupOrTeacher){
     card.style.position='relative';
     card.appendChild(btn);
   });
+  // Long-press для копирования пары
+  body.querySelectorAll('.pair-card.has-subject').forEach(function(card){
+    var subj=card.querySelector('.pair-subject');
+    var num=card.querySelector('.pair-num');
+    if(!subj||!num)return;
+    var txt_=num.textContent.trim()+' пара: '+subj.textContent;
+    var pt=null;
+    card.addEventListener('touchstart',function(){pt=setTimeout(function(){copyPairToClipboard('',txt_);},600);},{passive:true});
+    card.addEventListener('touchend',function(){clearTimeout(pt);},{passive:true});
+    card.addEventListener('touchmove',function(){clearTimeout(pt);},{passive:true});
+  });
 }
 
 // ══ СЧЁТЧИК ПОСЕЩЕНИЙ ══
@@ -5413,22 +5468,6 @@ function closeNote(){
   if(_noteOverlay){ _noteOverlay.remove(); _noteOverlay=null; }
 }
 // Добавляем кнопку заметки к каждой паре в renderSchedule и renderTeacherSchedule
-function addNoteButtons(body, groupOrTeacher){
-  body.querySelectorAll('.pair-card.has-subject,.pair-card.is-now,.pair-card.is-next').forEach(card=>{
-    const roman=card.querySelector('.pair-num')?.textContent?.trim();
-    if(!roman)return;
-    const notes=loadNotes();
-    const key=groupOrTeacher+'::'+roman;
-    const hasNote=!!notes[key];
-    const btn=document.createElement('button');
-    btn.title='Заметка';
-    btn.style.cssText='position:absolute;top:10px;right:10px;background:'+(hasNote?'var(--accent)':'var(--surface3)')+';border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;z-index:2';
-    btn.textContent=hasNote?'📝':'＋';
-    btn.onclick=(e)=>{e.stopPropagation();openNote(roman,groupOrTeacher);};
-    card.style.position='relative';
-    card.appendChild(btn);
-  });
-}
 
 // ══ СЧЁТЧИК ПОСЕЩЕНИЙ ══
 // ══ РЕЖИМ (student / teacher) ══
@@ -5938,21 +5977,7 @@ function copyPairToClipboard(roman,text){
   if(navigator.clipboard){navigator.clipboard.writeText(t).then(()=>toast('📋 Пара скопирована'));}
   else{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('📋 Скопировано');}
 }
-// Патчим addNoteButtons — добавляем долгое нажатие для копирования
-const _origAddNoteButtons=addNoteButtons;
-function addNoteButtons(body,groupOrTeacher){
-  _origAddNoteButtons(body,groupOrTeacher);
-  body.querySelectorAll('.pair-card.has-subject').forEach(card=>{
-    const subject=card.querySelector('.pair-subject')?.textContent||'';
-    const roman=card.querySelector('.pair-num')?.textContent?.trim()||'';
-    let pressTimer=null;
-    card.addEventListener('touchstart',()=>{pressTimer=setTimeout(()=>copyPairToClipboard(roman,subject),600);},{passive:true});
-    card.addEventListener('touchend',()=>clearTimeout(pressTimer),{passive:true});
-    card.addEventListener('touchmove',()=>clearTimeout(pressTimer),{passive:true});
-  });
-}
 
-// ⑥ Мини-статистика в настройках — сколько раз открывали приложение
 function getAppStats(){
   try{
     const v=JSON.parse(stor.get('visit_streak')||'{}');
@@ -6050,18 +6075,6 @@ function getDayMotivation(){
   const arr=MOTIVATIONS[dow]||MOTIVATIONS[1];
   return arr[Math.floor(Math.random()*arr.length)];
 }
-// Показываем мотивацию в приветствии если greet-sub доступен
-const _origShowGreeting=showGreeting;
-function showGreeting(){
-  _origShowGreeting();
-  setTimeout(()=>{
-    const sub=document.getElementById('greet-sub');
-    if(sub&&Math.random()<0.3){// 30% шанс показать мотивацию вместо стандартного
-      sub.textContent=getDayMotivation();
-    }
-  },100);
-}
-
 // Добавляем /fact, /stats, /excuse, /quiz, /focus, /weather в CMD
 const _extraCmds=[
   ['/fact',    'случайный факт об учёбе 💡'],
@@ -6077,22 +6090,32 @@ if(typeof CMD_HELP!=='undefined'){
     if(!CMD_HELP.find(x=>x[0]===c[0]))CMD_HELP.push(c);
   });
 }
-// Патчим cmdExec
-const _origCmdExec=cmdExec;
-function cmdExec(raw){
-  const parts=raw.trim().split(/\s+/),cmd=parts[0].toLowerCase();
-  switch(cmd){
-    case '/fact':    showRandomFact(); cmdPrint('ok','Показываю факт...'); break;
-    case '/stats':   showStats(); break;
-    case '/excuse':  cmdPrint('ok','📝 Твоя отмазка: «'+getExcuse()+'»'); break;
-    case '/quiz':    cmdClose();setTimeout(startScheduleQuiz,200); break;
-    case '/focus':   cmdClose();setTimeout(toggleFocusMode,200); break;
-    case '/weather': cmdClose();setTimeout(showWeatherToast,200); break;
-    default: _origCmdExec(raw);
-  }
+
+
+
+// Tanks — continuous fire/move on held touch
+var _tanksHeld={};
+document.addEventListener('touchstart',function(e){
+  var b=e.target.closest('.dpad-btn,.tanks-shoot-btn');
+  if(!b||!document.getElementById('egg-tanks')||document.getElementById('egg-tanks').style.display==='none')return;
+  var dir=b.getAttribute('data-dir');
+  if(!dir)return;
+  e.preventDefault();
+  if(_tanksHeld[dir])return;
+  if(dir==='shoot'){tanksShoot();}else{tanksDir(dir);}
+  _tanksHeld[dir]=setInterval(function(){if(dir==='shoot')tanksShoot();else tanksDir(dir);},120);
+},{passive:false});
+document.addEventListener('touchend',function(e){
+  var b=e.target.closest('.dpad-btn,.tanks-shoot-btn');
+  if(!b)return;
+  var dir=b.getAttribute('data-dir');
+  if(dir&&_tanksHeld[dir]){clearInterval(_tanksHeld[dir]);delete _tanksHeld[dir];}
+},{passive:true});
+function openMinecraftClassic(){
+  eggClose();
+  if(window.Android&&window.Android.openUrl){window.Android.openUrl('https://classic.minecraft.net/');}
+  else{window.open('https://classic.minecraft.net/','_blank');}
 }
-
-
 // ══ ЗВОНКИ ══
 function renderBells(){
   const body=document.getElementById('bells-body');
@@ -6552,7 +6575,6 @@ function eggStartGame(name) {
   else if (name === 'tanks')    { document.getElementById('egg-tanks').style.display = '';    tanksInit(); }
   else if (name === 'doom')        { doomStart(); }
   else if (name === 'minecraft')   { minecraftStart(); }
-  else if (name === 'quake')       { quakeStart(); }
 }
 
 function eggStopAll() {
@@ -6569,7 +6591,6 @@ function eggStopAll() {
   tanksStop();
   doomStop();
   minecraftStop();
-  quakeStop();
 }
 function g2048Stop(){document.removeEventListener('keydown',g2048Key);}
 
@@ -6614,17 +6635,37 @@ function doomStop() {
 function minecraftStart() {
   if (window.Android && window.Android.setOrientation) Android.setOrientation('landscape');
   document.getElementById('egg-overlay').classList.remove('show');
-  setTimeout(() => _openGame('overlay-minecraft', 'minecraft.html'), 200);
+  setTimeout(() => _openGame('overlay-minecraft', 'minecraft_classic.html'), 200);
 }
-function minecraftStop() { _closeGame('overlay-minecraft'); }
-function quakeStart() {
-  if (window.Android && window.Android.setOrientation) Android.setOrientation('landscape');
-  document.getElementById('egg-overlay').classList.remove('show');
-  setTimeout(() => _openGame('overlay-quake', 'quake.html'), 200);
-}
-function quakeStop() {
-  _closeGame('overlay-quake');
+function minecraftStop() {
+  _closeGame('overlay-minecraft');
   if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
 }
+
+// ══════════════════════════════════════════════
+// 🔐 СЕКРЕТНЫЙ ASCII-ВИДЕОПЛЕЕР (33%/33%/33%)
+// Триггер: 7 тапов по версии приложения подряд
+// ══════════════════════════════════════════════
+let _secretTapCount = 0, _secretTapTimer = null;
+function secretVersionTap() {
+  _secretTapCount++;
+  clearTimeout(_secretTapTimer);
+  _secretTapTimer = setTimeout(() => { _secretTapCount = 0; }, 800);
+  if (_secretTapCount >= 7) {
+    _secretTapCount = 0;
+    clearTimeout(_secretTapTimer);
+    openSecretVideo();
+  }
+}
+function openSecretVideo() {
+  SFX.play('themeSelect');
+  const roll = Math.random();
+  let videoMode;
+  if      (roll < 0.333) videoMode = 'bad_apple';
+  else if (roll < 0.666) videoMode = 'rickroll';
+  else                   videoMode = 'secret';
+  setTimeout(() => _openGame('overlay-ascii', 'ascii_player.html?v=' + videoMode), 100);
+}
+function asciiPlayerStop() { _closeGame('overlay-ascii'); }
 
 </script>

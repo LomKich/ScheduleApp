@@ -1894,7 +1894,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
       <div id="egg-tap-zone"
         style="cursor:default;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">3.5-T — Android (Учительская)</div>
+        <div class="item-sub" id="app-version-str">4.0-T — Android (Учительская)</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -1923,6 +1923,17 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
       <div class="section-label" style="margin-top:16px;margin-bottom:8px">Иконка приложения</div>
       <div class="theme-grid" id="icon-grid-screen"></div>
     </div>
+
+    <!-- Шрифт приложения -->
+    <div class="section-label" style="margin-top:20px;margin-bottom:6px">Шрифт приложения</div>
+    <div class="font-carousel-preview" id="font-preview-text" style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:6px">Расписание занятий</div>
+    <div class="font-carousel">
+      <button class="font-carousel-arrow" onclick="fontCarouselStep(-1)">&#8249;</button>
+      <div class="font-carousel-track" id="font-carousel-track"></div>
+      <button class="font-carousel-arrow" onclick="fontCarouselStep(1)">&#8250;</button>
+    </div>
+    <div class="font-carousel-dots" id="font-carousel-dots"></div>
+    <button class="btn btn-accent" onclick="fontCarouselApply()" id="font-apply-btn" style="margin-bottom:4px">Применить шрифт</button>
   </div>
 </div>
 
@@ -2128,7 +2139,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         <div class="egg-card-arrow" style="color:#ff4444">›</div>
       </div>
 
-      <div class="egg-card" onclick="eggStartGame('minecraft')" style="border-color:rgba(80,200,80,0.4);background:linear-gradient(135deg,rgba(0,60,0,0.5),var(--surface2))">
+      <div class="egg-card" onclick="openMinecraftClassic()" style="border-color:rgba(80,200,80,0.4);background:linear-gradient(135deg,rgba(0,60,0,0.5),var(--surface2))">
         <div class="egg-card-icon">⛏️</div>
         <div class="egg-card-body">
           <div class="egg-card-name" style="color:#4cff4c">Minecraft</div>
@@ -2137,10 +2148,8 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         </div>
         <div class="egg-card-arrow" style="color:#4cff4c">›</div>
       </div>
-      <div class="egg-card" onclick="eggStartGame('quake')" style="border-color:rgba(200,130,0,0.4);background:linear-gradient(135deg,rgba(80,40,0,0.5),var(--surface2))">
-        <div class="egg-card-icon">⚡</div>
-        <div class="egg-card-body">
-          <div class="egg-card-name" style="color:#ffaa00">Quake</div>
+<div class="egg-card-body">
+          
           <div class="egg-card-desc">Шутер от первого лица — убивай монстров!</div>
           <div class="egg-card-badge" style="color:#ffaa00;background:rgba(200,100,0,0.2);border-color:rgba(200,100,0,0.5)">v1.0.0 ✦ КЛАССИКА 🔥</div>
         </div>
@@ -2360,13 +2369,13 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <div class="egg-score" id="tanks-score-label">Уничтожено: 0 • Жизни: ❤️❤️❤️</div>
     <canvas id="tanks-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
     <div class="tanks-controls">
-      <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('up')" onclick="tanksDir('up')">▲</div>
+      <div class="dpad-btn" data-dir="up" ontouchstart="event.preventDefault();tanksDir('up')" onclick="tanksDir('up')">▲</div>
       <div style="display:flex;gap:6px">
-        <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('left')" onclick="tanksDir('left')">◀</div>
-        <div class="dpad-btn" style="background:var(--accent);color:#fff;font-size:14px" ontouchstart="event.preventDefault();tanksShoot()" onclick="tanksShoot()">🔥</div>
-        <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('right')" onclick="tanksDir('right')">▶</div>
+        <div class="dpad-btn" data-dir="left" ontouchstart="event.preventDefault();tanksDir('left')" onclick="tanksDir('left')">◀</div>
+        <div class="dpad-btn" style="background:var(--accent);color:#fff;font-size:14px" data-dir="shoot" ontouchstart="event.preventDefault();tanksShoot()" onclick="tanksShoot()">🔥</div>
+        <div class="dpad-btn" data-dir="right" ontouchstart="event.preventDefault();tanksDir('right')" onclick="tanksDir('right')">▶</div>
       </div>
-      <div class="dpad-btn" ontouchstart="event.preventDefault();tanksDir('down')" onclick="tanksDir('down')">▼</div>
+      <div class="dpad-btn" data-dir="down" ontouchstart="event.preventDefault();tanksDir('down')" onclick="tanksDir('down')">▼</div>
     </div>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tanksRestart()">🔄 Заново</button>
   </div>
@@ -2376,7 +2385,6 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 <!-- ══ Game iframe overlays ══ -->
 <div id="overlay-doom" class="game-iframe-overlay"></div>
 <div id="overlay-minecraft" class="game-iframe-overlay"></div>
-<div id="overlay-quake" class="game-iframe-overlay"></div>
 
 <!-- ══ Модальное окно обновления (в стиле приложения) ══ -->
 <div class="ota-overlay" id="ota-overlay" onclick="otaOverlayClose(event)">
@@ -4406,7 +4414,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='3.5';
+const APP_VERSION='4.0';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -4427,6 +4435,7 @@ function getGreeting(){
 }
 function showGreeting(){
   trackVisit();
+  setTimeout(()=>{try{var ms=document.getElementById('greet-sub');if(ms&&Math.random()<0.3)ms.textContent=getDayMotivation();}catch(e){}},250);
   const ov=document.getElementById('greeting-overlay');
   if(!ov)return;
   const stored=loadSecret();
@@ -5296,6 +5305,17 @@ function addNoteButtons(body, groupOrTeacher){
     card.style.position='relative';
     card.appendChild(btn);
   });
+  // Long-press для копирования пары
+  body.querySelectorAll('.pair-card.has-subject').forEach(function(card){
+    var subj=card.querySelector('.pair-subject');
+    var num=card.querySelector('.pair-num');
+    if(!subj||!num)return;
+    var txt_=num.textContent.trim()+' пара: '+subj.textContent;
+    var pt=null;
+    card.addEventListener('touchstart',function(){pt=setTimeout(function(){copyPairToClipboard('',txt_);},600);},{passive:true});
+    card.addEventListener('touchend',function(){clearTimeout(pt);},{passive:true});
+    card.addEventListener('touchmove',function(){clearTimeout(pt);},{passive:true});
+  });
 }
 
 // ══ СЧЁТЧИК ПОСЕЩЕНИЙ ══
@@ -5698,21 +5718,7 @@ function copyPairToClipboard(roman,text){
   if(navigator.clipboard){navigator.clipboard.writeText(t).then(()=>toast('📋 Пара скопирована'));}
   else{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('📋 Скопировано');}
 }
-// Патчим addNoteButtons — добавляем долгое нажатие для копирования
-const _origAddNoteButtons=addNoteButtons;
-function addNoteButtons(body,groupOrTeacher){
-  _origAddNoteButtons(body,groupOrTeacher);
-  body.querySelectorAll('.pair-card.has-subject').forEach(card=>{
-    const subject=card.querySelector('.pair-subject')?.textContent||'';
-    const roman=card.querySelector('.pair-num')?.textContent?.trim()||'';
-    let pressTimer=null;
-    card.addEventListener('touchstart',()=>{pressTimer=setTimeout(()=>copyPairToClipboard(roman,subject),600);},{passive:true});
-    card.addEventListener('touchend',()=>clearTimeout(pressTimer),{passive:true});
-    card.addEventListener('touchmove',()=>clearTimeout(pressTimer),{passive:true});
-  });
-}
 
-// ⑥ Мини-статистика в настройках — сколько раз открывали приложение
 function getAppStats(){
   try{
     const v=JSON.parse(stor.get('visit_streak')||'{}');
@@ -5810,18 +5816,6 @@ function getDayMotivation(){
   const arr=MOTIVATIONS[dow]||MOTIVATIONS[1];
   return arr[Math.floor(Math.random()*arr.length)];
 }
-// Показываем мотивацию в приветствии если greet-sub доступен
-const _origShowGreeting=showGreeting;
-function showGreeting(){
-  _origShowGreeting();
-  setTimeout(()=>{
-    const sub=document.getElementById('greet-sub');
-    if(sub&&Math.random()<0.3){// 30% шанс показать мотивацию вместо стандартного
-      sub.textContent=getDayMotivation();
-    }
-  },100);
-}
-
 // Добавляем /fact, /stats, /excuse, /quiz, /focus, /weather в CMD
 const _extraCmds=[
   ['/fact',    'случайный факт об учёбе 💡'],
@@ -5837,22 +5831,32 @@ if(typeof CMD_HELP!=='undefined'){
     if(!CMD_HELP.find(x=>x[0]===c[0]))CMD_HELP.push(c);
   });
 }
-// Патчим cmdExec
-const _origCmdExec=cmdExec;
-function cmdExec(raw){
-  const parts=raw.trim().split(/\s+/),cmd=parts[0].toLowerCase();
-  switch(cmd){
-    case '/fact':    showRandomFact(); cmdPrint('ok','Показываю факт...'); break;
-    case '/stats':   showStats(); break;
-    case '/excuse':  cmdPrint('ok','📝 Твоя отмазка: «'+getExcuse()+'»'); break;
-    case '/quiz':    cmdClose();setTimeout(startScheduleQuiz,200); break;
-    case '/focus':   cmdClose();setTimeout(toggleFocusMode,200); break;
-    case '/weather': cmdClose();setTimeout(showWeatherToast,200); break;
-    default: _origCmdExec(raw);
-  }
+
+
+
+// Tanks — continuous fire/move on held touch
+var _tanksHeld={};
+document.addEventListener('touchstart',function(e){
+  var b=e.target.closest('.dpad-btn,.tanks-shoot-btn');
+  if(!b||!document.getElementById('egg-tanks')||document.getElementById('egg-tanks').style.display==='none')return;
+  var dir=b.getAttribute('data-dir');
+  if(!dir)return;
+  e.preventDefault();
+  if(_tanksHeld[dir])return;
+  if(dir==='shoot'){tanksShoot();}else{tanksDir(dir);}
+  _tanksHeld[dir]=setInterval(function(){if(dir==='shoot')tanksShoot();else tanksDir(dir);},120);
+},{passive:false});
+document.addEventListener('touchend',function(e){
+  var b=e.target.closest('.dpad-btn,.tanks-shoot-btn');
+  if(!b)return;
+  var dir=b.getAttribute('data-dir');
+  if(dir&&_tanksHeld[dir]){clearInterval(_tanksHeld[dir]);delete _tanksHeld[dir];}
+},{passive:true});
+function openMinecraftClassic(){
+  eggClose();
+  if(window.Android&&window.Android.openUrl){window.Android.openUrl('https://classic.minecraft.net/');}
+  else{window.open('https://classic.minecraft.net/','_blank');}
 }
-
-
 // ══ ЗВОНКИ ══
 function renderBells(){
   const body=document.getElementById('bells-body');
@@ -6312,7 +6316,6 @@ function eggStartGame(name) {
   else if (name === 'tanks')    { document.getElementById('egg-tanks').style.display = '';    tanksInit(); }
   else if (name === 'doom')        { doomStart(); }
   else if (name === 'minecraft')   { minecraftStart(); }
-  else if (name === 'quake')       { quakeStart(); }
 }
 
 function eggStopAll() {
@@ -6329,7 +6332,6 @@ function eggStopAll() {
   tanksStop();
   doomStop();
   minecraftStop();
-  quakeStop();
 }
 function g2048Stop(){document.removeEventListener('keydown',g2048Key);}
 
@@ -6377,14 +6379,5 @@ function minecraftStart() {
   setTimeout(() => _openGame('overlay-minecraft', 'minecraft.html'), 200);
 }
 function minecraftStop() { _closeGame('overlay-minecraft'); }
-function quakeStart() {
-  if (window.Android && window.Android.setOrientation) Android.setOrientation('landscape');
-  document.getElementById('egg-overlay').classList.remove('show');
-  setTimeout(() => _openGame('overlay-quake', 'quake.html'), 200);
-}
-function quakeStop() {
-  _closeGame('overlay-quake');
-  if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
-}
 
 </script>

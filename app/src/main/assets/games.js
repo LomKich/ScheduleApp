@@ -1805,225 +1805,427 @@ function brUpdateScore() {
 
 
 // ══════════════════════════════════════════════════════════════════
-// ── 🫧 ПУЗЫРИ (v2.2.0) ───────────────────────────────────────────
+// ── 🎵 OSU! BUBBLES (v3.0.0) ─────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
-const BUB_COLORS = ['#e87722','#00e5ff','#a78bfa','#4caf7d','#f5c518','#f472b6','#60cdff','#c94f4f'];
+const OSU_COLORS = ['#ff66aa','#ffaa00','#66ddff','#aaffaa','#ff6666','#cc88ff','#ffee66','#44ffcc'];
+
 let bubRaf = null, bubRunning = false, bubLastTime = 0;
 let bubScore = 0, bubHi = 0, bubLives = 3;
-let bubW, bubH, bubBubbles = [], bubSpawnTimer = 0, bubDifficulty = 'normal', bubLevel = 1;
+let bubW, bubH, bubCircles = [], bubNum = 0, bubDifficulty = 'normal', bubLevel = 1;
 let bubLevelTimer = 0, bubCombo = 0, bubComboTimer = 0;
+let bubBPM = 120, bubBeatInterval = 500; // ms per beat
+let bubAudioCtx = null, bubAudioSource = null, bubAudioBuf = null;
+let bubAudioPlaying = false, bubAudioStartTime = 0, bubAudioOffset = 0;
+let bubLastBeat = 0, bubBeatPhase = 0;
+let bubSpawnQueue = [], bubAutoMode = true; // auto = no audio
+// legacy alias
+const bubBubbles = { filter: () => [] }; // unused shim
 
-const BUB_DIFF = {
-  easy:   { spawnInterval: 2200, lifespan: 3500, minR: 26, maxR: 42, maxBubs: 8  },
-  normal: { spawnInterval: 1500, lifespan: 2800, minR: 22, maxR: 36, maxBubs: 12 },
-  hard:   { spawnInterval: 900,  lifespan: 2000, minR: 16, maxR: 30, maxBubs: 16 },
+const OSU_DIFF = {
+  easy:   { approachMs: 1800, radius: 38, maxOnScreen: 6,  hitWindow: 250 },
+  normal: { approachMs: 1200, radius: 30, maxOnScreen: 10, hitWindow: 180 },
+  hard:   { approachMs: 700,  radius: 22, maxOnScreen: 14, hitWindow: 100 },
 };
+
+// ── BPM DETECTION via Web Audio ──
+async function osuDetectBPM(audioBuffer) {
+  const rate = audioBuffer.sampleRate;
+  const data = audioBuffer.getChannelData(0);
+  const winSize = Math.floor(rate * 0.01); // 10ms windows
+  const energies = [];
+  for (let i = 0; i < data.length - winSize; i += winSize) {
+    let e = 0;
+    for (let j = 0; j < winSize; j++) e += data[i+j] * data[i+j];
+    energies.push(e / winSize);
+  }
+  // Find beats: local maxima above threshold
+  const avg = energies.reduce((a,b)=>a+b,0) / energies.length;
+  const threshold = avg * 2.8;
+  const beatTimes = [];
+  let lastBeat = -Infinity;
+  for (let i = 1; i < energies.length - 1; i++) {
+    if (energies[i] > threshold && energies[i] > energies[i-1] && energies[i] > energies[i+1]) {
+      const t = i * 0.01; // seconds
+      if (t - lastBeat > 0.2) { beatTimes.push(t); lastBeat = t; }
+    }
+  }
+  if (beatTimes.length < 4) return 120;
+  // Median interval
+  const intervals = [];
+  for (let i = 1; i < Math.min(beatTimes.length, 60); i++) intervals.push(beatTimes[i] - beatTimes[i-1]);
+  intervals.sort((a,b)=>a-b);
+  const med = intervals[Math.floor(intervals.length/2)];
+  const bpm = Math.round(60 / med);
+  return Math.max(60, Math.min(240, bpm));
+}
 
 function bubInit() {
   bubHi = getHi("bubbles");
   const canvas = document.getElementById('bub-canvas');
-  const w = Math.min(window.innerWidth - 36, 360);
+  const w = Math.min(window.innerWidth - 36, 380);
   canvas.width = w;
-  canvas.height = Math.round(w * 1.2);
+  canvas.height = Math.round(w * 1.18);
   bubW = canvas.width; bubH = canvas.height;
+
+  // Setup tap handler
   const handleTap = (clientX, clientY) => {
+    if (!bubRunning) return;
     const rect = canvas.getBoundingClientRect();
-    const tx = clientX - rect.left, ty = clientY - rect.top;
-    let popped = false;
-    for (let i = bubBubbles.length - 1; i >= 0; i--) {
-      const b = bubBubbles[i];
-      if (b.popped) continue;
-      const dx = tx - b.x, dy = ty - b.y;
-      if (dx*dx + dy*dy <= (b.r + 8)*(b.r + 8)) {
-        b.popped = true; b.popTime = 0;
-        bubCombo++; bubComboTimer = 1500;
-        SFX.play('bubPop'); if(bubCombo>=3) SFX.play('bubCombo');
-        const pts = Math.round(10 * bubCombo * (1 + bubLevel * 0.1));
-        bubScore += pts; if (bubScore > bubHi) bubHi = saveHi("bubbles", bubScore);
-        bubUpdateScore(); popped = true; break;
+    const tx = (clientX - rect.left) * (bubW / rect.width);
+    const ty = (clientY - rect.top) * (bubH / rect.height);
+    let hit = false;
+    // Find lowest numbered unhit circle in hit window
+    const d = OSU_DIFF[bubDifficulty] || OSU_DIFF.normal;
+    const now = performance.now();
+    let bestCircle = null, bestNum = Infinity;
+    for (const c of bubCircles) {
+      if (c.hit || c.missed) continue;
+      const age = now - c.spawnAt;
+      if (age < 0 || age > c.approachMs + d.hitWindow) continue;
+      const dx = tx - c.x, dy = ty - c.y;
+      if (dx*dx + dy*dy <= (c.r + 12)*(c.r + 12)) {
+        if (c.num < bestNum) { bestNum = c.num; bestCircle = c; }
       }
     }
-    if (!popped && bubRunning) bubCombo = 0;
+    if (bestCircle) {
+      const c = bestCircle;
+      const age = now - c.spawnAt;
+      const timing = Math.abs(age - c.approachMs);
+      // Score based on timing accuracy
+      let pts, verdict;
+      if (timing < d.hitWindow * 0.25)       { pts = 300; verdict = '300'; }
+      else if (timing < d.hitWindow * 0.6)   { pts = 100; verdict = '100'; }
+      else                                   { pts = 50;  verdict = '50';  }
+      c.hit = true; c.hitTime = now; c.verdict = verdict;
+      bubCombo++; bubComboTimer = 2000;
+      const finalPts = Math.round(pts * (1 + (bubCombo - 1) * 0.1));
+      bubScore += finalPts;
+      if (bubScore > bubHi) bubHi = saveHi("bubbles", bubScore);
+      SFX.play('bubPop'); if (bubCombo >= 3) SFX.play('bubCombo');
+      bubUpdateScore(); hit = true;
+    }
+    if (!hit && bubRunning) {
+      // Miss click on empty area reduces combo
+      bubCombo = 0;
+    }
   };
   canvas.ontouchstart = e => { e.preventDefault(); const t = e.touches[0]; handleTap(t.clientX, t.clientY); };
   canvas.onclick = e => handleTap(e.clientX, e.clientY);
+
+  // Update audio upload UI
+  osuUpdateAudioUI();
   bubRestart();
+}
+
+function osuUpdateAudioUI() {
+  const info = document.getElementById('bub-audio-info');
+  if (!info) return;
+  if (bubAudioBuf) {
+    info.textContent = '🎵 BPM: ' + bubBPM + ' • Ритм-режим включён';
+    info.style.color = 'var(--success, #4a9e5c)';
+  } else {
+    info.textContent = '⬆️ Загрузи аудио для синхронизации с ритмом';
+    info.style.color = 'var(--muted)';
+  }
+}
+
+async function osuLoadAudio(file) {
+  try {
+    const info = document.getElementById('bub-audio-info');
+    if (info) { info.textContent = '⏳ Анализирую BPM...'; info.style.color = 'var(--accent)'; }
+    if (!bubAudioCtx) bubAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const arrBuf = await file.arrayBuffer();
+    bubAudioBuf = await bubAudioCtx.decodeAudioData(arrBuf);
+    bubBPM = await osuDetectBPM(bubAudioBuf);
+    bubBeatInterval = 60000 / bubBPM;
+    bubAutoMode = false;
+    osuUpdateAudioUI();
+    bubRestart();
+  } catch(e) {
+    const info = document.getElementById('bub-audio-info');
+    if (info) { info.textContent = '❌ Ошибка: ' + e.message; info.style.color = 'var(--danger, #c94f4f)'; }
+  }
+}
+
+function osuStartAudio() {
+  if (!bubAudioBuf || !bubAudioCtx) return;
+  if (bubAudioSource) { try { bubAudioSource.stop(); } catch(e) {} }
+  bubAudioSource = bubAudioCtx.createBufferSource();
+  bubAudioSource.buffer = bubAudioBuf;
+  bubAudioSource.connect(bubAudioCtx.destination);
+  bubAudioSource.start(0, bubAudioOffset);
+  bubAudioStartTime = bubAudioCtx.currentTime - bubAudioOffset;
+  bubAudioPlaying = true;
+}
+
+function osuStopAudio() {
+  if (bubAudioSource) { try { bubAudioSource.stop(); } catch(e) {} bubAudioSource = null; }
+  bubAudioPlaying = false; bubAudioOffset = 0;
 }
 
 function bubRestart() {
   bubStop();
-  bubLastTime = 0; bubBubbles = []; bubSpawnTimer = 0;
+  bubLastTime = 0; bubCircles = []; bubSpawnQueue = [];
   bubScore = 0; bubLives = 3; bubLevel = 1; bubLevelTimer = 0;
-  bubCombo = 0; bubComboTimer = 0;
-  bubUpdateScore(); bubRunning = true;
+  bubCombo = 0; bubComboTimer = 0; bubNum = 0;
+  bubLastBeat = 0;
+  bubUpdateScore();
+  osuStopAudio();
+  if (bubAudioBuf) { bubAudioOffset = 0; osuStartAudio(); }
+  bubRunning = true;
   bubRaf = requestAnimationFrame(bubLoop);
 }
 
-function bubStop() { cancelAnimationFrame(bubRaf); bubRaf = null; bubRunning = false; }
+function bubStop() {
+  cancelAnimationFrame(bubRaf); bubRaf = null; bubRunning = false;
+  osuStopAudio();
+}
 
 function bubLoop(ts) {
   if (!bubRunning) return;
   const dt = bubLastTime ? Math.min(ts - bubLastTime, 50) : 16;
   bubLastTime = ts;
-  bubTick(dt); bubDraw();
+  bubTick(ts, dt); bubDraw(ts);
   bubRaf = requestAnimationFrame(bubLoop);
 }
 
-function bubTick(dt) {
-  const d = BUB_DIFF[bubDifficulty] || BUB_DIFF.normal;
-  bubLevelTimer += dt; if (bubLevelTimer >= 25000) { bubLevelTimer = 0; bubLevel++; }
+function bubTick(now, dt) {
+  const d = OSU_DIFF[bubDifficulty] || OSU_DIFF.normal;
+  bubLevelTimer += dt;
+  if (bubLevelTimer >= 20000) { bubLevelTimer = 0; bubLevel++; }
   if (bubComboTimer > 0) { bubComboTimer -= dt; if (bubComboTimer <= 0) bubCombo = 0; }
-  const interval = Math.max(400, d.spawnInterval - bubLevel * 60);
-  bubSpawnTimer += dt;
-  if (bubSpawnTimer >= interval && bubBubbles.filter(b=>!b.popped).length < d.maxBubs) {
-    bubSpawnTimer = 0;
-    const r = d.minR + Math.random() * (d.maxR - d.minR);
-    const lifespan = Math.max(900, d.lifespan - bubLevel * 80 + (Math.random()-0.5)*400);
-    bubBubbles.push({
-      x: r*1.5 + Math.random()*(bubW - r*3), y: r*1.5 + Math.random()*(bubH - r*3 - 40),
-      r, color: BUB_COLORS[Math.floor(Math.random()*BUB_COLORS.length)],
-      age: 0, lifespan, popped: false, popTime: -1,
-      vy: (Math.random()-0.5)*0.25, vx: (Math.random()-0.5)*0.18,
-      spawnT: 0,  // 0→1 появление
-      wobble: Math.random() * Math.PI * 2, // фаза покачивания
-      wobbleSpeed: 0.003 + Math.random() * 0.002,
+
+  // Beat timing — spawn circles on beat
+  const beatsSinceStart = (now - (bubLastBeat === 0 ? now : 0));
+  if (bubLastBeat === 0) bubLastBeat = now;
+  const sinceLastBeat = now - bubLastBeat;
+  const effectiveBeatMs = Math.max(300, bubBeatInterval - bubLevel * 20);
+
+  const activeCount = bubCircles.filter(c => !c.hit && !c.missed).length;
+  if (sinceLastBeat >= effectiveBeatMs && activeCount < d.maxOnScreen) {
+    bubLastBeat = now;
+    // Spawn new circle
+    const margin = d.radius + 10;
+    const x = margin + Math.random() * (bubW - margin * 2);
+    const y = margin + Math.random() * (bubH - margin * 2 - 30);
+    bubCircles.push({
+      x, y, r: d.radius,
+      num: ++bubNum,
+      color: OSU_COLORS[bubNum % OSU_COLORS.length],
+      spawnAt: now,
+      approachMs: Math.max(400, d.approachMs - bubLevel * 30),
+      hit: false, missed: false,
+      hitTime: 0, verdict: '',
+      popParticles: [],
     });
   }
-  for (let i = bubBubbles.length-1; i >= 0; i--) {
-    const b = bubBubbles[i];
-    if (b.popped) { b.popTime += dt; if (b.popTime > 520) bubBubbles.splice(i,1); continue; }
-    b.age += dt;
-    b.spawnT = Math.min(1, (b.spawnT || 0) + dt * 0.006);
-    b.wobble = (b.wobble || 0) + (b.wobbleSpeed || 0.003) * dt;
-    b.x += b.vx * dt * 0.06; b.y += b.vy * dt * 0.06;
-    if (b.x-b.r < 0) { b.x=b.r; b.vx=Math.abs(b.vx); }
-    if (b.x+b.r > bubW) { b.x=bubW-b.r; b.vx=-Math.abs(b.vx); }
-    if (b.y-b.r < 0) { b.y=b.r; b.vy=Math.abs(b.vy); }
-    if (b.y+b.r > bubH-40) { b.y=bubH-40-b.r; b.vy=-Math.abs(b.vy); }
-    if (b.age >= b.lifespan) {
-      bubBubbles.splice(i,1); SFX.play('bubMiss'); bubLives--; bubCombo = 0; bubUpdateScore();
+
+  // Process circles
+  for (let i = bubCircles.length - 1; i >= 0; i--) {
+    const c = bubCircles[i];
+    const age = now - c.spawnAt;
+
+    // Hit animation cleanup
+    if (c.hit) {
+      if (now - c.hitTime > 600) bubCircles.splice(i, 1);
+      continue;
+    }
+
+    // Miss detection
+    if (!c.missed && age > c.approachMs + d.hitWindow) {
+      c.missed = true; c.hitTime = now;
+      bubLives--; bubCombo = 0; bubComboTimer = 0;
+      SFX.play('bubMiss');
+      bubUpdateScore();
       if (bubLives <= 0) {
-        bubStop(); bubRunning = false; bubDraw();
+        bubStop(); bubRunning = false; bubDraw(now);
         const canvas = document.getElementById('bub-canvas'); if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle='rgba(0,0,0,.7)'; ctx.fillRect(0,bubH/2-35,bubW,70);
-        ctx.fillStyle='#f0ede8'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center';
-        ctx.fillText('💀 Игра окончена! Тапни чтобы снова',bubW/2,bubH/2+6); ctx.textAlign='left';
-        toast('🫧 Счёт: '+bubScore);
+        ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(0, bubH/2-45, bubW, 90);
+        ctx.fillStyle = '#ff6699'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('💔 Игра окончена! Тапни для рестарта', bubW/2, bubH/2 - 6);
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '12px sans-serif';
+        ctx.fillText('Счёт: ' + bubScore + '  |  Комбо: ' + bubCombo + 'x', bubW/2, bubH/2 + 18);
+        ctx.textAlign = 'left';
+        toast('🎵 Счёт: ' + bubScore);
         canvas.ontouchstart = e => { e.preventDefault(); canvas.ontouchstart=null; canvas.onclick=null; bubRestart(); };
         canvas.onclick = () => { canvas.ontouchstart=null; canvas.onclick=null; bubRestart(); };
         return;
       }
     }
+    if (c.missed && now - c.hitTime > 500) { bubCircles.splice(i, 1); }
   }
 }
 
-function bubDraw() {
+function bubDraw(now) {
   const canvas = document.getElementById('bub-canvas'); if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const accent = getAccent();
-  ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,bubW,bubH);
+  now = now || performance.now();
 
-  for (const b of bubBubbles) {
-    // ── Анимация лопанья ──
-    if (b.popped) {
-      const t = Math.min(b.popTime / 520, 1);
-      const ease = 1 - Math.pow(1 - t, 2);
-      // Расходящееся кольцо
-      const ringR = b.r * (1 + ease * 1.3);
-      ctx.globalAlpha = (1 - ease) * 0.9;
-      ctx.strokeStyle = b.color;
-      ctx.lineWidth = 2.8 * (1 - ease) + 0.5;
-      ctx.shadowColor = b.color; ctx.shadowBlur = 12 * (1 - ease);
-      ctx.beginPath(); ctx.arc(b.x, b.y, ringR, 0, Math.PI * 2); ctx.stroke();
+  // Background with subtle pulse on beat
+  const beatPhase = Math.max(0, 1 - (now - bubLastBeat) / 200);
+  const bgPulse = beatPhase * 0.06;
+  ctx.fillStyle = `rgba(8,4,18,${1 - bgPulse})`;
+  ctx.fillRect(0, 0, bubW, bubH);
+  if (bgPulse > 0) {
+    const pg = ctx.createRadialGradient(bubW/2, bubH/2, 0, bubW/2, bubH/2, bubW);
+    pg.addColorStop(0, `rgba(180,60,255,${bgPulse * 0.4})`);
+    pg.addColorStop(1, 'transparent');
+    ctx.fillStyle = pg; ctx.fillRect(0, 0, bubW, bubH);
+  }
+
+  const d = OSU_DIFF[bubDifficulty] || OSU_DIFF.normal;
+
+  // Draw circles from oldest to newest (so oldest is on top)
+  const sortedCircles = [...bubCircles].sort((a,b)=>a.num-b.num);
+
+  for (const c of sortedCircles) {
+    const age = now - c.spawnAt;
+
+    // HIT animation
+    if (c.hit) {
+      const t = Math.min((now - c.hitTime) / 600, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      // Expanding ring
+      ctx.globalAlpha = (1-t) * 0.9;
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 3 * (1-t) + 0.5;
+      ctx.shadowColor = c.color; ctx.shadowBlur = 20 * (1-t);
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.r * (1 + ease * 1.5), 0, Math.PI*2); ctx.stroke();
       ctx.shadowBlur = 0;
-      // Брызги
-      for (let i = 0; i < 8; i++) {
-        const ang = (i / 8) * Math.PI * 2 + (b.wobble || 0);
-        const dist = b.r * (0.3 + ease * 1.6);
-        const dropR = Math.max(0.5, (1 - ease) * b.r * 0.26 + 1);
-        ctx.globalAlpha = Math.max(0, (1 - ease) * 0.9);
-        ctx.fillStyle = b.color;
-        ctx.shadowColor = b.color; ctx.shadowBlur = 4;
-        ctx.beginPath(); ctx.arc(b.x + Math.cos(ang)*dist, b.y + Math.sin(ang)*dist, dropR, 0, Math.PI*2); ctx.fill();
+      // Burst particles (8)
+      for (let p = 0; p < 8; p++) {
+        const ang = (p/8)*Math.PI*2;
+        const dist = c.r * (0.4 + ease * 2.2);
+        const pr = Math.max(0.5, (1-t) * c.r * 0.18);
+        ctx.globalAlpha = Math.max(0, (1-t) * 0.85);
+        ctx.fillStyle = c.color; ctx.shadowColor = c.color; ctx.shadowBlur = 6;
+        ctx.beginPath(); ctx.arc(c.x + Math.cos(ang)*dist, c.y + Math.sin(ang)*dist, pr, 0, Math.PI*2); ctx.fill();
       }
       ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      // Verdict text
+      if (c.verdict) {
+        const vt = Math.min((now - c.hitTime) / 300, 1);
+        ctx.globalAlpha = 1 - vt;
+        ctx.font = `bold ${14 + Math.floor(vt * 4)}px 'JetBrains Mono',monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = c.verdict === '300' ? '#ffdd00' : c.verdict === '100' ? '#88ffaa' : '#aaaaaa';
+        ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10;
+        ctx.fillText(c.verdict, c.x, c.y - c.r - 8 - vt * 20);
+        ctx.shadowBlur = 0; ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+      }
       continue;
     }
 
-    // ── Появление с упругим отскоком ──
-    const spawnT = Math.min(b.spawnT || 0, 1);
-    let spawnScale;
-    if (spawnT < 1) {
-      const c2 = (2 * Math.PI) / 3;
-      spawnScale = spawnT === 0 ? 0 : Math.pow(2, -8 * spawnT) * Math.sin((spawnT * 8 - 0.75) * c2) + 1;
-    } else { spawnScale = 1; }
-
-    // ── Прозрачность появления/исчезания ──
-    const ageFrac = b.age / b.lifespan;
-    const fadeIn = Math.min(1, b.age / 180);
-    const fadeOut = ageFrac > 0.78 ? 1 - Math.pow((ageFrac - 0.78) / 0.22, 2) * 0.3 : 1;
-    const alpha = fadeIn * fadeOut;
-
-    // ── Покачивание ──
-    const wob = Math.sin(b.wobble || 0) * 0.035;
-    const drawR = b.r * spawnScale;
-
-    ctx.save();
-    ctx.translate(b.x, b.y);
-    ctx.scale(1 + wob, 1 - wob);
-    ctx.globalAlpha = Math.max(0.04, alpha);
-
-    // Тело
-    ctx.shadowColor = b.color; ctx.shadowBlur = drawR * 0.5;
-    ctx.beginPath(); ctx.arc(0, 0, drawR, 0, Math.PI*2);
-    const grad = ctx.createRadialGradient(-drawR*0.28, -drawR*0.3, drawR*0.04, 0, 0, drawR);
-    grad.addColorStop(0, b.color + '55');
-    grad.addColorStop(0.55, b.color + '18');
-    grad.addColorStop(1, b.color + '88');
-    ctx.fillStyle = grad; ctx.fill(); ctx.shadowBlur = 0;
-    // Обводка
-    ctx.strokeStyle = b.color + 'cc'; ctx.lineWidth = 1.8; ctx.stroke();
-    // Основной блик
-    ctx.fillStyle = 'rgba(255,255,255,0.40)';
-    ctx.beginPath(); ctx.ellipse(-drawR*0.25, -drawR*0.28, drawR*0.26, drawR*0.13, -Math.PI/4, 0, Math.PI*2); ctx.fill();
-    // Вторичный блик
-    ctx.fillStyle = 'rgba(255,255,255,0.14)';
-    ctx.beginPath(); ctx.ellipse(drawR*0.2, drawR*0.25, drawR*0.1, drawR*0.055, Math.PI/5, 0, Math.PI*2); ctx.fill();
-
-    ctx.restore();
-
-    // Пульсирующее предупреждение
-    if (ageFrac > 0.65) {
-      const warn = (ageFrac - 0.65) / 0.35;
-      const pulse = 0.5 + 0.5 * Math.sin(b.age * 0.018);
-      ctx.globalAlpha = warn * pulse * 0.8;
-      ctx.strokeStyle = `rgba(255,80,80,1)`;
-      ctx.lineWidth = 1.5 + warn * 2;
-      ctx.shadowColor = 'rgba(255,60,60,0.8)'; ctx.shadowBlur = 8 * warn;
-      ctx.beginPath(); ctx.arc(b.x, b.y, drawR + 4 + warn * 3, 0, Math.PI*2); ctx.stroke();
-      ctx.shadowBlur = 0;
+    // MISS animation
+    if (c.missed) {
+      const t = Math.min((now - c.hitTime) / 500, 1);
+      ctx.globalAlpha = (1-t) * 0.5;
+      ctx.strokeStyle = '#ff2244';
+      ctx.lineWidth = 2; ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      continue;
     }
+
+    // Approach progress (0 = just spawned, 1 = time to hit)
+    const progress = Math.min(age / c.approachMs, 1.2);
+
+    // Approach ring (starts huge, shrinks to circle)
+    const ringScale = Math.max(1, 4.5 - progress * 3.5);
+    const ringAlpha = Math.min(1, progress * 2) * (1 - Math.max(0, progress - 1) * 5);
+    if (ringAlpha > 0 && ringScale > 1.02) {
+      ctx.globalAlpha = Math.max(0, ringAlpha);
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = Math.max(1, 3 * (ringScale - 1));
+      ctx.shadowColor = c.color; ctx.shadowBlur = 6;
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.r * ringScale, 0, Math.PI*2); ctx.stroke();
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
+
+    // Fade in
+    const fadeIn = Math.min(1, age / 120);
+    ctx.globalAlpha = fadeIn;
+
+    // Main circle body
+    ctx.shadowColor = c.color; ctx.shadowBlur = c.r * 0.6;
+    ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
+    // Gradient fill
+    const grad = ctx.createRadialGradient(c.x - c.r*0.3, c.y - c.r*0.3, c.r*0.05, c.x, c.y, c.r);
+    grad.addColorStop(0, c.color + 'cc');
+    grad.addColorStop(0.5, c.color + '44');
+    grad.addColorStop(1, c.color + '22');
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Border
+    ctx.strokeStyle = c.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2); ctx.stroke();
+
+    // Inner white border
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(c.x, c.y, c.r - 5, 0, Math.PI*2); ctx.stroke();
+
+    // Circle number
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 4;
+    const fontSize = Math.round(c.r * 0.7);
+    ctx.font = `700 ${fontSize}px 'JetBrains Mono',monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(c.num, c.x, c.y);
+    ctx.textBaseline = 'alphabetic';
+    ctx.shadowBlur = 0;
+
+    // Highlight glint
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.ellipse(c.x - c.r*0.3, c.y - c.r*0.3, c.r*0.25, c.r*0.12, -Math.PI/4, 0, Math.PI*2); ctx.fill();
+
+    ctx.globalAlpha = 1; ctx.textAlign = 'left';
+  }
+
+  // HUD bar
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, bubH - 36, bubW, 36);
+  ctx.font = `700 11px "JetBrains Mono",monospace`;
+  ctx.fillStyle = accent; ctx.textAlign = 'left';
+  ctx.fillText('Lv' + bubLevel, 8, bubH - 11);
+  // Combo
+  if (bubCombo > 1) {
+    const comboAlpha = bubComboTimer > 0 ? Math.min(1, bubComboTimer / 300) : 1;
+    ctx.globalAlpha = comboAlpha;
+    ctx.fillStyle = '#ff66aa'; ctx.textAlign = 'center';
+    ctx.font = `700 ${11 + Math.min(4, bubCombo/5)}px "JetBrains Mono",monospace`;
+    ctx.fillText(bubCombo + 'x COMBO', bubW/2, bubH - 11);
     ctx.globalAlpha = 1;
   }
-
-  // HUD
-  ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,bubH-38,bubW,38);
-  ctx.font=`700 12px "JetBrains Mono",monospace`;
-  ctx.fillStyle=accent; ctx.textAlign='left'; ctx.fillText('Lv'+bubLevel,8,bubH-12);
-  if (bubCombo>1) {
-    ctx.fillStyle='#f5c518'; ctx.textAlign='center';
-    ctx.fillText('x'+bubCombo+' КОМБО!',bubW/2,bubH-12);
+  // Lives as osu-style bars
+  const barW = 14, barH = 10, barGap = 4;
+  const barsX = bubW - (3 * (barW + barGap)) - 4;
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = i < bubLives ? '#ff66aa' : '#333';
+    ctx.shadowColor = i < bubLives ? '#ff66aa' : 'transparent';
+    ctx.shadowBlur = i < bubLives ? 6 : 0;
+    ctx.fillRect(barsX + i*(barW+barGap), bubH - 8 - barH, barW, barH);
   }
-  const hearts='❤️'.repeat(Math.max(0,bubLives))+'🖤'.repeat(Math.max(0,3-bubLives));
-  ctx.fillStyle='rgba(255,255,255,0.75)'; ctx.textAlign='right';
-  ctx.fillText(hearts,bubW-6,bubH-12); ctx.textAlign='left';
+  ctx.shadowBlur = 0; ctx.textAlign = 'left';
+
+  // BPM indicator pulse
+  const bpmPulse = Math.max(0, 1 - (now - bubLastBeat) / (bubBeatInterval * 0.6));
+  if (bpmPulse > 0) {
+    ctx.globalAlpha = bpmPulse * 0.3;
+    ctx.strokeStyle = '#ff66aa'; ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, bubW - 2, bubH - 38);
+    ctx.globalAlpha = 1;
+  }
 }
 
 function bubUpdateScore() {
-  const el=document.getElementById('bub-score-label'); if(!el) return;
-  const hearts='❤️'.repeat(Math.max(0,bubLives))+'🖤'.repeat(Math.max(0,3-bubLives));
-  el.textContent='Счёт: '+bubScore+' • Рекорд: '+bubHi+' • '+hearts;
+  const el = document.getElementById('bub-score-label'); if (!el) return;
+  const bars = ['❤️','❤️','❤️'].map((h,i) => i < bubLives ? '❤️' : '🖤').join('');
+  el.textContent = 'Счёт: ' + bubScore + ' • Рекорд: ' + bubHi + ' • BPM: ' + bubBPM + ' • ' + bars;
 }
 
 // ══ СЕКРЕТНЫЕ ЭФФЕКТЫ ══
@@ -3361,7 +3563,7 @@ function _closeGame(overlayId) {
 }
 window.addEventListener('message', function(e) {
   if (!e.data || e.data.type !== 'gameClose') return;
-  const map = { doom:'overlay-doom', minecraft:'overlay-minecraft', quake:'overlay-quake' };
+  const map = { doom:'overlay-doom', minecraft:'overlay-minecraft', quake:'overlay-quake', ascii_player:'overlay-ascii' };
   const id = map[e.data.game];
   if (id) _closeGame(id);
   if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
