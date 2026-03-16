@@ -3,7 +3,12 @@ package com.schedule.app;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -11,6 +16,7 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.net.VpnService;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Base64;
@@ -26,6 +32,9 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 
 import org.json.JSONObject;
 
@@ -41,6 +50,10 @@ public class MainActivity extends Activity {
     private static final String TAG              = "MainActivity";
     private static final int    VPN_REQUEST_CODE  = 1001;
     private static final int    IMAGE_PICK_CODE   = 1002;
+    private static final int    NOTIF_PERM_CODE   = 1003;
+    private static final String NOTIF_CHANNEL_ID  = "sapp_messages";
+    private static final String NOTIF_CHANNEL_NAME = "Сообщения";
+    private static final int    NOTIF_ID          = 42;
 
     private WebView                webView;
     private SharedPreferences      prefs;
@@ -102,6 +115,21 @@ public class MainActivity extends Activity {
         }
 
         log.i(TAG, "onCreate завершён");
+        createNotificationChannel();
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel ch = new NotificationChannel(
+                NOTIF_CHANNEL_ID,
+                NOTIF_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            ch.setDescription("Входящие сообщения");
+            ch.enableVibration(true);
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) nm.createNotificationChannel(ch);
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -425,6 +453,20 @@ public class MainActivity extends Activity {
 
     @Override protected void onPause()   { super.onPause();   log.i(TAG, "onPause"); }
     @Override protected void onResume()  { super.onResume();  log.i(TAG, "onResume"); }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == NOTIF_PERM_CODE) {
+            boolean granted = grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            String result = granted ? "granted" : "denied";
+            log.i(TAG, "Notification permission result: " + result);
+            webView.post(() -> webView.evaluateJavascript(
+                "if(typeof onNativeNotifPermissionResult==='function')" +
+                "onNativeNotifPermissionResult('" + result + "')", null));
+        }
+    }
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -438,8 +480,79 @@ public class MainActivity extends Activity {
 
     public class AndroidBridge {
 
+        // ─── Push-уведомления ─────────────────────────────────────────────────────
+
+        /** Возвращает "granted" | "denied" | "default" */
         @JavascriptInterface
-        public void setDns(String key, String dohUrl) {
+        public String getNotificationPermission() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                int state = ContextCompat.checkSelfPermission(
+                    MainActivity.this, android.Manifest.permission.POST_NOTIFICATIONS);
+                return (state == PackageManager.PERMISSION_GRANTED) ? "granted" : "default";
+            }
+            // До Android 13 разрешение не нужно — проверяем включён ли канал
+            NotificationManager nm = (NotificationManager)
+                getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null && !nm.areNotificationsEnabled()) return "denied";
+            return "granted";
+        }
+
+        /** Запрашивает runtime-разрешение (Android 13+). На старых — сразу "granted". */
+        @JavascriptInterface
+        public void requestNotificationPermission() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                int state = ContextCompat.checkSelfPermission(
+                    MainActivity.this, android.Manifest.permission.POST_NOTIFICATIONS);
+                if (state == PackageManager.PERMISSION_GRANTED) {
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof onNativeNotifPermissionResult==='function')" +
+                        "onNativeNotifPermissionResult('granted')", null));
+                } else {
+                    ActivityCompat.requestPermissions(
+                        MainActivity.this,
+                        new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                        NOTIF_PERM_CODE);
+                }
+            } else {
+                // Android < 13: разрешение не требуется
+                webView.post(() -> webView.evaluateJavascript(
+                    "if(typeof onNativeNotifPermissionResult==='function')" +
+                    "onNativeNotifPermissionResult('granted')", null));
+            }
+        }
+
+        /** Показывает системное уведомление */
+        @JavascriptInterface
+        public void showNotification(String title, String body) {
+            log.i(TAG, "showNotification: " + title + " — " + body);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(MainActivity.this,
+                    android.Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) return;
+            }
+            Intent tapIntent = new Intent(MainActivity.this, MainActivity.class);
+            tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                : PendingIntent.FLAG_UPDATE_CURRENT;
+            PendingIntent pi = PendingIntent.getActivity(
+                MainActivity.this, 0, tapIntent, flags);
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(
+                    MainActivity.this, NOTIF_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_email)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(pi)
+                .setVibrate(new long[]{0, 250, 100, 250});
+
+            NotificationManager nm = (NotificationManager)
+                getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.notify(NOTIF_ID, builder.build());
+        }
             log.i(TAG, "JS→setDns key=" + key + " url=" + dohUrl);
             prefs.edit().putString("dns_key", key).putString("doh_url", dohUrl).apply();
             if (vpnBound && vpnService != null && vpnService.isRunning()) {
