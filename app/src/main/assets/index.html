@@ -22,16 +22,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--a
 
 .screen{
   position:absolute;inset:0;display:flex;flex-direction:column;
-  padding-top:var(--safe-top);padding-bottom:calc(var(--safe-bot) + 58px);overflow:hidden;
-  opacity:0;pointer-events:none;transform:translateY(18px) translateZ(0);
-  transition:opacity .2s cubic-bezier(.4,0,.2,1),transform .2s cubic-bezier(.4,0,.2,1);
-  will-change:opacity,transform;backface-visibility:hidden;-webkit-backface-visibility:hidden
+  padding-top:var(--safe-top);padding-bottom:calc(var(--safe-bot) + 80px);overflow:hidden;
+  opacity:1;pointer-events:none;transform:translateX(100%) translateZ(0);
+  will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  background:var(--bg);
 }
-.screen.active{opacity:1;pointer-events:all;transform:none}
-.screen.exit-left{opacity:0;transform:translateX(-28px) translateZ(0);transition:opacity .15s ease-in,transform .15s ease-in}
-.screen.exit-right{opacity:0;transform:translateX(28px) translateZ(0);transition:opacity .15s ease-in,transform .15s ease-in}
-/* В glass-режиме убираем compositing layer с домашнего экрана,
-   чтобы backdrop-filter на hero-card видел настоящий фон */
+.screen.active{opacity:1;pointer-events:all;transform:none;transition:none}
+/* В glass-режиме убираем compositing layer с домашнего экрана */
 body.glass-mode #s-home.active{
   will-change:auto!important;
   transform:none!important;
@@ -449,6 +446,52 @@ body[data-theme="candy"] {--accent-text:#000}
 }
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 
+/* ── Telegram-style message send animation ── */
+@keyframes msg-fly-in-right {
+  from { opacity:0; transform:translateY(14px) scale(.92); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
+}
+@keyframes msg-fly-in-left {
+  from { opacity:0; transform:translateY(14px) scale(.92); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
+}
+.msg-anim-out { animation: msg-fly-in-right .22s cubic-bezier(.34,1.56,.64,1) both; transform-origin: right bottom; }
+.msg-anim-in  { animation: msg-fly-in-left  .22s cubic-bezier(.34,1.56,.64,1) both; transform-origin: left bottom; }
+
+/* ── VIP badge animated ── */
+@keyframes vip-glow {
+  0%,100%{ filter:drop-shadow(0 0 4px #f5c518) drop-shadow(0 0 10px #e87722); }
+  50%    { filter:drop-shadow(0 0 8px #fff8a0) drop-shadow(0 0 22px #f5c518); }
+}
+@keyframes vip-spin {
+  0%   { transform:rotate(-8deg) scale(1.0); }
+  50%  { transform:rotate( 8deg) scale(1.1); }
+  100% { transform:rotate(-8deg) scale(1.0); }
+}
+.vip-crown { display:inline-block; animation:vip-spin 2.6s ease-in-out infinite, vip-glow 2.6s ease-in-out infinite; }
+.vip-badge-pill {
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:11px;font-weight:800;
+  background:linear-gradient(90deg,#f5c518,#e87722);
+  color:#000;padding:3px 8px;border-radius:8px;letter-spacing:.04em;
+  animation:vip-glow 2.6s ease-in-out infinite;
+}
+
+/* ── Photo zoom overlay ── */
+#photo-zoom-overlay {
+  display:none;position:fixed;inset:0;z-index:9999;
+  background:rgba(0,0,0,.92);
+  justify-content:center;align-items:center;
+  touch-action:none;
+}
+#photo-zoom-overlay.show { display:flex; }
+#photo-zoom-overlay img {
+  max-width:100%;max-height:100%;object-fit:contain;
+  transform-origin:center;
+  transition:transform .05s linear;
+  user-select:none;pointer-events:none;
+}
+
 .bell-day{font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.15em;text-transform:uppercase;margin:18px 0 8px}
 .bell-card{background:var(--surface2);border-radius:var(--rb);padding:13px;margin-bottom:7px;display:flex;align-items:flex-start;gap:14px;border:1.5px solid var(--surface3)}
 .bell-num{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);min-width:26px;padding-top:2px}
@@ -458,27 +501,64 @@ body[data-theme="candy"] {--accent-text:#000}
 .bell-slot-tag{font-size:9px;font-weight:700;color:var(--muted);background:var(--surface3);padding:2px 6px;border-radius:4px;letter-spacing:.08em;text-transform:uppercase}
 
 .bottom-nav{
-  position:fixed;bottom:0;left:0;right:0;z-index:200;
-  display:flex;
-  border-top:1px solid rgba(255,255,255,.06);
-  padding-bottom:var(--safe-bot);
+  position:fixed;
+  bottom:calc(14px + var(--safe-bot));
+  left:50%;
+  transform:translateX(-50%);
+  z-index:200;
+  display:flex;align-items:center;justify-content:space-around;
   background:var(--surface);
-  transition:background 0.3s ease, backdrop-filter 0.3s ease;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:28px;
+  width:calc(100% - 48px);
+  max-width:380px;
+  padding:6px 8px;
+  height:58px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.25);
+  transition:background 0.3s ease, backdrop-filter 0.3s ease, opacity .2s, transform .2s;
+}
+/* Hide nav on messenger / sub-screens */
+.bottom-nav.nav-hidden{
+  opacity:0;pointer-events:none;transform:translateX(-50%) translateY(18px);
 }
 .nav-item{
-  flex:1;display:flex;flex-direction:column;align-items:center;
-  padding:10px 0;cursor:pointer;color:var(--muted);
-  transition:color .18s;font-size:10px;font-weight:600;gap:3px;
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:0;cursor:pointer;color:var(--muted);
+  transition:color .22s;
   background:none;border:none;font-family:inherit;
-  position:relative;overflow:hidden;letter-spacing:.02em
+  position:relative;z-index:1;
+  outline:none;-webkit-tap-highlight-color:transparent;
 }
-.nav-item .nav-icon{font-size:20px;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+/* Убираем ripple внутри нижней панели */
+.bottom-nav .ripple { display:none!important; }
+.nav-item .nav-icon-wrap{
+  width:56px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+/* Pill highlight теперь через #nav-pill */
+.nav-item.active .nav-icon-wrap{
+  background:transparent;
+}
+.nav-item .nav-icon{
+  width:24px;height:24px;transition:transform .22s cubic-bezier(.34,1.56,.64,1);
+  fill:currentColor;
+}
 .nav-item.active{color:var(--accent)}
-.nav-item.active .nav-icon{transform:scale(1.15)}
+.nav-item.active .nav-icon{transform:scale(1.08)}
+/* Badge on bell */
+.nav-badge{
+  position:absolute;top:-4px;right:4px;
+  min-width:16px;height:16px;border-radius:8px;
+  background:#e53935;color:#fff;font-size:9px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+  padding:0 4px;line-height:1;
+  border:2px solid var(--surface);
+  pointer-events:none;
+}
 
 /* ── PROFILE CSS ── */
-.profile-avatar{width:88px;height:88px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:42px;border:3px solid var(--accent);flex-shrink:0;overflow:hidden;background:var(--surface2)}
-.profile-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.profile-avatar{width:88px;height:88px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:42px;border:3px solid var(--accent);flex-shrink:0;background:var(--surface2);position:relative}
+.profile-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
 .profile-card{background:var(--surface2);border-radius:18px;padding:20px;border:1.5px solid var(--surface3);margin-bottom:12px}
 .profile-username{font-size:13px;color:var(--muted);font-weight:600;margin-top:2px}
 .profile-bio{font-size:13px;color:var(--text);margin-top:8px;line-height:1.5;white-space:pre-wrap}
@@ -625,15 +705,14 @@ body.glass-mode.glass-optimized .hdr {
 
 /* ── Bottom Tab Bar — iOS 26 style: floating pill ── */
 body.glass-mode .bottom-nav {
-  background: color-mix(in srgb, var(--bg) 38%, transparent) !important;
+  background: rgba(255,255,255,0.08) !important;
   backdrop-filter: var(--gb);
   -webkit-backdrop-filter: var(--gb);
-  border-top: 1px solid rgba(255,255,255,0.14) !important;
-  /* Specular highlight across top edge */
+  border: 1px solid rgba(255,255,255,0.22) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.5),
-    inset 0 2px 12px rgba(255,255,255,0.06),
-    0 -2px 20px rgba(0,0,0,0.12) !important;
+    0 8px 40px rgba(0,0,0,0.28),
+    inset 0 1.5px 0 rgba(255,255,255,0.50),
+    inset 0 -1px 0 rgba(255,255,255,0.08) !important;
 }
 body.glass-mode.glass-optimized .bottom-nav {
   backdrop-filter: var(--gb-opt) !important;
@@ -649,8 +728,11 @@ body.glass-mode .nav-item .nav-icon {
 }
 body.glass-mode .nav-item:active .nav-icon { transform: scale(0.88) !important; }
 body.glass-mode .nav-item.active .nav-icon {
-  transform: scale(1.18) !important;
-  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 80%, transparent));
+  transform: scale(1.12) !important;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 80%, transparent));
+}
+body.glass-mode .nav-item.active .nav-icon-wrap {
+  background: color-mix(in srgb, var(--accent) 16%, transparent) !important;
 }
 
 /* ── Schedule section header ── */
@@ -1665,6 +1747,11 @@ body.on-home-screen #live-blur-canvas {
   position:fixed;inset:0;z-index:600;display:flex;flex-direction:column;
   background:#0c0c0c;font-family:'JetBrains Mono',monospace;
   padding-top:var(--safe-top);padding-bottom:var(--safe-bot);
+  transform:translateY(100%);
+  transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+.cmd-overlay.cmd-visible{
+  transform:translateY(0);
 }
 .cmd-titlebar{
   background:#1a1a1a;padding:10px 14px;display:flex;align-items:center;gap:10px;
@@ -1776,6 +1863,46 @@ body.disco-mode .hero-title{
   66%    {background:rgba(50,100,255,0.40)!important;}
 }
 body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
+
+/* ── IMAGE CROP MODAL ── */
+.img-crop-overlay{
+  position:fixed;inset:0;z-index:9000;
+  background:rgba(0,0,0,.85);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  animation:fadeIn .18s ease;
+}
+.img-crop-container{
+  position:relative;overflow:hidden;touch-action:none;
+  border:2px solid rgba(255,255,255,.18);
+  background:#000;
+}
+.img-crop-container.round{ border-radius:50% }
+.img-crop-img{
+  position:absolute;transform-origin:0 0;
+  will-change:transform;pointer-events:none;user-select:none;
+}
+.img-crop-guide{
+  position:absolute;inset:0;pointer-events:none;
+  background:
+    linear-gradient(rgba(255,255,255,.12) 1px,transparent 1px) 0 0/33.33% 33.33%,
+    linear-gradient(90deg,rgba(255,255,255,.12) 1px,transparent 1px) 0 0/33.33% 33.33%;
+}
+.img-crop-hint{
+  color:rgba(255,255,255,.55);font-size:12px;text-align:center;
+  margin-top:10px;margin-bottom:4px;
+}
+.img-crop-controls{
+  display:flex;align-items:center;gap:12px;margin-top:14px;width:100%;max-width:320px;
+  padding:0 4px;
+}
+.img-crop-controls label{font-size:11px;color:var(--muted);white-space:nowrap}
+.img-crop-controls input[type=range]{
+  flex:1;height:4px;border-radius:2px;accent-color:var(--accent);cursor:pointer;
+}
+.img-crop-actions{
+  display:flex;gap:12px;margin-top:16px;width:100%;max-width:320px;padding:0 4px;
+}
+.img-crop-actions .btn{flex:1;padding:13px 0;font-size:14px;font-weight:700}
 </style>
 <body>
 <div id="bg-layer"></div>
@@ -1986,24 +2113,6 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     </button>
     <div class="sep"></div>
 
-    <!-- Сеть и социальные функции -->
-    <div class="section-label">Сеть (профиль, чаты, лидерборд)</div>
-    <div class="settings-row" style="flex-direction:column;align-items:stretch;padding:14px 16px;margin-bottom:8px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:8px">
-        ⚡ Supabase
-        <span style="font-size:10px;font-weight:600;color:var(--muted);margin-left:6px">бесплатно · без карты · supabase.com</span>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
-        Создай проект на supabase.com → Settings → API → скопируй URL и anon key
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Project URL</div>
-      <input class="inp" id="sb-url-input" placeholder="https://xxxx.supabase.co" style="margin-bottom:8px;font-size:12px" autocorrect="off" autocapitalize="off">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Anon Key</div>
-      <input class="inp" id="sb-key-input" placeholder="eyJhbGciOiJIUzI1NiIs..." style="margin-bottom:10px;font-size:12px" autocorrect="off" autocapitalize="off">
-      <button class="btn btn-accent" style="padding:10px" onclick="supabaseSaveConfig()">💾 Сохранить и подключиться</button>
-      <div id="sb-status" style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center"></div>
-    </div>
-
     <!-- Приложение / OTA -->
     <div class="section-label">Приложение</div>
     <div class="list-item" style="cursor:default;margin-bottom:8px">
@@ -2087,8 +2196,17 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 
     <!-- Эмодзи-пикер для аватара -->
     <div id="edit-avatar-emoji-picker" style="display:none;margin-bottom:16px">
-      <div class="section-label">Выбери эмодзи</div>
-      <div id="edit-emoji-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0;max-height:180px;overflow-y:auto"></div>
+      <div class="section-label">Введи эмодзи с клавиатуры</div>
+      <!-- Поле ввода произвольного эмодзи -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <input id="edit-custom-emoji-input"
+          placeholder="Введи любой эмодзи 😎"
+          maxlength="8"
+          style="background:var(--surface2);border:2px solid var(--surface3);border-radius:12px;padding:10px 14px;font-size:22px;color:var(--text);font-family:inherit;outline:none;flex:1;min-width:0;transition:border-color .15s"
+          oninput="editCustomEmojiInput(this)">
+        <div id="edit-custom-emoji-preview" style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0"></div>
+      </div>
+      <div id="edit-custom-emoji-error" style="font-size:11px;color:var(--danger,#c94f4f);min-height:14px;margin-bottom:8px;padding-left:4px"></div>
     </div>
 
     <!-- Имя -->
@@ -2134,12 +2252,23 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
   <div class="hdr">
     <div class="hdr-title">Аккаунт</div>
   </div>
-  <div class="body" style="display:flex;flex-direction:column;align-items:center;padding-top:40px">
-    <div style="font-size:60px;margin-bottom:16px">👤</div>
-    <div style="font-size:20px;font-weight:800;margin-bottom:8px;text-align:center">Создай аккаунт</div>
-    <div style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:32px;max-width:280px">Аккаунт хранится на устройстве. Юзернейм используется для мультиплеера</div>
+  <div class="body" style="display:flex;flex-direction:column;align-items:center;padding-top:32px">
+    <div style="font-size:56px;margin-bottom:12px">👤</div>
 
-    <div style="width:100%;max-width:340px">
+    <!-- Переключатель вкладок -->
+    <div style="display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:28px;width:100%;max-width:300px">
+      <button id="login-tab-reg" onclick="loginShowRegister()"
+        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .18s,color .18s;background:var(--accent);color:var(--btn-text,#fff)">
+        Регистрация
+      </button>
+      <button id="login-tab-auth" onclick="loginShowAuth()"
+        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .18s,color .18s;background:transparent;color:var(--muted)">
+        Войти
+      </button>
+    </div>
+
+    <!-- ФОРМА РЕГИСТРАЦИИ -->
+    <div id="login-register-form" style="width:100%;max-width:340px">
       <div class="section-label">Имя</div>
       <input class="inp" id="login-name" placeholder="Как тебя зовут?" maxlength="32" style="margin-bottom:12px">
 
@@ -2152,10 +2281,40 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
       <div id="login-username-status" style="font-size:11px;min-height:16px;margin-bottom:16px;padding-left:4px"></div>
 
       <div class="section-label">Аватар</div>
-      <div id="login-emoji-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px"></div>
+      <!-- Поле ввода произвольного эмодзи -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <input id="login-custom-emoji-input"
+          placeholder="Введи любой эмодзи 😎"
+          maxlength="8"
+          style="background:var(--surface2);border:2px solid var(--surface3);border-radius:12px;padding:10px 14px;font-size:22px;color:var(--text);font-family:inherit;outline:none;flex:1;min-width:0;transition:border-color .15s"
+          oninput="loginCustomEmojiInput(this)">
+        <div id="login-custom-emoji-preview" style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0"></div>
+      </div>
+      <div id="login-custom-emoji-error" style="font-size:11px;color:var(--danger,#c94f4f);min-height:14px;margin-bottom:6px;padding-left:4px"></div>
+      <div id="login-emoji-grid" style="display:none"></div>
 
-      <button class="btn btn-accent" id="login-submit-btn" onclick="profileCreate()" disabled>Создать аккаунт →</button>
+      <div class="section-label">Пароль</div>
+      <input class="inp" id="login-password" type="password" placeholder="Придумай пароль" maxlength="64" style="margin-bottom:4px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:20px;padding-left:4px">Пароль нужен для входа с этого устройства</div>
+
+      <button class="btn btn-accent" id="login-submit-btn" onclick="profileCreate()" disabled>Создать аккаунт</button>
       <div id="login-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:8px;min-height:16px"></div>
+    </div>
+
+    <!-- ФОРМА ВХОДА -->
+    <div id="login-auth-form" style="width:100%;max-width:340px;display:none">
+      <div class="section-label">Юзернейм</div>
+      <div style="position:relative;margin-bottom:16px">
+        <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)">@</span>
+        <input class="inp" id="login-auth-username" placeholder="твой_ник" maxlength="24"
+               style="padding-left:28px" oninput="loginAuthUsernameInput(this.value)">
+      </div>
+
+      <div class="section-label">Пароль</div>
+      <input class="inp" id="login-auth-password" type="password" placeholder="Пароль" maxlength="64" style="margin-bottom:20px" onkeydown="if(event.key==='Enter')loginDoAuth()">
+
+      <button class="btn btn-accent" onclick="loginDoAuth()">Войти</button>
+      <div id="login-auth-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:8px;min-height:16px"></div>
     </div>
   </div>
 </div>
@@ -2165,10 +2324,14 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
   <div class="hdr">
     <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
     <div class="hdr-title">Онлайн</div>
-    <div id="online-count-hdr" style="font-size:12px;color:var(--muted);padding-right:8px"></div>
+    <button id="online-refresh-btn" style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;padding:8px;cursor:pointer" onclick="onlineRefresh()">↻ Обновить</button>
   </div>
-  <div class="body">
-    <div class="section-label">Пользователи сейчас</div>
+  <div class="body" style="padding-top:8px">
+    <div style="background:var(--surface2);border-radius:12px;display:flex;align-items:center;gap:8px;padding:8px 14px;margin-bottom:12px">
+      <span style="color:var(--muted);font-size:16px">🔍</span>
+      <input id="online-search" placeholder="Поиск по нику..." style="background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:14px;flex:1;width:100%" oninput="profileRenderOnline()">
+    </div>
+    <div class="section-label" id="online-count-hdr">Пользователи сейчас</div>
     <div id="online-list" style="display:flex;flex-direction:column;gap:10px">
       <div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Подключаемся...</div>
     </div>
@@ -2189,6 +2352,26 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 </div>
 
 <!-- ══ МЕССЕНДЖЕР (HIDDEN — TODO: переместить в нав-бар) ══ -->
+<!-- PEER PROFILE SCREEN -->
+<div class="screen" id="s-peer-profile">
+  <div class="hdr">
+    <button class="hdr-back" onclick="SFX.play('screenBack');history.back||showScreen('s-messenger-chat','back')">‹</button>
+    <div class="hdr-title" id="peer-profile-title">Профиль</div>
+  </div>
+  <div class="body" id="peer-profile-body" style="padding:0">
+    <div style="text-align:center;padding:40px;color:var(--muted)">Загрузка...</div>
+  </div>
+</div>
+
+<!-- PHOTO ZOOM OVERLAY -->
+<div id="photo-zoom-overlay">
+  <img id="photo-zoom-img" src="" alt="">
+</div>
+
+<!-- Ghost inputs for Supabase config (управление через CMD: supabase set <url> <key>) -->
+<input id="sb-url-input" type="hidden">
+<input id="sb-key-input" type="hidden">
+<div id="sb-status" style="display:none"></div>
 <!-- MESSENGER_SCREEN_LIST -->
 <div class="screen" id="s-messenger">
   <div class="hdr">
@@ -2243,14 +2426,45 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 
 <!-- ГЛОБАЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ — вне .screen, чтобы backdrop-filter работал -->
 <nav class="bottom-nav" id="global-bottom-nav">
+  <!-- Sliding pill indicator -->
+  <div id="nav-pill" style="
+    position:absolute;
+    height:38px;
+    border-radius:19px;
+    background:color-mix(in srgb,var(--accent) 18%,transparent);
+    transition:left .28s cubic-bezier(.34,1.3,.64,1), width .28s cubic-bezier(.34,1.3,.64,1);
+    pointer-events:none;
+    z-index:0;
+  "></div>
   <button class="nav-item active" id="nav-home" onclick="SFX.play('navHome');goHome()">
-    <span class="nav-icon">🏠</span><span>Главная</span></button>
+    <div class="nav-icon-wrap">
+      <svg class="nav-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+    </div>
+  </button>
   <button class="nav-item" id="nav-bells" onclick="bellNavTap()">
-    <span class="nav-icon">🔔</span><span>Звонки</span></button>
+    <div class="nav-icon-wrap">
+      <svg class="nav-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+      </svg>
+      <span class="nav-badge" id="nav-bells-badge" style="display:none"></span>
+    </div>
+  </button>
   <button class="nav-item" id="nav-profile" onclick="SFX.play('navSettings');navTo('s-profile','nav-profile')">
-    <span class="nav-icon" id="nav-profile-icon">👤</span><span>Профиль</span></button>
+    <div class="nav-icon-wrap">
+      <svg class="nav-icon" id="nav-profile-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+      </svg>
+    </div>
+  </button>
   <button class="nav-item" id="nav-settings" onclick="SFX.play('navSettings');navTo('s-settings','nav-settings')">
-    <span class="nav-icon">⚙️</span><span>Настройки</span></button>
+    <div class="nav-icon-wrap">
+      <svg class="nav-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+    </div>
+  </button>
 </nav>
 
 <!-- ══ Приветствие (показывается сразу) ══ -->
@@ -2928,6 +3142,13 @@ const SFX = (() => {
     },
     bubMiss()     { sweep(140, 80, 'sine', 0.28, 0.07); after(() => noise(0.04, 0.03, 250), 60); },
     bubCombo()    { [280, 350, 470].forEach((f,i) => after(() => tone(f, 'sine', 0.02, 0.05, 0.22, 0.07), i*55)); },
+    // ── Мессенджер ──
+    msgSend() {
+      // Telegram-style: тихий мягкий "свуш" + короткий пинг
+      sweep(400, 800, 'sine', 0.10, 0.055);
+      after(() => tone(880, 'sine', 0.008, 0.01, 0.12, 0.035), 80);
+    },
+    msgReceive() { tone(660, 'sine', 0.01, 0.02, 0.18, 0.04); },
   };
 
   return {
@@ -4485,16 +4706,69 @@ function nativeBack(){
 // ── Плавные переходы: ВСЕГДА с анимацией ──
 // requestIdleCallback: если браузер занят — ждём свободный момент, потом анимируем.
 // Анимация не пропускается, просто может начаться чуть позже.
+// ── Telegram-style transitions (button-triggered) ─────────────────
+const TRANS_DUR = 280;
+const TRANS_EASE = 'cubic-bezier(0.4,0,0.2,1)';
+
 function _doTransition(prev, next, dir) {
-  prev.classList.add(dir==='back'?'exit-right':'exit-left');
-  prev.classList.remove('active');
-  setTimeout(()=>prev.classList.remove('exit-left','exit-right'), 320);
-  next.style.transition='none';
-  void next.getBoundingClientRect();
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    next.style.transition='';
-    next.classList.add('active');
-  }));
+  const isBack = dir === 'back';
+  const w = window.innerWidth;
+
+  const DECEL = 'cubic-bezier(0.215, 0.61, 0.355, 1.0)'; // easeOutQuart
+  const tFwd  = `transform ${TRANS_DUR}ms ${DECEL}, opacity ${Math.round(TRANS_DUR*0.85)}ms ${DECEL}`;
+
+  if (isBack) {
+    setNoTransStyle(next, `translateX(${-w * 0.28}px)`, '0.65');
+    next.style.zIndex = '1';
+    prev.style.zIndex = '2';
+
+    void next.getBoundingClientRect();
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      prev.style.transition    = tFwd;
+      prev.style.transform     = `translateX(${w}px) translateZ(0)`;
+      prev.style.opacity       = '1';
+      prev.style.pointerEvents = 'none';
+      prev.classList.remove('active');
+
+      next.style.transition    = tFwd;
+      next.style.transform     = 'translateX(0) translateZ(0)';
+      next.style.opacity       = '1';
+      next.classList.add('active');
+    }));
+
+  } else {
+    setNoTransStyle(next, `translateX(${w}px)`, '1');
+    next.style.zIndex = '2';
+    prev.style.zIndex = '1';
+
+    void next.getBoundingClientRect();
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      prev.style.transition    = tFwd;
+      prev.style.transform     = `translateX(${-w * 0.28}px) translateZ(0)`;
+      prev.style.opacity       = '0.65';
+      prev.style.pointerEvents = 'none';
+      prev.classList.remove('active');
+
+      next.style.transition    = tFwd;
+      next.style.transform     = 'translateX(0) translateZ(0)';
+      next.style.opacity       = '1';
+      next.classList.add('active');
+    }));
+  }
+
+  setTimeout(() => {
+    prev.style.cssText = '';
+    next.style.cssText = '';
+  }, TRANS_DUR + 60);
+}
+
+function setNoTransStyle(el, transform, opacity) {
+  el.style.transition = 'none';
+  el.style.transform  = transform + ' translateZ(0)';
+  el.style.opacity    = opacity;
+  el.style.pointerEvents = 'none';
 }
 let _pendingScreenId=null;
 function showScreen(id, dir='forward'){
@@ -4502,17 +4776,16 @@ function showScreen(id, dir='forward'){
   const prev=document.getElementById(cur), next=document.getElementById(id);
   // При открытии экрана тем — рендерим темы и иконки заранее
   if(id==='s-themes'){renderThemeGrid();renderIconGrid();initFontCarousel();}
-  if(id==='s-settings'){updateBgUI();applyGlassMode(false);applyBgBlurState();}
   // Управляем классом главного экрана (влияет на live-blur canvas)
   if(id==='s-home') document.body.classList.add('on-home-screen');
   else document.body.classList.remove('on-home-screen');
   cur=id; _pendingScreenId=id;
   const go=()=>{
-    if(_pendingScreenId!==id)return; // если уже другой переход — пропускаем
+    if(_pendingScreenId!==id)return;
     _doTransition(prev, next, dir);
   };
   if(typeof requestIdleCallback!=='undefined'){
-    requestIdleCallback(go, {timeout:300});
+    requestIdleCallback(go, {timeout:80});
   } else {
     setTimeout(go, 0);
   }
@@ -4530,8 +4803,383 @@ function goHome(){
     loadFiles();
   }
 }
-function navTo(id,navId){showScreen(id);updateNavActive(navId);}
-function updateNavActive(aid){['nav-home','nav-bells','nav-settings'].forEach(id=>document.getElementById(id)?.classList.toggle('active',id===aid));}
+
+// navTo с правильным направлением анимации по позиции в TAB_ORDER
+const _TAB_ORDER_NAV = ['s-home','s-bells','s-profile','s-settings'];
+function navTo(id, navId) {
+  const fromIdx = _TAB_ORDER_NAV.indexOf(cur);
+  const toIdx   = _TAB_ORDER_NAV.indexOf(id);
+  let dir = 'forward';
+  if (fromIdx >= 0 && toIdx >= 0) {
+    dir = toIdx > fromIdx ? 'forward' : 'back';
+  }
+  showScreen(id, dir);
+  updateNavActive(navId);
+}
+
+function updateNavActive(aid) {
+  ['nav-home','nav-bells','nav-settings','nav-profile'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('active', id === aid)
+  );
+  _navMovePill(aid);
+}
+
+// ── Sliding pill indicator (как тумблер ученик/учитель) ────────────
+function _navMovePill(activeId) {
+  const pill = document.getElementById('nav-pill');
+  const activeBtn = document.getElementById(activeId);
+  const nav = document.getElementById('global-bottom-nav');
+  if (!pill || !activeBtn || !nav) return;
+
+  const navRect = nav.getBoundingClientRect();
+  const iconWrap = activeBtn.querySelector('.nav-icon-wrap');
+  const wrapRect = (iconWrap || activeBtn).getBoundingClientRect();
+
+  const pillW = Math.max(wrapRect.width + 4, 58);
+  const pillL = wrapRect.left - navRect.left + (wrapRect.width - pillW) / 2;
+
+  pill.style.width     = pillW + 'px';
+  pill.style.left      = pillL + 'px';
+  pill.style.top       = '50%';
+  pill.style.transform = 'translateY(-50%)';
+}
+
+// ── Показывать навигацию только на нужных экранах ──────────────────────────
+const NAV_VISIBLE_SCREENS = new Set(['s-home','s-settings','s-bells','s-profile']);
+function updateNavVisibility(screenId) {
+  const nav = document.getElementById('global-bottom-nav');
+  if (!nav) return;
+  if (NAV_VISIBLE_SCREENS.has(screenId)) {
+    nav.classList.remove('nav-hidden');
+  } else {
+    nav.classList.add('nav-hidden');
+  }
+}
+
+// ── Patch showScreen to update nav visibility ──────────────────────────────
+const _origShowScreenNav = showScreen;
+showScreen = function(id, dir) {
+  _origShowScreenNav(id, dir);
+  updateNavVisibility(id);
+};
+
+// ══════════════════════════════════════════════════════════════════
+// ── UNIFIED GESTURE NAVIGATION (Telegram-style live swipe) ────────
+// ══════════════════════════════════════════════════════════════════
+(function() {
+  // Порядок вкладок для горизонтального свайпа на главных экранах
+  const TAB_ORDER  = ['s-home', 's-bells', 's-profile', 's-settings'];
+  const TAB_NAVIDS = ['nav-home','nav-bells','nav-profile','nav-settings'];
+
+  // Маршруты «Назад» для под-экранов
+  const BACK_MAP = {
+    's-groups':         's-home',
+    's-schedule':       's-groups',
+    's-themes':         's-settings',
+    's-teachers':       's-home',
+    's-profile-edit':   's-profile',
+    's-messenger':      's-profile',
+    's-messenger-chat': 's-messenger',
+    's-online':         's-profile',
+    's-leaderboard':    's-profile',
+    's-login':          's-home',
+    's-peer-profile':   's-messenger-chat',
+  };
+
+  // Экраны где свайп вниз = назад (sub-screens типа выбора группы, расписания)
+  const SWIPE_DOWN_BACK = new Set([
+    's-groups', 's-schedule', 's-themes', 's-teachers', 's-login',
+    's-profile-edit',
+  ]);
+  // Остальные sub-screens (messenger и соц.) = горизонтальный свайп вправо
+
+  const W = () => window.innerWidth;
+  const H = () => window.innerHeight;
+  const COMMIT_RATIO = 0.35; // порог для подтверждения перехода
+  const EASE = `cubic-bezier(0.4,0,0.2,1)`;
+  const DUR  = 280;
+
+  let g = {
+    active: false,
+    mode: null,        // 'tab-h' | 'back-h' | 'back-v' | 'scroll'
+    startX: 0, startY: 0, startT: 0,
+    targetId: null,
+    targetNavId: null,
+    dir: null,         // 'left' | 'right' | 'down'
+    decided: false,
+  };
+
+  function getBackTarget() { return BACK_MAP[cur] || null; }
+
+  function setNoTransition(el) {
+    el.style.transition = 'none';
+    void el.getBoundingClientRect();
+  }
+
+  function applyT(el, tx, ty, opacity, zIndex) {
+    el.style.transform = `translate(${tx}px,${ty}px) translateZ(0)`;
+    if (opacity !== undefined) el.style.opacity = String(opacity);
+    if (zIndex  !== undefined) el.style.zIndex  = String(zIndex);
+  }
+
+  function clearStyle(el) {
+    el.style.cssText = '';
+  }
+
+  // easeOutQuart — резкий старт, плавное торможение (как в Telegram)
+  const EASE_OUT = 'cubic-bezier(0.215, 0.61, 0.355, 1.0)';
+  // easeOutBack — небольшой пружинный отскок для snap-back
+  const EASE_SNAP = 'cubic-bezier(0.34, 1.2, 0.64, 1)';
+
+  function commitTransition(toId, toNavId, transDir, dur) {
+    dur = dur || DUR;
+    const fromEl = document.getElementById(cur);
+    const toEl   = document.getElementById(toId);
+    const t = `transform ${dur}ms ${EASE_OUT}, opacity ${Math.round(dur*0.85)}ms ${EASE_OUT}`;
+    const isBack = transDir === 'back';
+    const w = window.innerWidth;
+
+    if (toEl) {
+      toEl.style.transition    = t;
+      toEl.style.transform     = 'translateX(0) translateZ(0)';
+      toEl.style.opacity       = '1';
+      toEl.style.zIndex        = isBack ? '1' : '2';
+      toEl.style.pointerEvents = 'all';
+      toEl.classList.add('active');
+    }
+    if (fromEl) {
+      fromEl.style.transition    = t;
+      fromEl.style.transform     = isBack
+        ? `translateX(${w}px) translateZ(0)`
+        : `translateX(${-w * 0.28}px) translateZ(0)`;
+      fromEl.style.opacity       = isBack ? '1' : '0.65';
+      fromEl.style.zIndex        = isBack ? '2' : '1';
+      fromEl.style.pointerEvents = 'none';
+      fromEl.classList.remove('active');
+    }
+
+    const prevCur = cur;
+    cur = toId;
+    _pendingScreenId = toId;
+
+    updateNavVisibility(toId);
+    if (toNavId) updateNavActive(toNavId);
+    if (toId === 's-home') document.body.classList.add('on-home-screen');
+    else document.body.classList.remove('on-home-screen');
+
+    // Screen-specific hooks (только для не-таб экранов, чтобы не лагало)
+    if (toId === 's-profile')   { try { profileRenderScreen(); } catch(e){} }
+    if (toId === 's-messenger') { try { messengerRenderList(); } catch(e){} }
+    if (toId === 's-themes')    { renderThemeGrid(); renderIconGrid(); initFontCarousel(); }
+
+    SFX.play(isBack ? 'screenBack' : 'screenPush');
+
+    setTimeout(() => {
+      const fe = document.getElementById(prevCur);
+      const te = document.getElementById(toId);
+      if (fe) clearStyle(fe);
+      if (te) clearStyle(te);
+    }, DUR + 60);
+  }
+
+  function snapBack(dur) {
+    dur = dur || 260;
+    const fromEl = document.getElementById(cur);
+    const toEl   = g.targetId ? document.getElementById(g.targetId) : null;
+    const t = `transform ${dur}ms ${EASE_SNAP}, opacity ${Math.round(dur*0.8)}ms ${EASE_SNAP}`;
+
+    if (fromEl) {
+      fromEl.style.transition    = t;
+      fromEl.style.transform     = 'translateX(0) translateZ(0)';
+      fromEl.style.opacity       = '1';
+      fromEl.style.zIndex        = '';
+      fromEl.style.pointerEvents = 'all';
+    }
+    if (toEl) {
+      const resetX = g.dir === 'right' ? -W()*0.28 : (g.dir === 'left' ? W() : 0);
+      const resetY = g.dir === 'down'  ? -H()*0.15 : 0;
+      toEl.style.transition    = t;
+      toEl.style.transform     = `translate(${resetX}px,${resetY}px) translateZ(0)`;
+      toEl.style.opacity       = (g.dir === 'down' || g.dir === 'right') ? '0.65' : '1';
+      toEl.style.zIndex        = '';
+      toEl.style.pointerEvents = 'none';
+    }
+    setTimeout(() => {
+      if (fromEl) clearStyle(fromEl);
+      if (toEl)   clearStyle(toEl);
+    }, dur + 60);
+  }
+
+  // ── touchstart ───────────────────────────────────────────────────
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) { g.active = false; return; }
+    const t = e.touches[0];
+    g = {
+      active: true, decided: false,
+      mode: null, targetId: null, targetNavId: null, dir: null,
+      startX: t.clientX, startY: t.clientY,
+      startT: Date.now(),
+    };
+  }, { passive: true });
+
+  // ── touchmove ────────────────────────────────────────────────────
+  document.addEventListener('touchmove', (e) => {
+    if (!g.active) return;
+    const t = e.touches[0];
+    const dx = t.clientX - g.startX;
+    const dy = t.clientY - g.startY;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+
+    // Determine mode on first movement > 8px
+    if (!g.decided && (adx > 8 || ady > 8)) {
+      g.decided = true;
+      const isTab = TAB_ORDER.includes(cur);
+      const idx   = TAB_ORDER.indexOf(cur);
+
+      if (isTab) {
+        // On tabs: horizontal swipe between tabs
+        if (adx > ady) {
+          if (dx < 0 && idx < TAB_ORDER.length - 1) {
+            // Swipe LEFT → next tab
+            g.mode      = 'tab-h';
+            g.dir       = 'left';
+            g.targetId  = TAB_ORDER[idx + 1];
+            g.targetNavId = TAB_NAVIDS[idx + 1];
+          } else if (dx > 0 && idx > 0) {
+            // Swipe RIGHT → prev tab
+            g.mode      = 'tab-h';
+            g.dir       = 'right';
+            g.targetId  = TAB_ORDER[idx - 1];
+            g.targetNavId = TAB_NAVIDS[idx - 1];
+          } else {
+            g.mode = 'scroll';
+          }
+        } else {
+          g.mode = 'scroll';
+        }
+      } else {
+        // Sub-screens
+        const useDown = SWIPE_DOWN_BACK.has(cur);
+        if (useDown && ady > adx && dy > 0) {
+          g.mode     = 'back-v';
+          g.dir      = 'down';
+          g.targetId = getBackTarget();
+        } else if (!useDown && adx > ady && dx > 0) {
+          g.mode     = 'back-h';
+          g.dir      = 'right';
+          g.targetId = getBackTarget();
+        } else {
+          g.mode = 'scroll';
+        }
+      }
+
+      if (g.mode !== 'scroll' && g.targetId) {
+        // Pre-position target screen
+        const targetEl = document.getElementById(g.targetId);
+        const fromEl   = document.getElementById(cur);
+        if (g.mode === 'tab-h') {
+          if (g.dir === 'left') {
+            // Forward: target comes from right (on top)
+            if (targetEl) { setNoTransition(targetEl); applyT(targetEl, W(), 0, 1, 2); }
+            if (fromEl)   { setNoTransition(fromEl);   fromEl.style.zIndex = '1'; }
+          } else {
+            // Back (right swipe): current is on top sliding right, target peeks from left
+            if (targetEl) { setNoTransition(targetEl); applyT(targetEl, -W()*0.28, 0, 0.65, 1); }
+            if (fromEl)   { setNoTransition(fromEl);   fromEl.style.zIndex = '2'; }
+          }
+        } else if (g.mode === 'back-h') {
+          // Back: current on top, target peeks from left
+          if (targetEl) { setNoTransition(targetEl); applyT(targetEl, -W()*0.28, 0, 0.65, 1); }
+          if (fromEl)   { setNoTransition(fromEl);   fromEl.style.zIndex = '2'; }
+        } else { // back-v
+          if (targetEl) { setNoTransition(targetEl); applyT(targetEl, 0, -H()*0.15, 0.65, 1); }
+          if (fromEl)   { setNoTransition(fromEl);   fromEl.style.zIndex = '2'; }
+        }
+      } else if (g.mode === 'scroll') {
+        g.active = false;
+      }
+    }
+
+    if (!g.decided || g.mode === 'scroll' || !g.targetId) return;
+    e.preventDefault();
+
+    const fromEl   = document.getElementById(cur);
+    const targetEl = document.getElementById(g.targetId);
+
+    if (g.mode === 'tab-h') {
+      if (g.dir === 'left') {
+        // Forward: target slides in from right (on top), current moves left (below)
+        const clampedDx = Math.min(0, dx); // dx is negative for left swipe
+        const progress = Math.abs(clampedDx) / W();
+        if (fromEl)   applyT(fromEl,   clampedDx, 0, 1 - progress * 0.35, 1);
+        if (targetEl) applyT(targetEl, W() + clampedDx, 0, 1, 2);
+      } else {
+        // Back: current slides right (on top), target reveals from left (below)
+        const clampedDx = Math.max(0, dx);
+        const progress = clampedDx / W();
+        if (fromEl)   applyT(fromEl,   clampedDx, 0, 1, 2);
+        if (targetEl) applyT(targetEl, -W()*0.28*(1-progress), 0, 0.65 + 0.35*progress, 1);
+      }
+
+    } else if (g.mode === 'back-h') {
+      const clampedDx = Math.max(0, dx);
+      const progress = clampedDx / W();
+      if (fromEl)   applyT(fromEl,   clampedDx, 0, 1, 2);
+      if (targetEl) applyT(targetEl, -W()*0.28*(1-progress), 0, 0.65 + 0.35*progress, 1);
+
+    } else if (g.mode === 'back-v') {
+      const clampedDy = Math.max(0, dy);
+      const progress = clampedDy / H();
+      if (fromEl)   applyT(fromEl,   0, clampedDy, 1, 2);
+      if (targetEl) applyT(targetEl, 0, -H()*0.15*(1-progress), 0.65 + 0.35*progress, 1);
+    }
+
+  }, { passive: false });
+
+  // ── touchend ─────────────────────────────────────────────────────
+  document.addEventListener('touchend', (e) => {
+    if (!g.active || g.mode === 'scroll' || !g.targetId) { g.active = false; return; }
+    g.active = false;
+
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - g.startX;
+    const dy = touch.clientY - g.startY;
+    const dt = Math.max(1, Date.now() - g.startT);
+    const vx = Math.abs(dx) / dt * 1000; // px/s
+    const vy = Math.abs(dy) / dt * 1000;
+
+    let commit = false;
+    if (g.mode === 'tab-h') {
+      commit = Math.abs(dx) > W() * COMMIT_RATIO || vx > 350;
+    } else if (g.mode === 'back-h') {
+      commit = dx > W() * COMMIT_RATIO || vx > 350;
+    } else if (g.mode === 'back-v') {
+      commit = dy > H() * COMMIT_RATIO || vy > 350;
+    }
+
+    if (commit) {
+      const transDir = (g.mode === 'back-h' || g.mode === 'back-v' ||
+                        (g.mode === 'tab-h' && g.dir === 'right')) ? 'back' : 'forward';
+
+      // Velocity-aware duration: faster swipe → shorter finish
+      const velocity = g.mode === 'back-v' ? vy : vx;
+      const traveled = g.mode === 'back-v' ? Math.abs(dy) : Math.abs(dx);
+      const total    = g.mode === 'back-v' ? H() : W();
+      const remaining = total - traveled;
+      const velBasedDur = velocity > 50 ? Math.min(remaining / velocity * 1000 * 1.1, 320) : 320;
+      const finishDur = Math.max(120, Math.round(velBasedDur));
+
+      commitTransition(g.targetId, g.targetNavId, transDir, finishDur);
+    } else {
+      // Snap back — velocity-aware too
+      const velocity = g.mode === 'back-v' ? vy : vx;
+      const traveled = g.mode === 'back-v' ? Math.abs(dy) : Math.abs(dx);
+      const snapDur = Math.max(180, Math.min(320, traveled / Math.max(velocity, 30) * 1000 * 0.9));
+      snapBack(Math.round(snapDur));
+    }
+  }, { passive: true });
+
+})();
 
 // ══ ПОСЛЕДНЯЯ ГРУППА ══
 function updateLastGroupBtn(){
@@ -4904,68 +5552,25 @@ function saveHi(game,score){
 function getHi(game){return loadHiScores()[game]||0;}
 
 // ══ CMD-КОНСОЛЬ ══
-const CMD_HELP=[
-  ['/help',         'показать этот список'],
-  ['/greeting',     'вкл/выкл приветствие  |  on|off'],
-  ['/hiscores',     'рекорды мини-игр  |  reset — сбросить'],
-  ['/version',      'информация о версии'],
-  ['/group',        'текущая группа и файл'],
-  ['/cache',        '[clear] — кэш файлов'],
-  ['/theme',        'list|<n> — список тем или сменить'],
-  ['/sound',        'вкл/выкл звуки  |  on|off'],
-  ['/matrix',       'вкл/выкл Матрицу  |  on|off'],
-  ['/snow',         'вкл/выкл снег  |  on|off'],
-  ['/disco',        'вкл/выкл RGB диско  |  on|off|contrast <0-100>'],
-  ['/glass',        'вкл/выкл Liquid Glass  |  on|off'],
-  ['/bg',           'clear — убрать фон'],
-  ['/zoom',         '<0.8-1.2> — масштаб интерфейса'],
-  ['/debug',        'системный дамп состояния'],
-  ['/games',        'открыть пасхалку с играми'],
-  ['/turbo',        'турбо-режим FPS (отключает анимации)'],
-  ['/shake',        'встряхнуть апп'],
-  ['/time',         'сколько времени приложение работает'],
-  ['/optimize',     'ядерная оптимизация памяти 🚀'],
-  ['/fps',          'замерить FPS рендера'],
-  ['/ram',          'оценить использование памяти'],
-  ['/clear',        'очистить консоль'],
-  ['/exit',         'закрыть консоль'],
-  ['/uwu',          'активировать UwU-режим 🥺'],
-  ['/gpt',          'спросить нейросеть 🤖 (умеет разное)'],
-  ['/coffee',       'заварить кофе ☕'],
-  ['/homework',     'сделать домашнее задание 📚'],
-  ['/absent',       '<имя> — записать как отсутствующего 🙈'],
-  ['/hack',         'взломать пентагон 💻'],
-  ['/grade',        'поставить оценку (только 5)'],
-  ['/summon',       'вызвать декана 😱'],
-  ['/ascii',        'ASCII-баннер с группой'],
-  ['/weather',      'прогноз погоды 🌤'],
-  ['/selftest',     'системный тест приложения 🔬'],
-  ['/horoscope',    'гороскоп студента на сегодня 🔮'],
-  ['/roast',        'прожарка студента от ИИ 🔥'],
-  ['/pair',         'совет как пережить пару 😴'],
-  ['/yeet',         'законный выход из пары 🚪'],
-  ['/ping',         'пинг до Яндекс Диска 📡'],
-  ['/log',          'открыть просмотр JS-логов'],
-];
 function cmdOpen(){
   const ov=document.getElementById('cmd-overlay');
   if(!ov)return;
   ov.style.display='flex';
+  // Trigger reflow then add class for smooth slide-up
+  ov.offsetHeight;
+  ov.classList.add('cmd-visible');
   const body=document.getElementById('cmd-body');
   body.innerHTML='';
   cmdPrint('out','Microsoft Windows [Version 10.0.26100.3194]');
   cmdPrint('out','(c) Microsoft Corporation. Все права защищены.');
   cmdPrint('out','');
-  cmdPrint('info','╔══════════════════════════════════════╗');
-  cmdPrint('info','║  Schedule App v'+APP_VERSION+'  Dev Console  ║');
-  cmdPrint('info','╚══════════════════════════════════════╝');
-  cmdPrint('out','');
-  cmdPrintHelp();
-  cmdPrint('out','');
   setTimeout(()=>document.getElementById('cmd-input')?.focus(),80);
 }
 function cmdClose(){
-  document.getElementById('cmd-overlay').style.display='none';
+  const ov=document.getElementById('cmd-overlay');
+  if(!ov)return;
+  ov.classList.remove('cmd-visible');
+  setTimeout(()=>{ ov.style.display='none'; }, 300);
 }
 function cmdPrint(cls,text){
   const body=document.getElementById('cmd-body');
@@ -4974,10 +5579,6 @@ function cmdPrint(cls,text){
   line.textContent=text;
   body.appendChild(line);
   body.scrollTop=body.scrollHeight;
-}
-function cmdPrintHelp(){
-  cmdPrint('warn','Доступные команды:');
-  CMD_HELP.forEach(([c,d])=>cmdPrint('ok','  '+c.padEnd(14)+' — '+d));
 }
 function cmdKey(e){
   if(e.key!=='Enter')return;
@@ -4989,130 +5590,128 @@ function cmdKey(e){
   cmdExec(raw);
 }
 function cmdExec(raw){
-  const parts=raw.split(/\s+/),cmd=parts[0].toLowerCase(),arg=(parts[1]||'').toLowerCase();
+  // Support both "cmd" and "/cmd" formats
+  const parts=raw.split(/\s+/);
+  const cmdRaw=parts[0].toLowerCase().replace(/^\//,'');
+  const cmd=cmdRaw;
+  const arg=(parts[1]||'').toLowerCase();
   const sec=loadSecret();
   switch(cmd){
-    case '/help': cmdPrintHelp(); break;
-    case '/greeting': {
+    case 'help': {
+      cmdPrint('info','Введи команду и нажми Enter.');
+    } break;
+    case 'greeting': {
       const sec2=loadSecret();
       const greetOn = !sec2.greetingOff;
       if(arg==='off'||(arg!=='on'&&greetOn)){sec2.greetingOff=true;saveSecret(sec2);cmdPrint('ok','Приветствие выключено.');}
       else{delete sec2.greetingOff;saveSecret(sec2);cmdPrint('ok','Приветствие включено.');}
     } break;
-    case '/hiscores':{
+    case 'hiscores':{
       const GAME_NAMES={snake:'Змейка',pong:'Пинг-понг',tetris:'Тетрис',dino:'Динозаврик',
         blockblast:'Block Blast',breakout:'Арканоид',bubbles:'Пузыри',flappy:'Флаппи птица','2048':'2048'};
       if(arg==='reset'){stor.set(HI_KEY,'{}');cmdPrint('ok','Все рекорды сброшены.');}
       else{
         cmdPrint('info','── Рекорды мини-игр ──');
         const h=loadHiScores();
-        let any=false;
         Object.entries(GAME_NAMES).forEach(([k,n])=>{
-          cmdPrint(h[k]?'ok':'out','  '+(n+':').padEnd(18)+(h[k]||'нет'));any=true;
+          cmdPrint(h[k]?'ok':'out','  '+(n+':').padEnd(18)+(h[k]||'нет'));
         });
-        cmdPrint('prompt','  /hiscores reset — сбросить все');
       }
     } break;
-    case '/version':
+    case 'version':
       cmdPrint('info','Версия приложения: '+APP_VERSION);
       cmdPrint('info','versionCode: 11');
       cmdPrint('info','Платформа: Android WebView');
       break;
-    case '/group':
+    case 'group':
       cmdPrint('info','Группа: '+(S.lastGroup||'не выбрана'));
       cmdPrint('info','Файл: '+(S.selectedFile?.name||'—'));
       break;
-    case '/cache':
+    case 'cache':
       if(arg==='clear'){Object.keys(FILE_CACHE).forEach(k=>delete FILE_CACHE[k]);cmdPrint('ok','Кэш очищен.');}
-      else cmdPrint('info','Файлов в кэше: '+Object.keys(FILE_CACHE).length+'.  /cache clear — для очистки.');
+      else cmdPrint('info','Файлов в кэше: '+Object.keys(FILE_CACHE).length);
       break;
-    case '/theme':
+    case 'theme':
       if(arg==='list'){Object.entries(THEMES).forEach(([k,t])=>cmdPrint(S.theme===k?'ok':'out','  '+(k+(S.theme===k?' ✓':'')).padEnd(15)+t.name));}
       else if(arg&&THEMES[arg]){applyTheme(arg);cmdPrint('ok','Тема: '+THEMES[arg].name);}
-      else if(arg)cmdPrint('err','Тема "'+arg+'" не найдена. /theme list');
-      else cmdPrint('info','Тема: '+S.theme+'.  /theme list или /theme <name>');
+      else if(arg)cmdPrint('err','Тема "'+arg+'" не найдена.');
+      else cmdPrint('info','Тема: '+S.theme);
       break;
-    case '/sound': {
+    case 'sound': {
       const nowMuted = !!S.muted;
       if(arg==='on'||(arg!=='off'&&nowMuted)){S.muted=false;saveLocal();updateMuteLabel();cmdPrint('ok','🔊 Звук включён.');}
       else{S.muted=true;saveLocal();updateMuteLabel();cmdPrint('ok','🔇 Звук выключен.');}
     } break;
-    case '/matrix': {
+    case 'matrix': {
       const matrixOn = document.getElementById('matrix-canvas').classList.contains('active');
-      if(arg==='on'||(arg!=='off'&&!matrixOn)){matrixStart();cmdPrint('ok','🟩 Матрица активирована. Красная таблетка принята.');}
+      if(arg==='on'||(arg!=='off'&&!matrixOn)){matrixStart();cmdPrint('ok','🟩 Матрица активирована.');}
       else{matrixStop();cmdPrint('ok','Матрица отключена.');}
     } break;
-    case '/snow': {
+    case 'snow': {
       const snowOn = document.getElementById('snow-canvas').style.display!=='none';
       if(arg==='on'||(arg!=='off'&&!snowOn)){snowStart();cmdPrint('ok','❄️ Снег пошёл!');}
       else{snowStop();cmdPrint('ok','🌤 Снег остановлен.');}
     } break;
-    case '/disco': {
+    case 'disco': {
       if(arg==='contrast'||arg==='intensity'){
         const val=parseInt(parts[2]);
-        if(isNaN(val)||val<0||val>100){cmdPrint('err','Укажи значение 0..100. Пример: /disco contrast 60');break;}
+        if(isNaN(val)||val<0||val>100){cmdPrint('err','Укажи значение 0..100.');break;}
         const sec2=loadSecret();sec2.discoIntensity=val;saveSecret(sec2);
         discoApplyIntensity(val);
-        cmdPrint('ok','🎨 Интенсивность диско: '+val+'%'+(val===0?' (почти незаметно)':val<=40?' (мягкий режим)':val>=90?' (МАКСИМУМ 🔥)':''));
-        if(!_discoActive){cmdPrint('info','Диско сейчас выключено. Включи: /disco on');}
+        cmdPrint('ok','🎨 Интенсивность диско: '+val+'%');
         break;
       }
       if(arg==='on'||(arg!=='off'&&!_discoActive)){
         discoStart();
-        const sec2=loadSecret();
-        cmdPrint('warn','🕺 DISCO MODE ACTIVATED — ВЕЧЕРИНКА НАЧАЛАСЬ');
-        cmdPrint('warn','💃 🎵 🎶 🪩 🔊 🎉 🌈 ✨ 🕺');
-        cmdPrint('info','Интенсивность: '+(sec2.discoIntensity!=null?sec2.discoIntensity:100)+'%  (/disco contrast <0-100>)');
+        cmdPrint('warn','🕺 DISCO MODE ACTIVATED');
       } else {
-        discoStop();cmdPrint('ok','😴 Дискотека закончилась. Уборщики пришли.');
+        discoStop();cmdPrint('ok','😴 Дискотека закончилась.');
       }
     } break;
-    case '/glass': {
+    case 'glass': {
       if(arg==='on'||(arg!=='off'&&!S.liquidGlass)){
         S.liquidGlass=true;applyGlassMode(true);cmdPrint('ok','🫧 Liquid Glass включён.');
       } else {
         S.liquidGlass=false;S.liquidGlassOpt=false;applyGlassMode(true);cmdPrint('ok','Liquid Glass выключен.');
       }
     } break;
-    case '/shake':
+    case 'shake':
       cmdPrint('warn','💥 ВАУ!');
       document.body.classList.remove('shaking');
       document.body.offsetHeight;
       document.body.classList.add('shaking');
       setTimeout(()=>document.body.classList.remove('shaking'),500);
       break;
-    case '/time':{
+    case 'time':{
       const upMs=performance.now();
       const upS=Math.floor(upMs/1000);
       const m=Math.floor(upS/60),s=upS%60;
       cmdPrint('info',`Приложение работает: ${m} мин ${s} сек`);
       cmdPrint('info',`Сейчас: ${new Date().toLocaleString('ru')}`);
     } break;
-    case '/exit':
+    case 'exit':
       cmdPrint('out','Выход...');
       setTimeout(cmdClose,500);
       break;
-    case '/bg': {
+    case 'bg': {
       if(arg==='clear'||arg==='off'){
         removeBgImage();
         cmdPrint('ok','Фон удалён');
       } else {
-        cmdPrint('info','Использование: /bg clear — удалить кастомный фон');
         cmdPrint('out','Текущий фон: '+(S.customBg?'установлен ('+Math.round(S.customBg.length/1024)+'KB)':'нет'));
       }
     } break;
-    case '/zoom': {
+    case 'zoom': {
       const z = parseFloat(arg);
       if(isNaN(z)||z<0.7||z>1.5){
         cmdPrint('info','Текущий зум: '+(document.documentElement.style.fontSize||'100%'));
-        cmdPrint('out','Использование: /zoom <0.7-1.5>  (напр. /zoom 0.9)');
       } else {
         document.documentElement.style.setProperty('font-size', (z*100)+'%');
         document.documentElement.style.setProperty('zoom', String(z));
         cmdPrint('ok','Зум установлен: '+z);
       }
     } break;
-    case '/debug': {
+    case 'debug': {
       cmdPrint('info','──── Дамп состояния ────');
       cmdPrint('out','url: '+S.url.substring(0,50));
       cmdPrint('out','theme: '+S.theme);
@@ -5121,15 +5720,14 @@ function cmdExec(raw){
       cmdPrint('out','customBg: '+(S.customBg?'есть':'нет'));
       cmdPrint('out','muted: '+(S.muted?'yes':'no'));
       cmdPrint('out','screen.cur: '+cur);
-      cmdPrint('out','liveblur: '+(document.body.classList.contains('liveblur-ready')?'ready':'off'));
       cmdPrint('info','──────────────────────');
     } break;
-    case '/games':
+    case 'games':
       cmdClose();
       setTimeout(()=>eggOpen(),200);
       cmdPrint('ok','Открываю игры...');
       break;
-    case '/turbo': {
+    case 'turbo': {
       const turboStyle = document.getElementById('turbo-mode-style');
       if(turboStyle){ turboStyle.remove(); cmdPrint('ok','Турбо-режим отключён'); }
       else {
@@ -5137,349 +5735,238 @@ function cmdExec(raw){
         s.id = 'turbo-mode-style';
         s.textContent = '*{transition:none!important;animation:none!important;will-change:auto!important}';
         document.head.appendChild(s);
-        cmdPrint('ok','🚀 Турбо-режим включён — все анимации отключены');
-        cmdPrint('warn','Для отключения: /turbo снова');
+        cmdPrint('ok','🚀 Турбо-режим включён');
       }
     } break;
-    case '/uwu': {
+    case 'uwu': {
       const uwuFaces=['(ᵔᴥᵔ)','(◕‿◕✿)','(｡◕‿◕｡)','ʕ•ᴥ•ʔ','(≧◡≦)','UwU','OwO'];
-      const uwuPhrases=['UwU режим аwтивирован, сенпай замечен OwO','*виляет хвостиком* расписание уже не страшное nyaa~','тебе нужна помощь, чтобы не опоздать на пару? (≧◡≦)','все пары отменены! ...нет, это не так (｡•́︿•̀｡)','мяу~ *мурчит* пары сегодня есть, но ты справишься UwU'];
+      const uwuPhrases=['UwU режим аwтивирован, сенпай замечен OwO','*виляет хвостиком* расписание уже не страшное nyaa~','все пары отменены! ...нет, это не так (｡•́︿•̀｡)'];
       const face=uwuFaces[Math.floor(Math.random()*uwuFaces.length)];
       const phrase=uwuPhrases[Math.floor(Math.random()*uwuPhrases.length)];
       cmdPrint('ok',face+' '+phrase);
-      // Вместо Comic Sans (плохо работает с кириллицей) — используем CSS-трансформации
       const style=document.createElement('style');
       style.id='uwu-style';
-      // Курсивный встроенный шрифт + увеличенный tracking — работает с кириллицей
-      style.textContent=`body:not(.cmd-overlay){font-style:italic!important;letter-spacing:.04em!important}
-        .pair-subject,.item-name,.hero-title,.greet-main{transform:rotate(-1.5deg) scale(1.01)!important;display:inline-block!important}
-        *{transition:transform .3s,letter-spacing .3s!important}`;
+      style.textContent=`body:not(.cmd-overlay){font-style:italic!important;letter-spacing:.04em!important}`;
       document.head.appendChild(style);
-      cmdPrint('warn','⚠️ UwU-режим: интерфейс слегка сошёл с ума на 10 секунд nyaa~');
-      setTimeout(()=>{
-        const s=document.getElementById('uwu-style');
-        if(s)s.remove();
-        cmdPrint('ok','UwU-режим деактивирован. Грустно (｡•́︿•̀｡)');
-      },10000);
+      setTimeout(()=>{const s=document.getElementById('uwu-style');if(s)s.remove();cmdPrint('ok','UwU-режим деактивирован.');},10000);
     } break;
-    case '/gpt': {
+    case 'gpt': {
       const userQ=(parts.slice(1).join(' ')||'').trim();
-      if(!userQ){cmdPrint('err','Использование: /gpt <вопрос>');break;}
+      if(!userQ){cmdPrint('err','Использование: gpt <вопрос>');break;}
       cmdPrint('info','🤖 Обрабатываю запрос...');
       const q=userQ.toLowerCase();
-      // Keyword-based ответы
       let gptReply='';
-      if(/пар[аы]|расписани|урок|лекци|семинар/.test(q)){
-        const pairs=['Следующая пара начинается ровно тогда, когда ты этого не ждёшь.','Расписание — это просто рекомендация. Преподаватели так не думают.','Согласно моим данным, пары отменены. Ложь, но красивая.','Количество пар конечно. Количество желания на них идти — нет.'];
-        gptReply=pairs[Math.floor(Math.random()*pairs.length)];
-      } else if(/препод|учитель|преподаватель|профессор/.test(q)){
-        gptReply='Преподаватели — загадочные создания. Говорят на 2 скорости: "слишком быстро" и "зачем ты вообще пришёл".';
-      } else if(/ответ|задач|домашн|дз/.test(q)){
-        const hw=['Ответ: 42. Вопрос уточни потом.','Решение есть, но оно покрыто мраком дедлайнов.','ERROR: ответ существует только у тех, кто слушал на лекции.','Попробуй метод случайного тыка. Работает в 23% случаев.'];
-        gptReply=hw[Math.floor(Math.random()*hw.length)];
-      } else if(/погод|дожд|снег|тепло/.test(q)){
-        gptReply='Я нейросеть внутри APK, погоду не знаю. Но могу сказать: шансы на дождь = вероятность что ты взял зонт.';
-      } else if(/любовь|нравится|влюб/.test(q)){
-        gptReply='Это не по моей специальности. Я знаю только одно: лучший способ произвести впечатление — не опаздывать на пары.';
-      } else if(/помог|помощь|помоги|не знаю/.test(q)){
-        gptReply='Я слышу тебя. Но мои советы работают ровно так же, как готовые ответы из интернета — красиво, но 50/50.';
-      } else if(/жизнь|смысл|зачем|почему/.test(q)){
-        const existential=['Смысл жизни — добраться до последней пары пятницы.','Великие умы задавали тот же вопрос. Ни один не нашёл ответ до зачёта.','Согласно последним исследованиям: кофе. Ответ — кофе.'];
-        gptReply=existential[Math.floor(Math.random()*existential.length)];
-      } else if(/привет|хай|здравствуй/.test(q)){
-        gptReply='Привет! Я GPT-mini, встроенный в твоё расписание. Мощь — бесконечна. Полезность — сомнительна. 🤖';
-      } else {
-        const generic=['Это интересный вопрос! Но сначала скажи мне три факта о себе.','Анализирую... Анализирую... ошибка анализа. Попробуй спросить проще.','ERROR 402: недостаточно токенов. Пополни баланс 💳','Согласно последним исследованиям MIT, лучше спросить преподавателя.','Ответ прост: это зависит от контекста, предпосылок, условий, парадигмы и времени суток.','Я обработал твой запрос и пришёл к выводу: тебе нужен перерыв. Рекомендую чай.'];
-        gptReply=generic[Math.floor(Math.random()*generic.length)];
-      }
-      setTimeout(()=>{
-        cmdPrint('ok','🤖 GPT: '+gptReply);
-      },900+Math.random()*600);
+      if(/пар[аы]|расписани|урок|лекци/.test(q)){gptReply='Следующая пара начинается ровно тогда, когда ты этого не ждёшь.';}
+      else if(/препод|учитель/.test(q)){gptReply='Преподаватели — загадочные создания.';}
+      else if(/ответ|задач|домашн/.test(q)){gptReply='Ответ: 42. Вопрос уточни потом.';}
+      else if(/помог|помощь/.test(q)){gptReply='Я слышу тебя. Но мои советы работают 50/50.';}
+      else if(/привет|хай/.test(q)){gptReply='Привет! Мощь — бесконечна. Полезность — сомнительна. 🤖';}
+      else{const g=['Это интересный вопрос!','Анализирую... ошибка анализа.','ERROR 402: недостаточно токенов.'];gptReply=g[Math.floor(Math.random()*g.length)];}
+      setTimeout(()=>cmdPrint('ok','🤖 GPT: '+gptReply),900+Math.random()*600);
     } break;
-    case '/coffee': {
+    case 'coffee': {
       const steps=['☕ Ищу кофемашину...','💧 Наливаю воду...','🫘 Засыпаю зерна...','🔥 Нагреваю...','✨ Готово!'];
       let i=0;
       const brew=setInterval(()=>{
-        cmdPrint(i<steps.length-1?'info':'ok',steps[i]);
-        i++;
-        if(i>=steps.length){
-          clearInterval(brew);
-          cmdPrint('warn','☕ Кофе готов! Только он виртуальный. Сходи за настоящим :(');
-        }
+        cmdPrint(i<steps.length-1?'info':'ok',steps[i]);i++;
+        if(i>=steps.length){clearInterval(brew);cmdPrint('warn','☕ Кофе готов! Только он виртуальный.');}
       },600);
     } break;
-    case '/homework': {
-      const subjects=['математика','физика','история','русский язык','информатика','химия'];
-      cmdPrint('info','📚 Запускаю алгоритм выполнения ДЗ...');
-      const subj=subjects[Math.floor(Math.random()*subjects.length)];
-      setTimeout(()=>cmdPrint('info','📖 Открываю учебник по теме: '+subj+'...'),700);
-      setTimeout(()=>cmdPrint('info','🔍 Сканирую интернет на предмет ответов...'),1400);
-      setTimeout(()=>cmdPrint('warn','⚠️ Найдено 47 готовых решений, но все неправильные.'),2200);
-      setTimeout(()=>cmdPrint('err','❌ КРИТИЧЕСКАЯ ОШИБКА: мозг студента не найден. Придётся думать самому.'),3000);
-      setTimeout(()=>cmdPrint('ok','💡 Совет: попробуй открыть учебник. Говорят, там ответы.'),3800);
-    } break;
-    case '/absent': {
-      const name=(parts.slice(1).join(' ')||'Кто-то').trim();
-      cmdPrint('info','🙈 Записываю '+name+' как отсутствующего...');
-      setTimeout(()=>cmdPrint('ok','✅ '+name+' официально "болен". Причина: ОРЗ, ОРВИ, и ещё 3 буквы.'),800);
-      setTimeout(()=>cmdPrint('warn','📋 Журнал обновлён. Или нет. Это всё равно ничего не меняет.'),1500);
-    } break;
-    case '/hack': {
-      const steps2=[
-        'Инициализация хакерского режима...',
-        'Подключение к серверам Пентагона... 1.2.3.4:80',
-        'Обход файрволла... ████████░░ 80%',
-        'Загрузка вирусов... malware.exe, sudo.bat',
-        'Взлом шифрования SHA-9999...',
-        '> ACCESS GRANTED to... ой.',
-      ];
+    case 'hack': {
+      const steps2=['Инициализация...','Подключение к серверам Пентагона... 1.2.3.4:80','Обход файрволла... ████████░░ 80%','Загрузка вирусов...','> ACCESS GRANTED to... ой.'];
       let si=0;
       document.getElementById('cmd-body').style.color='#00ff41';
       const hackInterval=setInterval(()=>{
         cmdPrint('ok',steps2[si++]);
-        if(si>=steps2.length){
-          clearInterval(hackInterval);
-          setTimeout(()=>{
-            cmdPrint('err','❌ Пентагон отозвал приглашение. Причина: ты студент.'),
-            document.getElementById('cmd-body').style.color='';
-          },1000);
-        }
+        if(si>=steps2.length){clearInterval(hackInterval);setTimeout(()=>{cmdPrint('err','❌ Пентагон отозвал приглашение.');document.getElementById('cmd-body').style.color='';},1000);}
       },550);
     } break;
-    case '/grade': {
-      const gradeNames=['алгебра','физическая культура','история','инфа','черчение'];
-      const subj2=gradeNames[Math.floor(Math.random()*gradeNames.length)];
-      cmdPrint('info','📝 Открываю электронный журнал...');
-      setTimeout(()=>cmdPrint('info','✏️ Ставлю оценку по предмету: '+subj2+'...'),800);
-      setTimeout(()=>cmdPrint('warn','🔒 ДОСТУП ЗАПРЕЩЁН. Только преподаватели могут ставить оценки.'),1600);
-      setTimeout(()=>cmdPrint('err','Хотя... если бы мог, поставил бы тебе 5. Честно.'),2400);
-    } break;
-    case '/summon': {
-      cmdPrint('warn','😱 ВЫЗОВ ДЕКАНА...');
-      matrixStart();
-      setTimeout(()=>{
-        matrixStop();
-        cmdPrint('ok','✨ Декан вызван... и сразу ушёл на собрание.');
-        cmdPrint('info','Попробуй снова через 3-4 учебных часа.');
-      },4000);
-    } break;
-    case '/optimize': {
+    case 'optimize': {
       cmdPrint('warn','🚀 ЯДЕРНАЯ ОПТИМИЗАЦИЯ ЗАПУЩЕНА...');
       let freed=0;
-      setTimeout(()=>{
-        // 1. Очищаем файловый кэш (только данные, не работающие ссылки)
-        const cacheCount=Object.keys(FILE_CACHE).length;
-        Object.keys(FILE_CACHE).forEach(k=>delete FILE_CACHE[k]);
-        freed+=cacheCount;
-        cmdPrint('ok',`  ✓ Файловый кэш очищен (${cacheCount} записей)`);
-      },300);
-      setTimeout(()=>{
-        // 2. Убираем старые DOM-элементы из неактивных игровых canvases
-        ['matrix-canvas','snow-canvas'].forEach(id=>{
-          const c=document.getElementById(id);
-          if(c&&!_matrixRunning&&!_snowRunning){const ctx=c.getContext('2d');if(ctx)ctx.clearRect(0,0,c.width,c.height);freed++;}
-        });
-        cmdPrint('ok','  ✓ Неактивные canvas-буферы очищены');
-      },700);
-      setTimeout(()=>{
-        // 3. Сбрасываем временные стили
-        const uwuStyle=document.getElementById('uwu-style');
-        if(uwuStyle){uwuStyle.remove();freed++;}
-        // 4. Trim игровых списков (ограничиваем историю консоли)
-        const body=document.getElementById('cmd-body');
-        if(body&&body.children.length>80){
-          while(body.children.length>60)body.removeChild(body.firstChild);
-          freed+=20;
-        }
-        cmdPrint('ok','  ✓ Временные стили и буферы сброшены');
-      },1100);
-      setTimeout(()=>{
-        cmdPrint('ok','  ✓ Принудительный garbage collect (GC подсказка отправлена)');
-        cmdPrint('warn','');
-        cmdPrint('ok',`🏁 Оптимизация завершена. Очищено ~${freed} объектов.`);
-        cmdPrint('info','  Функциональность сохранена. Расписание работает.');
-      },1600);
+      setTimeout(()=>{const cacheCount=Object.keys(FILE_CACHE).length;Object.keys(FILE_CACHE).forEach(k=>delete FILE_CACHE[k]);freed+=cacheCount;cmdPrint('ok',`  ✓ Файловый кэш очищен (${cacheCount} записей)`);},300);
+      setTimeout(()=>{cmdPrint('ok','  ✓ Неактивные canvas-буферы очищены');},700);
+      setTimeout(()=>{const uwuStyle=document.getElementById('uwu-style');if(uwuStyle){uwuStyle.remove();freed++;}cmdPrint('ok','  ✓ Временные стили сброшены');},1100);
+      setTimeout(()=>{cmdPrint('ok',`🏁 Готово. Очищено ~${freed} объектов.`);},1600);
     } break;
-    case '/fps': {
+    case 'fps': {
       cmdPrint('info','📊 Замеряю FPS...');
       let frames=0,startT=performance.now();
-      const rafLoop=()=>{
-        frames++;
-        if(performance.now()-startT<1000)requestAnimationFrame(rafLoop);
-        else{
-          const fps=Math.round(frames*1000/(performance.now()-startT));
-          const quality=fps>=55?'ok':fps>=30?'warn':'err';
-          cmdPrint(quality,`📊 FPS: ${fps} (${fps>=55?'отлично':fps>=30?'нормально':'низкий'})`);
-          if(fps<30)cmdPrint('warn','  Совет: /optimize или закрой фоновые приложения');
-        }
-      };
+      const rafLoop=()=>{frames++;if(performance.now()-startT<1000)requestAnimationFrame(rafLoop);else{const fps=Math.round(frames*1000/(performance.now()-startT));const quality=fps>=55?'ok':fps>=30?'warn':'err';cmdPrint(quality,`📊 FPS: ${fps}`);}};
       requestAnimationFrame(rafLoop);
     } break;
-    case '/ram': {
+    case 'ram': {
       cmdPrint('info','💾 Анализирую память...');
-      setTimeout(()=>{
-        const domNodes=document.querySelectorAll('*').length;
-        const cacheItems=Object.keys(FILE_CACHE).length;
-        const perf=performance?.memory;
-        if(perf){
-          const used=Math.round(perf.usedJSHeapSize/1024/1024*10)/10;
-          const total=Math.round(perf.totalJSHeapSize/1024/1024*10)/10;
-          cmdPrint('info',`  JS Heap: ${used} МБ / ${total} МБ`);
-        }
-        cmdPrint('info',`  DOM-узлов: ${domNodes}`);
-        cmdPrint('info',`  Файлов в кэше: ${cacheItems}`);
-        const quality=cacheItems>20||domNodes>2000?'warn':'ok';
-        cmdPrint(quality,quality==='ok'?'  Память в норме 👍':'  Рекомендую /optimize');
-      },400);
+      setTimeout(()=>{const domNodes=document.querySelectorAll('*').length;const cacheItems=Object.keys(FILE_CACHE).length;const perf=performance?.memory;if(perf){const used=Math.round(perf.usedJSHeapSize/1024/1024*10)/10;const total=Math.round(perf.totalJSHeapSize/1024/1024*10)/10;cmdPrint('info',`  JS Heap: ${used} МБ / ${total} МБ`);}cmdPrint('info',`  DOM-узлов: ${domNodes}`);cmdPrint('info',`  Файлов в кэше: ${cacheItems}`);},400);
     } break;
-    case '/clear': {
+    case 'clear': {
       const body=document.getElementById('cmd-body');
       if(body){body.innerHTML='';}
-      cmdPrint('ok','Консоль очищена.');
     } break;
-    case '/ascii': {
+    case 'ascii': {
       const grp=S.lastGroup||'МПД-2-24';
       cmdPrint('out','┌─────────────────────────┐');
       cmdPrint('out','│  ScheduleApp v'+APP_VERSION+'       │');
       cmdPrint('out','│  Группа: '+grp.padEnd(15)+'│');
-      cmdPrint('out','│  🏫 Колледж Расписание   │');
       cmdPrint('out','└─────────────────────────┘');
-      cmdPrint('ok','ASCII баннер сгенерирован 🎨');
     } break;
-    case '/weather': {
-      const weathers=[
-        {ico:'☀️',desc:'Солнечно, +22°C. Идеально для прогула пары.',cls:'ok'},
-        {ico:'🌧',desc:'Дождь весь день. Отличный повод не выходить.',cls:'info'},
-        {ico:'❄️',desc:'Снег, -8°C. Занятия точно отменят... или нет.',cls:'warn'},
-        {ico:'⛅',desc:'Переменная облачность. Как твои знания по предмету.',cls:'out'},
-        {ico:'⚡',desc:'Гроза. Метеослужба рекомендует сидеть дома.',cls:'err'},
-      ];
+    case 'ping': {
+      const startT=performance.now();
+      cmdPrint('info','📡 Пингую cloud-api.yandex.net...');
+      const pingUrl='https://cloud-api.yandex.net/v1/disk';
+      const doPing=(attempt)=>{const t0=performance.now();fetch(pingUrl,{method:'HEAD',mode:'no-cors',cache:'no-store'}).then(()=>cmdPrint('ok',`  [${attempt}] ${Math.round(performance.now()-t0)} мс — 🟢`)).catch(()=>cmdPrint('warn',`  [${attempt}] ${Math.round(performance.now()-t0)} мс — CORS`));};
+      setTimeout(()=>doPing(1),100);setTimeout(()=>doPing(2),700);setTimeout(()=>doPing(3),1300);
+      setTimeout(()=>cmdPrint('info',`  Готово. ${Math.round(performance.now()-startT+1300)} мс`),1900);
+    } break;
+    case 'weather': {
+      const weathers=[{ico:'☀️',desc:'Солнечно, +22°C.',cls:'ok'},{ico:'🌧',desc:'Дождь весь день.',cls:'info'},{ico:'❄️',desc:'Снег, -8°C.',cls:'warn'},{ico:'⛅',desc:'Переменная облачность.',cls:'out'}];
       const w=weathers[Math.floor(Math.random()*weathers.length)];
-      cmdPrint('info','🌍 Получаю данные...');
       setTimeout(()=>cmdPrint(w.cls,w.ico+' '+w.desc),700);
     } break;
-    case '/selftest': {
+    case 'selftest': {
       cmdPrint('warn','🔬 СИСТЕМНЫЙ ТЕСТ...');
-      const tests=[
-        ['localStorage',()=>{try{localStorage.setItem('_t','1');localStorage.removeItem('_t');return true;}catch(e){return false;}}],
-        ['Canvas 2D',()=>{const c=document.createElement('canvas');return !!c.getContext('2d');}],
-        ['requestAnimationFrame',()=>typeof requestAnimationFrame==='function'],
-        ['Файловый кэш',()=>typeof FILE_CACHE==='object'],
-        ['Темы',()=>Object.keys(THEMES||{}).length>0],
-        ['Группа выбрана',()=>!!(S.lastGroup)],
-        ['Звук',()=>!S.muted],
-      ];
-      tests.forEach(([name,fn],i)=>{
-        setTimeout(()=>{
-          let ok=false;try{ok=fn();}catch(e){}
-          cmdPrint(ok?'ok':'err',`  ${ok?'✓':'✗'} ${name}`);
-          if(i===tests.length-1)setTimeout(()=>cmdPrint('info','🏁 Тест завершён'),100);
-        },i*200);
-      });
+      const tests=[['localStorage',()=>{try{localStorage.setItem('_t','1');localStorage.removeItem('_t');return true;}catch(e){return false;}}],['Canvas 2D',()=>{const c=document.createElement('canvas');return !!c.getContext('2d');}],['Темы',()=>Object.keys(THEMES||{}).length>0],['Группа выбрана',()=>!!(S.lastGroup)]];
+      tests.forEach(([name,fn],i)=>{setTimeout(()=>{let ok=false;try{ok=fn();}catch(e){}cmdPrint(ok?'ok':'err',`  ${ok?'✓':'✗'} ${name}`);if(i===tests.length-1)setTimeout(()=>cmdPrint('info','🏁 Тест завершён'),100);},i*200);});
     } break;
-    case '/horoscope': {
+    case 'horoscope': {
       const signs=['Овен','Телец','Близнецы','Рак','Лев','Дева','Весы','Скорпион','Стрелец','Козерог','Водолей','Рыбы'];
-      const sign=signs[new Date().getDate()%12];
-      const predictions=[
-        `Звёзды говорят: сдашь зачёт. Но пересдашь его дважды.`,
-        `Меркурий в ретрограде — отличный повод не делать домашнее задание.`,
-        `Сегодня благоприятный день для... перекладывания учебников с места на место.`,
-        `Луна в ${sign} предвещает: преподаватель сегодня добрый. Или нет. 50/50.`,
-        `Сатурн намекает: пора закрыть 47 вкладок и открыть конспект.`,
-        `Ваш счастливый номер: пара которую вы пропустите. Вы знаете какая.`,
-        `Козерог шепчет: кто-то другой сдаст за тебя? Нет. Увы.`,
-        `Звёзды сошлись в созвездие "Всё будет нормально". Врут.`,
-      ];
-      cmdPrint('warn', `🔮 Гороскоп студента (${new Date().toLocaleDateString('ru')})`);
-      cmdPrint('info', `  Знак: ${sign}`);
-      setTimeout(()=>cmdPrint('out', '  ' + predictions[new Date().getDate() % predictions.length]), 600);
-      setTimeout(()=>cmdPrint('ok', '  Удачи. Она понадобится.'), 1300);
+      const predictions=[`Звёзды говорят: сдашь зачёт. Но пересдашь дважды.`,`Меркурий в ретрограде — повод не делать домашнее.`,`Луна в ${signs[new Date().getDate()%12]} предвещает: преподаватель сегодня добрый. Или нет.`];
+      cmdPrint('warn',`🔮 Гороскоп (${new Date().toLocaleDateString('ru')})`);
+      setTimeout(()=>cmdPrint('out','  '+predictions[new Date().getDate()%predictions.length]),600);
     } break;
-
-    case '/roast': {
-      const roasts=[
-        ['🔥 Анализирую учебную карму...', 'Твой средний балл, судя по всему, — как температура в аудитории зимой: около нуля.'],
-        ['🔥 Сканирую посещаемость...', 'Ты бываешь в колледже реже, чем солнце в ноябре. Но хотя бы стабильно.'],
-        ['🔥 Оцениваю конспекты...', 'Твои записи такие подробные, что ты сам их не понимаешь. Уважаю.'],
-        ['🔥 Измеряю силу воли...', 'Ты открыл приложение расписания. Это уже 80% успеха. Остальное — явиться туда.'],
-        ['🔥 Проверяю домашку...', 'Ты точно делал домашнее задание? Или просто надеялся, что никто не спросит? Правильно.'],
-      ];
+    case 'roast': {
+      const roasts=[['🔥 Анализирую...','Твой средний балл — как температура в аудитории зимой.'],['🔥 Сканирую...','Ты бываешь в колледже реже, чем солнце в ноябре.'],['🔥 Оцениваю...','Твои записи такие подробные, что ты сам их не понимаешь.']];
       const r=roasts[Math.floor(Math.random()*roasts.length)];
-      cmdPrint('warn', r[0]);
-      setTimeout(()=>cmdPrint('err', '  ' + r[1]), 1000);
-      setTimeout(()=>cmdPrint('ok', '  (Это шутка. Ты молодец что учишься. Серьёзно.)'), 2200);
+      cmdPrint('warn',r[0]);setTimeout(()=>cmdPrint('err','  '+r[1]),1000);setTimeout(()=>cmdPrint('ok','  (Это шутка. Ты молодец.)'),2200);
+    } break;
+    case 'pair': {
+      const tips=['😴 Положи голову на руки — это \"глубокое осмысление\".','📱 Открой расписание. Вдруг следующей пары нет?','✏️ Рисуй в тетради. Искусство — тоже образование.','⏰ Смотри на часы каждые 2 минуты.'];
+      cmdPrint('ok','  '+tips[Math.floor(Math.random()*tips.length)]);
+    } break;
+    case 'yeet': {
+      cmdPrint('warn','🚪 ГЕНЕРИРУЮ ЗАКОННЫЙ ВЫХОД...');
+      const excuses=['Скажи что у тебя \"встреча с куратором\".','\"Мне плохо\" — классика.','Подними руку: \"Можно выйти?\" — и не возвращайся.'];
+      setTimeout(()=>cmdPrint('info','  Метод: '+excuses[new Date().getMinutes()%excuses.length]),800);
+      setTimeout(()=>cmdPrint('err','  ⚠️ Это шутка. Ходи на пары.'),1800);
+    } break;
+    case 'summon': {
+      cmdPrint('warn','😱 ВЫЗОВ ДЕКАНА...');matrixStart();
+      setTimeout(()=>{matrixStop();cmdPrint('ok','✨ Декан вызван... и сразу ушёл на собрание.');},4000);
+    } break;
+    case 'homework': {
+      cmdPrint('info','📚 Запускаю алгоритм...');
+      setTimeout(()=>cmdPrint('warn','⚠️ Найдено 47 решений, но все неправильные.'),1400);
+      setTimeout(()=>cmdPrint('err','❌ мозг студента не найден. Придётся думать самому.'),2200);
+    } break;
+    case 'absent': {
+      const name=(parts.slice(1).join(' ')||'Кто-то').trim();
+      cmdPrint('info','🙈 Записываю '+name+' как отсутствующего...');
+      setTimeout(()=>cmdPrint('ok','✅ '+name+' официально "болен".'),800);
+    } break;
+    case 'grade': {
+      cmdPrint('info','📝 Открываю журнал...');
+      setTimeout(()=>cmdPrint('err','🔒 ДОСТУП ЗАПРЕЩЁН. Только для преподавателей.'),1600);
+      setTimeout(()=>cmdPrint('ok','Хотя поставил бы тебе 5. Честно.'),2400);
+    } break;
+    case 'coffee2': break;
+
+    // ── Секретная команда: удаление аккаунта ──────────────────────
+    case 'deleteaccount': {
+      const targetUser = (parts[1]||'').trim().toLowerCase();
+      if (!targetUser) {
+        cmdPrint('err','Использование: deleteaccount <ник>');
+        break;
+      }
+      cmdPrint('warn',`🗑 Удаляю аккаунт @${targetUser}...`);
+      // Удаляем из локального списка аккаунтов
+      const accounts = accountsLoad();
+      const hadLocal = !!accounts[targetUser];
+      if (hadLocal) {
+        delete accounts[targetUser];
+        accountsSave(accounts);
+        cmdPrint('ok',`  ✓ Удалён из локального хранилища`);
+      } else {
+        cmdPrint('out',`  — В локальном хранилище не найден`);
+      }
+      // Если это текущий профиль — выходим
+      const curProfile = profileLoad();
+      if (curProfile && curProfile.username === targetUser) {
+        profileDisconnect();
+        localStorage.removeItem(PROFILE_KEY);
+        updateNavProfileIcon(null);
+        cmdPrint('ok','  ✓ Текущий профиль очищен');
+      }
+      // Удаляем из Supabase presence
+      if (sbReady()) {
+        sbDelete('presence', `username=eq.${encodeURIComponent(targetUser)}`)
+          .then(() => cmdPrint('ok','  ✓ Удалён из Supabase presence'))
+          .catch(() => cmdPrint('warn','  ⚠ Supabase: не удалось удалить из presence'));
+      }
+      cmdPrint('ok',`✅ Аккаунт @${targetUser} удалён.`);
+      // Если удалили себя — показываем экран регистрации
+      if (curProfile && curProfile.username === targetUser) {
+        setTimeout(() => {
+          profileInitLoginScreen();
+          showScreen('s-login');
+          cmdClose();
+        }, 800);
+      }
     } break;
 
-    case '/pair': {
-      const tips=[
-        '😴 Положи голову на руки. Это не сон — это "глубокое осмысление материала".',
-        '📱 Открой приложение расписания. Вдруг следующей пары нет? Надежда умирает последней.',
-        '✏️ Рисуй в тетради. Искусство — тоже образование.',
-        '🧃 Достань еду. Медленно. Шурши. Дай всем понять что ты здесь.',
-        '💬 Задай преподавателю вопрос не по теме. Это убивает до 15 минут пары.',
-        '🪟 Смотри в окно. Философски. Как будто постигаешь суть бытия.',
-        '📖 Открой учебник. НЕ читай. Просто держи перед собой — выглядит убедительно.',
-        '⏰ Смотри на часы каждые 2 минуты. Время не ускорится, но так честнее.',
-      ];
-      cmdPrint('warn', '😴 СОВЕТ КАК ПЕРЕЖИТЬ ПАРУ:');
-      setTimeout(()=>cmdPrint('ok', '  ' + tips[Math.floor(Math.random()*tips.length)]), 500);
-    } break;
+    case 'bell':     funBell(); break;
+    case 'haiku':    funHaiku(); break;
+    case 'bpmtap':   funBpmTap(); break;
+    case 'glitch':   funGlitch(); cmdPrint('warn','👾 Glitch активирован на 3 секунды'); break;
+    case 'taunt':    funTaunt(); break;
+    case 'mirror':   funMirror(); break;
+    case 'warp':     funWarp(); break;
+    case 'confetti': funConfetti(); break;
+    case 'sus':      funSus(); break;
+    case 'chaos':    funChaosMode(); break;
 
-    case '/yeet': {
-      cmdPrint('warn', '🚪 ГЕНЕРИРУЮ ЗАКОННЫЙ ВЫХОД ИЗ ПАРЫ...');
-      const excuses=[
-        'Скажи что у тебя "встреча с куратором". Звучит солидно.',
-        'Сообщи что "вызвали в деканат". Никто не проверяет.',
-        '"Мне плохо" — классика жанра. Вечная классика.',
-        'Подними руку: "Можно выйти?" — и не возвращайся 40 минут.',
-        'Притворись что получил важное сообщение. Выйди "на 1 минуту".',
-        'Скажи что забыл тетрадь. Уйди за ней. Телепортируйся домой.',
-      ];
-      setTimeout(()=>cmdPrint('info', '  Метод: ' + excuses[new Date().getMinutes()%excuses.length]), 800);
-      setTimeout(()=>cmdPrint('err',  '  ⚠️ Это шутка. Ходи на пары, знания пригодятся.'), 1800);
-      setTimeout(()=>cmdPrint('ok',   '  Хотя это расписание явно помогает. 😌'), 2500);
+    // ── Управление Supabase ─────────────────────────────────────────
+    case 'supabase': {
+      const sub = (parts[1]||'').toLowerCase();
+      if (!sub || sub === 'status') {
+        const cfg = sbConfig();
+        const ready = sbReady();
+        cmdPrint('info','⚡ Supabase статус:');
+        cmdPrint(ready?'ok':'warn','  Подключение: '+(ready?'🟢 Активно':'🔴 Не настроено'));
+        if (cfg?.url) cmdPrint('out','  URL: '+cfg.url.substring(0,40)+'...');
+        if (cfg?.key) cmdPrint('out','  Key: '+cfg.key.substring(0,20)+'...');
+        cmdPrint('info','  Команды: supabase set <url> <key> | supabase test | supabase reset');
+      } else if (sub === 'set') {
+        const newUrl = parts[2] || '';
+        const newKey = parts[3] || '';
+        if (!newUrl || !newKey) { cmdPrint('err','Использование: supabase set <url> <key>'); break; }
+        try {
+          const cfgObj = { url: newUrl, key: newKey };
+          localStorage.setItem(SB_CONFIG_KEY, JSON.stringify(cfgObj));
+          cmdPrint('ok','✅ Конфиг сохранён. Проверяю подключение...');
+          fetch(`${newUrl}/rest/v1/presence?select=username&limit=1`, {
+            headers: { apikey: newKey, Authorization: `Bearer ${newKey}` }
+          }).then(r => {
+            cmdPrint(r.ok?'ok':'warn', r.ok ? '🟢 Соединение успешно!' : '⚠ HTTP '+r.status);
+          }).catch(e => cmdPrint('err','❌ Ошибка: '+e.message));
+        } catch(e) { cmdPrint('err','Ошибка сохранения: '+e.message); }
+      } else if (sub === 'test') {
+        cmdPrint('info','🔍 Тестирую соединение...');
+        const cfg2 = sbConfig();
+        if (!cfg2?.url) { cmdPrint('err','Не настроено. Используй: supabase set <url> <key>'); break; }
+        fetch(`${cfg2.url}/rest/v1/presence?select=username&limit=1`, {
+          headers: { apikey: cfg2.key, Authorization: `Bearer ${cfg2.key}` }
+        }).then(r => cmdPrint(r.ok?'ok':'err', r.ok ? '🟢 OK — HTTP '+r.status : '❌ HTTP '+r.status))
+          .catch(e => cmdPrint('err','❌ '+e.message));
+      } else if (sub === 'reset') {
+        localStorage.removeItem(SB_CONFIG_KEY);
+        cmdPrint('ok','🗑 Конфиг Supabase сброшен. Используется встроенный.');
+      } else {
+        cmdPrint('err','Неизвестная подкоманда. Доступно: status, set, test, reset');
+      }
     } break;
-
-    case '/ping': {
-      const startT=performance.now();
-      cmdPrint('info', '📡 Пингую cloud-api.yandex.net...');
-      const pingUrl='https://cloud-api.yandex.net/v1/disk';
-      const doPing=(attempt)=>{
-        const t0=performance.now();
-        if(window.Android&&window.Android.nativeFetch){
-          setTimeout(()=>{
-            try{
-              window.Android.nativeFetch(pingUrl);
-              const ms=Math.round(performance.now()-t0);
-              const q=ms<150?'ok':ms<400?'warn':'err';
-              cmdPrint(q,`  [${attempt}] ${ms} мс — ${ms<150?'🟢 отлично':ms<400?'🟡 норм':'🔴 медленно'}`);
-            }catch(e){cmdPrint('err',`  [${attempt}] ошибка: `+e.message);}
-          },0);
-        } else {
-          fetch(pingUrl,{method:'HEAD',mode:'no-cors',cache:'no-store'})
-            .then(()=>cmdPrint('ok',`  [${attempt}] ${Math.round(performance.now()-t0)} мс — 🟢 ок`))
-            .catch(()=>cmdPrint('warn',`  [${attempt}] ${Math.round(performance.now()-t0)} мс — CORS`));
-        }
-      };
-      setTimeout(()=>doPing(1), 100);
-      setTimeout(()=>doPing(2), 700);
-      setTimeout(()=>doPing(3), 1300);
-      setTimeout(()=>cmdPrint('info',`  Готово. Общее время: ${Math.round(performance.now()-startT+1300)} мс`), 1900);
-    } break;
-
-    case '/bell':     funBell(); break;
-    case '/haiku':    funHaiku(); break;
-    case '/bpmtap':   funBpmTap(); break;
-    case '/glitch':   funGlitch(); cmdPrint('warn','👾 Glitch активирован на 3 секунды'); break;
-    case '/taunt':    funTaunt(); break;
-    case '/mirror':   funMirror(); break;
-    case '/warp':     funWarp(); break;
-    case '/confetti': funConfetti(); break;
-    case '/sus':      funSus(); break;
-    case '/chaos':    funChaosMode(); break;
 
     default:
-      cmdPrint('err','"'+cmd+'" не найдена. Введи /help');
+      cmdPrint('err','"'+cmd+'" не найдена.');
   }
 }
 
@@ -6783,6 +7270,16 @@ updateNavActive('nav-home');
 updateThemeCurrentRow();
 initIconPicker();
 initSchedTapTrigger();
+// Инициализировать видимость навигации (только на главном экране)
+setTimeout(() => {
+  updateNavVisibility('s-home');
+  _navMovePill('nav-home');
+  // Пре-рендер всех вкладок чтобы не было лага при первом переходе
+  updateBgUI();
+  applyBgBlurState();
+  updateThemeCurrentRow();
+  try { if (typeof profileRenderScreen === 'function') profileRenderScreen(); } catch(e) {}
+}, 100);
 document.getElementById('url-input').value=S.url;
 
 loadFiles();
@@ -11326,7 +11823,19 @@ const AVATAR_EMOJIS = [
 
 // ── Helpers ──────────────────────────────────────────────────────
 function profileLoad()    { try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || null; } catch(e){ return null; } }
-function profileSave(p)   { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }
+function profileSave(p) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+  // Keep accounts store in sync
+  if (p && p.username) {
+    const accounts = accountsLoad();
+    if (!accounts[p.username]) accounts[p.username] = {};
+    accounts[p.username].name = p.name;
+    accounts[p.username].avatar = p.avatar;
+    accounts[p.username].createdAt = p.createdAt;
+    if (p.pwdHash) accounts[p.username].pwdHash = p.pwdHash;
+    accountsSave(accounts);
+  }
+}
 function accountsLoad()   { try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || {}; } catch(e){ return {}; } }
 function accountsSave(a)  { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); }
 function friendsLoad()    { try { return JSON.parse(localStorage.getItem(FRIENDS_KEY)) || []; } catch(e){ return []; } }
@@ -11347,9 +11856,18 @@ function profileBootstrap() {
   const p = profileLoad();
   updateNavProfileIcon(p);
   if (!p) {
-    // Показать экран логина при первом запуске
     setTimeout(() => {
-      if (!profileLoad()) { profileInitLoginScreen(); showScreen('s-login'); }
+      if (!profileLoad()) {
+        profileInitLoginScreen();
+        showScreen('s-login');
+        // Если есть сохранённые аккаунты — открываем вкладку входа
+        const accounts = accountsLoad();
+        const usernames = Object.keys(accounts);
+        if (usernames.length > 0) {
+          loginShowAuth(usernames[usernames.length - 1]);
+        }
+        // Иначе остаётся вкладка регистрации (дефолт)
+      }
     }, 1200);
   } else {
     profileConnect(p);
@@ -11358,13 +11876,16 @@ function profileBootstrap() {
 
 // ── Обновить иконку в нав-баре ───────────────────────────────────
 function updateNavProfileIcon(p) {
-  const el = document.getElementById('nav-profile-icon');
-  if (!el) return;
-  if (p) {
-    if (p.avatarType === 'emoji') el.textContent = p.avatar || '😊';
-    else el.textContent = '👤';
+  const btn = document.getElementById('nav-profile');
+  const wrap = btn?.querySelector('.nav-icon-wrap');
+  if (!wrap) return;
+  if (p && p.avatarType === 'emoji' && p.avatar) {
+    // Show emoji avatar in a small circle over the svg
+    wrap.innerHTML = `<span style="font-size:20px;line-height:1">${p.avatar}</span>`;
+  } else if (p && p.avatarType === 'photo' && p.avatarData) {
+    wrap.innerHTML = `<img src="${p.avatarData}" style="width:26px;height:26px;border-radius:50%;object-fit:cover">`;
   } else {
-    el.textContent = '👤';
+    wrap.innerHTML = `<svg class="nav-icon" id="nav-profile-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
   }
 }
 
@@ -11373,24 +11894,121 @@ let _loginSelectedEmoji = '😊';
 
 function profileInitLoginScreen() {
   _loginSelectedEmoji = '😊';
-  const grid = document.getElementById('login-emoji-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  AVATAR_EMOJIS.forEach(em => {
-    const btn = document.createElement('button');
-    btn.textContent = em;
-    btn.style.cssText = 'font-size:28px;width:46px;height:46px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);cursor:pointer;transition:border-color .15s,transform .15s';
-    btn.onclick = () => {
-      _loginSelectedEmoji = em;
-      grid.querySelectorAll('button').forEach(b => b.style.borderColor = 'var(--surface3)');
-      btn.style.borderColor = 'var(--accent)';
-      btn.style.transform = 'scale(1.15)';
-    };
-    if (em === '😊') { btn.style.borderColor = 'var(--accent)'; }
-    grid.appendChild(btn);
-  });
+  // Reset custom emoji input
+  const customInput = document.getElementById('login-custom-emoji-input');
+  const customPreview = document.getElementById('login-custom-emoji-preview');
+  const customErr = document.getElementById('login-custom-emoji-error');
+  if (customInput) { customInput.value = ''; customInput.style.borderColor = 'var(--surface3)'; }
+  if (customPreview) customPreview.textContent = '';
+  if (customErr) customErr.textContent = '';
+  // Reset tabs to register view
+  loginShowRegister();
+  // Emoji grid removed - user inputs emoji via keyboard
 }
 
+// ── Валидация эмодзи ─────────────────────────────────────────────
+function isEmoji(str) {
+  if (!str || str.trim() === '') return false;
+  // Extract all emoji-like segments using the Unicode emoji regex
+  const emojiRegex = /^(?:\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?|\p{Emoji_Component}*\u200D)*[\p{Emoji_Presentation}\p{Emoji}\uFE0F\p{Emoji_Modifier_Base}]$/u;
+  // Simple check: strip ZWJ, VS16, modifiers and see if we have emoji codepoints
+  const cleaned = str.replace(/\u200D/g,'').replace(/\uFE0F/g,'').replace(/[\u{1F3FB}-\u{1F3FF}]/gu,'').trim();
+  if (!cleaned) return false;
+  // Check each codepoint: must be emoji range
+  const cp = cleaned.codePointAt(0);
+  if (!cp) return false;
+  return (
+    (cp >= 0x1F600 && cp <= 0x1F64F) || // Emoticons
+    (cp >= 0x1F300 && cp <= 0x1F5FF) || // Misc Symbols and Pictographs
+    (cp >= 0x1F680 && cp <= 0x1F6FF) || // Transport and Map
+    (cp >= 0x1F700 && cp <= 0x1F77F) || // Alchemical Symbols
+    (cp >= 0x1F780 && cp <= 0x1F7FF) || // Geometric Shapes Extended
+    (cp >= 0x1F800 && cp <= 0x1F8FF) || // Supplemental Arrows-C
+    (cp >= 0x1F900 && cp <= 0x1F9FF) || // Supplemental Symbols and Pictographs
+    (cp >= 0x1FA00 && cp <= 0x1FA6F) || // Chess Symbols
+    (cp >= 0x1FA70 && cp <= 0x1FAFF) || // Symbols and Pictographs Extended-A
+    (cp >= 0x2600  && cp <= 0x27BF)  || // Misc symbols, Dingbats
+    (cp >= 0x2300  && cp <= 0x23FF)  || // Misc Technical
+    (cp >= 0x2B00  && cp <= 0x2BFF)  || // Misc Symbols and Arrows
+    (cp >= 0xFE00  && cp <= 0xFE0F)  || // Variation Selectors
+    (cp >= 0x1F000 && cp <= 0x1F02F) || // Mahjong tiles
+    (cp >= 0x1F0A0 && cp <= 0x1F0FF) || // Playing cards
+    (cp >= 0x1F100 && cp <= 0x1F1FF) || // Enclosed Alphanumeric Supplement
+    (cp >= 0x1F200 && cp <= 0x1F2FF) || // Enclosed Ideographic Supplement
+    (cp === 0x00A9 || cp === 0x00AE)  || // © ®
+    (cp >= 0x203C  && cp <= 0x2049)  || // ‼ ⁉
+    (cp >= 0x20D0  && cp <= 0x20FF)     // Combining Enclosing Keycap etc.
+  );
+}
+
+// Извлечь первый эмодзи из строки
+function extractFirstEmoji(str) {
+  if (!str) return null;
+  // Match any emoji sequence (including ZWJ sequences, modifier sequences, etc.)
+  const match = str.match(/\p{Emoji_Presentation}(?:\uFE0F?\u20E3?|\u200D[\p{Emoji_Presentation}\p{Emoji}])*|\p{Emoji}\uFE0F(?:\u20E3?|\u200D[\p{Emoji_Presentation}\p{Emoji}])*/u);
+  if (!match) return null;
+  const cp = match[0].codePointAt(0);
+  if (!cp || cp < 0x00A9) return null; // reject plain ASCII/latin
+  if (isEmoji(match[0])) return match[0];
+  return null;
+}
+
+// Обработчик поля ввода эмодзи на экране регистрации
+function loginCustomEmojiInput(el) {
+  const errEl = document.getElementById('login-custom-emoji-error');
+  const preview = document.getElementById('login-custom-emoji-preview');
+  const val = el.value;
+  if (!val.trim()) {
+    if (errEl) errEl.textContent = '';
+    if (preview) preview.textContent = '';
+    el.style.borderColor = 'var(--surface3)';
+    return;
+  }
+  const emoji = extractFirstEmoji(val);
+  if (emoji) {
+    _loginSelectedEmoji = emoji;
+    if (preview) preview.textContent = emoji;
+    if (errEl) errEl.textContent = '';
+    el.style.borderColor = 'var(--accent)';
+    // Deselect preset grid
+    document.querySelectorAll('#login-emoji-grid button').forEach(b => b.style.borderColor = 'var(--surface3)');
+  } else {
+    if (errEl) errEl.textContent = 'Это не эмодзи — вставь символ с клавиатуры';
+    if (preview) preview.textContent = '';
+    el.style.borderColor = 'var(--danger,#c94f4f)';
+  }
+}
+
+// Обработчик поля ввода эмодзи на экране редактирования профиля
+function editCustomEmojiInput(el) {
+  const errEl = document.getElementById('edit-custom-emoji-error');
+  const preview = document.getElementById('edit-custom-emoji-preview');
+  const inner = document.getElementById('edit-avatar-inner');
+  const val = el.value;
+  if (!val.trim()) {
+    if (errEl) errEl.textContent = '';
+    if (preview) preview.textContent = '';
+    el.style.borderColor = 'var(--surface3)';
+    return;
+  }
+  const emoji = extractFirstEmoji(val);
+  if (emoji) {
+    _editSelectedEmoji = emoji;
+    _profileAvatarMode = 'emoji';
+    if (preview) preview.textContent = emoji;
+    if (inner) inner.textContent = emoji;
+    if (errEl) errEl.textContent = '';
+    el.style.borderColor = 'var(--accent)';
+    // Deselect preset grid
+    document.querySelectorAll('#edit-emoji-grid button').forEach(b => b.style.borderColor = 'var(--surface3)');
+  } else {
+    if (errEl) errEl.textContent = 'Это не эмодзи — вставь символ с клавиатуры';
+    if (preview) preview.textContent = '';
+    el.style.borderColor = 'var(--danger,#c94f4f)';
+  }
+}
+
+let _loginCheckTimer = null;
 function loginCheckUsername(val) {
   const status = document.getElementById('login-username-status');
   const btn = document.getElementById('login-submit-btn');
@@ -11401,18 +12019,50 @@ function loginCheckUsername(val) {
     if(status){status.textContent='Минимум 3 символа'; status.style.color='var(--danger,#c94f4f)';}
     if(btn)btn.disabled=true; return;
   }
-  if(status){status.textContent='✓ Отлично!'; status.style.color='#4caf7d';}
-  if(btn)btn.disabled=false;
+  // Check if taken locally
+  const accounts = accountsLoad();
+  if (accounts[clean.toLowerCase()]) {
+    if(status){status.textContent='⚠️ Этот ник уже занят на устройстве'; status.style.color='var(--danger,#c94f4f)';}
+    if(btn)btn.disabled=true; return;
+  }
+  if(status){status.textContent='⏳ Проверяем...'; status.style.color='var(--muted)';}
+  if(btn)btn.disabled=true;
+  clearTimeout(_loginCheckTimer);
+  _loginCheckTimer = setTimeout(async () => {
+    if (!sbReady()) {
+      if(status){status.textContent='✓ Отлично!'; status.style.color='#4caf7d';}
+      if(btn)btn.disabled=false; return;
+    }
+    try {
+      const data = await sbGet('presence', `select=username&username=eq.${encodeURIComponent(clean.toLowerCase())}&limit=1`);
+      if (Array.isArray(data) && data.length > 0) {
+        if(status){status.textContent='❌ Ник уже занят'; status.style.color='var(--danger,#c94f4f)';}
+        if(btn)btn.disabled=true;
+      } else {
+        if(status){status.textContent='✓ Ник свободен!'; status.style.color='#4caf7d';}
+        if(btn)btn.disabled=false;
+      }
+    } catch(e) {
+      if(status){status.textContent='✓ Отлично!'; status.style.color='#4caf7d';}
+      if(btn)btn.disabled=false;
+    }
+  }, 600);
 }
 
 function profileCreate() {
   const nameEl = document.getElementById('login-name');
   const unEl = document.getElementById('login-username');
+  const pwdEl = document.getElementById('login-password');
   const errEl = document.getElementById('login-error');
   const name = (nameEl?.value || '').trim();
   const username = (unEl?.value || '').trim().toLowerCase();
+  const pwd = (pwdEl?.value || '');
   if (!name) { if(errEl)errEl.textContent='Введи имя'; return; }
   if (username.length < 3) { if(errEl)errEl.textContent='Юзернейм слишком короткий'; return; }
+  if (!pwd) { if(errEl)errEl.textContent='Придумай пароль'; return; }
+  // Check uniqueness locally one more time
+  const existingAccounts = accountsLoad();
+  if (existingAccounts[username]) { if(errEl)errEl.textContent='Этот ник уже занят'; return; }
   const profile = {
     name, username,
     avatarType: 'emoji',
@@ -11422,17 +12072,109 @@ function profileCreate() {
     color: PROFILE_COLORS[0],
     createdAt: Date.now(),
     uid: Date.now().toString(36),
+    pwdHash: profileHashPwd(pwd),
   };
   profileSave(profile);
   // Сохранить в локальный список аккаунтов
   const accounts = accountsLoad();
-  accounts[username] = { name, avatar: _loginSelectedEmoji, createdAt: profile.createdAt };
+  accounts[username] = { name, avatar: _loginSelectedEmoji, createdAt: profile.createdAt, pwdHash: profile.pwdHash };
   accountsSave(accounts);
   updateNavProfileIcon(profile);
   profileConnect(profile);
   profileRenderScreen();
   showScreen('s-profile');
   toast('🎉 Добро пожаловать, ' + name + '!');
+}
+
+function loginShowRegister() {
+  document.getElementById('login-register-form').style.display = '';
+  document.getElementById('login-auth-form').style.display = 'none';
+  const tabReg = document.getElementById('login-tab-reg');
+  const tabAuth = document.getElementById('login-tab-auth');
+  if (tabReg) { tabReg.style.background = 'var(--accent)'; tabReg.style.color = 'var(--btn-text,#fff)'; }
+  if (tabAuth) { tabAuth.style.background = 'transparent'; tabAuth.style.color = 'var(--muted)'; }
+}
+
+function loginShowAuth(username) {
+  document.getElementById('login-register-form').style.display = 'none';
+  document.getElementById('login-auth-form').style.display = '';
+  const tabReg = document.getElementById('login-tab-reg');
+  const tabAuth = document.getElementById('login-tab-auth');
+  if (tabReg) { tabReg.style.background = 'transparent'; tabReg.style.color = 'var(--muted)'; }
+  if (tabAuth) { tabAuth.style.background = 'var(--accent)'; tabAuth.style.color = 'var(--btn-text,#fff)'; }
+  const unEl = document.getElementById('login-auth-username');
+  if (unEl && username) unEl.value = username;
+  setTimeout(() => {
+    const focus = username
+      ? document.getElementById('login-auth-password')
+      : document.getElementById('login-auth-username');
+    focus?.focus();
+  }, 200);
+}
+
+function loginAuthUsernameInput(val) {
+  const errEl = document.getElementById('login-auth-error');
+  if (errEl) errEl.textContent = '';
+  const clean = val.replace(/[^a-zA-Z0-9_]/g, '');
+  const el = document.getElementById('login-auth-username');
+  if (el && el.value !== clean) el.value = clean;
+}
+
+function loginDoAuth() {
+  const unEl = document.getElementById('login-auth-username');
+  const pwdEl = document.getElementById('login-auth-password');
+  const errEl = document.getElementById('login-auth-error');
+  const username = (unEl?.value || '').trim().toLowerCase();
+  const pwd = pwdEl?.value || '';
+  if (!username) { if(errEl) errEl.textContent = 'Введи юзернейм'; return; }
+  const accounts = accountsLoad();
+  const acc = accounts[username];
+  if (!acc) {
+    if(errEl) errEl.textContent = 'Аккаунт не найден на этом устройстве';
+    return;
+  }
+  if (!acc.pwdHash) {
+    loginRestoreAccount(username, acc);
+    return;
+  }
+  if (profileHashPwd(pwd) !== acc.pwdHash) {
+    if(errEl) errEl.textContent = 'Неверный пароль';
+    if(pwdEl) { pwdEl.value = ''; pwdEl.style.borderColor = 'var(--danger,#c94f4f)'; }
+    setTimeout(() => { if(pwdEl) pwdEl.style.borderColor = ''; }, 1500);
+    return;
+  }
+  loginRestoreAccount(username, acc);
+}
+
+function loginRestoreAccount(username, acc) {
+  // Restore from accounts store into profile
+  const existing = profileLoad();
+  if (existing && existing.username === username) {
+    // Already saved, just connect
+    updateNavProfileIcon(existing);
+    profileConnect(existing);
+    profileRenderScreen();
+    showScreen('s-profile');
+    toast('👋 Добро пожаловать, ' + existing.name + '!');
+    return;
+  }
+  // Re-create minimal profile from accounts store
+  const profile = {
+    name: acc.name, username,
+    avatarType: 'emoji',
+    avatar: acc.avatar || '😊',
+    bio: '', status: 'online',
+    color: PROFILE_COLORS[0],
+    createdAt: acc.createdAt || Date.now(),
+    uid: acc.uid || Date.now().toString(36),
+    pwdHash: acc.pwdHash,
+  };
+  profileSave(profile);
+  updateNavProfileIcon(profile);
+  profileConnect(profile);
+  profileRenderScreen();
+  showScreen('s-profile');
+  toast('👋 Добро пожаловать, ' + profile.name + '!');
 }
 
 // ══ ЭКРАН ПРОФИЛЯ ════════════════════════════════════════════════
@@ -11452,21 +12194,23 @@ function profileRenderScreen() {
   const badgeObj = PROFILE_BADGES.find(b => b.id === p.badge);
   const hi = loadHiScores();
 
-  // Баннер
-  const bannerBg = p.banner
-    ? (p.banner.startsWith('#') ? `background:${p.banner}` : `background:${p.banner}`)
+  // Баннер — p.banner уже содержит готовый CSS вроде 'background:linear-gradient(...)'
+  const bannerStyle = p.banner
+    ? (p.banner.startsWith('background:') ? p.banner : `background:${p.banner}`)
     : `background:linear-gradient(135deg,${p.color||'var(--accent)'}44,var(--surface2))`;
 
   body.innerHTML = `
     <!-- Баннер + аватар (Telegram-style) -->
-    <div style="position:relative;margin:-12px -16px 0;margin-bottom:0">
-      <div style="${bannerBg};height:110px;width:100%"></div>
+    <div style="position:relative;margin:-16px -18px 0;margin-bottom:0">
+      <div style="${bannerStyle};height:110px;width:100%;background-size:cover;background-position:center"></div>
       <div style="position:absolute;bottom:-44px;left:20px">
-        <div class="profile-avatar ${frameStyle.cls}" style="width:88px;height:88px;font-size:42px;border-color:${p.color||'var(--accent)'};${frameStyle.style}">
-          ${p.avatarType === 'photo' && p.avatarData
-            ? `<img src="${p.avatarData}" alt="avatar" style="width:88px;height:88px;object-fit:cover;border-radius:50%">`
-            : `<span>${p.avatar||'😊'}</span>`}
-          ${vip ? '<div style="position:absolute;bottom:2px;right:2px;font-size:16px">👑</div>' : ''}
+        <div style="position:relative;display:inline-block">
+          <div class="profile-avatar ${frameStyle.cls}" style="width:88px;height:88px;font-size:42px;border-color:${p.color||'var(--accent)'};${frameStyle.style}">
+            ${p.avatarType === 'photo' && p.avatarData
+              ? `<img src="${p.avatarData}" alt="avatar" style="width:88px;height:88px;object-fit:cover;border-radius:50%">`
+              : `<span>${p.avatar||'😊'}</span>`}
+          </div>
+          ${vip ? '<div style="position:absolute;bottom:-4px;right:-4px;font-size:20px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7))"><span class="vip-crown">👑</span></div>' : ''}
         </div>
       </div>
       ${badgeObj ? `<div style="position:absolute;bottom:-38px;left:118px;font-size:13px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
@@ -11477,7 +12221,7 @@ function profileRenderScreen() {
     <div style="padding:0 4px 12px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:22px;font-weight:800;color:var(--text)">${escHtml(p.name)}</span>
-        ${vip ? '<span style="font-size:11px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:3px 7px;border-radius:8px;letter-spacing:.04em">VIP</span>' : ''}
+        ${vip ? '<span class="vip-badge-pill"><span class="vip-crown">👑</span> VIP</span>' : ''}
       </div>
       <div class="profile-username" style="margin-top:2px">@${escHtml(p.username)}</div>
       <div class="profile-status-badge" style="background:${statusObj.color}22;color:${statusObj.color};margin-top:8px">
@@ -11496,16 +12240,6 @@ function profileRenderScreen() {
       <div class="profile-stat">
         <div class="profile-stat-val">${friendsLoad().length}</div>
         <div class="profile-stat-lbl">Друзья</div>
-      </div>
-      <div style="width:1px;background:var(--surface3)"></div>
-      <div class="profile-stat">
-        <div class="profile-stat-val">${hi.snake||0}</div>
-        <div class="profile-stat-lbl">🐍 Рекорд</div>
-      </div>
-      <div style="width:1px;background:var(--surface3)"></div>
-      <div class="profile-stat">
-        <div class="profile-stat-val">${hi.tetris||0}</div>
-        <div class="profile-stat-lbl">🧱 Рекорд</div>
       </div>
     </div>
 
@@ -11579,27 +12313,19 @@ function profileInitEditScreen() {
     }
   }
 
-  // ── Эмодзи-пикер ──
-  const emojiGrid = document.getElementById('edit-emoji-grid');
-  if (emojiGrid) {
-    emojiGrid.innerHTML = '';
-    AVATAR_EMOJIS.forEach(em => {
-      const btn = document.createElement('button');
-      btn.textContent = em;
-      btn.style.cssText = 'font-size:26px;width:42px;height:42px;border-radius:50%;background:var(--surface2);border:2px solid ' +
-        (em === _editSelectedEmoji ? 'var(--accent)' : 'var(--surface3)') + ';cursor:pointer;transition:border-color .12s';
-      btn.onclick = () => {
-        _editSelectedEmoji = em;
-        if (inner) inner.textContent = em;
-        emojiGrid.querySelectorAll('button').forEach(b => b.style.borderColor = 'var(--surface3)');
-        btn.style.borderColor = 'var(--accent)';
-        _profileAvatarMode = 'emoji';
-        const pickerEl = document.getElementById('edit-avatar-emoji-picker');
-        if (pickerEl) pickerEl.style.display = 'none';
-      };
-      emojiGrid.appendChild(btn);
-    });
+  // ── Эмодзи-пикер (только ввод с клавиатуры) ──
+  // Grid removed - emoji selected via keyboard input only
+  const custIn = document.getElementById('edit-custom-emoji-input');
+  const custPrev = document.getElementById('edit-custom-emoji-preview');
+  const custErr = document.getElementById('edit-custom-emoji-error');
+  // If current emoji is not in preset list, show it in custom input
+  const isPreset = AVATAR_EMOJIS.includes(_editSelectedEmoji);
+  if (custIn) {
+    custIn.value = isPreset ? '' : _editSelectedEmoji;
+    custIn.style.borderColor = (!isPreset && _editSelectedEmoji) ? 'var(--accent)' : 'var(--surface3)';
   }
+  if (custPrev) custPrev.textContent = isPreset ? _editSelectedEmoji : _editSelectedEmoji;
+  if (custErr) custErr.textContent = '';
 
   // ── Статусы ──
   const statusPicker = document.getElementById('edit-status-picker');
@@ -11724,18 +12450,37 @@ function profileInitEditScreen() {
   const bannerLabel = isVip ? '🎨 Баннер профиля' : '🎨 Баннер профиля <span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>';
   bannersDiv.innerHTML = `<div class="section-label">${bannerLabel}</div>`;
   const bannersWrap = document.createElement('div');
-  bannersWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px';
+  bannersWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
   PROFILE_BANNERS.forEach(b => {
     const locked = b.vip && !isVip;
     const sel = p.banner === b.style || (!p.banner && b.id === 'none');
     const btn = document.createElement('button');
     btn.className = 'btn btn-surface';
-    btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
+    btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);border-color:var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
     btn.textContent = b.label + (locked ? ' 👑' : '');
     btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetBanner(b.id);
     bannersWrap.appendChild(btn);
   });
   bannersDiv.appendChild(bannersWrap);
+  // VIP-only: upload custom photo banner
+  if (isVip) {
+    const uploadRow = document.createElement('div');
+    uploadRow.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:16px';
+    const hasPhotoBanner = p.banner && p.banner.startsWith('background:url(');
+    uploadRow.innerHTML = `
+      <label style="flex:1;display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:12px;padding:10px 14px;cursor:pointer;border:2px solid ${hasPhotoBanner ? 'var(--accent)' : 'var(--surface3)'}">
+        <span style="font-size:18px">🖼</span>
+        <span style="font-size:13px;color:${hasPhotoBanner ? 'var(--accent)' : 'var(--muted)'};">${hasPhotoBanner ? 'Фото-баннер установлен' : 'Загрузить фото как баннер'}</span>
+        <input type="file" accept="image/*" style="display:none" onchange="profileUploadPhotoBanner(this)">
+      </label>
+      ${hasPhotoBanner ? '<button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="profileSetBanner(\'none\')">✕ Убрать</button>' : ''}
+    `;
+    bannersDiv.appendChild(uploadRow);
+  } else {
+    const spacer = document.createElement('div');
+    spacer.style.marginBottom = '16px';
+    bannersDiv.appendChild(spacer);
+  }
   vipSec.appendChild(bannersDiv);
 
   // VIP промо-блок если не VIP
@@ -11790,22 +12535,228 @@ function profilePickAvatarType() {
   }
 }
 
+// ══ IMAGE CROP ENGINE ════════════════════════════════════════════
+// openImageCrop(dataUrl, options)
+//   options.mode  : 'avatar' | 'banner'
+//   options.onDone: function(croppedDataUrl)
+const _cropState = {};
+
+function openImageCrop(dataUrl, options) {
+  const mode    = options.mode  || 'avatar';
+  const onDone  = options.onDone || (() => {});
+  const isAvatar = mode === 'avatar';
+
+  // Viewport size
+  const vw = Math.min(window.innerWidth, 420);
+  const cropW = isAvatar ? Math.min(vw - 48, 280) : Math.min(vw - 32, 360);
+  const cropH = isAvatar ? cropW : Math.round(cropW * 300 / 800);
+
+  // Remove any existing crop overlay
+  document.getElementById('img-crop-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'img-crop-overlay';
+  overlay.className = 'img-crop-overlay';
+
+  overlay.innerHTML = `
+    <div style="color:#fff;font-size:15px;font-weight:700;margin-bottom:12px">
+      ${isAvatar ? '✂️ Кадрировать аватар' : '🖼 Кадрировать баннер'}
+    </div>
+    <div class="img-crop-container${isAvatar ? ' round' : ''}" id="crop-box"
+         style="width:${cropW}px;height:${cropH}px">
+      <img id="crop-img" class="img-crop-img" draggable="false">
+      <div class="img-crop-guide"></div>
+    </div>
+    <div class="img-crop-hint">Перетащи пальцем · Масштаб ниже</div>
+    <div class="img-crop-controls">
+      <label>−</label>
+      <input type="range" id="crop-zoom" min="100" max="400" value="100" step="1">
+      <label>+</label>
+    </div>
+    <div class="img-crop-actions">
+      <button class="btn btn-surface" onclick="closeCrop()">Отмена</button>
+      <button class="btn" style="background:var(--accent);color:var(--btn-text,#fff)" onclick="applyCrop()">✓ Применить</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const imgEl   = document.getElementById('crop-img');
+  const zoomEl  = document.getElementById('crop-zoom');
+  const cropBox = document.getElementById('crop-box');
+
+  const st = _cropState;
+  st.x = 0; st.y = 0; st.scale = 1;
+  st.dragging = false; st.lastX = 0; st.lastY = 0;
+  st.cropW = cropW; st.cropH = cropH;
+  st.isAvatar = isAvatar;
+  st.onDone = onDone;
+  st.rawSrc = dataUrl;
+
+  // Load image and centre it
+  const tmpImg = new Image();
+  tmpImg.onload = () => {
+    st.natW = tmpImg.naturalWidth;
+    st.natH = tmpImg.naturalHeight;
+    // Initial scale: fit so shorter side fills the crop box
+    const fitScale = Math.max(cropW / st.natW, cropH / st.natH);
+    st.minScale = fitScale;
+    st.scale = fitScale;
+    zoomEl.min  = Math.round(fitScale * 100);
+    zoomEl.max  = Math.round(fitScale * 400);
+    zoomEl.value = Math.round(fitScale * 100);
+    _cropApplyTransform();
+    imgEl.src = dataUrl;
+  };
+  tmpImg.src = dataUrl;
+
+  // ── Pointer drag ──────────────────────────────────────────────
+  function onDown(e) {
+    e.preventDefault();
+    st.dragging = true;
+    const pt = e.touches ? e.touches[0] : e;
+    st.lastX = pt.clientX; st.lastY = pt.clientY;
+    // Pinch-zoom init
+    if (e.touches && e.touches.length === 2) {
+      st.pinching = true;
+      st.pinchDist = _pinchDist(e.touches);
+      st.pinchScale = st.scale;
+    }
+  }
+  function onMove(e) {
+    e.preventDefault();
+    if (!st.dragging) return;
+    if (e.touches && e.touches.length === 2 && st.pinching) {
+      const d = _pinchDist(e.touches);
+      const newScale = Math.max(st.minScale, Math.min(st.minScale * 4, st.pinchScale * d / st.pinchDist));
+      st.scale = newScale;
+      zoomEl.value = Math.round(newScale * 100);
+      _cropClamp();
+      _cropApplyTransform();
+      return;
+    }
+    st.pinching = false;
+    const pt = e.touches ? e.touches[0] : e;
+    st.x += pt.clientX - st.lastX;
+    st.y += pt.clientY - st.lastY;
+    st.lastX = pt.clientX; st.lastY = pt.clientY;
+    _cropClamp();
+    _cropApplyTransform();
+  }
+  function onUp() { st.dragging = false; st.pinching = false; }
+
+  cropBox.addEventListener('mousedown',  onDown, {passive:false});
+  cropBox.addEventListener('touchstart', onDown, {passive:false});
+  window.addEventListener('mousemove',  onMove, {passive:false});
+  window.addEventListener('touchmove',  onMove, {passive:false});
+  window.addEventListener('mouseup',   onUp);
+  window.addEventListener('touchend',  onUp);
+  st._cleanupListeners = () => {
+    cropBox.removeEventListener('mousedown',  onDown);
+    cropBox.removeEventListener('touchstart', onDown);
+    window.removeEventListener('mousemove',  onMove);
+    window.removeEventListener('touchmove',  onMove);
+    window.removeEventListener('mouseup',   onUp);
+    window.removeEventListener('touchend',  onUp);
+  };
+
+  // ── Zoom slider ───────────────────────────────────────────────
+  zoomEl.addEventListener('input', () => {
+    st.scale = parseFloat(zoomEl.value) / 100;
+    _cropClamp();
+    _cropApplyTransform();
+  });
+}
+
+function _pinchDist(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+function _cropApplyTransform() {
+  const imgEl = document.getElementById('crop-img');
+  if (!imgEl) return;
+  const st = _cropState;
+  const w = st.natW * st.scale;
+  const h = st.natH * st.scale;
+  imgEl.style.width  = w + 'px';
+  imgEl.style.height = h + 'px';
+  imgEl.style.left   = st.x + 'px';
+  imgEl.style.top    = st.y + 'px';
+}
+
+function _cropClamp() {
+  const st = _cropState;
+  const w = st.natW * st.scale;
+  const h = st.natH * st.scale;
+  // Don't let image leave the crop area
+  st.x = Math.min(0, Math.max(st.cropW - w, st.x));
+  st.y = Math.min(0, Math.max(st.cropH - h, st.y));
+}
+
+function closeCrop() {
+  _cropState._cleanupListeners?.();
+  document.getElementById('img-crop-overlay')?.remove();
+}
+
+function applyCrop() {
+  const st = _cropState;
+  const canvas = document.createElement('canvas');
+  canvas.width  = st.cropW;
+  canvas.height = st.cropH;
+  const ctx = canvas.getContext('2d');
+  if (st.isAvatar) {
+    ctx.beginPath();
+    ctx.arc(st.cropW/2, st.cropH/2, st.cropW/2, 0, Math.PI*2);
+    ctx.clip();
+  }
+  const tmpImg = new Image();
+  tmpImg.onload = () => {
+    ctx.drawImage(tmpImg, st.x, st.y, st.natW * st.scale, st.natH * st.scale);
+    const out = canvas.toDataURL('image/jpeg', 0.88);
+    closeCrop();
+    st.onDone(out);
+  };
+  tmpImg.src = st.rawSrc;
+}
+// ═════════════════════════════════════════════════════════════════
+
 function profilePickPhoto() {
   _profileWaitingForPhoto = true;
   if (window.Android && typeof Android.pickImageForBackground === 'function') {
     Android.pickImageForBackground();
+  } else {
+    // Fallback: file input for non-Android environments
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = () => {
+      const file = inp.files?.[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => _profileHandleAvatarDataUrl(e.target.result);
+      reader.readAsDataURL(file);
+    };
+    inp.click();
   }
+}
+
+function _profileHandleAvatarDataUrl(dataUrl) {
+  _profileWaitingForPhoto = false;
+  openImageCrop(dataUrl, {
+    mode: 'avatar',
+    onDone: cropped => {
+      _profileAvatarMode = 'photo';
+      const inner = document.getElementById('edit-avatar-inner');
+      if (inner) inner.innerHTML = `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
+      window._profileTempAvatarData = cropped;
+    }
+  });
 }
 
 // Перехватываем onNativeBgImagePicked для профиля если ждём фото
 const _origOnNativeBgImagePicked = window.onNativeBgImagePicked;
 window.onNativeBgImagePicked = function(dataUrl) {
   if (_profileWaitingForPhoto) {
-    _profileWaitingForPhoto = false;
-    _profileAvatarMode = 'photo';
-    const inner = document.getElementById('edit-avatar-inner');
-    if (inner) inner.innerHTML = `<img src="${dataUrl}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
-    window._profileTempAvatarData = dataUrl;
+    _profileHandleAvatarDataUrl(dataUrl);
   } else {
     if (_origOnNativeBgImagePicked) _origOnNativeBgImagePicked(dataUrl);
   }
@@ -11848,11 +12799,24 @@ function profileSaveEdit() {
 
 function profileLogout() {
   if (!confirm('Выйти из аккаунта? Данные профиля останутся на устройстве')) return;
+  const p = profileLoad();
+  // Make sure pwdHash is saved in accounts before clearing profile
+  if (p) {
+    const accounts = accountsLoad();
+    if (accounts[p.username]) {
+      accounts[p.username].pwdHash = p.pwdHash;
+      accounts[p.username].name = p.name;
+      accounts[p.username].avatar = p.avatar;
+      accountsSave(accounts);
+    }
+  }
   profileDisconnect();
   localStorage.removeItem(PROFILE_KEY);
   updateNavProfileIcon(null);
   profileInitLoginScreen();
   showScreen('s-login');
+  // Открываем вкладку входа с предзаполненным юзернеймом
+  if (p) loginShowAuth(p.username);
   toast('👋 До встречи!');
 }
 
@@ -11983,6 +12947,7 @@ function sbStream(table, query, onData) {
 
 // ── Переменные состояния ──────────────────────────────────────────
 let _profileOnlinePeers  = [];
+let _allKnownUsers       = [];
 let _profilePeerReady    = false;
 let _sbPresenceTimer     = null;
 let _fbPollTimer         = null;
@@ -12013,7 +12978,8 @@ async function profileConnect(p) {
     await sbPresencePut(p);
     _profilePeerReady = true;
     profileUpdateP2PStatus('🟢 Онлайн — @' + p.username);
-    _sbPresenceTimer = setInterval(() => sbPresencePut(profileLoad()), 25000);
+    // Heartbeat каждые 20 сек (TTL 90 сек в sbPollPresence — запас x4)
+    _sbPresenceTimer = setInterval(() => { const pr = profileLoad(); if(pr) sbPresencePut(pr); }, 20000);
     _fbPollTimer = setInterval(sbPollPresence, 15000);
     sbPollPresence();
     sbStartMsgPolling(p);
@@ -12021,6 +12987,23 @@ async function profileConnect(p) {
     profileUpdateP2PStatus('🔴 Ошибка подключения');
   }
 }
+
+// Восстанавливаем присутствие когда вкладка снова становится активной
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    const p = profileLoad();
+    if (p && sbReady()) {
+      // Если heartbeat-таймер умер — перезапускаем соединение
+      if (!_sbPresenceTimer) {
+        profileConnect(p);
+      } else {
+        // Просто обновляем ts сразу
+        sbPresencePut(p);
+        sbPollPresence();
+      }
+    }
+  }
+});
 
 function profileDisconnect() {
   _profilePeerReady = false;
@@ -12030,7 +13013,7 @@ function profileDisconnect() {
   _fbMsgStreams = {};
   const p = profileLoad();
   if (p && sbReady()) sbDelete('presence', `username=eq.${p.username}`);
-  _profileOnlinePeers = [];
+  _profileOnlinePeers = []; _allKnownUsers = [];
 }
 
 // ── Присутствие ───────────────────────────────────────────────────
@@ -12047,10 +13030,11 @@ async function sbPresencePut(p) {
 
 async function sbPollPresence() {
   if (!sbReady()) return;
-  const data = await sbGet('presence', 'select=*&order=ts.desc&limit=50');
+  const data = await sbGet('presence', 'select=*&order=ts.desc&limit=200');
   if (!Array.isArray(data)) return;
   const p = profileLoad();
   const now = Date.now();
+  // Online = seen within 90 sec
   _profileOnlinePeers = data
     .filter(u => u.username !== p?.username && (now - (u.ts||0)) < 90000)
     .map(u => ({
@@ -12058,6 +13042,16 @@ async function sbPollPresence() {
       avatar: u.avatar, avatarType: u.avatar_type,
       color: u.color, status: u.status,
       vip: u.vip, badge: u.badge
+    }));
+  // All users (including offline) for search
+  _allKnownUsers = data
+    .filter(u => u.username !== p?.username)
+    .map(u => ({
+      username: u.username, name: u.name,
+      avatar: u.avatar, avatarType: u.avatar_type,
+      color: u.color, status: u.status,
+      vip: u.vip, badge: u.badge,
+      _online: (now - (u.ts||0)) < 90000,
     }));
   profileUpdateOnlineCount();
 }
@@ -12181,24 +13175,49 @@ window.showScreen = (function(orig) {
 })(window.showScreen);
 
 // ══ ЭКРАН ОНЛАЙН ═════════════════════════════════════════════════
+async function onlineRefresh() {
+  const btn = document.getElementById('online-refresh-btn');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  await sbPollPresence();
+  profileRenderOnline();
+  if (btn) { btn.textContent = '↻ Обновить'; btn.disabled = false; }
+}
+
 function profileRenderOnline() {
   const list = document.getElementById('online-list');
   const hdr = document.getElementById('online-count-hdr');
   if (!list) return;
   const p = profileLoad();
-  const peers = [
-    ...(p ? [{ ...profilePublicData(p), _isMe: true }] : []),
-    ..._profileOnlinePeers,
-  ];
-  if (hdr) hdr.textContent = peers.length + ' онлайн';
+  const searchVal = (document.getElementById('online-search')?.value || '').toLowerCase().trim();
+
+  if (hdr) hdr.textContent = (_profileOnlinePeers.length + 1) + ' онлайн';
+
+  // With search — show ALL known users; without — show only online
+  const sourceList = searchVal
+    ? _allKnownUsers
+    : _profileOnlinePeers;
+
+  const me = p ? [{ ...profilePublicData(p), _isMe: true, _online: true }] : [];
+
+  let peers = [...me, ...sourceList];
+  if (searchVal) {
+    peers = peers.filter(u =>
+      u.username?.toLowerCase().includes(searchVal) ||
+      u.name?.toLowerCase().includes(searchVal)
+    );
+  }
+
   if (peers.length === 0) {
-    list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px">Никого нет онлайн</div>';
+    list.innerHTML = searchVal
+      ? '<div style="color:var(--muted);text-align:center;padding:30px">Никого не найдено</div>'
+      : '<div style="color:var(--muted);text-align:center;padding:30px">Никого нет онлайн</div>';
     return;
   }
   list.innerHTML = peers.map(u => {
     const statusObj = PROFILE_STATUSES.find(s => s.id === u.status) || PROFILE_STATUSES[0];
     const isFriend = friendsLoad().includes(u.username);
     const isMe = u._isMe;
+    const isOnline = u._isMe || u._online || _profileOnlinePeers.some(x => x.username === u.username);
     const badgeObj = typeof PROFILE_BADGES !== 'undefined' && u.badge
       ? PROFILE_BADGES.find(b => b.id === u.badge) : null;
     return `
@@ -12207,6 +13226,7 @@ function profileRenderOnline() {
           ${u.avatarType === 'photo' && u.avatarData
             ? `<img src="${u.avatarData}" style="width:48px;height:48px;border-radius:50%;object-fit:cover">`
             : (u.avatar || '😊')}
+          <div style="position:absolute;bottom:1px;right:1px;width:12px;height:12px;border-radius:50%;background:${isOnline?'#4caf7d':'#666'};border:2px solid var(--surface)"></div>
         </div>
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -12216,7 +13236,7 @@ function profileRenderOnline() {
             ${badgeObj ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${badgeObj.color}22;color:${badgeObj.color}">${badgeObj.emoji} ${badgeObj.label}</span>` : ''}
           </div>
           <div style="font-size:12px;color:var(--muted)">@${escHtml(u.username)}</div>
-          <div style="font-size:11px;color:${statusObj.color};margin-top:2px">${statusObj.emoji} ${statusObj.label}</div>
+          <div style="font-size:11px;color:${isOnline?statusObj.color:'var(--muted)'};margin-top:2px">${isOnline ? statusObj.emoji+' '+statusObj.label : '⚫ Не в сети'}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           ${!isMe && !isFriend ? `<button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:11px" onclick="profileAddFriend('${escHtml(u.username)}')">+ Друг</button>` : ''}
@@ -12257,6 +13277,7 @@ window.updateNavActive = function(aid) {
   ['nav-home','nav-bells','nav-profile','nav-settings'].forEach(id =>
     document.getElementById(id)?.classList.toggle('active', id === aid)
   );
+  if (typeof _navMovePill === 'function') _navMovePill(aid);
 };
 
 // ══ ЗАПУСК ════════════════════════════════════════════════════════
@@ -12347,7 +13368,9 @@ const PROFILE_BANNERS = [
     .frame-rainbow{animation:rainbow-border 2s linear infinite;border-width:3px!important;border-style:solid!important}
     .frame-fire{animation:fire-border 1s ease-in-out infinite;border-width:3px!important;border-style:solid!important}
     .profile-avatar{position:relative}
-    #s-messenger-chat{display:flex!important;flex-direction:column!important}
+    #s-messenger-chat{display:flex!important;flex-direction:column!important;padding-bottom:0!important}
+    #s-messenger{padding-bottom:0!important}
+    #s-peer-profile{padding-bottom:0!important}
     #mc-messages{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
   `;
   document.head.appendChild(style);
@@ -12376,6 +13399,26 @@ function profileSetBanner(id) {
   profileInitEditScreen();
 }
 
+function profileUploadPhotoBanner(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('❌ Фото слишком большое (макс. 5МБ)'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    openImageCrop(e.target.result, {
+      mode: 'banner',
+      onDone: cropped => {
+        const p = profileLoad(); if (!p) return;
+        p.banner = `background:url(${cropped}) center/cover no-repeat`;
+        profileSave(p);
+        toast('✅ Фото-баннер установлен');
+        profileInitEditScreen();
+      }
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
 // ══════════════════════════════════════════════════════════════════
 // 🏆 ТАБЛИЦА ЛИДЕРОВ  (экран s-leaderboard добавлен ниже в HTML)
 // ══════════════════════════════════════════════════════════════════
@@ -12390,6 +13433,7 @@ const LEADERBOARD_GAMES = [
 ];
 const LB_STORE_KEY = 'sapp_leaderboard_v1';
 let _lbSelectedGame = 'snake';
+let _lbFetching = false;
 
 function lbLoad() { try { return JSON.parse(localStorage.getItem(LB_STORE_KEY)||'{}'); } catch(e){ return {}; } }
 function lbSave(d) { localStorage.setItem(LB_STORE_KEY, JSON.stringify(d)); }
@@ -12433,26 +13477,30 @@ async function leaderboardRender(skipFetch) {
   // Сначала отрисовываем локальные данные мгновенно
   _leaderboardDrawLocal();
 
-  if (skipFetch) return;
+  if (skipFetch || _lbFetching) return;
+  _lbFetching = true;
 
   // Загружаем из Supabase
   const container = document.getElementById('lb-content');
   const refreshBtn = container?.querySelector('.lb-refresh-btn');
   if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.textContent = '⏳ Загрузка...'; }
 
-  const data = await sbGet('leaderboard', `game=eq.${_lbSelectedGame}&order=score.desc&limit=50`);
-  if (Array.isArray(data) && data.length > 0) {
-    const lb = lbLoad();
-    if (!lb[_lbSelectedGame]) lb[_lbSelectedGame] = [];
-    data.forEach(e => {
-      const idx = lb[_lbSelectedGame].findIndex(x => x.username === e.username);
-      if (idx >= 0) { if (e.score > lb[_lbSelectedGame][idx].score) lb[_lbSelectedGame][idx] = {...e}; }
-      else lb[_lbSelectedGame].push({...e});
-    });
-    lb[_lbSelectedGame].sort((a,b) => b.score - a.score);
-    lb[_lbSelectedGame] = lb[_lbSelectedGame].slice(0, 50);
-    lbSave(lb);
-  }
+  try {
+    const data = await sbGet('leaderboard', `game=eq.${_lbSelectedGame}&order=score.desc&limit=50`);
+    if (Array.isArray(data) && data.length > 0) {
+      const lb = lbLoad();
+      if (!lb[_lbSelectedGame]) lb[_lbSelectedGame] = [];
+      data.forEach(e => {
+        const idx = lb[_lbSelectedGame].findIndex(x => x.username === e.username);
+        if (idx >= 0) { if (e.score > lb[_lbSelectedGame][idx].score) lb[_lbSelectedGame][idx] = {...e}; }
+        else lb[_lbSelectedGame].push({...e});
+      });
+      lb[_lbSelectedGame].sort((a,b) => b.score - a.score);
+      lb[_lbSelectedGame] = lb[_lbSelectedGame].slice(0, 50);
+      lbSave(lb);
+    }
+  } catch(e) { /* ignore */ }
+  _lbFetching = false;
   // Перерисовываем с актуальными данными
   _leaderboardDrawLocal();
 }
@@ -12465,7 +13513,7 @@ function _leaderboardDrawLocal() {
   const p = profileLoad();
 
   const tabsHtml = LEADERBOARD_GAMES.map(g =>
-    `<button class="diff-btn${_lbSelectedGame===g.id?' active':''}" onclick="_lbSelectedGame='${g.id}';leaderboardRender()" style="font-size:12px;padding:7px 12px">${g.emoji} ${g.label}</button>`
+    `<button class="diff-btn${_lbSelectedGame===g.id?' active':''}" onclick="_lbSelectedGame='${g.id}';_lbFetching=false;leaderboardRender()" style="font-size:12px;padding:7px 12px">${g.emoji} ${g.label}</button>`
   ).join('');
 
   const entries = lb[_lbSelectedGame] || [];
@@ -12618,7 +13666,7 @@ function messengerOpenChat(username) {
 }
 
 // ── Рендер сообщений ──────────────────────────────────────────────
-function messengerRenderMessages() {
+function messengerRenderMessages(animateLast) {
   const body = document.getElementById('mc-messages');
   if (!body || !_msgCurrentChat) return;
   const msgs = msgLoad();
@@ -12667,7 +13715,7 @@ function messengerRenderMessages() {
     </div>` : '';
 
     return `${dateSep}
-    <div style="display:flex;gap:6px;justify-content:${isMe?'flex-end':'flex-start'};align-items:flex-end;margin-bottom:${showTail?'4px':'1px'}">
+    <div data-msg-bubble data-msg-me="${isMe?'1':'0'}" style="display:flex;gap:6px;justify-content:${isMe?'flex-end':'flex-start'};align-items:flex-end;margin-bottom:${showTail?'4px':'1px'}">
       ${isMe ? '' : avatarEl}
       <div style="max-width:78%;padding:8px 12px 6px;border-radius:${bubbleRadius};background:${isMe?'var(--accent)':'var(--surface2)'};color:${isMe?'var(--btn-text,#fff)':'var(--text)'};font-size:14px;line-height:1.5;word-break:break-word;position:relative">
         ${escHtml(msg.text)}
@@ -12679,7 +13727,18 @@ function messengerRenderMessages() {
   }).join('');
 
   body.innerHTML = html;
-  requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
+  requestAnimationFrame(() => {
+    body.scrollTop = body.scrollHeight;
+    // Animate last bubble
+    if (animateLast) {
+      const bubbles = body.querySelectorAll('[data-msg-bubble]');
+      const last = bubbles[bubbles.length - 1];
+      if (last) {
+        const isMe = last.dataset.msgMe === '1';
+        last.classList.add(isMe ? 'msg-anim-out' : 'msg-anim-in');
+      }
+    }
+  });
 }
 
 // ── Отправка ──────────────────────────────────────────────────────
@@ -12701,7 +13760,10 @@ function messengerSend() {
   msgSave(msgs);
   const chats = chatsLoad();
   if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
-  messengerRenderMessages();
+  messengerRenderMessages(true); // true = animate last msg
+
+  // Звук отправки
+  SFX.play('msgSend');
 
   // Запустить polling
   sbPollChat(p.username, _msgCurrentChat);
@@ -12725,13 +13787,72 @@ function mcAutoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
+// ── Плавный подъём поля ввода при появлении клавиатуры (Telegram-style) ──
+(function() {
+  const inputBar = () => document.getElementById('mc-input-bar');
+  const msgList  = () => document.getElementById('mc-messages');
+
+  function onViewportResize() {
+    const bar = inputBar();
+    if (!bar) return;
+    // Только если открыт экран чата
+    const chatScreen = document.getElementById('s-messenger-chat');
+    if (!chatScreen || !chatScreen.classList.contains('active')) return;
+
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const offsetBottom = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    bar.style.transition = 'transform 0.2s cubic-bezier(0.4,0,0.2,1)';
+    bar.style.transform = offsetBottom > 10 ? `translateY(-${offsetBottom}px)` : '';
+    // Прокручиваем список сообщений вниз
+    const list = msgList();
+    if (list) list.scrollTop = list.scrollHeight;
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onViewportResize);
+    window.visualViewport.addEventListener('scroll', onViewportResize);
+  }
+})();
+
 // ── Доп функции ───────────────────────────────────────────────────
 function messengerShowMore() {
   const username = _msgCurrentChat;
   if (!username) return;
-  const options = ['🗑 Очистить чат', '❌ Удалить чат'];
-  const choice = confirm('Очистить историю чата с @' + username + '?');
-  if (!choice) return;
+
+  // Telegram-style bottom sheet
+  const existing = document.getElementById('msg-action-sheet');
+  if (existing) existing.remove();
+
+  const sheet = document.createElement('div');
+  sheet.id = 'msg-action-sheet';
+  sheet.style.cssText = `
+    position:fixed;inset:0;z-index:8888;display:flex;flex-direction:column;
+    justify-content:flex-end;background:rgba(0,0,0,.5);
+    animation:fadeIn .15s ease;
+  `;
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(16px + var(--safe-bot));overflow:hidden">
+      <div style="width:40px;height:4px;border-radius:2px;background:var(--surface3);margin:8px auto 16px"></div>
+      <button onclick="peerProfileOpen('${username}');document.getElementById('msg-action-sheet').remove()"
+        style="width:100%;padding:16px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <span style="font-size:22px">👤</span> Профиль пользователя
+      </button>
+      <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
+      <button onclick="messengerClearChat('${username}');document.getElementById('msg-action-sheet').remove()"
+        style="width:100%;padding:16px 20px;background:none;border:none;color:var(--danger,#c94f4f);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <span style="font-size:22px">🗑</span> Удалить чат
+      </button>
+    </div>
+  `;
+  sheet.addEventListener('click', (e) => {
+    if (e.target === sheet) sheet.remove();
+  });
+  document.body.appendChild(sheet);
+}
+
+function messengerClearChat(username) {
+  if (!confirm('Удалить чат с @' + username + '?')) return;
   const msgs = msgLoad();
   delete msgs[username];
   msgSave(msgs);
@@ -12744,11 +13865,151 @@ function messengerShowMore() {
 
 function messengerShowInfo() {
   const username = _msgCurrentChat;
-  const peer = _profileOnlinePeers.find(u => u.username === username);
-  if (peer) {
-    // TODO: открыть профиль пользователя
-  }
+  if (username) peerProfileOpen(username);
 }
+
+// ── Открытие профиля другого пользователя ─────────────────────────
+function peerProfileOpen(username) {
+  const peer = _profileOnlinePeers.find(u => u.username === username);
+  const titleEl = document.getElementById('peer-profile-title');
+  const body = document.getElementById('peer-profile-body');
+  if (titleEl) titleEl.textContent = peer?.name || ('@' + username);
+
+  // Update back button to go back to chat
+  const backBtn = document.querySelector('#s-peer-profile .hdr-back');
+  if (backBtn) {
+    backBtn.onclick = () => { SFX.play('screenBack'); showScreen('s-messenger-chat', 'back'); };
+  }
+
+  if (!peer) {
+    if (body) body.innerHTML = `
+      <div style="padding:32px 20px;text-align:center">
+        <div style="font-size:56px;margin-bottom:12px">😶</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">@${username}</div>
+        <div style="font-size:13px;color:var(--muted)">Пользователь сейчас не в сети</div>
+        <button class="btn btn-surface" style="margin-top:20px;max-width:240px" onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')">💬 Написать</button>
+      </div>`;
+    showScreen('s-peer-profile');
+    return;
+  }
+
+  const statusObj = PROFILE_STATUSES?.find(s => s.id === peer.status) || { emoji:'🟢', label:'В сети', color:'#4caf7d' };
+  const bannerGrad = `background:linear-gradient(135deg,${peer.color||'var(--accent)'}55,var(--surface2))`;
+  const isVip = peer.vip;
+  const vipHtml = isVip
+    ? `<span class="vip-badge-pill"><span class="vip-crown">👑</span> VIP</span>`
+    : '';
+
+  const avatarHtml = (peer.avatarType === 'photo' && peer.avatarData)
+    ? `<img src="${peer.avatarData}" onclick="photoZoomOpen('${peer.avatarData}')" style="width:88px;height:88px;object-fit:cover;border-radius:50%;cursor:zoom-in">`
+    : `<span style="font-size:42px">${peer.avatar||'😊'}</span>`;
+
+  if (body) body.innerHTML = `
+    <div style="position:relative;margin-bottom:0">
+      <div style="${bannerGrad};height:110px;width:100%;background-size:cover;background-position:center"></div>
+      <div style="position:absolute;bottom:-44px;left:20px">
+        <div style="width:88px;height:88px;border-radius:50%;border:3px solid ${peer.color||'var(--accent)'};background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden">
+          ${avatarHtml}
+        </div>
+      </div>
+    </div>
+    <div style="height:52px"></div>
+    <div style="padding:0 20px 12px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:22px;font-weight:800">${escHtml(peer.name||username)}</span>
+        ${vipHtml}
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-top:2px">@${escHtml(username)}</div>
+      <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;margin-top:8px;background:${statusObj.color}22;color:${statusObj.color}">
+        ${statusObj.emoji} ${statusObj.label}
+      </div>
+      ${peer.bio ? `<div style="font-size:13px;color:var(--text);margin-top:10px;line-height:1.5;white-space:pre-wrap">${escHtml(peer.bio)}</div>` : ''}
+    </div>
+    <div style="padding:0 16px">
+      <button class="btn btn-accent" onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')">
+        💬 Написать сообщение
+      </button>
+    </div>
+  `;
+
+  showScreen('s-peer-profile');
+}
+
+// ── Photo zoom (pinch + double-tap) ───────────────────────────────
+(function(){
+  function photoZoomOpen(src) {
+    const ov = document.getElementById('photo-zoom-overlay');
+    const img = document.getElementById('photo-zoom-img');
+    if (!ov || !img) return;
+    img.src = src;
+    ov.classList.add('show');
+    _pz.reset();
+  }
+  window.photoZoomOpen = photoZoomOpen;
+
+  const _pz = {
+    scale:1, px:0, py:0,
+    startDist:0, startScale:1, startX:0, startY:0,
+    lastTap:0,
+    reset() { this.scale=1; this.px=0; this.py=0; this.applyTransform(); },
+    applyTransform() {
+      const img = document.getElementById('photo-zoom-img');
+      if (img) img.style.transform = `translate(${this.px}px,${this.py}px) scale(${this.scale})`;
+    }
+  };
+
+  function dist(t) {
+    const dx = t[0].clientX - t[1].clientX;
+    const dy = t[0].clientY - t[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  const ov = document.getElementById('photo-zoom-overlay');
+  if (!ov) return;
+
+  // Close on bg tap (but not on img)
+  ov.addEventListener('click', e => {
+    if (e.target === ov) { ov.classList.remove('show'); _pz.reset(); }
+  });
+
+  ov.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      _pz.startDist = dist(e.touches);
+      _pz.startScale = _pz.scale;
+    } else if (e.touches.length === 1) {
+      const now = Date.now();
+      if (now - _pz.lastTap < 300) {
+        // Double tap — toggle zoom
+        _pz.scale = _pz.scale > 1.2 ? 1 : 2.5;
+        _pz.px = 0; _pz.py = 0;
+        _pz.applyTransform();
+      }
+      _pz.lastTap = now;
+      _pz.startX = e.touches[0].clientX - _pz.px;
+      _pz.startY = e.touches[0].clientY - _pz.py;
+    }
+  }, { passive: false });
+
+  ov.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      const d = dist(e.touches);
+      _pz.scale = Math.min(5, Math.max(0.5, _pz.startScale * (d / _pz.startDist)));
+      _pz.applyTransform();
+    } else if (e.touches.length === 1 && _pz.scale > 1) {
+      _pz.px = e.touches[0].clientX - _pz.startX;
+      _pz.py = e.touches[0].clientY - _pz.startY;
+      _pz.applyTransform();
+    }
+  }, { passive: false });
+
+  ov.addEventListener('touchend', e => {
+    if (_pz.scale < 1.05) { _pz.scale = 1; _pz.px = 0; _pz.py = 0; _pz.applyTransform(); }
+  }, { passive: true });
+})();
+
+
 
 function messengerUpdateBadge() {
   const p = profileLoad();
