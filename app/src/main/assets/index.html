@@ -28,6 +28,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--a
   background:var(--bg);
 }
 .screen.active{opacity:1;pointer-events:all;transform:none;transition:none}
+/* Экраны без нижней навигации — не резервируем место под неё */
+.screen.no-nav-padding{padding-bottom:calc(var(--safe-bot) + 16px)!important;}
 /* В glass-режиме убираем compositing layer с домашнего экрана */
 body.glass-mode #s-home.active{
   will-change:auto!important;
@@ -445,6 +447,21 @@ body[data-theme="candy"] {--accent-text:#000}
   opacity:0;z-index:999;max-width:88vw;overflow:hidden;text-overflow:ellipsis
 }
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+/* iOS-style notification banners */
+#ios-notif-container{position:fixed;top:calc(var(--safe-top) + 10px);left:50%;transform:translateX(-50%);z-index:1100;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:calc(100% - 32px);max-width:390px;}
+.ios-notif{width:100%;background:rgba(30,30,30,0.93);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,0.14);border-radius:20px;padding:12px 14px;display:flex;align-items:center;gap:11px;box-shadow:0 8px 40px rgba(0,0,0,0.55);pointer-events:all;cursor:pointer;transform:translateY(-110%) scale(0.88);opacity:0;transition:transform 0.42s cubic-bezier(0.34,1.26,0.64,1),opacity 0.28s ease;will-change:transform;}
+.ios-notif.ios-show{transform:translateY(0) scale(1);opacity:1;}
+.ios-notif.ios-hide{transform:translateY(-110%) scale(0.88);opacity:0;transition:transform 0.32s cubic-bezier(0.4,0,1,1),opacity 0.22s ease;}
+.ios-notif-avatar{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;background:var(--surface3);overflow:hidden;position:relative;}
+.ios-notif-avatar img{width:100%;height:100%;object-fit:cover;border-radius:12px;}
+.ios-notif-app-icon{position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-radius:5px;background:var(--accent);border:1.5px solid rgba(30,30,30,0.9);display:flex;align-items:center;justify-content:center;font-size:9px;}
+.ios-notif-body{flex:1;min-width:0;}
+.ios-notif-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+.ios-notif-app{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.02em;text-transform:uppercase;}
+.ios-notif-time{font-size:11px;color:var(--muted);}
+.ios-notif-sender{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ios-notif-text{font-size:13px;color:rgba(240,237,232,0.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+
 
 /* ── Telegram-style message send animation ── */
 @keyframes msg-fly-in-right {
@@ -2121,7 +2138,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.2 — Android</div>
+        <div class="item-sub" id="app-version-str">4.2.1 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2497,6 +2514,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="ios-notif-container"></div>
 
 <!-- ══ Секретная пасхалка — выбор игры (5 тапов по строке «Версия») ══ -->
 <div class="egg-overlay" id="egg-overlay">
@@ -4711,52 +4729,38 @@ const TRANS_DUR = 280;
 const TRANS_EASE = 'cubic-bezier(0.4,0,0.2,1)';
 
 function _doTransition(prev, next, dir) {
-  const isBack = dir === 'back';
+  const isTabLeft = dir === 'tab-left';
+  const isBack    = dir === 'back';
   const w = window.innerWidth;
 
-  const DECEL = 'cubic-bezier(0.215, 0.61, 0.355, 1.0)'; // easeOutQuart
+  const DECEL = 'cubic-bezier(0.215, 0.61, 0.355, 1.0)';
   const tFwd  = `transform ${TRANS_DUR}ms ${DECEL}, opacity ${Math.round(TRANS_DUR*0.85)}ms ${DECEL}`;
 
-  if (isBack) {
-    setNoTransStyle(next, `translateX(${-w * 0.28}px)`, '0.65');
-    next.style.zIndex = '1';
-    prev.style.zIndex = '2';
+  // Единая модель для ВСЕХ переходов:
+  // prev (уходящий) всегда z:2 — сверху, уезжает в нужную сторону
+  // next (входящий) всегда z:1 — снизу, выезжает из-под prev
 
-    void next.getBoundingClientRect();
+  // Куда уезжает prev и откуда появляется next
+  const prevEndX   = (isBack || isTabLeft) ? w : -w;       // вправо при назад/tab-left, влево при forward
+  const nextStartX = (isBack || isTabLeft) ? -w * 0.28 : w * 0.28;
 
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      prev.style.transition    = tFwd;
-      prev.style.transform     = `translateX(${w}px) translateZ(0)`;
-      prev.style.opacity       = '1';
-      prev.style.pointerEvents = 'none';
-      prev.classList.remove('active');
+  setNoTransStyle(next, `translateX(${nextStartX}px)`, '0.65');
+  next.style.zIndex = '1';
+  prev.style.zIndex = '2';
+  void next.getBoundingClientRect();
 
-      next.style.transition    = tFwd;
-      next.style.transform     = 'translateX(0) translateZ(0)';
-      next.style.opacity       = '1';
-      next.classList.add('active');
-    }));
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    prev.style.transition    = tFwd;
+    prev.style.transform     = `translateX(${prevEndX}px) translateZ(0)`;
+    prev.style.opacity       = '1';
+    prev.style.pointerEvents = 'none';
+    prev.classList.remove('active');
 
-  } else {
-    setNoTransStyle(next, `translateX(${w}px)`, '1');
-    next.style.zIndex = '2';
-    prev.style.zIndex = '1';
-
-    void next.getBoundingClientRect();
-
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      prev.style.transition    = tFwd;
-      prev.style.transform     = `translateX(${-w * 0.28}px) translateZ(0)`;
-      prev.style.opacity       = '0.65';
-      prev.style.pointerEvents = 'none';
-      prev.classList.remove('active');
-
-      next.style.transition    = tFwd;
-      next.style.transform     = 'translateX(0) translateZ(0)';
-      next.style.opacity       = '1';
-      next.classList.add('active');
-    }));
-  }
+    next.style.transition    = tFwd;
+    next.style.transform     = 'translateX(0) translateZ(0)';
+    next.style.opacity       = '1';
+    next.classList.add('active');
+  }));
 
   setTimeout(() => {
     prev.style.cssText = '';
@@ -4804,15 +4808,18 @@ function goHome(){
   }
 }
 
-// navTo с правильным направлением анимации по позиции в TAB_ORDER
+// navTo с правильным направлением: для вкладок всегда "forward" (единая модель),
+// для не-вкладок обычная логика
 const _TAB_ORDER_NAV = ['s-home','s-bells','s-profile','s-settings'];
 function navTo(id, navId) {
+  // Для главных вкладок — всегда единая модель (target сверху)
+  // Направление передаём как 'forward' или 'back' только для _doTransition,
+  // но визуально таб всегда работает по одной модели
   const fromIdx = _TAB_ORDER_NAV.indexOf(cur);
   const toIdx   = _TAB_ORDER_NAV.indexOf(id);
-  let dir = 'forward';
-  if (fromIdx >= 0 && toIdx >= 0) {
-    dir = toIdx > fromIdx ? 'forward' : 'back';
-  }
+  // Передаём dir чтобы _doTransition знал откуда приедет target
+  // forward = справа, back = слева — оба на z:2 сверху
+  const dir = (fromIdx >= 0 && toIdx >= 0 && toIdx < fromIdx) ? 'tab-left' : 'forward';
   showScreen(id, dir);
   updateNavActive(navId);
 }
@@ -4849,10 +4856,20 @@ const NAV_VISIBLE_SCREENS = new Set(['s-home','s-settings','s-bells','s-profile'
 function updateNavVisibility(screenId) {
   const nav = document.getElementById('global-bottom-nav');
   if (!nav) return;
-  if (NAV_VISIBLE_SCREENS.has(screenId)) {
+  const hasNav = NAV_VISIBLE_SCREENS.has(screenId);
+  if (hasNav) {
     nav.classList.remove('nav-hidden');
   } else {
     nav.classList.add('nav-hidden');
+  }
+  // Убираем/добавляем лишний padding-bottom на самом экране
+  const screenEl = document.getElementById(screenId);
+  if (screenEl) {
+    if (hasNav) {
+      screenEl.classList.remove('no-nav-padding');
+    } else {
+      screenEl.classList.add('no-nav-padding');
+    }
   }
 }
 
@@ -4908,6 +4925,7 @@ showScreen = function(id, dir) {
     dir: null,         // 'left' | 'right' | 'down'
     decided: false,
   };
+  let g_lastMode = null; // сохраняется для commitTransition
 
   function getBackTarget() { return BACK_MAP[cur] || null; }
 
@@ -4943,17 +4961,19 @@ showScreen = function(id, dir) {
       toEl.style.transition    = t;
       toEl.style.transform     = 'translateX(0) translateZ(0)';
       toEl.style.opacity       = '1';
-      toEl.style.zIndex        = isBack ? '1' : '2';
+      toEl.style.zIndex        = '1'; // next всегда снизу открывается
       toEl.style.pointerEvents = 'all';
       toEl.classList.add('active');
     }
     if (fromEl) {
+      // prev всегда сверху уезжает — вправо для back/tab-right, влево для tab-left/forward
+      const isLeft = g_lastMode === 'tab-h' && !isBack; // свайп влево = уходим влево
       fromEl.style.transition    = t;
-      fromEl.style.transform     = isBack
-        ? `translateX(${w}px) translateZ(0)`
-        : `translateX(${-w * 0.28}px) translateZ(0)`;
-      fromEl.style.opacity       = isBack ? '1' : '0.65';
-      fromEl.style.zIndex        = isBack ? '2' : '1';
+      fromEl.style.transform     = isLeft
+        ? `translateX(${-w}px) translateZ(0)`
+        : `translateX(${w}px) translateZ(0)`;
+      fromEl.style.opacity       = '1';
+      fromEl.style.zIndex        = '2';
       fromEl.style.pointerEvents = 'none';
       fromEl.classList.remove('active');
     }
@@ -4988,20 +5008,24 @@ showScreen = function(id, dir) {
     const toEl   = g.targetId ? document.getElementById(g.targetId) : null;
     const t = `transform ${dur}ms ${EASE_SNAP}, opacity ${Math.round(dur*0.8)}ms ${EASE_SNAP}`;
 
+    // prev вернулся на место (z:2 остаётся сверху)
     if (fromEl) {
       fromEl.style.transition    = t;
       fromEl.style.transform     = 'translateX(0) translateZ(0)';
       fromEl.style.opacity       = '1';
-      fromEl.style.zIndex        = '';
+      fromEl.style.zIndex        = '2';
       fromEl.style.pointerEvents = 'all';
     }
+    // target уходит обратно на своё место (z:1 снизу)
     if (toEl) {
-      const resetX = g.dir === 'right' ? -W()*0.28 : (g.dir === 'left' ? W() : 0);
-      const resetY = g.dir === 'down'  ? -H()*0.15 : 0;
+      const resetX = g.dir === 'left'  ? W() * 0.28
+                   : g.dir === 'right' ? -W() * 0.28
+                   : 0;
+      const resetY = g.dir === 'down'  ? -H() * 0.15 : 0;
       toEl.style.transition    = t;
       toEl.style.transform     = `translate(${resetX}px,${resetY}px) translateZ(0)`;
-      toEl.style.opacity       = (g.dir === 'down' || g.dir === 'right') ? '0.65' : '1';
-      toEl.style.zIndex        = '';
+      toEl.style.opacity       = '0.65';
+      toEl.style.zIndex        = '1';
       toEl.style.pointerEvents = 'none';
     }
     setTimeout(() => {
@@ -5061,9 +5085,16 @@ showScreen = function(id, dir) {
         // Sub-screens
         const useDown = SWIPE_DOWN_BACK.has(cur);
         if (useDown && ady > adx && dy > 0) {
-          g.mode     = 'back-v';
-          g.dir      = 'down';
-          g.targetId = getBackTarget();
+          // back-v только если скролл-контейнер уже в самом верху
+          const scrollEl = document.querySelector('#' + cur + ' .body');
+          const atTop = !scrollEl || scrollEl.scrollTop <= 4;
+          if (atTop) {
+            g.mode     = 'back-v';
+            g.dir      = 'down';
+            g.targetId = getBackTarget();
+          } else {
+            g.mode = 'scroll';
+          }
         } else if (!useDown && adx > ady && dx > 0) {
           g.mode     = 'back-h';
           g.dir      = 'right';
@@ -5078,15 +5109,10 @@ showScreen = function(id, dir) {
         const targetEl = document.getElementById(g.targetId);
         const fromEl   = document.getElementById(cur);
         if (g.mode === 'tab-h') {
-          if (g.dir === 'left') {
-            // Forward: target comes from right (on top)
-            if (targetEl) { setNoTransition(targetEl); applyT(targetEl, W(), 0, 1, 2); }
-            if (fromEl)   { setNoTransition(fromEl);   fromEl.style.zIndex = '1'; }
-          } else {
-            // Back (right swipe): current is on top sliding right, target peeks from left
-            if (targetEl) { setNoTransition(targetEl); applyT(targetEl, -W()*0.28, 0, 0.65, 1); }
-            if (fromEl)   { setNoTransition(fromEl);   fromEl.style.zIndex = '2'; }
-          }
+          // Единая модель: текущий (prev) z:2 сверху уезжает, цель z:1 снизу появляется
+          const nextStartX = g.dir === 'left' ? w * 0.28 : -w * 0.28;
+          if (targetEl) { setNoTransition(targetEl); applyT(targetEl, nextStartX, 0, 0.65, 1); }
+          if (fromEl)   { setNoTransition(fromEl);   fromEl.style.zIndex = '2'; }
         } else if (g.mode === 'back-h') {
           // Back: current on top, target peeks from left
           if (targetEl) { setNoTransition(targetEl); applyT(targetEl, -W()*0.28, 0, 0.65, 1); }
@@ -5107,19 +5133,13 @@ showScreen = function(id, dir) {
     const targetEl = document.getElementById(g.targetId);
 
     if (g.mode === 'tab-h') {
-      if (g.dir === 'left') {
-        // Forward: target slides in from right (on top), current moves left (below)
-        const clampedDx = Math.min(0, dx); // dx is negative for left swipe
-        const progress = Math.abs(clampedDx) / W();
-        if (fromEl)   applyT(fromEl,   clampedDx, 0, 1 - progress * 0.35, 1);
-        if (targetEl) applyT(targetEl, W() + clampedDx, 0, 1, 2);
-      } else {
-        // Back: current slides right (on top), target reveals from left (below)
-        const clampedDx = Math.max(0, dx);
-        const progress = clampedDx / W();
-        if (fromEl)   applyT(fromEl,   clampedDx, 0, 1, 2);
-        if (targetEl) applyT(targetEl, -W()*0.28*(1-progress), 0, 0.65 + 0.35*progress, 1);
-      }
+      // prev сверху (z:2) следует за пальцем, target снизу (z:1) появляется из-под
+      const clampedDx = g.dir === 'left' ? Math.min(0, dx) : Math.max(0, dx);
+      const progress   = Math.abs(clampedDx) / W();
+      const nextStartX = g.dir === 'left' ? W() * 0.28 : -W() * 0.28;
+
+      if (fromEl)   applyT(fromEl,   clampedDx, 0, 1, 2);
+      if (targetEl) applyT(targetEl, nextStartX * (1 - progress), 0, 0.65 + 0.35 * progress, 1);
 
     } else if (g.mode === 'back-h') {
       const clampedDx = Math.max(0, dx);
@@ -5160,6 +5180,9 @@ showScreen = function(id, dir) {
     if (commit) {
       const transDir = (g.mode === 'back-h' || g.mode === 'back-v' ||
                         (g.mode === 'tab-h' && g.dir === 'right')) ? 'back' : 'forward';
+
+      // Сохраняем mode до вызова commitTransition
+      g_lastMode = g.mode;
 
       // Velocity-aware duration: faster swipe → shorter finish
       const velocity = g.mode === 'back-v' ? vy : vx;
@@ -5437,7 +5460,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.2';
+const APP_VERSION='4.2.1';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -12034,6 +12057,11 @@ function loginCheckUsername(val) {
       if(btn)btn.disabled=false; return;
     }
     try {
+      // Сначала проверяем кэш _allKnownUsers чтобы не делать лишний запрос
+      if (_allKnownUsers.some(u => u.username === clean.toLowerCase())) {
+        if(status){status.textContent='❌ Ник уже занят'; status.style.color='var(--danger,#c94f4f)';}
+        if(btn)btn.disabled=true; return;
+      }
       const data = await sbGet('presence', `select=username&username=eq.${encodeURIComponent(clean.toLowerCase())}&limit=1`);
       if (Array.isArray(data) && data.length > 0) {
         if(status){status.textContent='❌ Ник уже занят'; status.style.color='var(--danger,#c94f4f)';}
@@ -12046,7 +12074,7 @@ function loginCheckUsername(val) {
       if(status){status.textContent='✓ Отлично!'; status.style.color='#4caf7d';}
       if(btn)btn.disabled=false;
     }
-  }, 600);
+  }, 900); // увеличен дебаунс с 600 до 900ms
 }
 
 function profileCreate() {
@@ -12953,99 +12981,172 @@ let _sbPresenceTimer     = null;
 let _fbPollTimer         = null;
 let _fbMsgStreams         = {};
 let _fbLastMsgTs         = {};
+let _connectSessionId    = 0; // защита от гонки при concurrent вызовах profileConnect
+let _fbInboxTimer        = null; // глобальный inbox poll — ловит НОВЫЕ входящие от незнакомцев
+let _fbInboxLastTs       = 0;    // последний ts обработанного входящего
 
 // ── Инициализируем таблицы Supabase при первом подключении ────────
 async function sbInitTables() {
   if (!sbReady()) return;
-  // Presence table: username (pk), name, avatar, color, status, vip, badge, ts
-  // Messages table: id, chat_key, from_user, to_user, text, ts, delivered
-  // Leaderboard table: game, username, name, avatar, color, score, ts
-  // (таблицы создаются через Supabase Dashboard → Table editor)
 }
 
 // ── Подключение ───────────────────────────────────────────────────
 async function profileConnect(p) {
   if (!p) return;
-  profileDisconnect();
+
+  // Инкрементируем session ID — все предыдущие вызовы становятся "устаревшими"
+  const sessionId = ++_connectSessionId;
+
+  // Останавливаем все таймеры немедленно
+  clearInterval(_sbPresenceTimer); _sbPresenceTimer = null;
+  clearInterval(_fbPollTimer);     _fbPollTimer = null;
+  clearInterval(_fbInboxTimer);    _fbInboxTimer = null;
+  Object.values(_fbMsgStreams).forEach(t => clearInterval(t));
+  _fbMsgStreams = {};
+  _profilePeerReady = false;
 
   if (!sbReady()) {
-    profileUpdateP2PStatus('⚙️ Настрой Supabase в Настройках → Сеть');
+    profileUpdateP2PStatus('⚙️ Supabase не настроен');
     return;
   }
 
   profileUpdateP2PStatus('⏳ Подключаемся...');
   try {
     await sbPresencePut(p);
+
+    // Если за время await появился более свежий вызов — выходим, не ставим таймеры
+    if (sessionId !== _connectSessionId) return;
+
     _profilePeerReady = true;
     profileUpdateP2PStatus('🟢 Онлайн — @' + p.username);
-    // Heartbeat каждые 20 сек (TTL 90 сек в sbPollPresence — запас x4)
-    _sbPresenceTimer = setInterval(() => { const pr = profileLoad(); if(pr) sbPresencePut(pr); }, 20000);
+
+    // Только один экземпляр каждого таймера
+    _sbPresenceTimer = setInterval(() => {
+      const pr = profileLoad(); if(pr) sbPresencePut(pr);
+    }, 25000);
+
     _fbPollTimer = setInterval(sbPollPresence, 15000);
-    sbPollPresence();
+
+    await sbPollPresence();
+    if (sessionId !== _connectSessionId) return; // ещё раз проверяем после poll
+
     sbStartMsgPolling(p);
+    // Глобальный inbox — ловит первые сообщения от НЕЗНАКОМЦЕВ
+    sbStartInboxPolling(p);
   } catch(e) {
-    profileUpdateP2PStatus('🔴 Ошибка подключения');
+    if (sessionId === _connectSessionId)
+      profileUpdateP2PStatus('🔴 Ошибка подключения');
   }
 }
 
 // Восстанавливаем присутствие когда вкладка снова становится активной
+let _visibilityDebounce = null;
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
+  if (document.visibilityState !== 'visible') return;
+  clearTimeout(_visibilityDebounce);
+  _visibilityDebounce = setTimeout(() => {
     const p = profileLoad();
-    if (p && sbReady()) {
-      // Если heartbeat-таймер умер — перезапускаем соединение
-      if (!_sbPresenceTimer) {
-        profileConnect(p);
-      } else {
-        // Просто обновляем ts сразу
-        sbPresencePut(p);
-        sbPollPresence();
-      }
+    if (!p || !sbReady()) return;
+    if (_sbPresenceTimer) {
+      // Таймеры живы — просто обновляем присутствие
+      sbPresencePut(p);
+      sbPollPresence();
+    } else {
+      // Таймеры умерли (долгое сворачивание) — переподключаемся
+      profileConnect(p);
     }
-  }
+  }, 500); // 500ms дебаунс — Android может стрелять несколько раз подряд
 });
 
 function profileDisconnect() {
   _profilePeerReady = false;
   clearInterval(_sbPresenceTimer);
   clearInterval(_fbPollTimer);
+  clearInterval(_fbInboxTimer); _fbInboxTimer = null;
   Object.values(_fbMsgStreams).forEach(t => clearInterval(t));
   _fbMsgStreams = {};
-  const p = profileLoad();
-  if (p && sbReady()) sbDelete('presence', `username=eq.${p.username}`);
-  _profileOnlinePeers = []; _allKnownUsers = [];
+  _sbPresenceTimer = null;
+  _fbPollTimer = null;
+  // НЕ удаляем из presence — запись протухнет сама через 90 сек TTL
+  // Это позволяет другим пользователям находить тебя в поиске (offline статус)
+  _profileOnlinePeers = [];
+  // _allKnownUsers не очищаем — пусть остаётся для поиска
 }
 
 // ── Присутствие ───────────────────────────────────────────────────
+// Первый раз делаем DELETE+INSERT чтобы аккаунт гарантированно появился в поиске
+let _presenceFirstPut = true;
 async function sbPresencePut(p) {
   if (!p || !sbReady()) return;
-  await sbUpsert('presence', {
+  const payload = {
     username: p.username, name: p.name,
-    avatar: p.avatar || '😊', avatar_type: p.avatarType || 'emoji',
+    avatar: p.avatar || '\u{1F60A}', avatar_type: p.avatarType || 'emoji',
     color: p.color || '#e87722', status: p.status || 'online',
     vip: p.vip || false, badge: p.badge || null,
     ts: Date.now()
-  });
+  };
+  try {
+    if (_presenceFirstPut) {
+      _presenceFirstPut = false;
+      // DELETE старой записи чтобы снять любые конфликты
+      await fetch(`${sbUrl()}/rest/v1/presence?username=eq.${encodeURIComponent(p.username)}`, {
+        method: 'DELETE',
+        headers: { apikey: sbKey(), Authorization: `Bearer ${sbKey()}` }
+      });
+      // INSERT чистой новой записи
+      await fetch(`${sbUrl()}/rest/v1/presence`, {
+        method: 'POST',
+        headers: {
+          apikey: sbKey(), Authorization: `Bearer ${sbKey()}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      // Последующие heartbeat: обычный upsert
+      await fetch(`${sbUrl()}/rest/v1/presence?on_conflict=username`, {
+        method: 'POST',
+        headers: {
+          apikey: sbKey(), Authorization: `Bearer ${sbKey()}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates,return=minimal'
+        },
+        body: JSON.stringify(payload)
+      });
+    }
+  } catch(e) {}
 }
 
 async function sbPollPresence() {
   if (!sbReady()) return;
-  const data = await sbGet('presence', 'select=*&order=ts.desc&limit=200');
+  const data = await sbGet('presence', 'select=*&order=ts.desc&limit=500');
   if (!Array.isArray(data)) return;
   const p = profileLoad();
   const now = Date.now();
+  const myUsername = p?.username;
+
+  // Дедуплицируем по username — берём самую свежую строку на пользователя
+  const seen = new Set();
+  const unique = [];
+  for (const u of data) {
+    if (!u.username || seen.has(u.username)) continue;
+    seen.add(u.username);
+    unique.push(u);
+  }
+
   // Online = seen within 90 sec
-  _profileOnlinePeers = data
-    .filter(u => u.username !== p?.username && (now - (u.ts||0)) < 90000)
+  _profileOnlinePeers = unique
+    .filter(u => u.username !== myUsername && (now - (u.ts||0)) < 90000)
     .map(u => ({
       username: u.username, name: u.name,
       avatar: u.avatar, avatarType: u.avatar_type,
       color: u.color, status: u.status,
       vip: u.vip, badge: u.badge
     }));
-  // All users (including offline) for search
-  _allKnownUsers = data
-    .filter(u => u.username !== p?.username)
+  // All known users (including offline) for search
+  _allKnownUsers = unique
+    .filter(u => u.username !== myUsername)
     .map(u => ({
       username: u.username, name: u.name,
       avatar: u.avatar, avatarType: u.avatar_type,
@@ -13089,6 +13190,33 @@ function sbPollChat(myUsername, otherUsername) {
   _fbMsgStreams[key] = setInterval(doCheck, 3000);
 }
 
+function sbStartInboxPolling(p) {
+  clearInterval(_fbInboxTimer);
+  _fbInboxLastTs = _fbInboxLastTs || (Date.now() - 30000); // смотрим за последние 30 сек
+  const doInboxCheck = async () => {
+    if (!sbReady() || !p) return;
+    // Ищем все сообщения адресованные МНЕ, которые я ещё не видел
+    const data = await sbGet('messages',
+      `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
+    );
+    if (!Array.isArray(data) || data.length === 0) return;
+    // Группируем по отправителю
+    const bySender = {};
+    data.forEach(msg => {
+      if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
+      bySender[msg.from_user].push(msg);
+      _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+    });
+    // Для каждого нового отправителя — запускаем полноценный poll и обрабатываем
+    Object.entries(bySender).forEach(([sender, msgs]) => {
+      sbPollChat(p.username, sender); // запускает постоянный poll
+      sbHandleIncomingMessages(p.username, sender, msgs);
+    });
+  };
+  doInboxCheck();
+  _fbInboxTimer = setInterval(doInboxCheck, 5000);
+}
+
 function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
   if (!rows || rows.length === 0) return;
   const msgs = msgLoad();
@@ -13127,13 +13255,79 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       const peer = _profileOnlinePeers.find(u => u.username === otherUsername) || {};
       const lastMsg = msgs[otherUsername]?.[msgs[otherUsername].length-1];
       messengerUpdateBadge();
-      if (lastMsg && lastMsg.from !== myUsername)
-        toast(`💬 ${peer.name||otherUsername}: ${lastMsg.text.slice(0,40)}`);
+      if (lastMsg && lastMsg.from !== myUsername) {
+        showIosNotif({
+          sender: peer.name || ('@' + otherUsername),
+          text: lastMsg.text.slice(0, 60),
+          avatar: peer.avatar,
+          avatarType: peer.avatarType,
+          color: peer.color,
+          onTap: function() { messengerOpenChat(otherUsername); },
+        });
+      }
     }
   }
 }
 
 // Отправка сообщений
+
+// iOS-style notification banners
+let _iosNotifQueue = [];
+let _iosNotifBusy  = false;
+const _iosNotifDur = 4200;
+
+function showIosNotif(opts) {
+  _iosNotifQueue.push(opts);
+  if (!_iosNotifBusy) _iosNotifNext();
+}
+
+function _iosNotifNext() {
+  if (_iosNotifQueue.length === 0) { _iosNotifBusy = false; return; }
+  _iosNotifBusy = true;
+  var item = _iosNotifQueue.shift();
+  var el = document.createElement('div');
+  el.className = 'ios-notif';
+  var avatarHtml = '';
+  if (item.avatarType === 'img' && item.avatar) {
+    avatarHtml = '<img src="' + item.avatar + '" alt="">';
+  } else {
+    avatarHtml = '<span>' + (item.avatar || '💬') + '</span>';
+  }
+  var accentColor = item.color || 'var(--accent)';
+  var now = new Date();
+  var timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  el.innerHTML =
+    '<div class="ios-notif-avatar" style="background:color-mix(in srgb,' + accentColor + ' 22%,var(--surface3));">' +
+      avatarHtml +
+      '<div class="ios-notif-app-icon">💬</div>' +
+    '</div>' +
+    '<div class="ios-notif-body">' +
+      '<div class="ios-notif-header">' +
+        '<span class="ios-notif-app">Сообщение</span>' +
+        '<span class="ios-notif-time">' + timeStr + '</span>' +
+      '</div>' +
+      '<div class="ios-notif-sender">' + (item.sender||'') + '</div>' +
+      '<div class="ios-notif-text">' + (item.text||'') + '</div>' +
+    '</div>';
+  el.addEventListener('click', function() {
+    _iosNotifDismiss(el);
+    if (item.onTap) item.onTap();
+  });
+  var container = document.getElementById('ios-notif-container');
+  if (container) container.appendChild(el);
+  requestAnimationFrame(function() { requestAnimationFrame(function() { el.classList.add('ios-show'); }); });
+  try { SFX.play('toastShow'); } catch(e) {}
+  el._notifTimer = setTimeout(function() { _iosNotifDismiss(el); }, _iosNotifDur);
+}
+
+function _iosNotifDismiss(el) {
+  if (!el || el._notifDismissed) return;
+  el._notifDismissed = true;
+  clearTimeout(el._notifTimer);
+  el.classList.remove('ios-show');
+  el.classList.add('ios-hide');
+  setTimeout(function() { el.remove(); setTimeout(_iosNotifNext, 250); }, 350);
+}
 // messengerSend и остальные функции мессенджера — в блоке ниже
 
 // ── Broadcast (профиль, лидерборд) ───────────────────────────────
@@ -13178,7 +13372,12 @@ window.showScreen = (function(orig) {
 async function onlineRefresh() {
   const btn = document.getElementById('online-refresh-btn');
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
-  await sbPollPresence();
+  try {
+    // Обновляем своё присутствие и сразу получаем всех
+    const p = profileLoad();
+    if (p && sbReady()) await sbPresencePut(p);
+    await sbPollPresence();
+  } catch(e) {}
   profileRenderOnline();
   if (btn) { btn.textContent = '↻ Обновить'; btn.disabled = false; }
 }
