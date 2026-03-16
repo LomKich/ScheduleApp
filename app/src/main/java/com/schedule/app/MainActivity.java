@@ -164,12 +164,41 @@ public class MainActivity extends Activity {
                     fileChooserCallback = null;
                 }
                 fileChooserCallback = filePathCallback;
+
+                // Определяем MIME-тип по accept из HTML input
+                String mimeType = "image/*";
+                String chooserTitle = "Выбери файл";
+                String[] acceptTypes = fileChooserParams.getAcceptTypes();
+                if (acceptTypes != null) {
+                    for (String t : acceptTypes) {
+                        if (t != null && t.startsWith("audio")) {
+                            mimeType = "audio/*";
+                            chooserTitle = "Выбери аудио файл";
+                            break;
+                        }
+                        if (t != null && t.startsWith("video")) {
+                            mimeType = "video/*";
+                            chooserTitle = "Выбери видео";
+                            break;
+                        }
+                        if (t != null && t.equals("*/*")) {
+                            mimeType = "*/*";
+                            break;
+                        }
+                    }
+                }
+
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("image/*");
+                intent.setType(mimeType);
+                // Для аудио явно разрешаем все аудио-расширения
+                if (mimeType.equals("audio/*")) {
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES,
+                        new String[]{"audio/*", "application/ogg", "application/mp4"});
+                }
                 try {
                     startActivityForResult(
-                        Intent.createChooser(intent, "Выбери изображение"),
+                        Intent.createChooser(intent, chooserTitle),
                         IMAGE_PICK_CODE
                     );
                 } catch (Exception e) {
