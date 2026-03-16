@@ -275,13 +275,22 @@ public class MainActivity extends Activity {
         } else if (requestCode == VPN_REQUEST_CODE) {
             log.w(TAG, "VPN разрешение отклонено");
         } else if (requestCode == IMAGE_PICK_CODE) {
-            // ─── Общая логика чтения изображения ───
+            // ─── Общая логика чтения файла ───
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
                 Uri uri = data.getData();
-                log.i(TAG, "Изображение выбрано: " + uri + " | нативный режим: " + isNativeBgPick);
+                log.i(TAG, "Файл выбран: " + uri + " | нативный режим: " + isNativeBgPick);
                 final Uri finalUri = uri;
                 final boolean wasNativePick = isNativeBgPick;
                 isNativeBgPick = false;
+
+                // Если это НЕ нативный пик фона, а <input type="file"> из WebView —
+                // просто возвращаем URI в callback, без image-обработки
+                if (!wasNativePick && fileChooserCallback != null) {
+                    log.i(TAG, "Передаём URI в fileChooserCallback напрямую");
+                    fileChooserCallback.onReceiveValue(new Uri[]{finalUri});
+                    fileChooserCallback = null;
+                    return;
+                }
 
                 new Thread(() -> {
                     try {
@@ -329,16 +338,11 @@ public class MainActivity extends Activity {
                         final String jsDataUrl = dataUrl;
 
                         runOnUiThread(() -> {
-                            if (!wasNativePick && fileChooserCallback != null) {
-                                // Путь через <input type="file"> — сначала закрываем file chooser
-                                fileChooserCallback.onReceiveValue(new Uri[]{finalUri});
-                                fileChooserCallback = null;
-                            } else if (fileChooserCallback != null) {
-                                // Нативный путь, но fileChooserCallback случайно остался — очищаем
+                            if (fileChooserCallback != null) {
                                 fileChooserCallback.onReceiveValue(null);
                                 fileChooserCallback = null;
                             }
-                            // Передаём изображение в JS в обоих случаях
+                            // Передаём изображение в JS (только для нативного пика фона)
                             String escaped = jsDataUrl.replace("\\", "\\\\").replace("'", "\\'");
                             webView.evaluateJavascript(
                                 "if(typeof onNativeBgImagePicked==='function')onNativeBgImagePicked('" + escaped + "')",
