@@ -553,6 +553,11 @@ public class MainActivity extends Activity {
                 getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.notify(NOTIF_ID, builder.build());
         }
+
+        // ─── DNS / DPI / VPN ──────────────────────────────────────────────────────
+
+        @JavascriptInterface
+        public void setDns(String key, String dohUrl) {
             log.i(TAG, "JS→setDns key=" + key + " url=" + dohUrl);
             prefs.edit().putString("dns_key", key).putString("doh_url", dohUrl).apply();
             if (vpnBound && vpnService != null && vpnService.isRunning()) {
