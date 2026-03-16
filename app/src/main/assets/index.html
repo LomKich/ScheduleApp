@@ -1220,7 +1220,7 @@ body.on-home-screen #live-blur-canvas {
 
 
 .egg-overlay{
-  position:fixed;inset:0;z-index:2000;
+  position:fixed;inset:0;z-index:4000;
   background:var(--bg);
   display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
   opacity:0;pointer-events:none;
@@ -1923,7 +1923,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.1.1 — Android</div>
+        <div class="item-sub" id="app-version-str">4.1.2 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -4478,7 +4478,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.1.1';
+const APP_VERSION='4.1.2';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -5155,6 +5155,17 @@ function cmdExec(raw){
       setTimeout(()=>doPing(3), 1300);
       setTimeout(()=>cmdPrint('info',`  Готово. Общее время: ${Math.round(performance.now()-startT+1300)} мс`), 1900);
     } break;
+
+    case '/bell':     funBell(); break;
+    case '/haiku':    funHaiku(); break;
+    case '/bpmtap':   funBpmTap(); break;
+    case '/glitch':   funGlitch(); cmdPrint('warn','👾 Glitch активирован на 3 секунды'); break;
+    case '/taunt':    funTaunt(); break;
+    case '/mirror':   funMirror(); break;
+    case '/warp':     funWarp(); break;
+    case '/confetti': funConfetti(); break;
+    case '/sus':      funSus(); break;
+    case '/chaos':    funChaosMode(); break;
 
     default:
       cmdPrint('err','"'+cmd+'" не найдена. Введи /help');
@@ -6074,21 +6085,202 @@ function getDayMotivation(){
   const arr=MOTIVATIONS[dow]||MOTIVATIONS[1];
   return arr[Math.floor(Math.random()*arr.length)];
 }
-// Добавляем /fact, /stats, /excuse, /quiz, /focus, /weather в CMD
-const _extraCmds=[
-  ['/fact',    'случайный факт об учёбе 💡'],
-  ['/stats',   'статистика использования приложения 📊'],
-  ['/excuse',  'генератор отмазок от пары 😈'],
-  ['/quiz',    'тест на знание расписания 🧠'],
-  ['/focus',   'режим фокуса — выделить текущую пару 🎯'],
-  ['/weather', 'погода по геолокации 🌤'],
-];
-// Патчим CMD_HELP
+// Добавляем /bell, /haiku, /bpmtap, /glitch, /taunt, /mirror, /warp, /confetti, /sus, /chaos в CMD_HELP
 if(typeof CMD_HELP!=='undefined'){
-  _extraCmds.forEach(c=>{
-    if(!CMD_HELP.find(x=>x[0]===c[0]))CMD_HELP.push(c);
-  });
+  [
+    ['/bell','звонок с анимацией 🔔'],['/haiku','хайку про учёбу 🌸'],
+    ['/bpmtap','тапай в ритм — BPM 🥁'],['/glitch','глитч 3 сек 👾'],
+    ['/taunt','реплика учителя 👩‍🏫'],['/mirror','зеркальный интерфейс 🪞'],
+    ['/warp','хаос шрифтов 🌀'],['/confetti','конфетти 🎊'],
+    ['/sus','амогус 📮'],['/chaos','все игры сразу 🎮'],
+  ].forEach(c=>{if(!CMD_HELP.find(x=>x[0]===c[0]))CMD_HELP.push(c);});
 }
+// ══════════════════════════════════════════════════════════════════
+
+// ⑪ Школьный звонок с анимацией
+function funBell(){
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const ring=(freq,t)=>{const o=ctx.createOscillator();const g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=freq;g.gain.setValueAtTime(0,ctx.currentTime+t);g.gain.linearRampToValueAtTime(0.3,ctx.currentTime+t+0.02);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+t+0.6);o.start(ctx.currentTime+t);o.stop(ctx.currentTime+t+0.7);};
+  [0,0.08,0.16,0.24,0.32,0.40].forEach((t,i)=>ring(i%2===0?880:1046,t));
+  toast('🔔 Звонок на урок!');
+  // bell shake animation
+  document.body.style.animation='none';
+  const el=document.getElementById('hero-title-text');
+  if(el){el.style.transition='transform .08s';let n=0;const iv=setInterval(()=>{el.style.transform=n%2?'rotate(3deg)':'rotate(-3deg)';n++;if(n>12){clearInterval(iv);el.style.transform='';}},80);}
+}
+
+// ⑫ Хайку про учёбу (рандомное)
+const HAIKU_LIST=[
+  ['Звонок прозвенел','Тетрадь тихо открыта','Сон не отпускает'],
+  ['Домашнее есть','«Кто выполнил?» — тишина','Все смотрят в окно'],
+  ['Урок математик','x не находит себя','Я — тоже'],
+  ['Доска исписана','Мел крошится и падёт','Пятница близко'],
+  ['Звонок. Конец пар','Рюкзак собран за секунд','Свобода пришла'],
+  ['Список предметов','Такой длинный, как страданье','Выходной — мечта'],
+  ['Контрольная — враг','Случайные варианты','Я знал эти все'],
+];
+function funHaiku(){
+  const h=HAIKU_LIST[Math.floor(Math.random()*HAIKU_LIST.length)];
+  toast('🌸 '+h.join(' / '));
+}
+
+// ⑬ BPM тапалка (тапай в ритм 8 раз)
+let _bpmTaps=[],_bpmTimer=null;
+function funBpmTap(){
+  const now=Date.now();
+  _bpmTaps.push(now);
+  clearTimeout(_bpmTimer);
+  _bpmTimer=setTimeout(()=>{
+    if(_bpmTaps.length>=4){
+      const diffs=[];
+      for(let i=1;i<_bpmTaps.length;i++)diffs.push(_bpmTaps[i]-_bpmTaps[i-1]);
+      const avg=diffs.reduce((a,b)=>a+b,0)/diffs.length;
+      const bpm=Math.round(60000/avg);
+      toast('🥁 Твой ритм: '+bpm+' BPM'+(bpm<80?' — медленнее дыши 😌':bpm>160?' — ты барабанщик 🤘':''));
+    }
+    _bpmTaps=[];
+  },2000);
+  toast('🥁 '+'•'.repeat(Math.min(_bpmTaps.length,8))+(_bpmTaps.length<4?' — ещё':''));
+}
+
+// ⑭ Глитч-эффект на 3 секунды
+let _glitchActive=false;
+function funGlitch(){
+  if(_glitchActive)return;
+  _glitchActive=true;
+  const style=document.createElement('style');
+  style.id='glitch-style';
+  style.textContent=`
+    @keyframes glitch-skew{0%,100%{transform:skewX(0)}20%{transform:skewX(-4deg)}40%{transform:skewX(3deg)}60%{transform:skewX(-2deg)}80%{transform:skewX(2deg)}}
+    @keyframes glitch-color{0%{filter:none}25%{filter:hue-rotate(90deg) saturate(3)}50%{filter:hue-rotate(180deg) contrast(2)}75%{filter:hue-rotate(270deg) brightness(1.5)}100%{filter:none}}
+    body.glitch-on{animation:glitch-skew 0.15s infinite, glitch-color 0.3s infinite!important;}
+    body.glitch-on *{animation:none!important;transition:none!important;}
+  `;
+  document.head.appendChild(style);
+  document.body.classList.add('glitch-on');
+  toast('👾 GLITCH');
+  setTimeout(()=>{
+    document.body.classList.remove('glitch-on');
+    const s=document.getElementById('glitch-style');if(s)s.remove();
+    _glitchActive=false;
+  },3000);
+}
+
+// ⑮ Реплики учителя (рандомные)
+const TEACHER_TAUNTS=[
+  '👩‍🏫 «Ещё раз опоздаешь — в журнал!»',
+  '👨‍🏫 «Кто не понял — подойдёт после урока»',
+  '👩‍🏫 «Это будет на контрольной. Записывайте.»',
+  '👨‍🏫 «Тишина в классе! Я слышу жвачку.»',
+  '👩‍🏫 «Убери телефон, иначе до родителей»',
+  '👨‍🏫 «Повторите дома. Всё. Прямо всё.»',
+  '👩‍🏫 «Это проходили в прошлом году. Как вы не знаете?»',
+  '👨‍🏫 «Опять двоечники вышли к доске первыми...»',
+  '👩‍🏫 «Лучший ответ — тот, которого не было.»',
+  '👨‍🏫 «Мы опаздываем на 20 минут, поэтому задание на дом двойное.»',
+];
+function funTaunt(){toast(TEACHER_TAUNTS[Math.floor(Math.random()*TEACHER_TAUNTS.length)]);}
+
+// ⑯ Зеркальный режим интерфейса
+let _mirrorOn=false;
+function funMirror(){
+  _mirrorOn=!_mirrorOn;
+  document.body.style.transform=_mirrorOn?'scaleX(-1)':'';
+  document.body.style.transition='transform .4s';
+  toast(_mirrorOn?'🪞 Зеркало включено — всё наоборот!':'🪞 Зеркало выключено');
+}
+
+// ⑰ Режим искажения шрифта (warp)
+let _warpOn=false,_warpRaf=null,_warpT=0;
+function funWarp(){
+  _warpOn=!_warpOn;
+  if(!_warpOn){cancelAnimationFrame(_warpRaf);document.documentElement.style.setProperty('--app-font',S.font?("'"+S.font+"'"):"'Geologica'");toast('🌀 Warp выключен');return;}
+  toast('🌀 Warp режим — шрифты сходят с ума!');
+  const fonts=["'Geologica'","'Unbounded'","'Comfortaa'","'Caveat'","'Bebas Neue'","'Bangers'","'Dela Gothic One'","'JetBrains Mono'"];
+  const loop=()=>{
+    if(!_warpOn)return;
+    _warpT++;
+    if(_warpT%8===0){const f=fonts[Math.floor(Math.random()*fonts.length)];document.documentElement.style.setProperty('--app-font',f);}
+    _warpRaf=requestAnimationFrame(loop);
+  };
+  loop();
+}
+
+// ⑱ Конфетти-взрыв
+function funConfetti(){
+  const canvas=document.createElement('canvas');
+  canvas.style.cssText='position:fixed;inset:0;z-index:9990;pointer-events:none;width:100%;height:100%';
+  canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx=canvas.getContext('2d');
+  const COLORS=['#e87722','#00e5ff','#a78bfa','#ff66aa','#f5c518','#4caf7d'];
+  const particles=Array.from({length:120},()=>({
+    x:Math.random()*canvas.width,y:-10,
+    vx:(Math.random()-0.5)*6,vy:Math.random()*4+3,
+    r:Math.random()*6+3,c:COLORS[Math.floor(Math.random()*COLORS.length)],
+    rot:Math.random()*360,rv:(Math.random()-0.5)*8,
+    shape:Math.random()<0.5?'rect':'circle',
+  }));
+  let frame=0;
+  const loop=()=>{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.rot+=p.rv;
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot*Math.PI/180);
+      ctx.fillStyle=p.c;ctx.globalAlpha=Math.max(0,1-frame/90);
+      if(p.shape==='rect'){ctx.fillRect(-p.r/2,-p.r/2,p.r,p.r*1.6);}else{ctx.beginPath();ctx.arc(0,0,p.r/2,0,Math.PI*2);ctx.fill();}
+      ctx.restore();
+    });
+    frame++;
+    if(frame<100)requestAnimationFrame(loop);else canvas.remove();
+  };
+  loop();
+  toast('🎊 Конфетти!');
+}
+
+// ⑲ Sus-режим (амогус пасхалка)
+const SUS_MSGS=[
+  '📮 Ты — самозванец в группе. Red всегда подозрительный.',
+  '📮 EMERGENCY MEETING! Кто-то не сдал домашку... 👀',
+  '📮 Vent detected. Вентиляция в кабинете закрыта.',
+  '📮 Task complete: "Сдать реферат" ✅',
+  '📮 Dead body reported: Твоя мотивация во вторник.',
+  '📮 Impostor sus: Учитель был с нами... или нет? 🤔',
+];
+function funSus(){toast(SUS_MSGS[Math.floor(Math.random()*SUS_MSGS.length)]);}
+
+// ⑳ Chaos Mode — все игры сразу (маленькие окошки)
+let _chaosOn=false;
+function funChaosMode(){
+  if(_chaosOn){
+    const old=document.getElementById('chaos-overlay');
+    if(old)old.remove();_chaosOn=false;
+    toast('🎮 Chaos mode выключен');return;
+  }
+  _chaosOn=true;
+  const ov=document.createElement('div');
+  ov.id='chaos-overlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:8500;background:rgba(0,0,0,.9);overflow:auto;padding:50px 10px 10px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start';
+  const btn=document.createElement('button');
+  btn.textContent='✕ Закрыть Chaos';
+  btn.style.cssText='position:fixed;top:10px;right:10px;z-index:8501;background:var(--danger,#c94f4f);border:none;color:#fff;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:700;cursor:pointer;font-size:13px';
+  btn.onclick=funChaosMode;ov.appendChild(btn);
+  const titles=['🐍 Змейка','❌ Крестики','🏓 Понг','🧱 Тетрис','🦕 Динозавр'];
+  const srcs=['snake','ttt','pong','tetris','dino'];
+  srcs.forEach((g,i)=>{
+    const wrap=document.createElement('div');
+    wrap.style.cssText='width:calc(50% - 4px);background:var(--surface2);border-radius:10px;overflow:hidden;font-size:11px;color:var(--muted);padding:4px;text-align:center';
+    wrap.innerHTML='<div style="padding:4px 0;font-weight:700;color:var(--accent)">'+titles[i]+'</div>';
+    const mini=document.createElement('div');mini.style.cssText='transform:scale(0.45);transform-origin:top left;width:222%;pointer-events:none;height:200px;overflow:hidden';
+    wrap.appendChild(mini);ov.appendChild(wrap);
+  });
+  document.body.appendChild(ov);
+  toast('🎮 Chaos Mode! (все игры сразу)');
+}
+
+// Команды ⑪–⑳ встроены в cmdExec switch выше
+
+// ══ КОНЕЦ ПРИКОЛЬНЫХ ФУНКЦИЙ ══
 
 
 
