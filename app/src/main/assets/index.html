@@ -1986,6 +1986,24 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     </button>
     <div class="sep"></div>
 
+    <!-- Сеть и социальные функции -->
+    <div class="section-label">Сеть (профиль, чаты, лидерборд)</div>
+    <div class="settings-row" style="flex-direction:column;align-items:stretch;padding:14px 16px;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">
+        ⚡ Supabase
+        <span style="font-size:10px;font-weight:600;color:var(--muted);margin-left:6px">бесплатно · без карты · supabase.com</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+        Создай проект на supabase.com → Settings → API → скопируй URL и anon key
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Project URL</div>
+      <input class="inp" id="sb-url-input" placeholder="https://xxxx.supabase.co" style="margin-bottom:8px;font-size:12px" autocorrect="off" autocapitalize="off">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Anon Key</div>
+      <input class="inp" id="sb-key-input" placeholder="eyJhbGciOiJIUzI1NiIs..." style="margin-bottom:10px;font-size:12px" autocorrect="off" autocapitalize="off">
+      <button class="btn btn-accent" style="padding:10px" onclick="supabaseSaveConfig()">💾 Сохранить и подключиться</button>
+      <div id="sb-status" style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center"></div>
+    </div>
+
     <!-- Приложение / OTA -->
     <div class="section-label">Приложение</div>
     <div class="list-item" style="cursor:default;margin-bottom:8px">
@@ -1994,7 +2012,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.1.6 — Android</div>
+        <div class="item-sub" id="app-version-str">3.2.1 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -4758,7 +4776,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.1.6';
+const APP_VERSION='3.2.1';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -7545,55 +7563,87 @@ function tttLanSetStatus(msg) {
   if (el) el.textContent = msg;
 }
 
+// Надёжная конфигурация ICE серверов (Google + Cloudflare STUN, бесплатно)
+const PEER_ICE_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.stunprotocol.org:3478' },
+  ]
+};
+
+function makePeer(id) {
+  // Если id задан — создаём с явным ID, иначе случайный
+  const opts = {
+    config: PEER_ICE_CONFIG,
+    debug: 0,
+  };
+  return id ? new window.Peer(id, opts) : new window.Peer(opts);
+}
+
+// Ждём открытия пира с таймаутом 15 секунд
+function waitPeerOpen(peer, onOpen, onError) {
+  const timer = setTimeout(() => {
+    onError('Сервер недоступен. Проверь интернет-соединение (15с таймаут)');
+  }, 15000);
+  peer.on('open', () => { clearTimeout(timer); onOpen(); });
+  peer.on('error', e => { clearTimeout(timer); onError(e.message || String(e)); });
+}
+
 async function tttLoadPeer() {
   if (window.Peer) return window.Peer;
   return new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js';
     s.onload = () => res(window.Peer);
-    s.onerror = () => rej(new Error('PeerJS не загрузился'));
+    s.onerror = () => rej(new Error('PeerJS не загрузился — проверь интернет'));
     document.head.appendChild(s);
   });
 }
 
 async function tttLanHost() {
-  tttLanSetStatus('⏳ Создаём комнату...');
+  tttLanSetStatus('⏳ Загружаем модуль...');
   try {
-    const Peer = await tttLoadPeer();
+    await tttLoadPeer();
     tttLanDisconnect();
     const code = Math.random().toString(36).slice(2,8).toUpperCase();
-    tttLanPeer = new Peer('ttt-' + code);
+    tttLanPeer = makePeer('ttt-' + code);
     tttLanRole = 'host'; tttLanSymbol = 'X';
-    tttLanPeer.on('open', () => {
-      tttLanSetStatus('✅ Комната создана! Жди друга...');
-      const cw = document.getElementById('ttt-lan-code-wrap');
-      const cc = document.getElementById('ttt-lan-code');
-      if (cw) cw.style.display = '';
-      if (cc) cc.textContent = code;
-    });
-    tttLanPeer.on('connection', conn => {
-      tttLanConn = conn;
-      tttLanSetupConn(conn);
-    });
-    tttLanPeer.on('error', e => tttLanSetStatus('❌ Ошибка: ' + e.message));
+    tttLanSetStatus('⏳ Подключение к серверу...');
+    waitPeerOpen(tttLanPeer,
+      () => {
+        tttLanSetStatus('✅ Комната создана! Жди друга...');
+        const cw = document.getElementById('ttt-lan-code-wrap');
+        const cc = document.getElementById('ttt-lan-code');
+        if (cw) cw.style.display = '';
+        if (cc) cc.textContent = code;
+      },
+      msg => tttLanSetStatus('❌ ' + msg)
+    );
+    tttLanPeer.on('connection', conn => { tttLanConn = conn; tttLanSetupConn(conn); });
   } catch(e) { tttLanSetStatus('❌ ' + e.message); }
 }
 
 async function tttLanJoinPrompt() {
   const code = prompt('Введи код комнаты:');
   if (!code) return;
-  tttLanSetStatus('⏳ Подключаемся...');
+  tttLanSetStatus('⏳ Загружаем модуль...');
   try {
-    const Peer = await tttLoadPeer();
+    await tttLoadPeer();
     tttLanDisconnect();
-    tttLanPeer = new Peer();
+    tttLanPeer = makePeer(null);
     tttLanRole = 'guest'; tttLanSymbol = 'O';
-    tttLanPeer.on('open', () => {
-      const conn = tttLanPeer.connect('ttt-' + code.trim().toUpperCase());
-      tttLanConn = conn;
-      tttLanSetupConn(conn);
-    });
-    tttLanPeer.on('error', e => tttLanSetStatus('❌ Ошибка: ' + e.message));
+    tttLanSetStatus('⏳ Подключение к серверу...');
+    waitPeerOpen(tttLanPeer,
+      () => {
+        tttLanSetStatus('⏳ Соединяемся с хостом...');
+        const conn = tttLanPeer.connect('ttt-' + code.trim().toUpperCase(), { reliable: true });
+        tttLanConn = conn;
+        tttLanSetupConn(conn);
+      },
+      msg => tttLanSetStatus('❌ ' + msg)
+    );
   } catch(e) { tttLanSetStatus('❌ ' + e.message); }
 }
 
@@ -7952,39 +8002,46 @@ function pongLanSetStatus(msg) {
 }
 
 async function pongLanHost() {
-  pongLanSetStatus('⏳ Создаём комнату...');
+  pongLanSetStatus('⏳ Загружаем модуль...');
   try {
-    const Peer = await tttLoadPeer(); // переиспользуем загрузчик
+    await tttLoadPeer(); // переиспользуем загрузчик
     pongLanDisconnect();
     const code = Math.random().toString(36).slice(2,8).toUpperCase();
-    pongLanPeer = new Peer('pong-' + code);
+    pongLanPeer = makePeer('pong-' + code);
     pongLanRole = 'host';
-    pongLanPeer.on('open', () => {
-      pongLanSetStatus('✅ Комната создана! Жди друга...');
-      const cw = document.getElementById('pong-lan-code-wrap');
-      const cc = document.getElementById('pong-lan-code');
-      if (cw) cw.style.display = '';
-      if (cc) cc.textContent = code;
-    });
+    pongLanSetStatus('⏳ Подключение к серверу...');
+    waitPeerOpen(pongLanPeer,
+      () => {
+        pongLanSetStatus('✅ Комната создана! Жди друга...');
+        const cw = document.getElementById('pong-lan-code-wrap');
+        const cc = document.getElementById('pong-lan-code');
+        if (cw) cw.style.display = '';
+        if (cc) cc.textContent = code;
+      },
+      msg => pongLanSetStatus('❌ ' + msg)
+    );
     pongLanPeer.on('connection', conn => pongLanSetupConn(conn));
-    pongLanPeer.on('error', e => pongLanSetStatus('❌ ' + e.message));
   } catch(e) { pongLanSetStatus('❌ ' + e.message); }
 }
 
 async function pongLanJoinPrompt() {
   const code = prompt('Введи код комнаты:');
   if (!code) return;
-  pongLanSetStatus('⏳ Подключаемся...');
+  pongLanSetStatus('⏳ Загружаем модуль...');
   try {
-    const Peer = await tttLoadPeer();
+    await tttLoadPeer();
     pongLanDisconnect();
-    pongLanPeer = new Peer();
+    pongLanPeer = makePeer(null);
     pongLanRole = 'guest';
-    pongLanPeer.on('open', () => {
-      const conn = pongLanPeer.connect('pong-' + code.trim().toUpperCase());
-      pongLanSetupConn(conn);
-    });
-    pongLanPeer.on('error', e => pongLanSetStatus('❌ ' + e.message));
+    pongLanSetStatus('⏳ Подключение к серверу...');
+    waitPeerOpen(pongLanPeer,
+      () => {
+        pongLanSetStatus('⏳ Соединяемся с хостом...');
+        const conn = pongLanPeer.connect('pong-' + code.trim().toUpperCase(), { reliable: true });
+        pongLanSetupConn(conn);
+      },
+      msg => pongLanSetStatus('❌ ' + msg)
+    );
   } catch(e) { pongLanSetStatus('❌ ' + e.message); }
 }
 
@@ -11782,182 +11839,280 @@ function profilePublicData(p) {
 
 // ══ P2P ФОНОВОЕ СОЕДИНЕНИЕ ══════════════════════════════════════
 // ══════════════════════════════════════════════════════════════════
-// 🔥 FIREBASE REALTIME DATABASE — замена P2P
-// Работает через HTTPS/443 — проходит любой NAT, мобильный интернет,
-// корпоративные сети, VPN. Бесплатный тариф Spark.
-//
-// ❗ Смени FB_DB_URL на свой проект (firebase.google.com → создать проект
-//    → Realtime Database → правила: { ".read": true, ".write": true })
+// ⚡ SUPABASE BACKEND — замена Firebase
+// Бесплатно, без карты. Создай проект на supabase.com → Settings → API
+// Вставь URL и Anon key в Настройки → Сеть
 // ══════════════════════════════════════════════════════════════════
-const FB_DB_URL = 'https://scheduleapp-social-default-rtdb.europe-west1.firebasedatabase.app';
+const SB_CONFIG_KEY = 'sapp_supabase_config';
 
-// ── REST helpers ────────────────────────────────────────────────
-async function fbGet(path) {
+function sbConfig() {
+  try { return JSON.parse(localStorage.getItem(SB_CONFIG_KEY) || 'null'); } catch(e) { return null; }
+}
+function sbUrl()  { return sbConfig()?.url?.replace(/\/$/, '') || ''; }
+function sbKey()  { return sbConfig()?.key || ''; }
+function sbReady(){ const c = sbConfig(); return !!(c?.url && c?.key); }
+
+function supabaseSaveConfig() {
+  const url = document.getElementById('sb-url-input')?.value?.trim();
+  const key = document.getElementById('sb-key-input')?.value?.trim();
+  const st  = document.getElementById('sb-status');
+  if (!url || !key) { if(st) st.textContent = '❌ Заполни оба поля'; return; }
+  localStorage.setItem(SB_CONFIG_KEY, JSON.stringify({ url, key }));
+  if(st) st.textContent = '⏳ Проверяем подключение...';
+  sbTestConnection().then(ok => {
+    if(st) st.textContent = ok ? '🟢 Подключено!' : '🔴 Ошибка — проверь URL и ключ';
+    if(ok) { toast('✅ Supabase подключён!'); profileConnect(profileLoad()); }
+  });
+}
+
+async function sbTestConnection() {
+  if (!sbReady()) return false;
   try {
-    const r = await fetch(`${FB_DB_URL}/${path}.json`);
+    const r = await fetch(`${sbUrl()}/rest/v1/presence?select=username&limit=1`, {
+      headers: { apikey: sbKey(), Authorization: `Bearer ${sbKey()}` }
+    });
+    return r.ok || r.status === 404; // 404 = table doesn't exist yet = still connected
+  } catch(e) { return false; }
+}
+
+// Заполняем поля при открытии настроек
+function sbFillSettings() {
+  const c = sbConfig();
+  const urlEl = document.getElementById('sb-url-input');
+  const keyEl = document.getElementById('sb-key-input');
+  if (urlEl && c?.url) urlEl.value = c.url;
+  if (keyEl && c?.key) keyEl.value = c.key;
+  if (c && document.getElementById('sb-status'))
+    document.getElementById('sb-status').textContent = sbReady() ? '🟢 Настроено' : '';
+}
+
+// ── Supabase REST helpers ──────────────────────────────────────────
+async function sbGet(table, query = '') {
+  if (!sbReady()) return null;
+  try {
+    const r = await fetch(`${sbUrl()}/rest/v1/${table}?${query}`, {
+      headers: { apikey: sbKey(), Authorization: `Bearer ${sbKey()}` }
+    });
     if (!r.ok) return null;
     return await r.json();
   } catch(e) { return null; }
 }
-async function fbPut(path, data) {
+
+async function sbUpsert(table, data) {
+  if (!sbReady()) return false;
   try {
-    await fetch(`${FB_DB_URL}/${path}.json`, {
-      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+    const r = await fetch(`${sbUrl()}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: {
+        apikey: sbKey(), Authorization: `Bearer ${sbKey()}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify(data)
+    });
+    return r.ok;
+  } catch(e) { return false; }
+}
+
+async function sbInsert(table, data) {
+  if (!sbReady()) return null;
+  try {
+    const r = await fetch(`${sbUrl()}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: {
+        apikey: sbKey(), Authorization: `Bearer ${sbKey()}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(data)
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+async function sbDelete(table, query) {
+  if (!sbReady()) return;
+  try {
+    await fetch(`${sbUrl()}/rest/v1/${table}?${query}`, {
+      method: 'DELETE',
+      headers: { apikey: sbKey(), Authorization: `Bearer ${sbKey()}` }
     });
   } catch(e) {}
 }
-async function fbPost(path, data) {
-  try {
-    const r = await fetch(`${FB_DB_URL}/${path}.json`, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
-    });
-    return await r.json(); // returns {name: pushId}
-  } catch(e) { return null; }
-}
-async function fbDelete(path) {
-  try { await fetch(`${FB_DB_URL}/${path}.json`, {method:'DELETE'}); } catch(e) {}
-}
 
-// SSE стрим (Firebase поддерживает text/event-stream)
-function fbStream(path, onData) {
+// Supabase Realtime via SSE (works on port 443, through any VPN/NAT)
+function sbStream(table, query, onData) {
+  if (!sbReady()) return null;
   try {
-    const src = new EventSource(`${FB_DB_URL}/${path}.json`);
-    src.addEventListener('put', e => {
-      try { onData(JSON.parse(e.data)); } catch(err) {}
-    });
-    src.onerror = () => {};
-    return src;
+    const src = new EventSource(
+      `${sbUrl()}/rest/v1/${table}?${query}`,
+      { headers: { apikey: sbKey() } }  // NOTE: EventSource doesn't support custom headers
+    );
+    // Fallback — just poll since EventSource won't send custom headers in Android WebView
+    return null;
   } catch(e) { return null; }
 }
 
-// ── Переменные состояния ─────────────────────────────────────────
+// ── Переменные состояния ──────────────────────────────────────────
 let _profileOnlinePeers  = [];
 let _profilePeerReady    = false;
-let _fbPresenceTimer     = null;
+let _sbPresenceTimer     = null;
 let _fbPollTimer         = null;
-let _fbMsgStreams         = {};   // chatKey → EventSource
-let _fbLastMsgTs         = {};   // chatKey → last ts read
+let _fbMsgStreams         = {};
+let _fbLastMsgTs         = {};
 
-// ── Подключение ──────────────────────────────────────────────────
+// ── Инициализируем таблицы Supabase при первом подключении ────────
+async function sbInitTables() {
+  if (!sbReady()) return;
+  // Presence table: username (pk), name, avatar, color, status, vip, badge, ts
+  // Messages table: id, chat_key, from_user, to_user, text, ts, delivered
+  // Leaderboard table: game, username, name, avatar, color, score, ts
+  // (таблицы создаются через Supabase Dashboard → Table editor)
+}
+
+// ── Подключение ───────────────────────────────────────────────────
 async function profileConnect(p) {
   if (!p) return;
   profileDisconnect();
+
+  if (!sbReady()) {
+    profileUpdateP2PStatus('⚙️ Настрой Supabase в Настройках → Сеть');
+    return;
+  }
+
   profileUpdateP2PStatus('⏳ Подключаемся...');
   try {
-    // Записать своё присутствие
-    await fbPresencePut(p);
+    await sbPresencePut(p);
     _profilePeerReady = true;
     profileUpdateP2PStatus('🟢 Онлайн — @' + p.username);
-
-    // Обновлять присутствие каждые 25с (timeout = 60с)
-    _fbPresenceTimer = setInterval(() => fbPresencePut(profileLoad()), 25000);
-    // Читать онлайн-пользователей каждые 15с
-    _fbPollTimer = setInterval(fbPollPresence, 15000);
-    fbPollPresence(); // сразу
-
-    // Стримить входящие сообщения
-    fbStartMsgStreams(p);
+    _sbPresenceTimer = setInterval(() => sbPresencePut(profileLoad()), 25000);
+    _fbPollTimer = setInterval(sbPollPresence, 15000);
+    sbPollPresence();
+    sbStartMsgPolling(p);
   } catch(e) {
-    profileUpdateP2PStatus('🔴 Нет соединения с Firebase');
+    profileUpdateP2PStatus('🔴 Ошибка подключения');
   }
 }
 
 function profileDisconnect() {
   _profilePeerReady = false;
-  clearInterval(_fbPresenceTimer);
+  clearInterval(_sbPresenceTimer);
   clearInterval(_fbPollTimer);
-  // Удалить своё присутствие
-  const p = profileLoad();
-  if (p) fbDelete(`presence/${p.username}`).catch(()=>{});
-  // Закрыть SSE потоки
-  Object.values(_fbMsgStreams).forEach(s => { try { s.close(); } catch(e){} });
+  Object.values(_fbMsgStreams).forEach(t => clearInterval(t));
   _fbMsgStreams = {};
+  const p = profileLoad();
+  if (p && sbReady()) sbDelete('presence', `username=eq.${p.username}`);
   _profileOnlinePeers = [];
 }
 
-// ── Присутствие ──────────────────────────────────────────────────
-async function fbPresencePut(p) {
-  if (!p) return;
-  await fbPut(`presence/${p.username}`, {
-    ...profilePublicData(p),
+// ── Присутствие ───────────────────────────────────────────────────
+async function sbPresencePut(p) {
+  if (!p || !sbReady()) return;
+  await sbUpsert('presence', {
+    username: p.username, name: p.name,
+    avatar: p.avatar || '😊', avatar_type: p.avatarType || 'emoji',
+    color: p.color || '#e87722', status: p.status || 'online',
+    vip: p.vip || false, badge: p.badge || null,
     ts: Date.now()
   });
 }
 
-async function fbPollPresence() {
-  const data = await fbGet('presence');
-  if (!data) return;
+async function sbPollPresence() {
+  if (!sbReady()) return;
+  const data = await sbGet('presence', 'select=*&order=ts.desc&limit=50');
+  if (!Array.isArray(data)) return;
   const p = profileLoad();
   const now = Date.now();
-  _profileOnlinePeers = Object.entries(data)
-    .filter(([un, u]) => un !== p?.username && (now - (u.ts||0)) < 90000)
-    .map(([, u]) => u);
+  _profileOnlinePeers = data
+    .filter(u => u.username !== p?.username && (now - (u.ts||0)) < 90000)
+    .map(u => ({
+      username: u.username, name: u.name,
+      avatar: u.avatar, avatarType: u.avatar_type,
+      color: u.color, status: u.status,
+      vip: u.vip, badge: u.badge
+    }));
   profileUpdateOnlineCount();
 }
 
 function profileUpdateOnlineCount() {
   const count = _profileOnlinePeers.length + 1;
-  profileUpdateP2PStatus('🟢 Онлайн • ' + count + ' ' + (count === 1 ? 'пользователь' : count < 5 ? 'пользователя' : 'пользователей'));
+  profileUpdateP2PStatus(
+    '🟢 Онлайн • ' + count + ' ' +
+    (count === 1 ? 'пользователь' : count < 5 ? 'пользователя' : 'пользователей')
+  );
 }
 
-// ── Сообщения через Firebase ─────────────────────────────────────
-function fbChatKey(a, b) {
-  return [a, b].sort().join('__');
-}
+// ── Сообщения ─────────────────────────────────────────────────────
+function sbChatKey(a, b) { return [a, b].sort().join('__'); }
 
-function fbStartMsgStreams(p) {
-  // Стримим все чаты из списка
+function sbStartMsgPolling(p) {
   const chats = chatsLoad();
-  chats.forEach(username => fbStreamChat(p.username, username));
+  chats.forEach(username => sbPollChat(p.username, username));
 }
 
-function fbStreamChat(myUsername, otherUsername) {
-  const key = fbChatKey(myUsername, otherUsername);
+function sbPollChat(myUsername, otherUsername) {
+  const key = sbChatKey(myUsername, otherUsername);
   if (_fbMsgStreams[key]) return;
-  const src = fbStream(`messages/${key}`, (data) => {
-    if (!data || !data.data) return;
-    fbHandleIncomingMessages(myUsername, otherUsername, data.data);
-  });
-  if (src) _fbMsgStreams[key] = src;
+  // Poll every 3 seconds for new messages
+  const lastTs = _fbLastMsgTs[key] || 0;
+  const doCheck = async () => {
+    if (!sbReady()) return;
+    const data = await sbGet('messages',
+      `select=*&chat_key=eq.${key}&ts=gt.${_fbLastMsgTs[key]||0}&order=ts.asc&limit=50`
+    );
+    if (!Array.isArray(data) || data.length === 0) return;
+    sbHandleIncomingMessages(myUsername, otherUsername, data);
+  };
+  doCheck();
+  _fbMsgStreams[key] = setInterval(doCheck, 3000);
 }
 
-function fbHandleIncomingMessages(myUsername, otherUsername, firebaseData) {
-  if (!firebaseData) return;
+function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
+  if (!rows || rows.length === 0) return;
   const msgs = msgLoad();
-  const chatKey = fbChatKey(myUsername, otherUsername);
-  const lastTs = _fbLastMsgTs[chatKey] || 0;
+  const key = sbChatKey(myUsername, otherUsername);
   let hasNew = false;
 
-  Object.values(firebaseData).forEach(msg => {
-    if (msg.from === myUsername) return; // наши, уже есть локально
-    if (!msg.ts || msg.ts <= lastTs) return;
-    // Новое входящее сообщение
+  rows.forEach(msg => {
+    if (msg.from_user === myUsername) {
+      // Обновляем статус доставки
+      if (!msgs[otherUsername]) msgs[otherUsername] = [];
+      const local = msgs[otherUsername].find(m => m.ts === msg.ts && m.from === myUsername);
+      if (local && !local.delivered) { local.delivered = true; hasNew = true; }
+      _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
+      return;
+    }
     if (!msgs[otherUsername]) msgs[otherUsername] = [];
-    const alreadyExists = msgs[otherUsername].some(m => m.ts === msg.ts && m.from === msg.from);
-    if (!alreadyExists) {
+    const exists = msgs[otherUsername].some(m => m.ts === msg.ts && m.from === msg.from_user);
+    if (!exists) {
       const alreadyRead = _msgCurrentChat === otherUsername;
       msgs[otherUsername].push({
-        from: msg.from, to: myUsername, text: msg.text,
-        ts: msg.ts, delivered: true, read: alreadyRead
+        from: msg.from_user, to: myUsername,
+        text: msg.text, ts: msg.ts,
+        delivered: true, read: alreadyRead
       });
-      _fbLastMsgTs[chatKey] = Math.max(_fbLastMsgTs[chatKey]||0, msg.ts);
+      _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
       hasNew = true;
     }
   });
 
   if (hasNew) {
     msgSave(msgs);
+    const chats = chatsLoad();
+    if (!chats.includes(otherUsername)) { chats.unshift(otherUsername); chatsSave(chats); }
     if (_msgCurrentChat === otherUsername) messengerRenderMessages();
     else {
       const peer = _profileOnlinePeers.find(u => u.username === otherUsername) || {};
       const lastMsg = msgs[otherUsername]?.[msgs[otherUsername].length-1];
       messengerUpdateBadge();
-      if (lastMsg) toast(`💬 ${peer.name||otherUsername}: ${lastMsg.text.slice(0,40)}`);
+      if (lastMsg && lastMsg.from !== myUsername)
+        toast(`💬 ${peer.name||otherUsername}: ${lastMsg.text.slice(0,40)}`);
     }
   }
 }
 
-// Переопределяем messengerSend — теперь через Firebase
+// Отправка сообщений
 function messengerSend() {
   const inp = document.getElementById('mc-input');
   if (!inp || !_msgCurrentChat) return;
@@ -11969,8 +12124,6 @@ function messengerSend() {
 
   const ts = Date.now();
   const msg = { from: p.username, to: _msgCurrentChat, text, ts, delivered: false, read: false };
-
-  // Сохранить локально
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
   msgs[_msgCurrentChat].push(msg);
@@ -11979,14 +12132,15 @@ function messengerSend() {
   if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
   messengerRenderMessages();
 
-  // Убедиться что стрим для этого чата запущен
-  fbStreamChat(p.username, _msgCurrentChat);
+  if (!sbReady()) { toast('⚙️ Supabase не настроен — сообщение сохранено локально'); return; }
 
-  // Отправить в Firebase
-  const chatKey = fbChatKey(p.username, _msgCurrentChat);
-  fbPost(`messages/${chatKey}`, {
-    from: p.username, fromName: p.name, fromAvatar: p.avatar,
-    to: _msgCurrentChat, text, ts
+  // Запустить polling для этого чата
+  sbPollChat(p.username, _msgCurrentChat);
+
+  const chatKey = sbChatKey(p.username, _msgCurrentChat);
+  sbInsert('messages', {
+    chat_key: chatKey, from_user: p.username, to_user: _msgCurrentChat,
+    text, ts
   }).then(res => {
     if (res) {
       msg.delivered = true;
@@ -11996,59 +12150,57 @@ function messengerSend() {
   });
 }
 
-// ── Broadcast для лидерборда (через Firebase) ─────────────────────
+// ── Broadcast (профиль, лидерборд) ───────────────────────────────
 function profileBroadcast(data) {
-  // Для profile_update — обновляем presence
   if (data.type === 'profile_update') {
     const p = profileLoad();
-    if (p) fbPresencePut(p);
+    if (p && sbReady()) sbPresencePut(p);
   }
-  // Для lb_update — пишем в Firebase
   if (data.type === 'lb_update' && data.lb) {
     const p = profileLoad();
-    if (!p) return;
+    if (!p || !sbReady()) return;
     Object.entries(data.lb).forEach(([game, entries]) => {
       const myEntry = entries.find(e => e.username === p.username);
-      if (myEntry) fbPut(`leaderboard/${game}/${p.username}`, myEntry);
+      if (myEntry) sbUpsert('leaderboard', {
+        game, username: p.username, name: p.name,
+        avatar: p.avatar, color: p.color,
+        score: myEntry.score, ts: Date.now()
+      });
     });
   }
 }
 
-// ── Перегружаем lbSubmitMyScores — читает из Firebase ─────────────
 const _origLbSubmitMyScores = window.lbSubmitMyScores;
 window.lbSubmitMyScores = async function() {
   if (_origLbSubmitMyScores) _origLbSubmitMyScores();
+  if (!sbReady()) return;
   const p = profileLoad();
   if (!p) return;
   const hi = loadHiScores();
-  // Заливаем свои рекорды в Firebase
-  LEADERBOARD_GAMES.forEach(async g => {
+  LEADERBOARD_GAMES.forEach(g => {
     const score = hi[g.id] || 0;
     if (!score) return;
-    fbPut(`leaderboard/${g.id}/${p.username}`, {
-      username: p.username, name: p.name, avatar: p.avatar, color: p.color, score, ts: Date.now()
+    sbUpsert('leaderboard', {
+      game: g.id, username: p.username, name: p.name,
+      avatar: p.avatar, color: p.color, score, ts: Date.now()
     });
   });
 };
 
-// ── leaderboardRender читает Firebase ─────────────────────────────
 const _origLeaderboardRender = window.leaderboardRender;
 window.leaderboardRender = async function() {
-  // Сначала показываем локальные данные мгновенно
   if (_origLeaderboardRender) _origLeaderboardRender();
-  // Затем подгружаем из Firebase
-  const fbData = await fbGet(`leaderboard/${_lbSelectedGame}`);
-  if (!fbData) return;
+  if (!sbReady()) return;
+  const data = await sbGet('leaderboard', `game=eq.${_lbSelectedGame}&order=score.desc&limit=50`);
+  if (!Array.isArray(data) || data.length === 0) return;
   const lb = lbLoad();
-  const entries = Object.values(fbData).filter(e => e && e.username && e.score);
-  entries.forEach(e => {
-    if (!lb[_lbSelectedGame]) lb[_lbSelectedGame] = [];
+  if (!lb[_lbSelectedGame]) lb[_lbSelectedGame] = [];
+  data.forEach(e => {
     const idx = lb[_lbSelectedGame].findIndex(x => x.username === e.username);
-    if (idx >= 0) { if (e.score > lb[_lbSelectedGame][idx].score) lb[_lbSelectedGame][idx] = e; }
-    else lb[_lbSelectedGame].push(e);
+    if (idx >= 0) { if (e.score > lb[_lbSelectedGame][idx].score) lb[_lbSelectedGame][idx] = {...e}; }
+    else lb[_lbSelectedGame].push({...e});
   });
   lb[_lbSelectedGame].sort((a,b) => b.score - a.score);
-  lb[_lbSelectedGame] = lb[_lbSelectedGame].slice(0, 50);
   lbSave(lb);
   if (_origLeaderboardRender) _origLeaderboardRender();
 };
@@ -12057,6 +12209,15 @@ function profileUpdateP2PStatus(msg) {
   const el = document.getElementById('profile-p2p-status');
   if (el) el.textContent = msg;
 }
+
+// Заполнить поля настроек при открытии
+const _origShowScreenForSb = window.showScreen;
+window.showScreen = (function(orig) {
+  return function(id, dir) {
+    if (id === 's-settings') sbFillSettings();
+    if (orig) orig(id, dir);
+  };
+})(window.showScreen);
 
 // ══ ЭКРАН ОНЛАЙН ═════════════════════════════════════════════════
 function profileRenderOnline() {
@@ -12112,7 +12273,7 @@ function profileAddFriend(username) {
     toast('👥 @' + username + ' добавлен в друзья!');
     // Запустить стрим сообщений для этого чата
     const p = profileLoad();
-    if (p) fbStreamChat(p.username, username);
+    if (p) sbPollChat(p.username, username);
   }
   profileRenderOnline();
 }
