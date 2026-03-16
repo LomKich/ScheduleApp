@@ -1923,7 +1923,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.1 — Android</div>
+        <div class="item-sub" id="app-version-str">3.2.1 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -4478,7 +4478,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.1';
+const APP_VERSION='3.2.1';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -6552,41 +6552,45 @@ function eggShowPicker() {
 }
 
 function eggStartGame(name) {
-  if(_eggBlockCards) return; // блокируем если только что открылось от тапа по версии
+  if (_eggBlockCards) return;
   SFX.play('gameSelect');
-  eggStopAll();
+
+  // osu — свой полноэкранный оверлей, не трогаем egg-overlay
   if (name === 'bubbles') {
-    // osu-режим — свой полноэкранный оверлей, не трогаем egg-overlay
-    const el = document.getElementById('egg-bubbles');
-    el.style.display = 'flex';
+    eggStopAll();
+    document.getElementById('egg-bubbles').style.display = 'flex';
     bubInit();
     return;
   }
+
+  // Все остальные игры: сначала прячем пикер и показываем «назад»,
+  // потом останавливаем предыдущие и запускаем новую.
   document.getElementById('egg-picker').style.display = 'none';
   document.getElementById('egg-back').classList.add('show');
-  if (name === 'snake') { document.getElementById('egg-snake').style.display = ''; snakeInit(); }
-  else if (name === 'ttt')  { document.getElementById('egg-ttt').style.display = ''; tttInit(); }
-  else if (name === 'pong') { document.getElementById('egg-pong').style.display = ''; pongInit(); }
-  else if (name === 'tetris') { document.getElementById('egg-tetris').style.display = ''; tetInit(); }
-  else if (name === 'dino') { document.getElementById('egg-dino').style.display = ''; dinoInit(); }
-  else if (name === 'blockblast') { document.getElementById('egg-blockblast').style.display = ''; bbInit(); }
-  else if (name === 'breakout') { document.getElementById('egg-breakout').style.display = ''; brInit(); }
-  else if (name === 'flappy')   { document.getElementById('egg-flappy').style.display = '';   flappyInit(); }
-  else if (name === '2048')     { document.getElementById('egg-2048').style.display = '';     g2048Init(); }
-  else if (name === 'coin')     { document.getElementById('egg-coin').style.display = '';     coinInit(); }
-  else if (name === 'dice')     { document.getElementById('egg-dice').style.display = '';     diceInit(); }
-  else if (name === 'basket')   { document.getElementById('egg-basket').style.display = '';   basketInit(); }
-  else if (name === 'geodash')  { document.getElementById('egg-geodash').style.display = '';  geoInit(); }
-  else if (name === 'tanks')    { document.getElementById('egg-tanks').style.display = '';    tanksInit(); }
-  else if (name === 'doom')        { doomStart(); }
-  else if (name === 'minecraft')   { minecraftStart(); }
+  eggStopAll();
+
+  if      (name === 'snake')      { document.getElementById('egg-snake').style.display      = ''; snakeInit();  }
+  else if (name === 'ttt')        { document.getElementById('egg-ttt').style.display        = ''; tttInit();    }
+  else if (name === 'pong')       { document.getElementById('egg-pong').style.display       = ''; pongInit();   }
+  else if (name === 'tetris')     { document.getElementById('egg-tetris').style.display     = ''; tetInit();    }
+  else if (name === 'dino')       { document.getElementById('egg-dino').style.display       = ''; dinoInit();   }
+  else if (name === 'blockblast') { document.getElementById('egg-blockblast').style.display = ''; bbInit();     }
+  else if (name === 'breakout')   { document.getElementById('egg-breakout').style.display   = ''; brInit();     }
+  else if (name === 'flappy')     { document.getElementById('egg-flappy').style.display     = ''; flappyInit(); }
+  else if (name === '2048')       { document.getElementById('egg-2048').style.display       = ''; g2048Init();  }
+  else if (name === 'coin')       { document.getElementById('egg-coin').style.display       = ''; coinInit();   }
+  else if (name === 'dice')       { document.getElementById('egg-dice').style.display       = ''; diceInit();   }
+  else if (name === 'basket')     { document.getElementById('egg-basket').style.display     = ''; basketInit(); }
+  else if (name === 'geodash')    { document.getElementById('egg-geodash').style.display    = ''; geoInit();    }
+  else if (name === 'tanks')      { document.getElementById('egg-tanks').style.display      = ''; tanksInit();  }
+  else if (name === 'doom')       { doomStart(); }
+  else if (name === 'minecraft')  { minecraftStart(); }
 }
 
 // Закрыть osu-режим → вернуться в список игр
 function bubbleClose() {
   bubStop();
-  const el = document.getElementById('egg-bubbles');
-  el.style.display = 'none';
+  document.getElementById('egg-bubbles').style.display = 'none';
   eggOpen();
 }
 
@@ -6597,7 +6601,7 @@ function eggStopAll() {
   dinoStop();
   brStop();
   bubStop();
-  // Скрываем osu оверлей если был открыт
+  // Скрываем osu-оверлей если был открыт
   const bub = document.getElementById('egg-bubbles');
   if (bub) bub.style.display = 'none';
   flappyStop();
@@ -6605,8 +6609,10 @@ function eggStopAll() {
   basketStop();
   geoStop();
   tanksStop();
-  doomStop();
-  minecraftStop();
+  // Doom/Minecraft останавливаем только если их оверлей активен —
+  // иначе setOrientation('portrait') вызывается лишний раз
+  if (document.getElementById('overlay-doom')?.classList.contains('active'))  doomStop();
+  if (document.getElementById('overlay-minecraft')?.classList.contains('active')) minecraftStop();
 }
 function g2048Stop(){document.removeEventListener('keydown',g2048Key);}
 
@@ -6691,7 +6697,7 @@ function openSecretVideo() {
   let videoMode;
   if      (roll < 0.333) videoMode = 'bad_apple';
   else if (roll < 0.666) videoMode = 'rickroll';
-  else                   videoMode = 'secret';
+  else                   videoMode = 'kiss_me_again';
   setTimeout(() => _openGame('overlay-ascii', 'ascii_player.html?v=' + videoMode), 100);
 }
 function asciiPlayerStop() { _closeGame('overlay-ascii'); }
