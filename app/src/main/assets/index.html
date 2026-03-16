@@ -1994,7 +1994,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.1.5 — Android</div>
+        <div class="item-sub" id="app-version-str">4.1.6 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -4758,7 +4758,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.1.5';
+const APP_VERSION='4.1.6';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -11781,154 +11781,281 @@ function profilePublicData(p) {
 }
 
 // ══ P2P ФОНОВОЕ СОЕДИНЕНИЕ ══════════════════════════════════════
-let _profilePeer = null;
-let _profileConnections = {};   // username → conn
-let _profileOnlinePeers = [];   // [{username, name, avatar, status, ...}]
-let _profilePeerReady = false;
-let _profileHeartbeatInterval = null;
-const BROADCAST_PEERS = [];     // известные peer-id для "broadcast"
-const MAX_RECONNECT_ATTEMPTS = 3;
-let _profileReconnectAttempts = 0;
-let _profileReconnectTimer = null;
+// ══════════════════════════════════════════════════════════════════
+// 🔥 FIREBASE REALTIME DATABASE — замена P2P
+// Работает через HTTPS/443 — проходит любой NAT, мобильный интернет,
+// корпоративные сети, VPN. Бесплатный тариф Spark.
+//
+// ❗ Смени FB_DB_URL на свой проект (firebase.google.com → создать проект
+//    → Realtime Database → правила: { ".read": true, ".write": true })
+// ══════════════════════════════════════════════════════════════════
+const FB_DB_URL = 'https://scheduleapp-social-default-rtdb.europe-west1.firebasedatabase.app';
 
+// ── REST helpers ────────────────────────────────────────────────
+async function fbGet(path) {
+  try {
+    const r = await fetch(`${FB_DB_URL}/${path}.json`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) { return null; }
+}
+async function fbPut(path, data) {
+  try {
+    await fetch(`${FB_DB_URL}/${path}.json`, {
+      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+    });
+  } catch(e) {}
+}
+async function fbPost(path, data) {
+  try {
+    const r = await fetch(`${FB_DB_URL}/${path}.json`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+    });
+    return await r.json(); // returns {name: pushId}
+  } catch(e) { return null; }
+}
+async function fbDelete(path) {
+  try { await fetch(`${FB_DB_URL}/${path}.json`, {method:'DELETE'}); } catch(e) {}
+}
+
+// SSE стрим (Firebase поддерживает text/event-stream)
+function fbStream(path, onData) {
+  try {
+    const src = new EventSource(`${FB_DB_URL}/${path}.json`);
+    src.addEventListener('put', e => {
+      try { onData(JSON.parse(e.data)); } catch(err) {}
+    });
+    src.onerror = () => {};
+    return src;
+  } catch(e) { return null; }
+}
+
+// ── Переменные состояния ─────────────────────────────────────────
+let _profileOnlinePeers  = [];
+let _profilePeerReady    = false;
+let _fbPresenceTimer     = null;
+let _fbPollTimer         = null;
+let _fbMsgStreams         = {};   // chatKey → EventSource
+let _fbLastMsgTs         = {};   // chatKey → last ts read
+
+// ── Подключение ──────────────────────────────────────────────────
 async function profileConnect(p) {
   if (!p) return;
   profileDisconnect();
+  profileUpdateP2PStatus('⏳ Подключаемся...');
   try {
-    const Peer = await tttLoadPeer(); // уже используем загрузчик PeerJS
-    const peerId = profileGetPeerId(p.username);
-    _profilePeer = new Peer(peerId, { debug: 0 });
+    // Записать своё присутствие
+    await fbPresencePut(p);
+    _profilePeerReady = true;
+    profileUpdateP2PStatus('🟢 Онлайн — @' + p.username);
 
-    _profilePeer.on('open', () => {
-      _profilePeerReady = true;
-      _profileReconnectAttempts = 0;
-      profileUpdateP2PStatus('🟢 Подключено — @' + p.username);
-      // Запускаем heartbeat — каждые 30 секунд пингуем известных пиров
-      _profileHeartbeatInterval = setInterval(profileHeartbeat, 30000);
-      profileHeartbeat();
-    });
+    // Обновлять присутствие каждые 25с (timeout = 60с)
+    _fbPresenceTimer = setInterval(() => fbPresencePut(profileLoad()), 25000);
+    // Читать онлайн-пользователей каждые 15с
+    _fbPollTimer = setInterval(fbPollPresence, 15000);
+    fbPollPresence(); // сразу
 
-    // Входящие подключения
-    _profilePeer.on('connection', conn => profileHandleIncoming(conn));
-
-    _profilePeer.on('disconnected', () => {
-      _profilePeerReady = false;
-      profileUpdateP2PStatus('🟡 Отключено, переподключение...');
-      profileScheduleReconnect(p);
-    });
-
-    _profilePeer.on('error', e => {
-      if (e.type === 'unavailable-id') {
-        // Peer с таким ID уже есть — значит мы уже подключены с другого устройства
-        profileUpdateP2PStatus('⚠️ Юзернейм занят на другом устройстве');
-      } else {
-        profileUpdateP2PStatus('🔴 Ошибка: ' + e.message);
-        profileScheduleReconnect(p);
-      }
-    });
+    // Стримить входящие сообщения
+    fbStartMsgStreams(p);
   } catch(e) {
-    profileUpdateP2PStatus('🔴 PeerJS не загрузился');
+    profileUpdateP2PStatus('🔴 Нет соединения с Firebase');
   }
 }
 
 function profileDisconnect() {
   _profilePeerReady = false;
-  clearInterval(_profileHeartbeatInterval);
-  clearTimeout(_profileReconnectTimer);
-  if (_profilePeer) {
-    try { _profilePeer.destroy(); } catch(e) {}
-    _profilePeer = null;
-  }
-  _profileConnections = {};
+  clearInterval(_fbPresenceTimer);
+  clearInterval(_fbPollTimer);
+  // Удалить своё присутствие
+  const p = profileLoad();
+  if (p) fbDelete(`presence/${p.username}`).catch(()=>{});
+  // Закрыть SSE потоки
+  Object.values(_fbMsgStreams).forEach(s => { try { s.close(); } catch(e){} });
+  _fbMsgStreams = {};
   _profileOnlinePeers = [];
 }
 
-function profileScheduleReconnect(p) {
-  if (_profileReconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
-  _profileReconnectAttempts++;
-  clearTimeout(_profileReconnectTimer);
-  _profileReconnectTimer = setTimeout(() => profileConnect(p), 5000 * _profileReconnectAttempts);
+// ── Присутствие ──────────────────────────────────────────────────
+async function fbPresencePut(p) {
+  if (!p) return;
+  await fbPut(`presence/${p.username}`, {
+    ...profilePublicData(p),
+    ts: Date.now()
+  });
 }
 
-function profileUpdateP2PStatus(msg) {
-  const el = document.getElementById('profile-p2p-status');
-  if (el) el.textContent = msg;
-}
-
-// Heartbeat — пытаемся подключиться к известным пирам из friends list и истории
-function profileHeartbeat() {
+async function fbPollPresence() {
+  const data = await fbGet('presence');
+  if (!data) return;
   const p = profileLoad();
-  if (!p || !_profilePeer || !_profilePeerReady) return;
-  const friends = friendsLoad();
-  friends.forEach(username => {
-    if (username === p.username) return;
-    if (_profileConnections[username]) return; // уже подключены
-    const peerId = profileGetPeerId(username);
-    profileConnectToPeer(peerId, username);
-  });
-}
-
-function profileConnectToPeer(peerId, username) {
-  if (!_profilePeer || !_profilePeerReady) return;
-  try {
-    const conn = _profilePeer.connect(peerId, { reliable: true });
-    conn.on('open', () => {
-      _profileConnections[username || peerId] = conn;
-      // Отправляем свой профиль
-      const p = profileLoad();
-      if (p) conn.send({ type: 'hello', profile: profilePublicData(p) });
-      profileHandleIncoming(conn);
-    });
-    conn.on('error', () => {});
-  } catch(e) {}
-}
-
-function profileHandleIncoming(conn) {
-  conn.on('data', data => {
-    if (!data || !data.type) return;
-    if (data.type === 'hello' || data.type === 'profile_update') {
-      const pd = data.profile;
-      if (!pd || !pd.username) return;
-      _profileConnections[pd.username] = conn;
-      // Обновить список онлайн
-      const idx = _profileOnlinePeers.findIndex(u => u.username === pd.username);
-      if (idx >= 0) _profileOnlinePeers[idx] = pd;
-      else _profileOnlinePeers.push(pd);
-      // Ответить своим профилем если это hello
-      if (data.type === 'hello') {
-        const p = profileLoad();
-        if (p) conn.send({ type: 'profile_update', profile: profilePublicData(p) });
-      }
-      profileUpdateOnlineCount();
-    }
-    if (data.type === 'ping') conn.send({ type: 'pong' });
-    if (data.type === 'friend_request') {
-      toast('👋 ' + (data.from || '???') + ' хочет добавить тебя в друзья!');
-      const accept = confirm(data.from + ' хочет добавить тебя в друзья. Принять?');
-      if (accept) profileAddFriend(data.fromUsername);
-    }
-  });
-  conn.on('close', () => {
-    // Убрать из онлайн
-    _profileOnlinePeers = _profileOnlinePeers.filter(u => {
-      const pid = profileGetPeerId(u.username);
-      return conn.peer !== pid;
-    });
-    profileUpdateOnlineCount();
-  });
-  conn.on('error', () => {});
-}
-
-function profileBroadcast(data) {
-  Object.values(_profileConnections).forEach(conn => {
-    try { if (conn.open) conn.send(data); } catch(e) {}
-  });
+  const now = Date.now();
+  _profileOnlinePeers = Object.entries(data)
+    .filter(([un, u]) => un !== p?.username && (now - (u.ts||0)) < 90000)
+    .map(([, u]) => u);
+  profileUpdateOnlineCount();
 }
 
 function profileUpdateOnlineCount() {
   const count = _profileOnlinePeers.length + 1;
+  profileUpdateP2PStatus('🟢 Онлайн • ' + count + ' ' + (count === 1 ? 'пользователь' : count < 5 ? 'пользователя' : 'пользователей'));
+}
+
+// ── Сообщения через Firebase ─────────────────────────────────────
+function fbChatKey(a, b) {
+  return [a, b].sort().join('__');
+}
+
+function fbStartMsgStreams(p) {
+  // Стримим все чаты из списка
+  const chats = chatsLoad();
+  chats.forEach(username => fbStreamChat(p.username, username));
+}
+
+function fbStreamChat(myUsername, otherUsername) {
+  const key = fbChatKey(myUsername, otherUsername);
+  if (_fbMsgStreams[key]) return;
+  const src = fbStream(`messages/${key}`, (data) => {
+    if (!data || !data.data) return;
+    fbHandleIncomingMessages(myUsername, otherUsername, data.data);
+  });
+  if (src) _fbMsgStreams[key] = src;
+}
+
+function fbHandleIncomingMessages(myUsername, otherUsername, firebaseData) {
+  if (!firebaseData) return;
+  const msgs = msgLoad();
+  const chatKey = fbChatKey(myUsername, otherUsername);
+  const lastTs = _fbLastMsgTs[chatKey] || 0;
+  let hasNew = false;
+
+  Object.values(firebaseData).forEach(msg => {
+    if (msg.from === myUsername) return; // наши, уже есть локально
+    if (!msg.ts || msg.ts <= lastTs) return;
+    // Новое входящее сообщение
+    if (!msgs[otherUsername]) msgs[otherUsername] = [];
+    const alreadyExists = msgs[otherUsername].some(m => m.ts === msg.ts && m.from === msg.from);
+    if (!alreadyExists) {
+      const alreadyRead = _msgCurrentChat === otherUsername;
+      msgs[otherUsername].push({
+        from: msg.from, to: myUsername, text: msg.text,
+        ts: msg.ts, delivered: true, read: alreadyRead
+      });
+      _fbLastMsgTs[chatKey] = Math.max(_fbLastMsgTs[chatKey]||0, msg.ts);
+      hasNew = true;
+    }
+  });
+
+  if (hasNew) {
+    msgSave(msgs);
+    if (_msgCurrentChat === otherUsername) messengerRenderMessages();
+    else {
+      const peer = _profileOnlinePeers.find(u => u.username === otherUsername) || {};
+      const lastMsg = msgs[otherUsername]?.[msgs[otherUsername].length-1];
+      messengerUpdateBadge();
+      if (lastMsg) toast(`💬 ${peer.name||otherUsername}: ${lastMsg.text.slice(0,40)}`);
+    }
+  }
+}
+
+// Переопределяем messengerSend — теперь через Firebase
+function messengerSend() {
+  const inp = document.getElementById('mc-input');
+  if (!inp || !_msgCurrentChat) return;
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  const p = profileLoad();
+  if (!p) return;
+
+  const ts = Date.now();
+  const msg = { from: p.username, to: _msgCurrentChat, text, ts, delivered: false, read: false };
+
+  // Сохранить локально
+  const msgs = msgLoad();
+  if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
+  msgs[_msgCurrentChat].push(msg);
+  msgSave(msgs);
+  const chats = chatsLoad();
+  if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
+  messengerRenderMessages();
+
+  // Убедиться что стрим для этого чата запущен
+  fbStreamChat(p.username, _msgCurrentChat);
+
+  // Отправить в Firebase
+  const chatKey = fbChatKey(p.username, _msgCurrentChat);
+  fbPost(`messages/${chatKey}`, {
+    from: p.username, fromName: p.name, fromAvatar: p.avatar,
+    to: _msgCurrentChat, text, ts
+  }).then(res => {
+    if (res) {
+      msg.delivered = true;
+      msgSave(msgs);
+      messengerRenderMessages();
+    }
+  });
+}
+
+// ── Broadcast для лидерборда (через Firebase) ─────────────────────
+function profileBroadcast(data) {
+  // Для profile_update — обновляем presence
+  if (data.type === 'profile_update') {
+    const p = profileLoad();
+    if (p) fbPresencePut(p);
+  }
+  // Для lb_update — пишем в Firebase
+  if (data.type === 'lb_update' && data.lb) {
+    const p = profileLoad();
+    if (!p) return;
+    Object.entries(data.lb).forEach(([game, entries]) => {
+      const myEntry = entries.find(e => e.username === p.username);
+      if (myEntry) fbPut(`leaderboard/${game}/${p.username}`, myEntry);
+    });
+  }
+}
+
+// ── Перегружаем lbSubmitMyScores — читает из Firebase ─────────────
+const _origLbSubmitMyScores = window.lbSubmitMyScores;
+window.lbSubmitMyScores = async function() {
+  if (_origLbSubmitMyScores) _origLbSubmitMyScores();
+  const p = profileLoad();
+  if (!p) return;
+  const hi = loadHiScores();
+  // Заливаем свои рекорды в Firebase
+  LEADERBOARD_GAMES.forEach(async g => {
+    const score = hi[g.id] || 0;
+    if (!score) return;
+    fbPut(`leaderboard/${g.id}/${p.username}`, {
+      username: p.username, name: p.name, avatar: p.avatar, color: p.color, score, ts: Date.now()
+    });
+  });
+};
+
+// ── leaderboardRender читает Firebase ─────────────────────────────
+const _origLeaderboardRender = window.leaderboardRender;
+window.leaderboardRender = async function() {
+  // Сначала показываем локальные данные мгновенно
+  if (_origLeaderboardRender) _origLeaderboardRender();
+  // Затем подгружаем из Firebase
+  const fbData = await fbGet(`leaderboard/${_lbSelectedGame}`);
+  if (!fbData) return;
+  const lb = lbLoad();
+  const entries = Object.values(fbData).filter(e => e && e.username && e.score);
+  entries.forEach(e => {
+    if (!lb[_lbSelectedGame]) lb[_lbSelectedGame] = [];
+    const idx = lb[_lbSelectedGame].findIndex(x => x.username === e.username);
+    if (idx >= 0) { if (e.score > lb[_lbSelectedGame][idx].score) lb[_lbSelectedGame][idx] = e; }
+    else lb[_lbSelectedGame].push(e);
+  });
+  lb[_lbSelectedGame].sort((a,b) => b.score - a.score);
+  lb[_lbSelectedGame] = lb[_lbSelectedGame].slice(0, 50);
+  lbSave(lb);
+  if (_origLeaderboardRender) _origLeaderboardRender();
+};
+
+function profileUpdateP2PStatus(msg) {
   const el = document.getElementById('profile-p2p-status');
-  if (el && _profilePeerReady) el.textContent = '🟢 Онлайн • ' + count + ' пользователей';
+  if (el) el.textContent = msg;
 }
 
 // ══ ЭКРАН ОНЛАЙН ═════════════════════════════════════════════════
@@ -11983,14 +12110,9 @@ function profileAddFriend(username) {
     friends.push(username);
     friendsSave(friends);
     toast('👥 @' + username + ' добавлен в друзья!');
-    // Попытаться подключиться
-    profileConnectToPeer(profileGetPeerId(username), username);
-    // Уведомить их
-    const conn = _profileConnections[username];
-    if (conn && conn.open) {
-      const p = profileLoad();
-      if (p) conn.send({ type: 'friend_request', from: p.name, fromUsername: p.username });
-    }
+    // Запустить стрим сообщений для этого чата
+    const p = profileLoad();
+    if (p) fbStreamChat(p.username, username);
   }
   profileRenderOnline();
 }
@@ -12356,85 +12478,11 @@ function messengerRenderMessages() {
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
 }
 
-function messengerSend() {
-  const inp = document.getElementById('mc-input');
-  if (!inp || !_msgCurrentChat) return;
-  const text = inp.value.trim();
-  if (!text) return;
-  inp.value = '';
-  const p = profileLoad();
-  if (!p) return;
-
-  const msg = { from: p.username, to: _msgCurrentChat, text, ts: Date.now(), delivered: false, read: false };
-  const msgs = msgLoad();
-  if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
-  msgs[_msgCurrentChat].push(msg);
-  msgSave(msgs);
-
-  // Добавить чат в список если новый
-  const chats = chatsLoad();
-  if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
-
-  messengerRenderMessages();
-
-  // Отправить через P2P
-  const conn = _profileConnections[_msgCurrentChat];
-  if (conn && conn.open) {
-    conn.send({ type: 'message', from: p.username, fromName: p.name, fromAvatar: p.avatar, text, ts: msg.ts });
-    msg.delivered = true;
-    msgSave(msgs);
-    messengerRenderMessages();
-  }
-}
-
 function msgFormatTime(ts) {
   if (!ts) return '';
   const d = new Date(ts);
   return d.toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit'});
 }
-
-// Входящие сообщения
-const _origHandleIncoming = window.profileHandleIncoming;
-window.profileHandleIncoming = function(conn) {
-  conn.on('data', data => {
-    if (data && data.type === 'message') {
-      const { from, fromName, fromAvatar, text, ts } = data;
-      // Сохранить
-      const msgs = msgLoad();
-      const p = profileLoad();
-      if (!msgs[from]) msgs[from] = [];
-      const alreadyRead = _msgCurrentChat === from && document.getElementById('s-messenger-chat')?.classList.contains('active');
-      msgs[from].push({ from, to: p?.username, text, ts: ts||Date.now(), delivered: true, read: alreadyRead });
-      msgSave(msgs);
-      const chats = chatsLoad();
-      if (!chats.includes(from)) { chats.unshift(from); chatsSave(chats); }
-      // Если открыт чат — обновить
-      if (_msgCurrentChat === from) messengerRenderMessages();
-      else {
-        messengerUpdateBadge();
-        toast(`💬 ${fromName||from}: ${text.slice(0,40)}`);
-      }
-    }
-    if (data && data.type === 'lb_update') {
-      const lb = lbLoad();
-      // Merge lb
-      if (data.lb) {
-        Object.entries(data.lb).forEach(([game, entries]) => {
-          if (!lb[game]) lb[game] = [];
-          entries.forEach(e => {
-            const idx = lb[game].findIndex(x => x.username === e.username);
-            if (idx >= 0) { if (e.score > lb[game][idx].score) lb[game][idx] = e; }
-            else lb[game].push(e);
-          });
-          lb[game].sort((a,b) => b.score - a.score);
-          lb[game] = lb[game].slice(0, 50);
-        });
-        lbSave(lb);
-      }
-    }
-  });
-  if (_origHandleIncoming) _origHandleIncoming(conn);
-};
 
 // Патч CMD для /vip
 const _origCmdExecForVip2 = window.cmdExec;
