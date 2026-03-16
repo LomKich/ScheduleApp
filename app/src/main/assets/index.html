@@ -476,6 +476,23 @@ body[data-theme="candy"] {--accent-text:#000}
 .nav-item.active{color:var(--accent)}
 .nav-item.active .nav-icon{transform:scale(1.15)}
 
+/* ── PROFILE CSS ── */
+.profile-avatar{width:88px;height:88px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:42px;border:3px solid var(--accent);flex-shrink:0;overflow:hidden;background:var(--surface2)}
+.profile-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.profile-card{background:var(--surface2);border-radius:18px;padding:20px;border:1.5px solid var(--surface3);margin-bottom:12px}
+.profile-username{font-size:13px;color:var(--muted);font-weight:600;margin-top:2px}
+.profile-bio{font-size:13px;color:var(--text);margin-top:8px;line-height:1.5;white-space:pre-wrap}
+.profile-status-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;margin-top:8px}
+.profile-stat{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1}
+.profile-stat-val{font-size:20px;font-weight:800;color:var(--text)}
+.profile-stat-lbl{font-size:10px;color:var(--muted)}
+.online-user-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:14px;border:1.5px solid var(--surface3)}
+.online-dot{width:9px;height:9px;border-radius:50%;background:#4caf7d;flex-shrink:0;box-shadow:0 0 6px #4caf7d}
+.status-chip{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid transparent;transition:border-color .15s,background .15s}
+.status-chip.selected{border-color:var(--accent)}
+.color-dot{width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:border-color .15s,transform .15s}
+.color-dot.selected{border-color:#fff;transform:scale(1.15)}
+
 .toggle-switch{width:44px;height:26px;border-radius:100px;background:var(--surface3);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
 .toggle-switch.on{background:var(--accent)}
 .toggle-switch::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
@@ -1977,7 +1994,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.1.3 — Android</div>
+        <div class="item-sub" id="app-version-str">4.1.5 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2020,6 +2037,174 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
   </div>
 </div>
 
+<!-- ЭКРАН ПРОФИЛЯ -->
+<div class="screen" id="s-profile">
+  <div class="hdr">
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
+    <div class="hdr-title">Профиль</div>
+    <button id="profile-edit-btn" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:700;padding:8px;cursor:pointer" onclick="profileToggleEdit()">Изменить</button>
+  </div>
+  <div class="body" id="profile-body">
+    <!-- Заглушка — рендерится через JS -->
+    <div style="text-align:center;padding:40px 20px;color:var(--muted)">Загрузка...</div>
+  </div>
+</div>
+
+<!-- ЭКРАН РЕДАКТИРОВАНИЯ ПРОФИЛЯ -->
+<div class="screen" id="s-profile-edit">
+  <div class="hdr">
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
+    <div class="hdr-title">Редактировать</div>
+    <button style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:700;padding:8px;cursor:pointer" onclick="profileSaveEdit()">Сохранить</button>
+  </div>
+  <div class="body">
+    <!-- Аватар -->
+    <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:24px;gap:12px">
+      <div id="edit-avatar-preview" style="width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:44px;cursor:pointer;background:var(--surface2);border:3px solid var(--accent);position:relative" onclick="profilePickAvatarType()">
+        <span id="edit-avatar-inner">😊</span>
+        <div style="position:absolute;bottom:2px;right:2px;width:24px;height:24px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px">✏️</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">Тапни для смены аватара</div>
+    </div>
+
+    <!-- Эмодзи-пикер для аватара -->
+    <div id="edit-avatar-emoji-picker" style="display:none;margin-bottom:16px">
+      <div class="section-label">Выбери эмодзи</div>
+      <div id="edit-emoji-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 0;max-height:180px;overflow-y:auto"></div>
+    </div>
+
+    <!-- Имя -->
+    <div class="section-label">Имя</div>
+    <input class="inp" id="edit-name" placeholder="Твоё имя" maxlength="32" style="margin-bottom:12px">
+
+    <!-- Юзернейм -->
+    <div class="section-label">Юзернейм</div>
+    <div style="position:relative;margin-bottom:4px">
+      <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px">@</span>
+      <input class="inp" id="edit-username" placeholder="username" maxlength="24"
+             style="padding-left:28px" oninput="profileCheckUsername(this.value)">
+    </div>
+    <div id="edit-username-status" style="font-size:11px;min-height:16px;margin-bottom:12px;padding-left:4px;color:var(--muted)"></div>
+
+    <!-- Биография -->
+    <div class="section-label">О себе</div>
+    <textarea class="inp" id="edit-bio" placeholder="Расскажи о себе..." maxlength="140" rows="3"
+              style="resize:none;height:auto;margin-bottom:12px"></textarea>
+    <div style="font-size:11px;color:var(--muted);text-align:right;margin-top:-10px;margin-bottom:12px">
+      <span id="edit-bio-count">0</span>/140
+    </div>
+
+    <!-- Статус -->
+    <div class="section-label">Статус</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px" id="edit-status-picker">
+      <!-- рендерится JS -->
+    </div>
+
+    <!-- Цвет профиля -->
+    <div class="section-label">Цвет профиля</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px" id="edit-color-picker">
+      <!-- рендерится JS -->
+    </div>
+
+    <div class="sep"></div>
+    <button class="btn" style="background:var(--danger,#c94f4f);color:#fff;margin-top:8px" onclick="profileLogout()">🚪 Выйти из аккаунта</button>
+  </div>
+</div>
+
+<!-- ЭКРАН ВХОДА/РЕГИСТРАЦИИ -->
+<div class="screen" id="s-login">
+  <div class="hdr">
+    <div class="hdr-title">Аккаунт</div>
+  </div>
+  <div class="body" style="display:flex;flex-direction:column;align-items:center;padding-top:40px">
+    <div style="font-size:60px;margin-bottom:16px">👤</div>
+    <div style="font-size:20px;font-weight:800;margin-bottom:8px;text-align:center">Создай аккаунт</div>
+    <div style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:32px;max-width:280px">Аккаунт хранится на устройстве. Юзернейм используется для мультиплеера</div>
+
+    <div style="width:100%;max-width:340px">
+      <div class="section-label">Имя</div>
+      <input class="inp" id="login-name" placeholder="Как тебя зовут?" maxlength="32" style="margin-bottom:12px">
+
+      <div class="section-label">Юзернейм</div>
+      <div style="position:relative;margin-bottom:4px">
+        <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)">@</span>
+        <input class="inp" id="login-username" placeholder="твой_ник" maxlength="24"
+               style="padding-left:28px" oninput="loginCheckUsername(this.value)">
+      </div>
+      <div id="login-username-status" style="font-size:11px;min-height:16px;margin-bottom:16px;padding-left:4px"></div>
+
+      <div class="section-label">Аватар</div>
+      <div id="login-emoji-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px"></div>
+
+      <button class="btn btn-accent" id="login-submit-btn" onclick="profileCreate()" disabled>Создать аккаунт →</button>
+      <div id="login-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:8px;min-height:16px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ЭКРАН ОНЛАЙН-ПОЛЬЗОВАТЕЛЕЙ -->
+<div class="screen" id="s-online">
+  <div class="hdr">
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
+    <div class="hdr-title">Онлайн</div>
+    <div id="online-count-hdr" style="font-size:12px;color:var(--muted);padding-right:8px"></div>
+  </div>
+  <div class="body">
+    <div class="section-label">Пользователи сейчас</div>
+    <div id="online-list" style="display:flex;flex-direction:column;gap:10px">
+      <div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Подключаемся...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ТАБЛИЦА ЛИДЕРОВ -->
+<div class="screen" id="s-leaderboard">
+  <div class="hdr">
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
+    <div class="hdr-title">🏆 Лидерборд</div>
+  </div>
+  <div class="body">
+    <div id="lb-content">
+      <div style="text-align:center;padding:30px;color:var(--muted)">Загрузка...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ МЕССЕНДЖЕР (HIDDEN — TODO: переместить в нав-бар) ══ -->
+<!-- MESSENGER_SCREEN_LIST -->
+<div class="screen" id="s-messenger">
+  <div class="hdr">
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
+    <div class="hdr-title">💬 Сообщения</div>
+    <button style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;padding:8px;cursor:pointer" onclick="profileRenderOnline();showScreen('s-online')">Найти</button>
+  </div>
+  <div class="body" id="messenger-list">
+    <div style="text-align:center;padding:40px;color:var(--muted)">Загрузка...</div>
+  </div>
+</div>
+
+<!-- MESSENGER_SCREEN_CHAT -->
+<div class="screen" id="s-messenger-chat">
+  <div class="hdr" style="padding-bottom:10px">
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-messenger','back')">‹</button>
+    <div style="display:flex;align-items:center;gap:10px;flex:1">
+      <div id="mc-hdr-avatar" style="width:36px;height:36px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">😊</div>
+      <div>
+        <div id="mc-hdr-name" style="font-size:15px;font-weight:700;line-height:1.2">...</div>
+        <div id="mc-hdr-sub" style="font-size:11px;color:var(--muted)"></div>
+      </div>
+    </div>
+  </div>
+  <!-- Messages area -->
+  <div id="mc-messages" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;min-height:0"></div>
+  <!-- Input bar -->
+  <div style="display:flex;gap:8px;padding:10px 16px calc(10px + var(--safe-bot));background:var(--surface);border-top:1px solid rgba(255,255,255,.06);flex-shrink:0">
+    <input id="mc-input" class="inp" placeholder="Сообщение..." style="flex:1;padding:10px 14px;margin:0"
+           onkeydown="if(event.key==='Enter')messengerSend()">
+    <button class="btn btn-accent" style="width:auto;padding:10px 16px;flex-shrink:0" onclick="messengerSend()">➤</button>
+  </div>
+</div>
+
 <!-- ══ Секретные эффекты ══ -->
 <canvas id="matrix-canvas"></canvas>
 <canvas id="snow-canvas" style="display:none"></canvas>
@@ -2031,6 +2216,8 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <span class="nav-icon">🏠</span><span>Главная</span></button>
   <button class="nav-item" id="nav-bells" onclick="bellNavTap()">
     <span class="nav-icon">🔔</span><span>Звонки</span></button>
+  <button class="nav-item" id="nav-profile" onclick="SFX.play('navSettings');navTo('s-profile','nav-profile')">
+    <span class="nav-icon" id="nav-profile-icon">👤</span><span>Профиль</span></button>
   <button class="nav-item" id="nav-settings" onclick="SFX.play('navSettings');navTo('s-settings','nav-settings')">
     <span class="nav-icon">⚙️</span><span>Настройки</span></button>
 </nav>
@@ -2268,10 +2455,29 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
   <!-- Крестики-нолики -->
   <div id="egg-ttt" class="egg-game" style="display:none">
     <div class="egg-game-title">❌ Крестики-нолики</div>
+    <!-- Mode selector -->
+    <div class="diff-picker" id="ttt-mode-picker" style="margin-bottom:8px">
+      <button class="diff-btn active" id="ttt-mode-ai"     onclick="tttSetMode('ai')">🤖 vs ИИ</button>
+      <button class="diff-btn"        id="ttt-mode-local"  onclick="tttSetMode('local')">📱 Вдвоём</button>
+      <button class="diff-btn"        id="ttt-mode-lan"    onclick="tttSetMode('lan')">📡 LAN</button>
+    </div>
+    <!-- LAN panel -->
+    <div id="ttt-lan-panel" style="display:none;width:100%;max-width:340px;margin-bottom:8px">
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <button class="btn btn-accent" style="flex:1;padding:10px;font-size:13px" onclick="tttLanHost()">🏠 Создать</button>
+        <button class="btn btn-surface3" style="flex:1;padding:10px;font-size:13px" onclick="tttLanJoinPrompt()">🔗 Войти</button>
+      </div>
+      <div id="ttt-lan-status" style="font-size:12px;color:var(--muted);text-align:center;min-height:18px"></div>
+      <div id="ttt-lan-code-wrap" style="display:none;margin-top:6px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-align:center">Код для друга:</div>
+        <div id="ttt-lan-code" onclick="tttLanCopyCode()" style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:.15em;padding:10px;background:var(--surface2);border-radius:10px;cursor:pointer"></div>
+        <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:4px">Тапни чтобы скопировать</div>
+      </div>
+    </div>
     <div class="ttt-scores">
-      <div class="ttt-score-item"><div class="ttt-score-val" id="ttt-score-x">0</div><div>Ты (✕)</div></div>
+      <div class="ttt-score-item"><div class="ttt-score-val" id="ttt-score-x">0</div><div id="ttt-label-x">Ты (✕)</div></div>
       <div class="ttt-score-item"><div class="ttt-score-val" id="ttt-score-d">0</div><div>Ничья</div></div>
-      <div class="ttt-score-item"><div class="ttt-score-val" id="ttt-score-o">0</div><div>ИИ (◯)</div></div>
+      <div class="ttt-score-item"><div class="ttt-score-val" id="ttt-score-o">0</div><div id="ttt-label-o">ИИ (◯)</div></div>
     </div>
     <div class="ttt-board" id="ttt-board"></div>
     <div class="ttt-status" id="ttt-status">Твой ход — ставь ✕</div>
@@ -2281,13 +2487,33 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
   <!-- Пинг-понг -->
   <div id="egg-pong" class="egg-game" style="display:none">
     <div class="egg-game-title">🏓 Пинг-понг</div>
-    <div class="diff-picker">
+    <!-- Mode selector -->
+    <div class="diff-picker" id="pong-mode-picker" style="margin-bottom:4px">
+      <button class="diff-btn active" id="pong-mode-ai"    onclick="pongSetMode('ai')">🤖 vs ИИ</button>
+      <button class="diff-btn"        id="pong-mode-local" onclick="pongSetMode('local')">📱 Вдвоём</button>
+      <button class="diff-btn"        id="pong-mode-lan"   onclick="pongSetMode('lan')">📡 LAN</button>
+    </div>
+    <!-- LAN panel -->
+    <div id="pong-lan-panel" style="display:none;width:100%;max-width:340px;margin-bottom:4px">
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <button class="btn btn-accent" style="flex:1;padding:10px;font-size:13px" onclick="pongLanHost()">🏠 Создать</button>
+        <button class="btn btn-surface3" style="flex:1;padding:10px;font-size:13px" onclick="pongLanJoinPrompt()">🔗 Войти</button>
+      </div>
+      <div id="pong-lan-status" style="font-size:12px;color:var(--muted);text-align:center;min-height:18px"></div>
+      <div id="pong-lan-code-wrap" style="display:none;margin-top:6px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-align:center">Код для друга:</div>
+        <div id="pong-lan-code" onclick="pongLanCopyCode()" style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:.15em;padding:10px;background:var(--surface2);border-radius:10px;cursor:pointer"></div>
+        <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:4px">Тапни чтобы скопировать</div>
+      </div>
+    </div>
+    <div class="diff-picker" id="pong-diff-picker">
       <button class="diff-btn" onclick="pongDifficulty='easy';updateDiffBtns('pong');pongRestart()">🐢 Легко</button>
       <button class="diff-btn active" onclick="pongDifficulty='normal';updateDiffBtns('pong');pongRestart()">⚡ Нормально</button>
       <button class="diff-btn" onclick="pongDifficulty='hard';updateDiffBtns('pong');pongRestart()">💀 Хардкор</button>
     </div>
     <div class="egg-score" id="pong-score-label">Счёт: 0 • Рекорд: 0</div>
-    <canvas id="pong-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
+    <canvas id="pong-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
+    <div id="pong-local-hint" style="display:none;font-size:11px;color:var(--muted);text-align:center;margin-top:6px">👆 Верхняя зона — Игрок 2 &nbsp;|&nbsp; 👇 Нижняя зона — Игрок 1</div>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="pongRestart()">🔄 Заново</button>
   </div>
 
@@ -4532,7 +4758,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.1.3';
+const APP_VERSION='4.1.5';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -7147,15 +7373,47 @@ function snakeDrawGameOver() {
 // ══════════════════════════════════════════════════════════════════
 // ── ❌ КРЕСТИКИ-НОЛИКИ (v1.7.0) — minimax IG ─────────────────────
 // ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// ── ❌ КРЕСТИКИ-НОЛИКИ с мультиплеером ───────────────────────────
+// ══════════════════════════════════════════════════════════════════
 let tttBoard, tttXWins = 0, tttOWins = 0, tttDraws = 0, tttGameOver;
+let tttMode = 'ai';       // 'ai' | 'local' | 'lan'
+let tttLocalTurn = 'X';   // для local mode
+let tttLanRole = null;    // 'host' | 'guest'
+let tttLanPeer = null, tttLanConn = null, tttLanSymbol = null;
+let tttLanReady = false;
 
-function tttInit() { tttRestart(); }
+function tttInit() { tttSetMode('ai'); }
+
+function tttSetMode(mode) {
+  tttMode = mode;
+  ['ai','local','lan'].forEach(m => {
+    const btn = document.getElementById('ttt-mode-' + m);
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+  const lanPanel = document.getElementById('ttt-lan-panel');
+  if (lanPanel) lanPanel.style.display = mode === 'lan' ? '' : 'none';
+  // Update score labels
+  const lx = document.getElementById('ttt-label-x');
+  const lo = document.getElementById('ttt-label-o');
+  if (mode === 'ai')    { if(lx)lx.textContent='Ты (✕)'; if(lo)lo.textContent='ИИ (◯)'; }
+  if (mode === 'local') { if(lx)lx.textContent='Игрок 1 (✕)'; if(lo)lo.textContent='Игрок 2 (◯)'; }
+  if (mode === 'lan')   { if(lx)lx.textContent='✕'; if(lo)lo.textContent='◯'; }
+  if (mode !== 'lan') { tttLanDisconnect(); tttRestart(); }
+}
 
 function tttRestart() {
   tttBoard = Array(9).fill(null);
   tttGameOver = false;
+  tttLocalTurn = 'X';
   tttRenderBoard();
-  document.getElementById('ttt-status').textContent = 'Твой ход — ставь ✕';
+  if (tttMode === 'ai')    document.getElementById('ttt-status').textContent = 'Твой ход — ставь ✕';
+  if (tttMode === 'local') document.getElementById('ttt-status').textContent = 'Игрок 1 (✕) ходит';
+  if (tttMode === 'lan') {
+    const myTurn = tttLanSymbol === 'X';
+    document.getElementById('ttt-status').textContent = tttLanReady ? (myTurn ? 'Твой ход' : 'Ждём хода противника...') : 'Ждём подключения...';
+  }
+  if (tttLanConn && tttLanReady) tttLanSend({type:'restart'});
 }
 
 function tttRenderBoard() {
@@ -7166,30 +7424,74 @@ function tttRenderBoard() {
     const cell = document.createElement('div');
     cell.className = 'ttt-cell' + (v === 'X' ? ' x-cell' : v === 'O' ? ' o-cell' : '');
     cell.textContent = v === 'X' ? '✕' : v === 'O' ? '◯' : '';
-    if (!v && !tttGameOver) cell.onclick = () => tttMove(i);
+    const canClick = !v && !tttGameOver && tttCanMove();
+    if (canClick) cell.onclick = () => tttMove(i);
     el.appendChild(cell);
   });
 }
 
+function tttCanMove() {
+  if (tttMode === 'ai') return true;
+  if (tttMode === 'local') return true;
+  if (tttMode === 'lan') return tttLanReady && !tttGameOver;
+  return false;
+}
+
 function tttMove(i) {
   if (tttBoard[i] || tttGameOver) return;
-  SFX.play('tttPlace');
-  tttBoard[i] = 'X';
-  tttRenderBoard();
-  const win = tttCheck(tttBoard);
-  if (win === 'X') { SFX.play('tttWin'); tttEndGame('✨ Ты победил! Неплохо!', win); return; }
-  if (tttFull(tttBoard)) { SFX.play('tttDraw'); tttEndGame('🤝 Ничья!', null); return; }
-  document.getElementById('ttt-status').textContent = '🤔 ИИ думает...';
-  setTimeout(() => {
-    const best = tttMinimax(tttBoard, 'O', -Infinity, Infinity);
-    tttBoard[best.idx] = 'O';
+
+  if (tttMode === 'ai') {
     SFX.play('tttPlace');
+    tttBoard[i] = 'X';
     tttRenderBoard();
-    const win2 = tttCheck(tttBoard);
-    if (win2 === 'O') { SFX.play('tttLose'); tttEndGame('🤖 ИИ победил! Ещё раз?', win2); return; }
+    const win = tttCheck(tttBoard);
+    if (win === 'X') { SFX.play('tttWin'); tttEndGame('✨ Ты победил!', win); return; }
     if (tttFull(tttBoard)) { SFX.play('tttDraw'); tttEndGame('🤝 Ничья!', null); return; }
-    document.getElementById('ttt-status').textContent = 'Твой ход — ставь ✕';
-  }, 250);
+    document.getElementById('ttt-status').textContent = '🤔 ИИ думает...';
+    setTimeout(() => {
+      const best = tttMinimax(tttBoard, 'O', -Infinity, Infinity);
+      tttBoard[best.idx] = 'O';
+      SFX.play('tttPlace');
+      tttRenderBoard();
+      const win2 = tttCheck(tttBoard);
+      if (win2 === 'O') { SFX.play('tttLose'); tttEndGame('🤖 ИИ победил!', win2); return; }
+      if (tttFull(tttBoard)) { SFX.play('tttDraw'); tttEndGame('🤝 Ничья!', null); return; }
+      document.getElementById('ttt-status').textContent = 'Твой ход — ставь ✕';
+    }, 250);
+    return;
+  }
+
+  if (tttMode === 'local') {
+    SFX.play('tttPlace');
+    tttBoard[i] = tttLocalTurn;
+    tttRenderBoard();
+    const win = tttCheck(tttBoard);
+    if (win) { SFX.play(win === 'X' ? 'tttWin' : 'tttLose'); tttEndGame('🏆 Игрок ' + (win === 'X' ? '1' : '2') + ' победил!', win); return; }
+    if (tttFull(tttBoard)) { SFX.play('tttDraw'); tttEndGame('🤝 Ничья!', null); return; }
+    tttLocalTurn = tttLocalTurn === 'X' ? 'O' : 'X';
+    document.getElementById('ttt-status').textContent = 'Игрок ' + (tttLocalTurn === 'X' ? '1' : '2') + ' (' + (tttLocalTurn === 'X' ? '✕' : '◯') + ') ходит';
+    return;
+  }
+
+  if (tttMode === 'lan') {
+    if (!tttLanReady || !tttLanConn) return;
+    // Check it's our turn
+    const myTurn = (tttLanSymbol === 'X' && tttCheck(tttBoard) === null && tttBoard.filter(Boolean).length % 2 === 0)
+                || (tttLanSymbol === 'O' && tttCheck(tttBoard) === null && tttBoard.filter(Boolean).length % 2 === 1);
+    if (!myTurn) return;
+    SFX.play('tttPlace');
+    tttBoard[i] = tttLanSymbol;
+    tttLanSend({type:'move', idx: i, board: tttBoard});
+    tttRenderBoard();
+    const win = tttCheck(tttBoard);
+    if (win) {
+      SFX.play(win === tttLanSymbol ? 'tttWin' : 'tttLose');
+      tttEndGame(win === tttLanSymbol ? '🏆 Ты победил!' : '😢 Противник победил', win);
+      return;
+    }
+    if (tttFull(tttBoard)) { SFX.play('tttDraw'); tttEndGame('🤝 Ничья!', null); return; }
+    document.getElementById('ttt-status').textContent = 'Ждём хода противника...';
+  }
 }
 
 function tttCheck(b) {
@@ -7197,7 +7499,6 @@ function tttCheck(b) {
   for (const [a,c,d] of lines) if (b[a] && b[a]===b[c] && b[a]===b[d]) return b[a];
   return null;
 }
-
 function tttFull(b) { return b.every(v => v); }
 
 function tttMinimax(b, player, alpha, beta) {
@@ -7210,8 +7511,7 @@ function tttMinimax(b, player, alpha, beta) {
     if (b[i]) continue;
     b[i] = player;
     const res = tttMinimax(b, player === 'O' ? 'X' : 'O', alpha, beta);
-    b[i] = null;
-    res.idx = i;
+    b[i] = null; res.idx = i;
     if (player === 'O') { if (res.score > best.score) best = res; alpha = Math.max(alpha, best.score); }
     else                { if (res.score < best.score) best = res; beta  = Math.min(beta,  best.score); }
     if (beta <= alpha) break;
@@ -7228,27 +7528,139 @@ function tttEndGame(msg, winner) {
   document.getElementById('ttt-score-x').textContent = tttXWins;
   document.getElementById('ttt-score-o').textContent = tttOWins;
   document.getElementById('ttt-score-d').textContent = tttDraws;
-  // Подсветить выигрышную линию
   if (winner) {
     const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-    const cells = document.getElementById('ttt-board').children;
-    for (const [a,c,d] of lines) {
+    const cells = document.getElementById('ttt-board')?.children;
+    if (cells) for (const [a,c,d] of lines) {
       if (tttBoard[a] === winner && tttBoard[c] === winner && tttBoard[d] === winner) {
-        [a,c,d].forEach(idx => cells[idx].classList.add('win'));
-        break;
+        [a,c,d].forEach(idx => cells[idx].classList.add('win')); break;
       }
     }
   }
 }
 
+// ── TTT LAN (PeerJS) ──────────────────────────────────────────────
+function tttLanSetStatus(msg) {
+  const el = document.getElementById('ttt-lan-status');
+  if (el) el.textContent = msg;
+}
+
+async function tttLoadPeer() {
+  if (window.Peer) return window.Peer;
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js';
+    s.onload = () => res(window.Peer);
+    s.onerror = () => rej(new Error('PeerJS не загрузился'));
+    document.head.appendChild(s);
+  });
+}
+
+async function tttLanHost() {
+  tttLanSetStatus('⏳ Создаём комнату...');
+  try {
+    const Peer = await tttLoadPeer();
+    tttLanDisconnect();
+    const code = Math.random().toString(36).slice(2,8).toUpperCase();
+    tttLanPeer = new Peer('ttt-' + code);
+    tttLanRole = 'host'; tttLanSymbol = 'X';
+    tttLanPeer.on('open', () => {
+      tttLanSetStatus('✅ Комната создана! Жди друга...');
+      const cw = document.getElementById('ttt-lan-code-wrap');
+      const cc = document.getElementById('ttt-lan-code');
+      if (cw) cw.style.display = '';
+      if (cc) cc.textContent = code;
+    });
+    tttLanPeer.on('connection', conn => {
+      tttLanConn = conn;
+      tttLanSetupConn(conn);
+    });
+    tttLanPeer.on('error', e => tttLanSetStatus('❌ Ошибка: ' + e.message));
+  } catch(e) { tttLanSetStatus('❌ ' + e.message); }
+}
+
+async function tttLanJoinPrompt() {
+  const code = prompt('Введи код комнаты:');
+  if (!code) return;
+  tttLanSetStatus('⏳ Подключаемся...');
+  try {
+    const Peer = await tttLoadPeer();
+    tttLanDisconnect();
+    tttLanPeer = new Peer();
+    tttLanRole = 'guest'; tttLanSymbol = 'O';
+    tttLanPeer.on('open', () => {
+      const conn = tttLanPeer.connect('ttt-' + code.trim().toUpperCase());
+      tttLanConn = conn;
+      tttLanSetupConn(conn);
+    });
+    tttLanPeer.on('error', e => tttLanSetStatus('❌ Ошибка: ' + e.message));
+  } catch(e) { tttLanSetStatus('❌ ' + e.message); }
+}
+
+function tttLanSetupConn(conn) {
+  conn.on('open', () => {
+    tttLanReady = true;
+    tttLanSetStatus('🟢 Подключено! ' + (tttLanSymbol === 'X' ? 'Ты ходишь первым (✕)' : 'Противник ходит первым (◯ — ты)'));
+    const cw = document.getElementById('ttt-lan-code-wrap');
+    if (cw) cw.style.display = 'none';
+    tttRestart();
+  });
+  conn.on('data', data => {
+    if (data.type === 'move') {
+      tttBoard = data.board;
+      SFX.play('tttPlace');
+      tttRenderBoard();
+      const win = tttCheck(tttBoard);
+      if (win) {
+        SFX.play(win === tttLanSymbol ? 'tttWin' : 'tttLose');
+        tttEndGame(win === tttLanSymbol ? '🏆 Ты победил!' : '😢 Противник победил', win);
+        return;
+      }
+      if (tttFull(tttBoard)) { SFX.play('tttDraw'); tttEndGame('🤝 Ничья!', null); return; }
+      document.getElementById('ttt-status').textContent = 'Твой ход';
+    }
+    if (data.type === 'restart') {
+      tttBoard = Array(9).fill(null); tttGameOver = false;
+      tttRenderBoard();
+      const myTurn = tttLanSymbol === 'X';
+      document.getElementById('ttt-status').textContent = myTurn ? 'Твой ход' : 'Ждём хода противника...';
+    }
+  });
+  conn.on('close', () => { tttLanReady = false; tttLanSetStatus('🔴 Соединение потеряно'); });
+  conn.on('error', e => tttLanSetStatus('❌ ' + e.message));
+}
+
+function tttLanSend(data) { if (tttLanConn) tttLanConn.send(data); }
+
+function tttLanCopyCode() {
+  const code = document.getElementById('ttt-lan-code')?.textContent;
+  if (code && navigator.clipboard) navigator.clipboard.writeText(code).then(() => toast('📋 Код скопирован: ' + code));
+  else toast('Код: ' + code);
+}
+
+function tttLanDisconnect() {
+  tttLanReady = false;
+  if (tttLanConn) { try { tttLanConn.close(); } catch(e){} tttLanConn = null; }
+  if (tttLanPeer) { try { tttLanPeer.destroy(); } catch(e){} tttLanPeer = null; }
+  const cw = document.getElementById('ttt-lan-code-wrap');
+  if (cw) cw.style.display = 'none';
+}
+
 // ══════════════════════════════════════════════════════════════════
-// ── 🏓 ПИНГ-ПОНГ (v1.8.0) ────────────────────────────────────────
+// ── 🏓 ПИНГ-ПОНГ с мультиплеером (v2.0) ─────────────────────────
 // ══════════════════════════════════════════════════════════════════
 let pongRaf = null, pongRunning = false;
 let pongScore = 0, pongHi = 0;
-let pongBall, pongPad, pongW, pongH, pongSpeed, pongMissed;
-let pongDifficulty = 'normal'; // easy / normal / hard
+let pongBall, pongPad, pongPad2, pongW, pongH, pongSpeed, pongMissed;
+let pongDifficulty = 'normal';
 let pongLastTime = 0;
+let pongMode = 'ai';       // 'ai' | 'local' | 'lan'
+let pongLanRole = null;    // 'host' | 'guest'
+let pongLanPeer = null, pongLanConn = null;
+let pongLanReady = false;
+let pongScoreP1 = 0, pongScoreP2 = 0; // для 2p режимов
+// Touch tracking для 2-player local
+let pongTouch1 = null, pongTouch2 = null;
 
 const PONG_DIFF = {
   easy:   { initSpeed: 2.0, maxSpeed: 7,  padW: 0.38 },
@@ -7256,22 +7668,86 @@ const PONG_DIFF = {
   hard:   { initSpeed: 4.5, maxSpeed: 14, padW: 0.22 },
 };
 
+function pongSetMode(mode) {
+  pongMode = mode;
+  ['ai','local','lan'].forEach(m => {
+    const btn = document.getElementById('pong-mode-' + m);
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+  const lanPanel = document.getElementById('pong-lan-panel');
+  const diffPicker = document.getElementById('pong-diff-picker');
+  const hint = document.getElementById('pong-local-hint');
+  if (lanPanel)   lanPanel.style.display   = mode === 'lan'   ? '' : 'none';
+  if (diffPicker) diffPicker.style.display = mode === 'ai'    ? '' : 'none';
+  if (hint)       hint.style.display       = mode === 'local' ? '' : 'none';
+  if (mode !== 'lan') { pongLanDisconnect(); }
+  pongScoreP1 = 0; pongScoreP2 = 0;
+  pongStop();
+  setTimeout(pongInit, 50);
+}
+
 function pongInit() {
   const canvas = document.getElementById('pong-canvas');
-  const side = Math.min(window.innerWidth - 36, 360);
+  if (!canvas) return;
+  const side = Math.min(window.innerWidth - 36, 380);
   canvas.width = side;
-  canvas.height = Math.round(side * 1.1);
+  // В 2p режимах нужно больше высоты — обе ракетки
+  canvas.height = Math.round(side * (pongMode === 'ai' ? 1.1 : 1.25));
   pongW = canvas.width; pongH = canvas.height;
   pongHi = getHi('pong');
   pongRestart();
-  const movePad = (clientX) => {
-    const rect = canvas.getBoundingClientRect();
-    pongPad.x = Math.max(pongPad.w/2, Math.min(pongW - pongPad.w/2, clientX - rect.left));
-  };
-  canvas.ontouchstart = e => { e.preventDefault(); movePad(e.touches[0].clientX); if (!pongRunning && !pongMissed) pongStart(); };
-  canvas.ontouchmove  = e => { e.preventDefault(); movePad(e.touches[0].clientX); };
-  canvas.onmousemove  = e => movePad(e.clientX);
-  canvas.onclick = () => { if (!pongRunning && !pongMissed) pongStart(); };
+
+  // Убираем старые обработчики
+  canvas.ontouchstart = null; canvas.ontouchmove = null;
+  canvas.ontouchend = null; canvas.onmousemove = null; canvas.onclick = null;
+
+  if (pongMode === 'ai') {
+    // Оригинальное управление — одна ракетка снизу
+    const movePad = (clientX) => {
+      const rect = canvas.getBoundingClientRect();
+      const scale = pongW / rect.width;
+      pongPad.x = Math.max(pongPad.w/2, Math.min(pongW - pongPad.w/2, (clientX - rect.left) * scale));
+    };
+    canvas.ontouchstart = e => { e.preventDefault(); movePad(e.touches[0].clientX); if (!pongRunning && !pongMissed) pongStart(); };
+    canvas.ontouchmove  = e => { e.preventDefault(); movePad(e.touches[0].clientX); };
+    canvas.onmousemove  = e => movePad(e.clientX);
+    canvas.onclick = () => { if (!pongRunning && !pongMissed) pongStart(); };
+  } else {
+    // 2-player: multi-touch — каждый палец управляет своей ракеткой
+    // Верхняя половина → Игрок 2 (pongPad2) / Нижняя половина → Игрок 1 (pongPad)
+    const handleTouches = (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const scale = pongW / rect.width;
+      const mid = rect.top + rect.height / 2;
+      for (const t of e.touches) {
+        const tx = (t.clientX - rect.left) * scale;
+        if (t.clientY > mid) {
+          // Bottom half → Player 1
+          pongPad.x = Math.max(pongPad.w/2, Math.min(pongW - pongPad.w/2, tx));
+        } else {
+          // Top half → Player 2
+          if (pongPad2) pongPad2.x = Math.max(pongPad2.w/2, Math.min(pongW - pongPad2.w/2, tx));
+          // In LAN mode, send position to opponent
+          if (pongMode === 'lan' && pongLanReady) pongLanSend({type:'pad', x: pongPad.x});
+        }
+      }
+      if (!pongRunning && !pongMissed) pongStart();
+    };
+    canvas.ontouchstart = handleTouches;
+    canvas.ontouchmove  = handleTouches;
+    canvas.onmousemove = e => {
+      const rect = canvas.getBoundingClientRect();
+      const scale = pongW / rect.width;
+      const tx = (e.clientX - rect.left) * scale;
+      if (e.clientY > rect.top + rect.height / 2) {
+        pongPad.x = Math.max(pongPad.w/2, Math.min(pongW - pongPad.w/2, tx));
+      } else if (pongPad2 && pongMode === 'local') {
+        pongPad2.x = Math.max(pongPad2.w/2, Math.min(pongW - pongPad2.w/2, tx));
+      }
+    };
+    canvas.onclick = () => { if (!pongRunning) pongStart(); };
+  }
 }
 
 function pongRestart() {
@@ -7279,16 +7755,28 @@ function pongRestart() {
   pongLastTime = 0;
   const diff = PONG_DIFF[pongDifficulty] || PONG_DIFF.normal;
   const padW = Math.round(pongW * diff.padW);
-  pongPad = {x: pongW/2, w: padW, h: 10, y: pongH - 22};
+  pongPad  = {x: pongW/2, w: padW, h: 10, y: pongH - 22};
+  pongPad2 = {x: pongW/2, w: padW, h: 10, y: 12};
   pongSpeed = diff.initSpeed; pongScore = 0; pongMissed = false; pongRunning = false;
   const angle = (Math.random() * 60 + 60) * (Math.PI/180) * (Math.random() > .5 ? 1 : -1);
-  pongBall = {x: pongW/2, y: pongH/2, r: 8, vx: Math.cos(angle)*pongSpeed, vy: -Math.abs(Math.sin(angle)*pongSpeed), sx:1, sy:1, sqT:0, trail:[]};
+  const vy = pongMode === 'ai' ? -Math.abs(Math.sin(angle)*pongSpeed) : (Math.random()>.5?1:-1)*Math.abs(Math.sin(angle)*pongSpeed);
+  pongBall = {x: pongW/2, y: pongH/2, r: 8, vx: Math.cos(angle)*pongSpeed, vy, sx:1, sy:1, sqT:0, trail:[]};
   pongUpdateScore();
   pongDraw();
-  _drawPongMsg('Тапни для старта 🏓');
+  if (pongMode === 'lan' && !pongLanReady) {
+    _drawPongMsg('Ждём подключения...');
+  } else {
+    _drawPongMsg(pongMode === 'ai' ? 'Тапни для старта 🏓' : 'Тапни для старта\n↑ Игрок 2 | Игрок 1 ↓');
+  }
 }
 
-function pongStart() { if (pongRunning) return; pongRunning = true; pongLoop(); }
+function pongStart() {
+  if (pongRunning) return;
+  if (pongMode === 'lan' && !pongLanReady) return;
+  pongRunning = true;
+  if (pongMode === 'lan') pongLanSend({type:'start', ball: pongBall});
+  pongLoop();
+}
 
 function pongStop() { cancelAnimationFrame(pongRaf); pongRaf = null; pongRunning = false; }
 
@@ -7301,37 +7789,24 @@ function pongLoop(ts) {
 }
 
 function pongTick(dt) {
-  const b = pongBall, p = pongPad;
+  const b = pongBall, p = pongPad, p2 = pongPad2;
   b.x += b.vx * dt; b.y += b.vy * dt;
 
-  // Trail — храним с временной меткой, чтобы длина не зависела от FPS
   const now1 = performance.now();
   b.trail.push({x: b.x, y: b.y, ts: now1});
-  // Удаляем точки старше 160мс
   while (b.trail.length > 0 && now1 - b.trail[0].ts > 160) b.trail.shift();
 
-  // Squish recovery
   if (b.sqT > 0) {
     b.sqT = Math.max(0, b.sqT - dt * 0.17);
     const k = b.sqT;
-    b.sx = 1 + (b._sqTx || 0) * k;
-    b.sy = 1 + (b._sqTy || 0) * k;
+    b.sx = 1 + (b._sqTx || 0) * k; b.sy = 1 + (b._sqTy || 0) * k;
   } else { b.sx = 1; b.sy = 1; }
 
-  if (b.x - b.r < 0) {
-    b.x = b.r; b.vx = Math.abs(b.vx);
-    b.sx = 0.84; b.sy = 1.14; b._sqTx = -0.16; b._sqTy = 0.14; b.sqT = 1;
-    SFX.play('pongWall');
-  }
-  if (b.x + b.r > pongW) {
-    b.x = pongW - b.r; b.vx = -Math.abs(b.vx);
-    b.sx = 0.84; b.sy = 1.14; b._sqTx = -0.16; b._sqTy = 0.14; b.sqT = 1;
-    SFX.play('pongWall');
-  }
-  if (b.y - b.r < 0) {
-    b.y = b.r; b.vy = Math.abs(b.vy);
-    b.sx = 1.14; b.sy = 0.84; b._sqTx = 0.14; b._sqTy = -0.16; b.sqT = 1;
-  }
+  // Wall bounce
+  if (b.x - b.r < 0) { b.x = b.r; b.vx = Math.abs(b.vx); b.sx=0.84;b.sy=1.14;b._sqTx=-0.16;b._sqTy=0.14;b.sqT=1; SFX.play('pongWall'); }
+  if (b.x + b.r > pongW) { b.x = pongW - b.r; b.vx = -Math.abs(b.vx); b.sx=0.84;b.sy=1.14;b._sqTx=-0.16;b._sqTy=0.14;b.sqT=1; SFX.play('pongWall'); }
+
+  // Bottom wall / pad1
   const padLeft = p.x - p.w/2, padRight = p.x + p.w/2;
   if (b.vy > 0 && b.y+b.r >= p.y && b.y+b.r <= p.y+p.h+4 && b.x >= padLeft-b.r && b.x <= padRight+b.r) {
     b.y = p.y - b.r;
@@ -7339,17 +7814,55 @@ function pongTick(dt) {
     const ba = hit * 65 * (Math.PI/180);
     pongSpeed = Math.min(pongSpeed + 0.18, PONG_DIFF[pongDifficulty].maxSpeed);
     b.vx = Math.sin(ba) * pongSpeed; b.vy = -Math.cos(ba) * pongSpeed;
-    b.sx = 1.16; b.sy = 0.86; b._sqTx = 0.16; b._sqTy = -0.14; b.sqT = 1;
+    b.sx=1.16;b.sy=0.86;b._sqTx=0.16;b._sqTy=-0.14;b.sqT=1;
     SFX.play('pongHit'); SFX.play('pongScore');
-    pongScore++; if (pongScore > pongHi) pongHi = saveHi('pong', pongScore);
-    pongUpdateScore();
+    if (pongMode === 'ai') {
+      pongScore++; if (pongScore > pongHi) pongHi = saveHi('pong', pongScore);
+      pongUpdateScore();
+    } else {
+      pongScoreP1++;
+      pongUpdateScore();
+      if (pongMode === 'lan') pongLanSend({type:'ball', ball: b, score1: pongScoreP1, score2: pongScoreP2});
+    }
   }
+
+  // Top wall / pad2
+  if (pongMode === 'ai') {
+    if (b.y - b.r < 0) { b.y = b.r; b.vy = Math.abs(b.vy); b.sx=1.14;b.sy=0.84;b._sqTx=0.14;b._sqTy=-0.16;b.sqT=1; }
+  } else {
+    // pad2 (top)
+    const pad2Left = p2.x - p2.w/2, pad2Right = p2.x + p2.w/2;
+    if (b.vy < 0 && b.y-b.r <= p2.y+p2.h && b.y-b.r >= p2.y-4 && b.x >= pad2Left-b.r && b.x <= pad2Right+b.r) {
+      b.y = p2.y + p2.h + b.r;
+      const hit = (b.x - p2.x) / (p2.w/2);
+      const ba = hit * 65 * (Math.PI/180);
+      pongSpeed = Math.min(pongSpeed + 0.18, PONG_DIFF['normal'].maxSpeed);
+      b.vx = Math.sin(ba) * pongSpeed; b.vy = Math.cos(ba) * pongSpeed;
+      b.sx=1.16;b.sy=0.86;b._sqTx=0.16;b._sqTy=-0.14;b.sqT=1;
+      SFX.play('pongHit'); SFX.play('pongScore');
+      pongScoreP2++;
+      pongUpdateScore();
+      if (pongMode === 'lan') pongLanSend({type:'ball', ball: b, score1: pongScoreP1, score2: pongScoreP2});
+    }
+    // Ball out top
+    if (b.y - b.r < 0) {
+      pongRunning = false; pongMissed = true;
+      cancelAnimationFrame(pongRaf);
+      SFX.play('pongLose');
+      pongDraw(); _drawPongMsg('💀 Игрок 1 пропустил! Тапни — заново');
+      return;
+    }
+  }
+
+  // Ball out bottom
   if (b.y - b.r > pongH) {
     pongRunning = false; pongMissed = true;
     cancelAnimationFrame(pongRaf);
     SFX.play('pongLose');
-    pongDraw(); _drawPongMsg('💀 Промах! Тапни — заново');
-    toast('💀 Счёт: ' + pongScore);
+    pongDraw();
+    const msg = pongMode === 'ai' ? '💀 Промах! Тапни — заново' : '💀 Игрок 2 пропустил! Тапни — заново';
+    _drawPongMsg(msg);
+    if (pongMode === 'ai') toast('💀 Счёт: ' + pongScore);
   }
 }
 
@@ -7357,59 +7870,171 @@ function pongDraw() {
   const canvas = document.getElementById('pong-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const b = pongBall, p = pongPad;
+  const b = pongBall, p = pongPad, p2 = pongPad2;
   const accent = getAccent();
   ctx.fillStyle = '#111'; ctx.fillRect(0, 0, pongW, pongH);
+
+  // Center line
   ctx.setLineDash([6,6]); ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, pongH/2); ctx.lineTo(pongW, pongH/2); ctx.stroke();
   ctx.setLineDash([]);
 
-  // Trail — по возрасту точки, не по индексу
-  const trail = b.trail || [];
-  const trailDur = 160;
-  const nowT = performance.now();
+  // 2P score overlay
+  if (pongMode !== 'ai') {
+    ctx.font = 'bold 28px "JetBrains Mono",monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillText(pongScoreP2, pongW/2, pongH/2 - 10);
+    ctx.fillText(pongScoreP1, pongW/2, pongH/2 + 30);
+    // Player labels
+    ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillText(pongMode === 'lan' ? '👆 Противник' : '👆 Игрок 2', pongW/2, 28);
+    ctx.fillText(pongMode === 'lan' ? '👇 Ты'       : '👇 Игрок 1', pongW/2, pongH - 30);
+  }
+
+  // Trail
+  const trail = b.trail || [], trailDur = 160, nowT = performance.now();
   for (let i = 0; i < trail.length; i++) {
-    const age = nowT - trail[i].ts;
-    const t = Math.max(0, 1 - age / trailDur); // 1=свежая, 0=старая
-    const alpha = t * t * 0.45;
-    const r = b.r * (0.25 + t * 0.55);
-    ctx.globalAlpha = alpha;
+    const age = nowT - trail[i].ts, t = Math.max(0, 1 - age / trailDur);
+    ctx.globalAlpha = t * t * 0.45;
     ctx.fillStyle = accent;
-    ctx.beginPath(); ctx.arc(trail[i].x, trail[i].y, r, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(trail[i].x, trail[i].y, b.r * (0.25 + t * 0.55), 0, Math.PI*2); ctx.fill();
   }
   ctx.globalAlpha = 1;
 
-  // Ball with squish
-  const sx = b.sx || 1, sy = b.sy || 1;
-  ctx.save();
-  ctx.translate(b.x, b.y);
-  ctx.scale(sx, sy);
+  // Ball
+  const sx = b.sx||1, sy = b.sy||1;
+  ctx.save(); ctx.translate(b.x, b.y); ctx.scale(sx, sy);
   ctx.shadowColor = accent; ctx.shadowBlur = 16; ctx.fillStyle = accent;
   ctx.beginPath(); ctx.arc(0, 0, b.r, 0, Math.PI*2); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.restore();
+  ctx.shadowBlur = 0; ctx.restore();
 
-  // Paddle
-  const grad = ctx.createLinearGradient(p.x-p.w/2, 0, p.x+p.w/2, 0);
-  grad.addColorStop(0, 'rgba(255,255,255,.15)'); grad.addColorStop(.5, accent); grad.addColorStop(1, 'rgba(255,255,255,.15)');
-  ctx.fillStyle = grad; ctx.shadowColor = accent; ctx.shadowBlur = 10;
-  if (ctx.roundRect) ctx.roundRect(p.x-p.w/2, p.y, p.w, p.h, 6); else ctx.rect(p.x-p.w/2, p.y, p.w, p.h);
-  ctx.fill(); ctx.shadowBlur = 0;
+  // Paddle 1 (bottom)
+  const drawPad = (pad, color) => {
+    const grad = ctx.createLinearGradient(pad.x-pad.w/2, 0, pad.x+pad.w/2, 0);
+    grad.addColorStop(0, 'rgba(255,255,255,.15)'); grad.addColorStop(.5, color); grad.addColorStop(1, 'rgba(255,255,255,.15)');
+    ctx.fillStyle = grad; ctx.shadowColor = color; ctx.shadowBlur = 10;
+    if (ctx.roundRect) ctx.roundRect(pad.x-pad.w/2, pad.y, pad.w, pad.h, 6); else ctx.rect(pad.x-pad.w/2, pad.y, pad.w, pad.h);
+    ctx.fill(); ctx.shadowBlur = 0;
+  };
+  drawPad(p, accent);
+  // Paddle 2 (top) only in 2P modes
+  if (pongMode !== 'ai' && p2) drawPad(p2, '#60cdff');
+
+  ctx.textAlign = 'left';
 }
 
 function _drawPongMsg(msg) {
   const canvas = document.getElementById('pong-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, pongH/2-30, pongW, 56);
-  ctx.fillStyle = '#f0ede8'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(msg, pongW/2, pongH/2+8);
-  canvas.onclick = () => { pongMissed = false; pongRestart(); pongStart(); };
+  const lines = msg.split('\n');
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, pongH/2-40, pongW, lines.length*24+32);
+  ctx.fillStyle = '#f0ede8'; ctx.textAlign = 'center';
+  lines.forEach((line, i) => {
+    ctx.font = i === 0 ? 'bold 15px sans-serif' : '12px sans-serif';
+    ctx.fillText(line, pongW/2, pongH/2 - 10 + i * 22);
+  });
+  canvas.onclick = () => { pongMissed = false; pongRestart(); if (pongMode !== 'lan') pongStart(); };
 }
 
 function pongUpdateScore() {
   const el = document.getElementById('pong-score-label');
-  if (el) el.textContent = 'Счёт: ' + pongScore + ' • Рекорд: ' + pongHi;
+  if (!el) return;
+  if (pongMode === 'ai') el.textContent = 'Счёт: ' + pongScore + ' • Рекорд: ' + pongHi;
+  else el.textContent = '🟠 Игрок 1: ' + pongScoreP1 + '  |  🔵 Игрок 2: ' + pongScoreP2;
+}
+
+// ── PONG LAN (PeerJS) ──────────────────────────────────────────────
+function pongLanSetStatus(msg) {
+  const el = document.getElementById('pong-lan-status');
+  if (el) el.textContent = msg;
+}
+
+async function pongLanHost() {
+  pongLanSetStatus('⏳ Создаём комнату...');
+  try {
+    const Peer = await tttLoadPeer(); // переиспользуем загрузчик
+    pongLanDisconnect();
+    const code = Math.random().toString(36).slice(2,8).toUpperCase();
+    pongLanPeer = new Peer('pong-' + code);
+    pongLanRole = 'host';
+    pongLanPeer.on('open', () => {
+      pongLanSetStatus('✅ Комната создана! Жди друга...');
+      const cw = document.getElementById('pong-lan-code-wrap');
+      const cc = document.getElementById('pong-lan-code');
+      if (cw) cw.style.display = '';
+      if (cc) cc.textContent = code;
+    });
+    pongLanPeer.on('connection', conn => pongLanSetupConn(conn));
+    pongLanPeer.on('error', e => pongLanSetStatus('❌ ' + e.message));
+  } catch(e) { pongLanSetStatus('❌ ' + e.message); }
+}
+
+async function pongLanJoinPrompt() {
+  const code = prompt('Введи код комнаты:');
+  if (!code) return;
+  pongLanSetStatus('⏳ Подключаемся...');
+  try {
+    const Peer = await tttLoadPeer();
+    pongLanDisconnect();
+    pongLanPeer = new Peer();
+    pongLanRole = 'guest';
+    pongLanPeer.on('open', () => {
+      const conn = pongLanPeer.connect('pong-' + code.trim().toUpperCase());
+      pongLanSetupConn(conn);
+    });
+    pongLanPeer.on('error', e => pongLanSetStatus('❌ ' + e.message));
+  } catch(e) { pongLanSetStatus('❌ ' + e.message); }
+}
+
+function pongLanSetupConn(conn) {
+  pongLanConn = conn;
+  conn.on('open', () => {
+    pongLanReady = true;
+    // Host = controls bottom pad, Guest = controls top pad
+    pongLanSetStatus('🟢 Подключено! ' + (pongLanRole === 'host' ? 'Ты управляешь нижней ракеткой 👇' : 'Ты управляешь верхней ракеткой 👆'));
+    const cw = document.getElementById('pong-lan-code-wrap');
+    if (cw) cw.style.display = 'none';
+    pongRestart();
+    if (pongLanRole === 'host') pongStart();
+  });
+  conn.on('data', data => {
+    if (data.type === 'pad') {
+      // Opponent moved their paddle
+      if (pongLanRole === 'host') { if (pongPad2) pongPad2.x = data.x; }
+      else { if (pongPad) pongPad.x = data.x; }
+    }
+    if (data.type === 'ball') {
+      // Sync ball state from host
+      if (pongLanRole === 'guest') {
+        Object.assign(pongBall, data.ball);
+        pongScoreP1 = data.score1; pongScoreP2 = data.score2;
+        pongUpdateScore();
+      }
+    }
+    if (data.type === 'start') {
+      if (!pongRunning) { Object.assign(pongBall, data.ball); pongStart(); }
+    }
+  });
+  conn.on('close', () => { pongLanReady = false; pongLanSetStatus('🔴 Соединение потеряно'); pongStop(); });
+  conn.on('error', e => pongLanSetStatus('❌ ' + e.message));
+}
+
+function pongLanSend(data) { if (pongLanConn) pongLanConn.send(data); }
+
+function pongLanCopyCode() {
+  const code = document.getElementById('pong-lan-code')?.textContent;
+  if (code && navigator.clipboard) navigator.clipboard.writeText(code).then(() => toast('📋 Код скопирован: ' + code));
+  else toast('Код: ' + code);
+}
+
+function pongLanDisconnect() {
+  pongLanReady = false;
+  if (pongLanConn) { try { pongLanConn.close(); } catch(e){} pongLanConn = null; }
+  if (pongLanPeer) { try { pongLanPeer.destroy(); } catch(e){} pongLanPeer = null; }
+  const cw = document.getElementById('pong-lan-code-wrap');
+  if (cw) cw.style.display = 'none';
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -10588,4 +11213,1249 @@ function openSecretVideo() {
 }
 function asciiPlayerStop() { _closeGame('overlay-ascii'); }
 
+</script>
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// 👤 СИСТЕМА АККАУНТОВ И ПРОФИЛЯ
+// Хранение: localStorage. P2P онлайн: PeerJS (id = "sapp-" + username)
+// ══════════════════════════════════════════════════════════════════════
+
+const PROFILE_KEY   = 'sapp_profile_v1';
+const ACCOUNTS_KEY  = 'sapp_accounts_v1'; // все локальные аккаунты
+const FRIENDS_KEY   = 'sapp_friends_v1';
+
+const PROFILE_STATUSES = [
+  { id:'online',  emoji:'🟢', label:'В сети',       color:'#4caf7d' },
+  { id:'study',   emoji:'📚', label:'Учусь',         color:'#60cdff' },
+  { id:'busy',    emoji:'🔴', label:'Занят',          color:'#c94f4f' },
+  { id:'sleep',   emoji:'😴', label:'Сплю',           color:'#a78bfa' },
+  { id:'game',    emoji:'🎮', label:'Играю',          color:'#f5c518' },
+  { id:'away',    emoji:'🌙', label:'Отошёл',         color:'#e87722' },
+];
+
+const PROFILE_COLORS = [
+  '#e87722','#60cdff','#a78bfa','#4caf7d','#f5c518','#c94f4f',
+  '#ff66aa','#00e5ff','#ffb347','#b2ff59','#ff6e40','#40c4ff',
+];
+
+const AVATAR_EMOJIS = [
+  '😊','😎','🤓','🥳','😏','🤩','🦊','🐺','🦋','🐸','🐱','🐶',
+  '🦁','🐼','🐨','🦄','🐉','🦅','🎭','🤖','👻','💀','🎃','⚡',
+  '🔥','💎','🌙','⭐','🌈','🎵','🎮','🏆',
+];
+
+// ── Helpers ──────────────────────────────────────────────────────
+function profileLoad()    { try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || null; } catch(e){ return null; } }
+function profileSave(p)   { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }
+function accountsLoad()   { try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || {}; } catch(e){ return {}; } }
+function accountsSave(a)  { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); }
+function friendsLoad()    { try { return JSON.parse(localStorage.getItem(FRIENDS_KEY)) || []; } catch(e){ return []; } }
+function friendsSave(f)   { localStorage.setItem(FRIENDS_KEY, JSON.stringify(f)); }
+
+function profileHashPwd(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+  return h.toString(16);
+}
+
+function profileGetPeerId(username) {
+  return 'sapp-' + username.toLowerCase().replace(/[^a-z0-9_]/g, '');
+}
+
+// ── Инициализация при старте ─────────────────────────────────────
+function profileBootstrap() {
+  const p = profileLoad();
+  updateNavProfileIcon(p);
+  if (!p) {
+    // Показать экран логина при первом запуске
+    setTimeout(() => {
+      if (!profileLoad()) { profileInitLoginScreen(); showScreen('s-login'); }
+    }, 1200);
+  } else {
+    profileConnect(p);
+  }
+}
+
+// ── Обновить иконку в нав-баре ───────────────────────────────────
+function updateNavProfileIcon(p) {
+  const el = document.getElementById('nav-profile-icon');
+  if (!el) return;
+  if (p) {
+    if (p.avatarType === 'emoji') el.textContent = p.avatar || '😊';
+    else el.textContent = '👤';
+  } else {
+    el.textContent = '👤';
+  }
+}
+
+// ══ ЭКРАН ЛОГИНА ═════════════════════════════════════════════════
+let _loginSelectedEmoji = '😊';
+
+function profileInitLoginScreen() {
+  _loginSelectedEmoji = '😊';
+  const grid = document.getElementById('login-emoji-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  AVATAR_EMOJIS.forEach(em => {
+    const btn = document.createElement('button');
+    btn.textContent = em;
+    btn.style.cssText = 'font-size:28px;width:46px;height:46px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);cursor:pointer;transition:border-color .15s,transform .15s';
+    btn.onclick = () => {
+      _loginSelectedEmoji = em;
+      grid.querySelectorAll('button').forEach(b => b.style.borderColor = 'var(--surface3)');
+      btn.style.borderColor = 'var(--accent)';
+      btn.style.transform = 'scale(1.15)';
+    };
+    if (em === '😊') { btn.style.borderColor = 'var(--accent)'; }
+    grid.appendChild(btn);
+  });
+}
+
+function loginCheckUsername(val) {
+  const status = document.getElementById('login-username-status');
+  const btn = document.getElementById('login-submit-btn');
+  if (!val) { if(status)status.textContent=''; if(btn)btn.disabled=true; return; }
+  const clean = val.replace(/[^a-zA-Z0-9_]/g, '');
+  if (document.getElementById('login-username')) document.getElementById('login-username').value = clean;
+  if (clean.length < 3) {
+    if(status){status.textContent='Минимум 3 символа'; status.style.color='var(--danger,#c94f4f)';}
+    if(btn)btn.disabled=true; return;
+  }
+  if(status){status.textContent='✓ Отлично!'; status.style.color='#4caf7d';}
+  if(btn)btn.disabled=false;
+}
+
+function profileCreate() {
+  const nameEl = document.getElementById('login-name');
+  const unEl = document.getElementById('login-username');
+  const errEl = document.getElementById('login-error');
+  const name = (nameEl?.value || '').trim();
+  const username = (unEl?.value || '').trim().toLowerCase();
+  if (!name) { if(errEl)errEl.textContent='Введи имя'; return; }
+  if (username.length < 3) { if(errEl)errEl.textContent='Юзернейм слишком короткий'; return; }
+  const profile = {
+    name, username,
+    avatarType: 'emoji',
+    avatar: _loginSelectedEmoji,
+    bio: '',
+    status: 'online',
+    color: PROFILE_COLORS[0],
+    createdAt: Date.now(),
+    uid: Date.now().toString(36),
+  };
+  profileSave(profile);
+  // Сохранить в локальный список аккаунтов
+  const accounts = accountsLoad();
+  accounts[username] = { name, avatar: _loginSelectedEmoji, createdAt: profile.createdAt };
+  accountsSave(accounts);
+  updateNavProfileIcon(profile);
+  profileConnect(profile);
+  profileRenderScreen();
+  showScreen('s-profile');
+  toast('🎉 Добро пожаловать, ' + name + '!');
+}
+
+// ══ ЭКРАН ПРОФИЛЯ ════════════════════════════════════════════════
+function profileRenderScreen() {
+  const p = profileLoad();
+  const body = document.getElementById('profile-body');
+  if (!body) return;
+  if (!p) {
+    body.innerHTML = '<div style="text-align:center;padding:40px"><button class="btn btn-accent" onclick="profileInitLoginScreen();showScreen(\'s-login\')">Войти / Создать аккаунт</button></div>';
+    return;
+  }
+
+  const statusObj = PROFILE_STATUSES.find(s => s.id === p.status) || PROFILE_STATUSES[0];
+  const onlinePeers = _profileOnlinePeers || [];
+  const vip = p.vip;
+  const frameStyle = PROFILE_FRAMES[p.frame] || PROFILE_FRAMES['none'];
+  const badgeObj = PROFILE_BADGES.find(b => b.id === p.badge);
+  const hi = loadHiScores();
+
+  // Баннер
+  const bannerBg = p.banner
+    ? (p.banner.startsWith('#') ? `background:${p.banner}` : `background:${p.banner}`)
+    : `background:linear-gradient(135deg,${p.color||'var(--accent)'}44,var(--surface2))`;
+
+  body.innerHTML = `
+    <!-- Баннер + аватар (Telegram-style) -->
+    <div style="position:relative;margin:-12px -16px 0;margin-bottom:0">
+      <div style="${bannerBg};height:110px;width:100%"></div>
+      <div style="position:absolute;bottom:-44px;left:20px">
+        <div class="profile-avatar ${frameStyle.cls}" style="width:88px;height:88px;font-size:42px;border-color:${p.color||'var(--accent)'};${frameStyle.style}">
+          ${p.avatarType === 'photo' && p.avatarData
+            ? `<img src="${p.avatarData}" alt="avatar" style="width:88px;height:88px;object-fit:cover;border-radius:50%">`
+            : `<span>${p.avatar||'😊'}</span>`}
+          ${vip ? '<div style="position:absolute;bottom:2px;right:2px;font-size:16px">👑</div>' : ''}
+        </div>
+      </div>
+      ${badgeObj ? `<div style="position:absolute;bottom:-38px;left:118px;font-size:13px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
+    </div>
+    <div style="height:52px"></div>
+
+    <!-- Имя и инфо -->
+    <div style="padding:0 4px 12px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:22px;font-weight:800;color:var(--text)">${escHtml(p.name)}</span>
+        ${vip ? '<span style="font-size:11px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:3px 7px;border-radius:8px;letter-spacing:.04em">VIP</span>' : ''}
+      </div>
+      <div class="profile-username" style="margin-top:2px">@${escHtml(p.username)}</div>
+      <div class="profile-status-badge" style="background:${statusObj.color}22;color:${statusObj.color};margin-top:8px">
+        ${statusObj.emoji} ${statusObj.label}
+      </div>
+      ${p.bio ? `<div class="profile-bio" style="margin-top:10px">${escHtml(p.bio)}</div>` : ''}
+    </div>
+
+    <!-- Статистика -->
+    <div class="profile-card" style="display:flex;gap:8px;margin-top:4px">
+      <div class="profile-stat">
+        <div class="profile-stat-val">${onlinePeers.length + 1}</div>
+        <div class="profile-stat-lbl">Онлайн</div>
+      </div>
+      <div style="width:1px;background:var(--surface3)"></div>
+      <div class="profile-stat">
+        <div class="profile-stat-val">${friendsLoad().length}</div>
+        <div class="profile-stat-lbl">Друзья</div>
+      </div>
+      <div style="width:1px;background:var(--surface3)"></div>
+      <div class="profile-stat">
+        <div class="profile-stat-val">${hi.snake||0}</div>
+        <div class="profile-stat-lbl">🐍 Рекорд</div>
+      </div>
+      <div style="width:1px;background:var(--surface3)"></div>
+      <div class="profile-stat">
+        <div class="profile-stat-val">${hi.tetris||0}</div>
+        <div class="profile-stat-lbl">🧱 Рекорд</div>
+      </div>
+    </div>
+
+    <!-- P2P статус -->
+    <div class="settings-row" style="margin-bottom:8px">
+      <div>
+        <div style="font-size:13px;font-weight:700">📡 P2P соединение</div>
+        <div class="settings-row-sub" id="profile-p2p-status">${_profilePeerReady ? '🟢 Подключено' : '🔴 Отключено'}</div>
+      </div>
+      <button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="profileConnect(profileLoad())">Переподключить</button>
+    </div>
+
+    <!-- Кнопки -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-surface" onclick="profileRenderOnline();showScreen('s-online')">
+        👥 Пользователи онлайн <span style="color:var(--accent);margin-left:4px">${onlinePeers.length + 1}</span>
+      </button>
+      <button class="btn btn-surface" onclick="showScreen('s-leaderboard')">
+        🏆 Таблица лидеров
+      </button>
+      <!-- MESSENGER_HIDDEN_ENTRY — переместить в нав-бар после готовности -->
+      <button class="btn btn-surface" onclick="messengerOpen()" style="position:relative">
+        💬 Сообщения
+        <span id="msg-unread-badge" style="display:none;position:absolute;top:8px;right:12px;background:var(--accent);color:#000;border-radius:10px;font-size:11px;font-weight:800;padding:2px 7px">0</span>
+      </button>
+    </div>
+  `;
+}
+
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── profileInitEditScreen полностью переписан — без monkey-patch ──
+// Вызывается из кнопки "Изменить" вверху профиля через profileToggleEdit()
+function profileInitEditScreen() {
+  const p = profileLoad();
+  if (!p) return;
+  const isVip = typeof vipCheck === 'function' ? vipCheck() : false;
+
+  // ── Основные поля ──
+  const nameEl = document.getElementById('edit-name');
+  const unEl   = document.getElementById('edit-username');
+  const bioEl  = document.getElementById('edit-bio');
+  if (nameEl) nameEl.value = p.name || '';
+  if (unEl)   unEl.value   = p.username || '';
+  if (bioEl) {
+    bioEl.value = p.bio || '';
+    bioEl.oninput = () => {
+      const cnt = document.getElementById('edit-bio-count');
+      if (cnt) cnt.textContent = bioEl.value.length;
+    };
+    const cnt = document.getElementById('edit-bio-count');
+    if (cnt) cnt.textContent = (p.bio||'').length;
+  }
+
+  // ── Аватар превью ──
+  _editSelectedEmoji  = p.avatar || '😊';
+  _editSelectedColor  = p.color  || PROFILE_COLORS[0];
+  _editSelectedStatus = p.status || 'online';
+  _profileAvatarMode  = p.avatarType === 'photo' ? 'photo' : 'emoji';
+
+  const inner   = document.getElementById('edit-avatar-inner');
+  const preview = document.getElementById('edit-avatar-preview');
+  if (preview) preview.style.borderColor = p.color || 'var(--accent)';
+  if (inner) {
+    if (p.avatarType === 'photo' && p.avatarData) {
+      inner.innerHTML = `<img src="${p.avatarData}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
+    } else {
+      inner.textContent = p.avatar || '😊';
+    }
+  }
+
+  // ── Эмодзи-пикер ──
+  const emojiGrid = document.getElementById('edit-emoji-grid');
+  if (emojiGrid) {
+    emojiGrid.innerHTML = '';
+    AVATAR_EMOJIS.forEach(em => {
+      const btn = document.createElement('button');
+      btn.textContent = em;
+      btn.style.cssText = 'font-size:26px;width:42px;height:42px;border-radius:50%;background:var(--surface2);border:2px solid ' +
+        (em === _editSelectedEmoji ? 'var(--accent)' : 'var(--surface3)') + ';cursor:pointer;transition:border-color .12s';
+      btn.onclick = () => {
+        _editSelectedEmoji = em;
+        if (inner) inner.textContent = em;
+        emojiGrid.querySelectorAll('button').forEach(b => b.style.borderColor = 'var(--surface3)');
+        btn.style.borderColor = 'var(--accent)';
+        _profileAvatarMode = 'emoji';
+        const pickerEl = document.getElementById('edit-avatar-emoji-picker');
+        if (pickerEl) pickerEl.style.display = 'none';
+      };
+      emojiGrid.appendChild(btn);
+    });
+  }
+
+  // ── Статусы ──
+  const statusPicker = document.getElementById('edit-status-picker');
+  if (statusPicker) {
+    statusPicker.innerHTML = '';
+    PROFILE_STATUSES.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'status-chip' + (s.id === _editSelectedStatus ? ' selected' : '');
+      btn.style.background = s.id === _editSelectedStatus ? s.color + '22' : 'var(--surface2)';
+      btn.style.color = s.color;
+      btn.innerHTML = `${s.emoji} ${s.label}`;
+      btn.onclick = () => {
+        _editSelectedStatus = s.id;
+        statusPicker.querySelectorAll('.status-chip').forEach(c => {
+          c.classList.remove('selected'); c.style.background = 'var(--surface2)';
+        });
+        btn.classList.add('selected');
+        btn.style.background = s.color + '22';
+      };
+      statusPicker.appendChild(btn);
+    });
+  }
+
+  // ── Цвета ──
+  const colorPicker = document.getElementById('edit-color-picker');
+  if (colorPicker) {
+    colorPicker.innerHTML = '';
+    PROFILE_COLORS.forEach(c => {
+      const dot = document.createElement('div');
+      dot.className = 'color-dot' + (c === _editSelectedColor ? ' selected' : '');
+      dot.style.background = c;
+      dot.onclick = () => {
+        _editSelectedColor = c;
+        colorPicker.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+        dot.classList.add('selected');
+        if (preview) preview.style.borderColor = c;
+      };
+      colorPicker.appendChild(dot);
+    });
+  }
+
+  // ── VIP-секции (рамки, значки, баннер, фото) ──
+  document.getElementById('vip-edit-section')?.remove();
+
+  if (typeof PROFILE_FRAMES === 'undefined') return; // VIP скрипт ещё не загружен
+
+  const body = document.querySelector('#s-profile-edit .body');
+  if (!body) return;
+
+  const vipSec = document.createElement('div');
+  vipSec.id = 'vip-edit-section';
+
+  // Фото-аватар
+  const photoRow = document.createElement('div');
+  photoRow.innerHTML = `<div class="sep"></div>
+    <div class="section-label" style="display:flex;align-items:center;gap:8px">
+      📷 Фото аватара
+      ${isVip
+        ? '<span style="font-size:10px;color:#4caf7d;font-weight:700">✓ VIP</span>'
+        : '<span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>'}
+    </div>`;
+  if (isVip) {
+    const photoBtn = document.createElement('button');
+    photoBtn.className = 'btn btn-surface';
+    photoBtn.style.marginBottom = '12px';
+    photoBtn.textContent = '📷 Выбрать фото из галереи';
+    photoBtn.onclick = profilePickPhoto;
+    photoRow.appendChild(photoBtn);
+  } else {
+    const lockNote = document.createElement('div');
+    lockNote.style.cssText = 'font-size:12px;color:var(--muted);margin-bottom:12px;padding:10px;background:var(--surface2);border-radius:10px';
+    lockNote.textContent = '🔒 Введи /vip КОД в CMD для активации';
+    photoRow.appendChild(lockNote);
+  }
+  vipSec.appendChild(photoRow);
+
+  // Рамки
+  const framesDiv = document.createElement('div');
+  framesDiv.innerHTML = '<div class="section-label">🖼 Рамка профиля</div>';
+  const framesWrap = document.createElement('div');
+  framesWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px';
+  Object.entries(PROFILE_FRAMES).forEach(([id, f]) => {
+    const locked = f.vip && !isVip;
+    const sel = (p.frame || 'none') === id;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-surface';
+    btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);box-shadow:0 0 0 2px var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
+    btn.textContent = f.label + (locked ? ' 👑' : '');
+    btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetFrame(id);
+    framesWrap.appendChild(btn);
+  });
+  framesDiv.appendChild(framesWrap);
+  vipSec.appendChild(framesDiv);
+
+  // Значки
+  const badgesDiv = document.createElement('div');
+  badgesDiv.innerHTML = '<div class="section-label">🏷 Значок профиля</div>';
+  const badgesWrap = document.createElement('div');
+  badgesWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px';
+  // Кнопка "Нет"
+  const noneBtn = document.createElement('button');
+  noneBtn.className = 'btn btn-surface';
+  noneBtn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${!p.badge ? 'color:var(--accent);' : ''}`;
+  noneBtn.textContent = 'Нет';
+  noneBtn.onclick = () => profileSetBadge(null);
+  badgesWrap.appendChild(noneBtn);
+  PROFILE_BADGES.forEach(b => {
+    const locked = b.vip && !isVip;
+    const sel = p.badge === b.id;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-surface';
+    btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;color:${b.color};${sel ? `box-shadow:0 0 0 2px ${b.color};` : ''}${locked ? 'opacity:.45;' : ''}`;
+    btn.textContent = b.emoji + ' ' + b.label + (locked ? ' 👑' : '');
+    btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetBadge(b.id);
+    badgesWrap.appendChild(btn);
+  });
+  badgesDiv.appendChild(badgesWrap);
+  vipSec.appendChild(badgesDiv);
+
+  // Баннеры
+  const bannersDiv = document.createElement('div');
+  const bannerLabel = isVip ? '🎨 Баннер профиля' : '🎨 Баннер профиля <span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>';
+  bannersDiv.innerHTML = `<div class="section-label">${bannerLabel}</div>`;
+  const bannersWrap = document.createElement('div');
+  bannersWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px';
+  PROFILE_BANNERS.forEach(b => {
+    const locked = b.vip && !isVip;
+    const sel = p.banner === b.style || (!p.banner && b.id === 'none');
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-surface';
+    btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
+    btn.textContent = b.label + (locked ? ' 👑' : '');
+    btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetBanner(b.id);
+    bannersWrap.appendChild(btn);
+  });
+  bannersDiv.appendChild(bannersWrap);
+  vipSec.appendChild(bannersDiv);
+
+  // VIP промо-блок если не VIP
+  if (!isVip) {
+    const promo = document.createElement('div');
+    promo.innerHTML = `
+      <div class="sep"></div>
+      <div style="background:linear-gradient(135deg,#f5c51822,#e8772222);border:1px solid #f5c51844;border-radius:14px;padding:16px;text-align:center;margin-bottom:12px">
+        <div style="font-size:24px;margin-bottom:6px">👑</div>
+        <div style="font-weight:800;margin-bottom:4px">VIP Аккаунт</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Фото-аватар · рамки · значки · баннеры</div>
+        <div style="font-size:11px;color:var(--muted)">Введи <code style="color:var(--accent);background:var(--surface3);padding:2px 6px;border-radius:4px">/vip КОД</code> в CMD</div>
+      </div>
+    `;
+    vipSec.appendChild(promo);
+  }
+
+  // Вставить перед кнопкой "Выйти"
+  const logoutBtn = body.querySelector('button[onclick*="profileLogout"]') || body.lastElementChild;
+  body.insertBefore(vipSec, logoutBtn);
+}
+
+function profileToggleEdit() {
+  profileInitEditScreen();
+  showScreen('s-profile-edit');
+}
+
+function profileCheckUsername(val) {
+  const status = document.getElementById('edit-username-status');
+  if (!status) return;
+  const clean = val.replace(/[^a-zA-Z0-9_]/g, '');
+  const el = document.getElementById('edit-username');
+  if (el) el.value = clean;
+  if (clean.length < 3) {
+    status.textContent = 'Минимум 3 символа'; status.style.color = 'var(--danger,#c94f4f)';
+  } else {
+    status.textContent = '✓ Ок'; status.style.color = '#4caf7d';
+  }
+}
+
+let _editSelectedEmoji = '😊', _editSelectedColor = PROFILE_COLORS[0], _editSelectedStatus = 'online';
+let _profileAvatarMode = 'emoji';
+let _profileWaitingForPhoto = false;
+
+function profilePickAvatarType() {
+  const pickerEl = document.getElementById('edit-avatar-emoji-picker');
+  if (!pickerEl) return;
+  if (pickerEl.style.display === 'none') {
+    pickerEl.style.display = '';
+  } else {
+    pickerEl.style.display = 'none';
+  }
+}
+
+function profilePickPhoto() {
+  _profileWaitingForPhoto = true;
+  if (window.Android && typeof Android.pickImageForBackground === 'function') {
+    Android.pickImageForBackground();
+  }
+}
+
+// Перехватываем onNativeBgImagePicked для профиля если ждём фото
+const _origOnNativeBgImagePicked = window.onNativeBgImagePicked;
+window.onNativeBgImagePicked = function(dataUrl) {
+  if (_profileWaitingForPhoto) {
+    _profileWaitingForPhoto = false;
+    _profileAvatarMode = 'photo';
+    const inner = document.getElementById('edit-avatar-inner');
+    if (inner) inner.innerHTML = `<img src="${dataUrl}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
+    window._profileTempAvatarData = dataUrl;
+  } else {
+    if (_origOnNativeBgImagePicked) _origOnNativeBgImagePicked(dataUrl);
+  }
+};
+
+function profileSaveEdit() {
+  const p = profileLoad();
+  if (!p) return;
+  const name = (document.getElementById('edit-name')?.value || '').trim();
+  const username = (document.getElementById('edit-username')?.value || '').trim().toLowerCase();
+  const bio = (document.getElementById('edit-bio')?.value || '').trim();
+  if (!name || username.length < 3) { toast('❌ Заполни имя и юзернейм'); return; }
+
+  p.name = name;
+  p.username = username;
+  p.bio = bio;
+  p.status = _editSelectedStatus;
+  p.color = _editSelectedColor;
+  if (_profileAvatarMode === 'photo' && window._profileTempAvatarData) {
+    p.avatarType = 'photo';
+    p.avatarData = window._profileTempAvatarData;
+    window._profileTempAvatarData = null;
+  } else {
+    p.avatarType = 'emoji';
+    p.avatar = _editSelectedEmoji;
+    delete p.avatarData;
+  }
+  profileSave(p);
+
+  // Обновить peer ID если юзернейм изменился
+  profileConnect(p);
+  updateNavProfileIcon(p);
+  // Broadcast обновление профиля всем подключённым
+  profileBroadcast({ type: 'profile_update', profile: profilePublicData(p) });
+
+  showScreen('s-profile', 'back');
+  setTimeout(profileRenderScreen, 100);
+  toast('✅ Профиль сохранён');
+}
+
+function profileLogout() {
+  if (!confirm('Выйти из аккаунта? Данные профиля останутся на устройстве')) return;
+  profileDisconnect();
+  localStorage.removeItem(PROFILE_KEY);
+  updateNavProfileIcon(null);
+  profileInitLoginScreen();
+  showScreen('s-login');
+  toast('👋 До встречи!');
+}
+
+function profilePublicData(p) {
+  return { name: p.name, username: p.username, avatar: p.avatar, avatarType: p.avatarType, status: p.status, color: p.color, bio: p.bio, vip: p.vip || false, badge: p.badge || null };
+}
+
+// ══ P2P ФОНОВОЕ СОЕДИНЕНИЕ ══════════════════════════════════════
+let _profilePeer = null;
+let _profileConnections = {};   // username → conn
+let _profileOnlinePeers = [];   // [{username, name, avatar, status, ...}]
+let _profilePeerReady = false;
+let _profileHeartbeatInterval = null;
+const BROADCAST_PEERS = [];     // известные peer-id для "broadcast"
+const MAX_RECONNECT_ATTEMPTS = 3;
+let _profileReconnectAttempts = 0;
+let _profileReconnectTimer = null;
+
+async function profileConnect(p) {
+  if (!p) return;
+  profileDisconnect();
+  try {
+    const Peer = await tttLoadPeer(); // уже используем загрузчик PeerJS
+    const peerId = profileGetPeerId(p.username);
+    _profilePeer = new Peer(peerId, { debug: 0 });
+
+    _profilePeer.on('open', () => {
+      _profilePeerReady = true;
+      _profileReconnectAttempts = 0;
+      profileUpdateP2PStatus('🟢 Подключено — @' + p.username);
+      // Запускаем heartbeat — каждые 30 секунд пингуем известных пиров
+      _profileHeartbeatInterval = setInterval(profileHeartbeat, 30000);
+      profileHeartbeat();
+    });
+
+    // Входящие подключения
+    _profilePeer.on('connection', conn => profileHandleIncoming(conn));
+
+    _profilePeer.on('disconnected', () => {
+      _profilePeerReady = false;
+      profileUpdateP2PStatus('🟡 Отключено, переподключение...');
+      profileScheduleReconnect(p);
+    });
+
+    _profilePeer.on('error', e => {
+      if (e.type === 'unavailable-id') {
+        // Peer с таким ID уже есть — значит мы уже подключены с другого устройства
+        profileUpdateP2PStatus('⚠️ Юзернейм занят на другом устройстве');
+      } else {
+        profileUpdateP2PStatus('🔴 Ошибка: ' + e.message);
+        profileScheduleReconnect(p);
+      }
+    });
+  } catch(e) {
+    profileUpdateP2PStatus('🔴 PeerJS не загрузился');
+  }
+}
+
+function profileDisconnect() {
+  _profilePeerReady = false;
+  clearInterval(_profileHeartbeatInterval);
+  clearTimeout(_profileReconnectTimer);
+  if (_profilePeer) {
+    try { _profilePeer.destroy(); } catch(e) {}
+    _profilePeer = null;
+  }
+  _profileConnections = {};
+  _profileOnlinePeers = [];
+}
+
+function profileScheduleReconnect(p) {
+  if (_profileReconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
+  _profileReconnectAttempts++;
+  clearTimeout(_profileReconnectTimer);
+  _profileReconnectTimer = setTimeout(() => profileConnect(p), 5000 * _profileReconnectAttempts);
+}
+
+function profileUpdateP2PStatus(msg) {
+  const el = document.getElementById('profile-p2p-status');
+  if (el) el.textContent = msg;
+}
+
+// Heartbeat — пытаемся подключиться к известным пирам из friends list и истории
+function profileHeartbeat() {
+  const p = profileLoad();
+  if (!p || !_profilePeer || !_profilePeerReady) return;
+  const friends = friendsLoad();
+  friends.forEach(username => {
+    if (username === p.username) return;
+    if (_profileConnections[username]) return; // уже подключены
+    const peerId = profileGetPeerId(username);
+    profileConnectToPeer(peerId, username);
+  });
+}
+
+function profileConnectToPeer(peerId, username) {
+  if (!_profilePeer || !_profilePeerReady) return;
+  try {
+    const conn = _profilePeer.connect(peerId, { reliable: true });
+    conn.on('open', () => {
+      _profileConnections[username || peerId] = conn;
+      // Отправляем свой профиль
+      const p = profileLoad();
+      if (p) conn.send({ type: 'hello', profile: profilePublicData(p) });
+      profileHandleIncoming(conn);
+    });
+    conn.on('error', () => {});
+  } catch(e) {}
+}
+
+function profileHandleIncoming(conn) {
+  conn.on('data', data => {
+    if (!data || !data.type) return;
+    if (data.type === 'hello' || data.type === 'profile_update') {
+      const pd = data.profile;
+      if (!pd || !pd.username) return;
+      _profileConnections[pd.username] = conn;
+      // Обновить список онлайн
+      const idx = _profileOnlinePeers.findIndex(u => u.username === pd.username);
+      if (idx >= 0) _profileOnlinePeers[idx] = pd;
+      else _profileOnlinePeers.push(pd);
+      // Ответить своим профилем если это hello
+      if (data.type === 'hello') {
+        const p = profileLoad();
+        if (p) conn.send({ type: 'profile_update', profile: profilePublicData(p) });
+      }
+      profileUpdateOnlineCount();
+    }
+    if (data.type === 'ping') conn.send({ type: 'pong' });
+    if (data.type === 'friend_request') {
+      toast('👋 ' + (data.from || '???') + ' хочет добавить тебя в друзья!');
+      const accept = confirm(data.from + ' хочет добавить тебя в друзья. Принять?');
+      if (accept) profileAddFriend(data.fromUsername);
+    }
+  });
+  conn.on('close', () => {
+    // Убрать из онлайн
+    _profileOnlinePeers = _profileOnlinePeers.filter(u => {
+      const pid = profileGetPeerId(u.username);
+      return conn.peer !== pid;
+    });
+    profileUpdateOnlineCount();
+  });
+  conn.on('error', () => {});
+}
+
+function profileBroadcast(data) {
+  Object.values(_profileConnections).forEach(conn => {
+    try { if (conn.open) conn.send(data); } catch(e) {}
+  });
+}
+
+function profileUpdateOnlineCount() {
+  const count = _profileOnlinePeers.length + 1;
+  const el = document.getElementById('profile-p2p-status');
+  if (el && _profilePeerReady) el.textContent = '🟢 Онлайн • ' + count + ' пользователей';
+}
+
+// ══ ЭКРАН ОНЛАЙН ═════════════════════════════════════════════════
+function profileRenderOnline() {
+  const list = document.getElementById('online-list');
+  const hdr = document.getElementById('online-count-hdr');
+  if (!list) return;
+  const p = profileLoad();
+  const peers = [
+    ...(p ? [{ ...profilePublicData(p), _isMe: true }] : []),
+    ..._profileOnlinePeers,
+  ];
+  if (hdr) hdr.textContent = peers.length + ' онлайн';
+  if (peers.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px">Никого нет онлайн</div>';
+    return;
+  }
+  list.innerHTML = peers.map(u => {
+    const statusObj = PROFILE_STATUSES.find(s => s.id === u.status) || PROFILE_STATUSES[0];
+    const isFriend = friendsLoad().includes(u.username);
+    const isMe = u._isMe;
+    const badgeObj = typeof PROFILE_BADGES !== 'undefined' && u.badge
+      ? PROFILE_BADGES.find(b => b.id === u.badge) : null;
+    return `
+      <div class="online-user-row">
+        <div style="width:48px;height:48px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;position:relative">
+          ${u.avatarType === 'photo' && u.avatarData
+            ? `<img src="${u.avatarData}" style="width:48px;height:48px;border-radius:50%;object-fit:cover">`
+            : (u.avatar || '😊')}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${escHtml(u.name)}
+            ${isMe ? '<span style="color:var(--accent);font-size:11px">(ты)</span>' : ''}
+            ${u.vip ? '<span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 6px;border-radius:6px">👑 VIP</span>' : ''}
+            ${badgeObj ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${badgeObj.color}22;color:${badgeObj.color}">${badgeObj.emoji} ${badgeObj.label}</span>` : ''}
+          </div>
+          <div style="font-size:12px;color:var(--muted)">@${escHtml(u.username)}</div>
+          <div style="font-size:11px;color:${statusObj.color};margin-top:2px">${statusObj.emoji} ${statusObj.label}</div>
+        </div>
+        ${!isMe && !isFriend ? `<button class="btn btn-surface" style="width:auto;padding:7px 12px;font-size:11px" onclick="profileAddFriend('${escHtml(u.username)}')">+ Друг</button>` : ''}
+        ${isFriend && !isMe ? '<span style="font-size:18px">👥</span>' : ''}
+        <div class="online-dot" style="flex-shrink:0"></div>
+      </div>
+    `;
+  }).join('');
+}
+
+function profileAddFriend(username) {
+  const friends = friendsLoad();
+  if (!friends.includes(username)) {
+    friends.push(username);
+    friendsSave(friends);
+    toast('👥 @' + username + ' добавлен в друзья!');
+    // Попытаться подключиться
+    profileConnectToPeer(profileGetPeerId(username), username);
+    // Уведомить их
+    const conn = _profileConnections[username];
+    if (conn && conn.open) {
+      const p = profileLoad();
+      if (p) conn.send({ type: 'friend_request', from: p.name, fromUsername: p.username });
+    }
+  }
+  profileRenderOnline();
+}
+
+// ══ ХУКИ: показ экрана профиля ═══════════════════════════════════
+const _origShowScreen = window.showScreen;
+window.showScreen = function(id, dir) {
+  if (id === 's-profile')     profileRenderScreen();
+  if (id === 's-online')      profileRenderOnline();
+  if (id === 's-leaderboard') leaderboardRender();
+  if (id === 's-messenger')   messengerRenderList();
+  if (_origShowScreen) _origShowScreen(id, dir);
+};
+
+// Обновить nav items (4 кнопки)
+const _origUpdateNavActive = window.updateNavActive;
+window.updateNavActive = function(aid) {
+  ['nav-home','nav-bells','nav-profile','nav-settings'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('active', id === aid)
+  );
+};
+
+// ══ ЗАПУСК ════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => setTimeout(profileBootstrap, 500));
+</script>
+<script>
+// ══════════════════════════════════════════════════════════════════
+// 👑 VIP СИСТЕМА
+// Активация: /vip LOMKICH2025  (секретный код в CMD)
+// ══════════════════════════════════════════════════════════════════
+const VIP_CODES = ['LOMKICH2025','SAPP_VIP','SCHEDULEAPP_PRO'];
+const VIP_KEY = 'sapp_vip_v1';
+
+function vipCheck() { return !!localStorage.getItem(VIP_KEY); }
+function vipActivate(code) {
+  if (!VIP_CODES.includes(code.toUpperCase())) return false;
+  localStorage.setItem(VIP_KEY, '1');
+  const p = profileLoad();
+  if (p) { p.vip = true; profileSave(p); }
+  return true;
+}
+
+// CMD команда /vip
+// Добавляем в cmdExec — патч через хук
+const _origCmdExecForVip = window.cmdExec;
+if (typeof cmdExec === 'function') {
+  // Вставим /vip перед default кейсом через monkey-patch
+  window._vipCmdHandler = function(cmd, arg) {
+    if (cmd === '/vip') {
+      if (!arg) { cmdPrint('info','👑 Использование: /vip <КОД>  (секретный код VIP)'); return true; }
+      if (vipActivate(arg)) {
+        cmdPrint('ok','👑 VIP активирован! Теперь доступны: фото-аватар, рамки профиля, значки, кастомный баннер');
+        toast('👑 Добро пожаловать в VIP!');
+        profileRenderScreen();
+      } else {
+        cmdPrint('err','❌ Неверный код VIP');
+      }
+      return true;
+    }
+    return false;
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 🖼 РАМКИ, ЗНАЧКИ, БАННЕРЫ
+// ══════════════════════════════════════════════════════════════════
+const PROFILE_FRAMES = {
+  'none':     { cls: '',          style: '',                                               label: 'Нет',         vip: false },
+  'accent':   { cls: '',          style: 'box-shadow:0 0 0 3px var(--accent)',              label: '🔶 Акцент',   vip: false },
+  'glow':     { cls: '',          style: 'box-shadow:0 0 16px 4px var(--accent)',           label: '✨ Свечение', vip: true  },
+  'rainbow':  { cls: 'frame-rainbow', style: '',                                           label: '🌈 Радуга',   vip: true  },
+  'gold':     { cls: '',          style: 'box-shadow:0 0 0 3px #f5c518,0 0 12px #f5c51866', label: '🥇 Золото',  vip: true  },
+  'neon':     { cls: '',          style: 'box-shadow:0 0 0 3px #00e5ff,0 0 20px #00e5ff88', label: '💠 Неон',    vip: true  },
+  'fire':     { cls: 'frame-fire', style: '',                                              label: '🔥 Огонь',    vip: true  },
+};
+
+const PROFILE_BADGES = [
+  { id: 'early',  emoji: '🌟', label: 'Первый',  color: '#f5c518', vip: false },
+  { id: 'gamer',  emoji: '🎮', label: 'Геймер',  color: '#a78bfa', vip: false },
+  { id: 'vip',    emoji: '👑', label: 'VIP',     color: '#f5c518', vip: true  },
+  { id: 'dev',    emoji: '⚙️', label: 'Dev',     color: '#60cdff', vip: true  },
+  { id: 'fire',   emoji: '🔥', label: 'Огонь',   color: '#e87722', vip: true  },
+  { id: 'ghost',  emoji: '👻', label: 'Призрак', color: '#a78bfa', vip: true  },
+];
+
+const PROFILE_BANNERS = [
+  { id: 'none',    label: 'Нет',          style: 'background:var(--surface2)',                                   vip: false },
+  { id: 'accent',  label: 'Акцент',       style: 'background:linear-gradient(135deg,var(--accent)66,var(--surface2))', vip: false },
+  { id: 'sunset',  label: '🌅 Закат',     style: 'background:linear-gradient(135deg,#e87722,#c94f4f,#a78bfa)',   vip: true  },
+  { id: 'ocean',   label: '🌊 Океан',     style: 'background:linear-gradient(135deg,#00e5ff,#60cdff,#4caf7d)',   vip: true  },
+  { id: 'night',   label: '🌌 Ночь',      style: 'background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)',   vip: true  },
+  { id: 'candy',   label: '🍭 Конфета',   style: 'background:linear-gradient(135deg,#ff66aa,#a78bfa,#60cdff)',   vip: true  },
+  { id: 'gold',    label: '🥇 Золото',    style: 'background:linear-gradient(135deg,#f5c518,#e87722,#c94f4f)',   vip: true  },
+  { id: 'matrix',  label: '💚 Матрица',   style: 'background:linear-gradient(135deg,#0d0d0d,#0a3d0a,#00ff41)',   vip: true  },
+];
+
+// ── CSS для спец-рамок и мессенджера ────────────────────────────
+(function injectFrameCSS() {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes rainbow-border {
+      0%{border-color:#ff0000} 14%{border-color:#ff9900} 28%{border-color:#ffff00}
+      42%{border-color:#00ff00} 57%{border-color:#0099ff} 71%{border-color:#6600ff} 85%{border-color:#ff00ff} 100%{border-color:#ff0000}
+    }
+    @keyframes fire-border {
+      0%{border-color:#e87722;box-shadow:0 0 8px #e87722} 50%{border-color:#f5c518;box-shadow:0 0 18px #f5c518} 100%{border-color:#c94f4f;box-shadow:0 0 8px #c94f4f}
+    }
+    .frame-rainbow{animation:rainbow-border 2s linear infinite;border-width:3px!important;border-style:solid!important}
+    .frame-fire{animation:fire-border 1s ease-in-out infinite;border-width:3px!important;border-style:solid!important}
+    .profile-avatar{position:relative}
+    #s-messenger-chat{display:flex!important;flex-direction:column!important}
+    #mc-messages{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  `;
+  document.head.appendChild(style);
+})();
+
+// profileInitEditScreen теперь единая функция в profile-script блоке выше.
+// VIP-секции рендерятся внутри неё напрямую через PROFILE_FRAMES/BADGES/BANNERS.
+
+function profileSetFrame(id) {
+  const p = profileLoad(); if (!p) return;
+  p.frame = id; profileSave(p);
+  toast('✅ Рамка: ' + PROFILE_FRAMES[id].label);
+  profileInitEditScreen();
+}
+function profileSetBadge(id) {
+  const p = profileLoad(); if (!p) return;
+  p.badge = id; profileSave(p);
+  toast(id ? '✅ Значок выбран' : '✅ Значок убран');
+  profileInitEditScreen();
+}
+function profileSetBanner(id) {
+  const p = profileLoad(); if (!p) return;
+  const b = PROFILE_BANNERS.find(x => x.id === id);
+  p.banner = b ? b.style : null; profileSave(p);
+  toast('✅ Баннер обновлён');
+  profileInitEditScreen();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 🏆 ТАБЛИЦА ЛИДЕРОВ  (экран s-leaderboard добавлен ниже в HTML)
+// ══════════════════════════════════════════════════════════════════
+const LEADERBOARD_GAMES = [
+  { id: 'snake',      emoji: '🐍', label: 'Змейка'        },
+  { id: 'tetris',     emoji: '🧱', label: 'Тетрис'        },
+  { id: 'pong',       emoji: '🏓', label: 'Пинг-понг'     },
+  { id: 'dino',       emoji: '🦕', label: 'Динозавр'      },
+  { id: 'blockblast', emoji: '💥', label: 'Block Blast'   },
+  { id: 'breakout',   emoji: '🏏', label: 'Арканоид'      },
+  { id: 'flappy',     emoji: '🐦', label: 'Флаппи'        },
+];
+const LB_STORE_KEY = 'sapp_leaderboard_v1';
+let _lbSelectedGame = 'snake';
+
+function lbLoad() { try { return JSON.parse(localStorage.getItem(LB_STORE_KEY)||'{}'); } catch(e){ return {}; } }
+function lbSave(d) { localStorage.setItem(LB_STORE_KEY, JSON.stringify(d)); }
+
+// Записать свой рекорд в глобальную таблицу лидеров при сохранении
+function lbSubmitMyScores() {
+  const p = profileLoad();
+  if (!p) return;
+  const hi = loadHiScores();
+  const lb = lbLoad();
+  LEADERBOARD_GAMES.forEach(g => {
+    const score = hi[g.id] || 0;
+    if (!score) return;
+    if (!lb[g.id]) lb[g.id] = [];
+    const existing = lb[g.id].find(e => e.username === p.username);
+    if (existing) {
+      if (score > existing.score) { existing.score = score; existing.name = p.name; existing.avatar = p.avatar; }
+    } else {
+      lb[g.id].push({ username: p.username, name: p.name, avatar: p.avatar, color: p.color, score });
+    }
+    lb[g.id].sort((a,b) => b.score - a.score);
+    lb[g.id] = lb[g.id].slice(0, 50); // max 50 per game
+  });
+  lbSave(lb);
+  // Broadcast через P2P
+  profileBroadcast({ type: 'lb_update', lb, username: p.username });
+}
+
+function leaderboardRender() {
+  lbSubmitMyScores();
+  const container = document.getElementById('lb-content');
+  if (!container) return;
+  const lb = lbLoad();
+  const p = profileLoad();
+
+  // Вкладки игр
+  const tabsHtml = LEADERBOARD_GAMES.map(g =>
+    `<button class="diff-btn${_lbSelectedGame===g.id?' active':''}" onclick="_lbSelectedGame='${g.id}';leaderboardRender()" style="font-size:12px;padding:7px 12px">${g.emoji} ${g.label}</button>`
+  ).join('');
+
+  const entries = lb[_lbSelectedGame] || [];
+  const myHi = loadHiScores()[_lbSelectedGame] || 0;
+  const myRank = entries.findIndex(e => e.username === p?.username) + 1;
+
+  const rowsHtml = entries.length === 0
+    ? `<div style="text-align:center;padding:30px;color:var(--muted)">Рекордов пока нет.<br>Сыграй и стань первым! 🏆</div>`
+    : entries.slice(0, 20).map((e, i) => {
+        const isMe = e.username === p?.username;
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+        return `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:${isMe?'color-mix(in srgb,var(--accent) 10%,var(--surface2))':'var(--surface2)'};border-radius:14px;border:1.5px solid ${isMe?'var(--accent)':'var(--surface3)'};margin-bottom:8px">
+            <div style="font-size:18px;width:28px;text-align:center;flex-shrink:0">${medal}</div>
+            <div style="width:38px;height:38px;border-radius:50%;background:${e.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${e.avatar||'😊'}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:700;${isMe?'color:var(--accent)':''}">${escHtml(e.name)}${isMe?' (ты)':''}</div>
+              <div style="font-size:11px;color:var(--muted)">@${escHtml(e.username)}</div>
+            </div>
+            <div style="font-size:18px;font-weight:800;color:var(--accent);font-family:'JetBrains Mono',monospace">${e.score}</div>
+          </div>`;
+      }).join('');
+
+  const myInfoHtml = p ? `
+    <div style="background:var(--surface2);border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;margin-bottom:12px;font-size:13px">
+      <span style="color:var(--muted)">Твой рекорд:</span>
+      <span style="font-weight:700;color:var(--accent)">${myHi} ${myRank > 0 ? `• #${myRank}` : '• не в топе'}</span>
+    </div>` : '';
+
+  container.innerHTML = `
+    <div class="diff-picker" style="flex-wrap:wrap;gap:6px;margin-bottom:12px">${tabsHtml}</div>
+    ${myInfoHtml}
+    ${rowsHtml}
+    <button class="btn btn-surface" style="margin-top:8px" onclick="lbSubmitMyScores();leaderboardRender()">🔄 Обновить</button>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 💬 МЕССЕНДЖЕР  (HIDDEN — TODO: переместить в nav-bar когда готов)
+// Чаты хранятся в localStorage, P2P через профильный PeerJS
+// ══════════════════════════════════════════════════════════════════
+const MSG_STORE_KEY = 'sapp_messages_v2';
+const MSG_CHATS_KEY = 'sapp_chats_v1';
+let _msgCurrentChat = null; // username собеседника
+let _msgRafScroll = null;
+
+function msgLoad()  { try { return JSON.parse(localStorage.getItem(MSG_STORE_KEY)||'{}'); } catch(e){ return {}; } }
+function msgSave(d) { localStorage.setItem(MSG_STORE_KEY, JSON.stringify(d)); }
+function chatsLoad()  { try { return JSON.parse(localStorage.getItem(MSG_CHATS_KEY)||'[]'); } catch(e){ return []; } }
+function chatsSave(d) { localStorage.setItem(MSG_CHATS_KEY, JSON.stringify(d)); }
+
+function messengerOpen() {
+  showScreen('s-messenger');
+}
+
+function messengerRenderList() {
+  const list = document.getElementById('messenger-list');
+  if (!list) return;
+  const p = profileLoad();
+  const chats = chatsLoad();
+  const msgs = msgLoad();
+
+  if (chats.length === 0) {
+    list.innerHTML = `
+      <div style="text-align:center;padding:40px;color:var(--muted)">
+        <div style="font-size:40px;margin-bottom:12px">💬</div>
+        <div style="font-weight:700;margin-bottom:6px">Нет сообщений</div>
+        <div style="font-size:13px">Напиши кому-нибудь из списка онлайн</div>
+      </div>
+      <button class="btn btn-accent" onclick="profileRenderOnline();showScreen('s-online')">👥 Найти собеседника</button>
+    `;
+    return;
+  }
+
+  list.innerHTML = chats.map(username => {
+    const chatMsgs = (msgs[username] || []);
+    const last = chatMsgs[chatMsgs.length - 1];
+    const unread = chatMsgs.filter(m => m.from !== p?.username && !m.read).length;
+    const onlinePeer = _profileOnlinePeers.find(u => u.username === username);
+    return `
+      <div onclick="messengerOpenChat('${username}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:14px;border:1.5px solid var(--surface3);cursor:pointer;margin-bottom:8px;position:relative">
+        <div style="width:50px;height:50px;border-radius:50%;background:${onlinePeer?.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;position:relative">
+          ${onlinePeer?.avatar||'😊'}
+          ${onlinePeer ? '<div style="position:absolute;bottom:1px;right:1px;width:10px;height:10px;border-radius:50%;background:#4caf7d;border:2px solid var(--surface2)"></div>' : ''}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:15px">${escHtml(onlinePeer?.name||username)}</div>
+          <div style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">
+            ${last ? (last.from === p?.username ? '✓ ' : '') + escHtml(last.text||'') : 'Нет сообщений'}
+          </div>
+        </div>
+        ${unread > 0 ? `<div style="background:var(--accent);color:#000;border-radius:10px;font-size:11px;font-weight:800;padding:2px 8px;flex-shrink:0">${unread}</div>` : ''}
+        ${last ? `<div style="font-size:10px;color:var(--muted);position:absolute;top:10px;right:12px">${msgFormatTime(last.ts)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+
+  messengerUpdateBadge();
+}
+
+function messengerUpdateBadge() {
+  const p = profileLoad();
+  const msgs = msgLoad();
+  let total = 0;
+  Object.values(msgs).forEach(chatMsgs => {
+    total += (chatMsgs||[]).filter(m => m.from !== p?.username && !m.read).length;
+  });
+  const badge = document.getElementById('msg-unread-badge');
+  if (badge) { badge.style.display = total > 0 ? '' : 'none'; badge.textContent = total; }
+}
+
+function messengerOpenChat(username) {
+  _msgCurrentChat = username;
+  // Отметить как прочитанные
+  const msgs = msgLoad();
+  const p = profileLoad();
+  if (msgs[username]) {
+    msgs[username].forEach(m => { if (m.from !== p?.username) m.read = true; });
+    msgSave(msgs);
+  }
+  messengerUpdateBadge();
+
+  const screen = document.getElementById('s-messenger-chat');
+  if (!screen) return;
+
+  const peer = _profileOnlinePeers.find(u => u.username === username);
+  const hdrName = screen.querySelector('#mc-hdr-name');
+  const hdrSub = screen.querySelector('#mc-hdr-sub');
+  const hdrAvatar = screen.querySelector('#mc-hdr-avatar');
+  if (hdrName) hdrName.textContent = peer?.name || username;
+  if (hdrSub) hdrSub.textContent = '@' + username + (peer ? ' · В сети' : ' · Не в сети');
+  if (hdrAvatar) hdrAvatar.textContent = peer?.avatar || '😊';
+
+  showScreen('s-messenger-chat');
+  messengerRenderMessages();
+}
+
+function messengerRenderMessages() {
+  const body = document.getElementById('mc-messages');
+  if (!body || !_msgCurrentChat) return;
+  const msgs = msgLoad();
+  const p = profileLoad();
+  const chatMsgs = msgs[_msgCurrentChat] || [];
+
+  if (chatMsgs.length === 0) {
+    body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">Начни разговор! 👋</div>';
+    return;
+  }
+
+  let lastDate = '';
+  body.innerHTML = chatMsgs.map(msg => {
+    const isMe = msg.from === p?.username;
+    const dt = new Date(msg.ts);
+    const dateStr = dt.toLocaleDateString('ru', {day:'numeric',month:'short'});
+    const dateSep = dateStr !== lastDate ? `<div style="text-align:center;margin:10px 0;font-size:11px;color:var(--muted)">${dateStr}</div>` : '';
+    lastDate = dateStr;
+    return `
+      ${dateSep}
+      <div style="display:flex;justify-content:${isMe?'flex-end':'flex-start'};margin-bottom:4px">
+        <div style="max-width:75%;padding:10px 14px;border-radius:${isMe?'18px 18px 4px 18px':'18px 18px 18px 4px'};background:${isMe?'var(--accent)':'var(--surface3)'};color:${isMe?'var(--btn-text,#fff)':'var(--text)'};font-size:14px;line-height:1.4;word-break:break-word">
+          ${escHtml(msg.text)}
+          <div style="font-size:10px;opacity:.6;text-align:right;margin-top:4px;display:flex;align-items:center;justify-content:flex-end;gap:3px">
+            ${msgFormatTime(msg.ts)}
+            ${isMe ? (msg.delivered ? '✓✓' : '✓') : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Scroll to bottom
+  requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
+}
+
+function messengerSend() {
+  const inp = document.getElementById('mc-input');
+  if (!inp || !_msgCurrentChat) return;
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  const p = profileLoad();
+  if (!p) return;
+
+  const msg = { from: p.username, to: _msgCurrentChat, text, ts: Date.now(), delivered: false, read: false };
+  const msgs = msgLoad();
+  if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
+  msgs[_msgCurrentChat].push(msg);
+  msgSave(msgs);
+
+  // Добавить чат в список если новый
+  const chats = chatsLoad();
+  if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
+
+  messengerRenderMessages();
+
+  // Отправить через P2P
+  const conn = _profileConnections[_msgCurrentChat];
+  if (conn && conn.open) {
+    conn.send({ type: 'message', from: p.username, fromName: p.name, fromAvatar: p.avatar, text, ts: msg.ts });
+    msg.delivered = true;
+    msgSave(msgs);
+    messengerRenderMessages();
+  }
+}
+
+function msgFormatTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit'});
+}
+
+// Входящие сообщения
+const _origHandleIncoming = window.profileHandleIncoming;
+window.profileHandleIncoming = function(conn) {
+  conn.on('data', data => {
+    if (data && data.type === 'message') {
+      const { from, fromName, fromAvatar, text, ts } = data;
+      // Сохранить
+      const msgs = msgLoad();
+      const p = profileLoad();
+      if (!msgs[from]) msgs[from] = [];
+      const alreadyRead = _msgCurrentChat === from && document.getElementById('s-messenger-chat')?.classList.contains('active');
+      msgs[from].push({ from, to: p?.username, text, ts: ts||Date.now(), delivered: true, read: alreadyRead });
+      msgSave(msgs);
+      const chats = chatsLoad();
+      if (!chats.includes(from)) { chats.unshift(from); chatsSave(chats); }
+      // Если открыт чат — обновить
+      if (_msgCurrentChat === from) messengerRenderMessages();
+      else {
+        messengerUpdateBadge();
+        toast(`💬 ${fromName||from}: ${text.slice(0,40)}`);
+      }
+    }
+    if (data && data.type === 'lb_update') {
+      const lb = lbLoad();
+      // Merge lb
+      if (data.lb) {
+        Object.entries(data.lb).forEach(([game, entries]) => {
+          if (!lb[game]) lb[game] = [];
+          entries.forEach(e => {
+            const idx = lb[game].findIndex(x => x.username === e.username);
+            if (idx >= 0) { if (e.score > lb[game][idx].score) lb[game][idx] = e; }
+            else lb[game].push(e);
+          });
+          lb[game].sort((a,b) => b.score - a.score);
+          lb[game] = lb[game].slice(0, 50);
+        });
+        lbSave(lb);
+      }
+    }
+  });
+  if (_origHandleIncoming) _origHandleIncoming(conn);
+};
+
+// Патч CMD для /vip
+const _origCmdExecForVip2 = window.cmdExec;
+if (typeof cmdExec !== 'undefined') {
+  const origFn = cmdExec;
+  window.cmdExec = function(raw) {
+    const parts = raw.trim().split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const arg = parts.slice(1).join(' ').trim();
+    if (cmd === '/vip') {
+      if (!arg) { cmdPrint('info','👑 /vip <КОД> — активировать VIP'); return; }
+      if (vipActivate(arg)) {
+        cmdPrint('ok','👑 VIP активирован! Доступны: фото-аватар, рамки, значки, баннеры');
+        toast('👑 Добро пожаловать в VIP клуб!');
+        setTimeout(profileRenderScreen, 200);
+      } else {
+        cmdPrint('err','❌ Неверный VIP-код');
+      }
+      return;
+    }
+    origFn(raw);
+  };
+}
 </script>
