@@ -2351,7 +2351,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.2.7 — Android</div>
+        <div class="item-sub" id="app-version-str">4.2.9 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -5727,7 +5727,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.2.7';
+const APP_VERSION='4.2.9';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -6164,42 +6164,174 @@ function cmdExec(raw){
     case 'deleteaccount': {
       const targetUser = (parts[1]||'').trim().toLowerCase();
       if (!targetUser) {
-        cmdPrint('err','Использование: deleteaccount <ник>');
+        cmdPrint('err','Использование: deleteaccount <ник>  [--all для удаления всего]');
+        cmdPrint('info','  deleteaccount vasya       — удалить аккаунт @vasya');
+        cmdPrint('info','  accounts list             — показать все аккаунты');
         break;
       }
-      cmdPrint('warn',`🗑 Удаляю аккаунт @${targetUser}...`);
-      // Удаляем из локального списка аккаунтов
+      cmdPrint('warn', '🗑 Удаляю @' + targetUser + ' со всех платформ...');
+
+      // 1. Локальный список аккаунтов
       const accounts = accountsLoad();
-      const hadLocal = !!accounts[targetUser];
-      if (hadLocal) {
+      if (accounts[targetUser]) {
         delete accounts[targetUser];
         accountsSave(accounts);
-        cmdPrint('ok',`  ✓ Удалён из локального хранилища`);
+        cmdPrint('ok', '  ✓ Локальное хранилище (accounts)');
       } else {
-        cmdPrint('out',`  — В локальном хранилище не найден`);
+        cmdPrint('out', '  — Не найден в локальном хранилище');
       }
-      // Если это текущий профиль — выходим
+
+      // 2. Текущий профиль
       const curProfile = profileLoad();
       if (curProfile && curProfile.username === targetUser) {
         profileDisconnect();
         localStorage.removeItem(PROFILE_KEY);
+        localStorage.removeItem(FRIENDS_KEY);
+        localStorage.removeItem(MSG_STORE_KEY);
+        localStorage.removeItem(MSG_CHATS_KEY);
         updateNavProfileIcon(null);
-        cmdPrint('ok','  ✓ Текущий профиль очищен');
+        cmdPrint('ok', '  ✓ Активный профиль и все данные очищены');
       }
-      // Удаляем из Supabase presence
+
+      // 3. Supabase — удаляем везде
       if (sbReady()) {
-        sbDelete('presence', `username=eq.${encodeURIComponent(targetUser)}`)
-          .then(() => cmdPrint('ok','  ✓ Удалён из Supabase presence'))
-          .catch(() => cmdPrint('warn','  ⚠ Supabase: не удалось удалить из presence'));
+        Promise.all([
+          sbDelete('presence',    'username=eq.' + encodeURIComponent(targetUser))
+            .then(() => cmdPrint('ok', '  ✓ Supabase: presence'))
+            .catch(()  => cmdPrint('warn', '  ⚠ Supabase: не удалось удалить из presence')),
+          sbDelete('messages',    'from_user=eq.' + encodeURIComponent(targetUser))
+            .then(() => cmdPrint('ok', '  ✓ Supabase: messages (отправленные)'))
+            .catch(()  => cmdPrint('warn', '  ⚠ Supabase: не удалось удалить сообщения (from)')),
+          sbDelete('messages',    'to_user=eq.' + encodeURIComponent(targetUser))
+            .then(() => cmdPrint('ok', '  ✓ Supabase: messages (входящие)'))
+            .catch(()  => cmdPrint('warn', '  ⚠ Supabase: не удалось удалить сообщения (to)')),
+          sbDelete('leaderboard', 'username=eq.' + encodeURIComponent(targetUser))
+            .then(() => cmdPrint('ok', '  ✓ Supabase: leaderboard'))
+            .catch(()  => cmdPrint('warn', '  ⚠ Supabase: не удалось удалить из leaderboard')),
+        ]).then(() => cmdPrint('ok', '✅ @' + targetUser + ' полностью удалён.'));
+      } else {
+        cmdPrint('warn', '  ⚠ Supabase недоступен — удалено только локально');
+        cmdPrint('ok', '✅ @' + targetUser + ' удалён локально.');
       }
-      cmdPrint('ok',`✅ Аккаунт @${targetUser} удалён.`);
-      // Если удалили себя — показываем экран регистрации
+
       if (curProfile && curProfile.username === targetUser) {
-        setTimeout(() => {
-          profileInitLoginScreen();
-          showScreen('s-login');
-          cmdClose();
-        }, 800);
+        setTimeout(() => { profileInitLoginScreen(); showScreen('s-login'); cmdClose(); }, 1000);
+      }
+    } break;
+
+    case 'accounts': {
+      const sub = (parts[1]||'').toLowerCase();
+      const targetUserAcc = (parts[2]||'').trim().toLowerCase();
+
+      if (!sub || sub === 'list') {
+        // Локальные
+        const localAccs = accountsLoad();
+        const localKeys = Object.keys(localAccs);
+        const curP = profileLoad();
+        cmdPrint('info', '── Локальные аккаунты (' + localKeys.length + ') ──');
+        if (localKeys.length === 0) {
+          cmdPrint('out', '  (пусто)');
+        } else {
+          localKeys.forEach(u => {
+            const a = localAccs[u];
+            const isCurrent = curP && curP.username === u;
+            cmdPrint(isCurrent ? 'ok' : 'out',
+              '  @' + u.padEnd(20) +
+              (a.name ? ('  ' + a.name) : '') +
+              (isCurrent ? '  ← текущий' : '')
+            );
+          });
+        }
+        // Supabase
+        if (sbReady()) {
+          cmdPrint('info', '── Supabase presence (все зарегистрированные) ──');
+          sbGet('presence', 'select=username,name,ts&order=ts.desc&limit=100').then(rows => {
+            if (!Array.isArray(rows) || rows.length === 0) {
+              cmdPrint('out', '  (нет данных)');
+              return;
+            }
+            rows.forEach(r => {
+              const ago = r.ts ? Math.round((Date.now() - r.ts) / 60000) : null;
+              const online = ago !== null && ago < 2;
+              cmdPrint(online ? 'ok' : 'out',
+                '  @' + (r.username||'?').padEnd(20) +
+                '  ' + (r.name||'').substring(0,20).padEnd(20) +
+                (ago !== null ? '  ' + (online ? '🟢 сейчас' : ago + ' мин назад') : '')
+              );
+            });
+            cmdPrint('info', 'Итого в Supabase: ' + rows.length);
+          }).catch(e => cmdPrint('err', '❌ Supabase ошибка: ' + e.message));
+        } else {
+          cmdPrint('warn', '  Supabase недоступен');
+        }
+      } else if (sub === 'delete') {
+        if (!targetUserAcc) {
+          cmdPrint('err', 'Использование: accounts delete <ник>');
+          break;
+        }
+        // Переиспользуем логику deleteaccount
+        cmdExec('deleteaccount ' + targetUserAcc);
+      } else if (sub === 'search') {
+        const query = (parts[2]||'').toLowerCase();
+        if (!query) { cmdPrint('err', 'Использование: accounts search <запрос>'); break; }
+        if (sbReady()) {
+          cmdPrint('info', '🔍 Ищу "' + query + '" в Supabase...');
+          sbGet('presence', 'select=username,name,ts&username=ilike.*' + encodeURIComponent(query) + '*&limit=50')
+            .then(rows => {
+              if (!Array.isArray(rows) || rows.length === 0) {
+                cmdPrint('out', '  Не найдено');
+                return;
+              }
+              rows.forEach(r => cmdPrint('ok', '  @' + r.username + '  ' + (r.name||'')));
+            }).catch(e => cmdPrint('err', '❌ ' + e.message));
+        } else cmdPrint('warn', 'Supabase недоступен');
+      } else if (sub === 'clear-local') {
+        accountsSave({});
+        cmdPrint('ok', '🗑 Все локальные аккаунты удалены из устройства');
+      } else {
+        cmdPrint('info', 'Команды accounts:');
+        cmdPrint('out', '  accounts list             — все аккаунты');
+        cmdPrint('out', '  accounts delete <ник>     — удалить аккаунт');
+        cmdPrint('out', '  accounts search <запрос>  — поиск в Supabase');
+        cmdPrint('out', '  accounts clear-local      — очистить локальный список');
+      }
+    } break;
+
+    case 'p2p': {
+      const sub2 = (parts[1]||'').toLowerCase();
+      if (!sub2 || sub2 === 'status') {
+        cmdPrint('info', '── P2P стратегии ──');
+        _P2P_STRATEGIES.forEach((s, i) => {
+          const active = i === _p2pActiveIdx;
+          cmdPrint(active ? 'ok' : 'out',
+            '  [' + i + '] ' + s.emoji + ' ' + s.label.padEnd(20) + (active ? ' ← АКТИВНА' : ''));
+        });
+        cmdPrint('info', 'Сбоев: ' + _p2pFailCount + ' | Переключение: ' + (_p2pSwitching ? 'да' : 'нет'));
+      } else if (sub2 === 'test') {
+        cmdPrint('info', '🔍 Тестирую все каналы параллельно...');
+        _P2P_STRATEGIES.forEach((s, i) => {
+          p2pTestStrategy(i).then(ok => {
+            cmdPrint(ok ? 'ok' : 'err',
+              '  [' + i + '] ' + s.emoji + ' ' + s.label.padEnd(20) + (ok ? ' ✅' : ' ❌'));
+          });
+        });
+      } else if (sub2 === 'use') {
+        const idx = parseInt(parts[2]);
+        if (isNaN(idx) || idx < 0 || idx >= _P2P_STRATEGIES.length) {
+          cmdPrint('err', 'Неверный индекс. Доступно 0–' + (_P2P_STRATEGIES.length-1));
+          break;
+        }
+        p2pSelectStrategy(idx);
+        cmdPrint('ok', '✅ Канал переключён на [' + idx + '] ' + _P2P_STRATEGIES[idx].label);
+      } else if (sub2 === 'failover') {
+        cmdPrint('warn', '⚡ Запускаю failover...');
+        p2pFailover();
+      } else {
+        cmdPrint('info', 'Команды p2p:');
+        cmdPrint('out', '  p2p status         — список каналов');
+        cmdPrint('out', '  p2p test           — проверить все каналы');
+        cmdPrint('out', '  p2p use <индекс>   — переключить канал');
+        cmdPrint('out', '  p2p failover       — принудительный поиск');
       }
     } break;
 
@@ -7661,16 +7793,20 @@ async function otaStartDownload() {
       clearInterval(fakeTimer);
       bar.style.width = '100%';
       label.textContent = '100% — Запускаю установщик...';
+      // Передаём оригинальный URL — Java сама попробует зеркала
       window.Android.downloadAndInstallApk(_otaApkUrl);
       setTimeout(() => otaClose(), 1200);
     } else {
+      // Браузерный режим — пробуем зеркала для открытия
       clearInterval(fakeTimer);
       bar.style.width = '100%';
-      label.textContent = 'Открываю браузер...';
+      label.textContent = 'Открываю загрузку...';
+      const mirrorUrls = buildApkMirrorUrls(_otaApkUrl);
+      const urlToOpen = mirrorUrls[1] || mirrorUrls[0]; // ghproxy по умолчанию
       if (window.Android && window.Android.openUrl) {
-        window.Android.openUrl(_otaApkUrl);
+        window.Android.openUrl(urlToOpen);
       } else {
-        window.open(_otaApkUrl, '_blank');
+        window.open(urlToOpen, '_blank');
       }
       setTimeout(() => otaClose(), 800);
     }
@@ -7694,55 +7830,80 @@ function compareVersions(a, b) {
   return 0;
 }
 
+// Зеркала GitHub для обхода блокировок в России
+const GH_API_MIRRORS = [
+  'https://api.github.com/repos/LomKich/ScheduleApp/releases',
+  'https://api.github.moeyy.xyz/repos/LomKich/ScheduleApp/releases',
+  'https://api.kgithub.com/repos/LomKich/ScheduleApp/releases',
+];
+// Зеркала для скачивания APK (заменяют github.com/objects.githubusercontent.com)
+const GH_DL_MIRRORS = [
+  null,                              // 0 = оригинальный URL без изменений
+  'https://ghproxy.com/',            // ghproxy.com/https://github.com/...
+  'https://mirror.ghproxy.com/',     // mirror.ghproxy.com/https://github.com/...
+  'https://ghfast.top/',             // ghfast.top/https://github.com/...
+  'https://gh.con.sh/',              // gh.con.sh/https://...
+  'https://gitproxy.click/',         // gitproxy.click/https://...
+];
+
+// Строим список URL для скачивания APK через все зеркала
+function buildApkMirrorUrls(originalUrl) {
+  const urls = [];
+  for (const mirror of GH_DL_MIRRORS) {
+    if (!mirror) { urls.push(originalUrl); continue; }
+    // Зеркала типа ghproxy принимают URL как suffix: mirror + originalUrl
+    urls.push(mirror + originalUrl);
+  }
+  return urls;
+}
+
 async function checkOtaUpdate(silent) {
   const btn = document.querySelector('[onclick="checkOtaUpdate()"]');
   if (!silent && btn) { btn.disabled = true; btn.textContent = '⏳'; }
   try {
-    const baseApi = 'https://api.github.com/repos/LomKich/ScheduleApp/releases';
-
-    async function ghFetch(url) {
+    async function tryGhFetch(url) {
       if (window.Android && window.Android.nativeFetch) {
-        // Оборачиваем синхронный @JavascriptInterface в Promise+setTimeout
-        // чтобы не блокировать JS event loop на время HTTP запроса
         return new Promise((resolve, reject) => {
           setTimeout(() => {
             try {
               const resStr = window.Android.nativeFetch(url);
               const res = JSON.parse(resStr);
-              if (!res.ok) {
-                const err = new Error(res.error || 'HTTP ' + res.status);
-                err.status = res.status;
-                reject(err);
-              } else {
-                resolve(JSON.parse(res.body));
-              }
+              if (!res.ok) reject(new Error('HTTP ' + res.status));
+              else resolve(JSON.parse(res.body));
             } catch(e) { reject(e); }
           }, 0);
         });
       } else {
-        const r = await fetch(url);
-        if (!r.ok) { const err = new Error('HTTP ' + r.status); err.status = r.status; throw err; }
+        const r = await _fetchTimeout(fetch(url), 7000);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
       }
     }
 
+    // Пробуем все зеркала по очереди
+    async function ghFetch(path) {
+      const errs = [];
+      for (const base of GH_API_MIRRORS) {
+        try { return await tryGhFetch(base + path); }
+        catch(e) { errs.push(e.message); }
+      }
+      throw new Error('GitHub недоступен (' + errs[0] + ')');
+    }
+
     let data;
-    try {
-      data = await ghFetch(baseApi + '/latest');
-    } catch(e) {
-      if (e.status === 404) {
-        const all = await ghFetch(baseApi + '?per_page=5');
-        if (!Array.isArray(all) || all.length === 0) {
-          if (!silent) toast('❌ В репозитории нет релизов');
-          return;
-        }
-        data = all[0];
-      } else { throw e; }
+    try { data = await ghFetch('/latest'); }
+    catch(e) {
+      const all = await ghFetch('?per_page=5');
+      if (!Array.isArray(all) || !all.length) {
+        if (!silent) toast('❌ В репозитории нет релизов');
+        return;
+      }
+      data = all[0];
     }
 
     const rawTag    = (data.tag_name || '').trim();
     const latestTag = rawTag.replace(/^v/i, '');
-    const apkAsset  = (data.assets || []).find(a => a.name && a.name.endsWith('.apk'));
+    const apkAsset  = (data.assets || []).find(a => a.name?.endsWith('.apk'));
 
     if (!latestTag) { if (!silent) toast('❌ Не удалось определить версию'); return; }
 
@@ -7758,7 +7919,7 @@ async function checkOtaUpdate(silent) {
       if (!silent) toast('🆕 v' + latestTag + ' — APK не прикреплён к релизу');
     }
   } catch(e) {
-    if (!silent) toast('❌ ' + e.message);
+    if (!silent) toast('❌ ' + e.message.slice(0, 80));
   }
   if (!silent && btn) { btn.disabled = false; btn.textContent = '🔄 Проверить'; }
 }

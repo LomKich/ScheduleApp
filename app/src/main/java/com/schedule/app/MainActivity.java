@@ -649,11 +649,36 @@ public class MainActivity extends Activity {
 
         /**
          * Нативный HTTP GET без CORS — возвращает JSON: {ok, status, body, error?}
+         * Для GitHub URL автоматически пробует зеркала (обход блокировок в России).
          */
         @JavascriptInterface
         public String nativeFetch(String urlStr) {
             log.i(TAG, "nativeFetch: " + urlStr);
-            return nativeFetchInternal(urlStr, buildProxy());
+            java.net.Proxy proxy = buildProxy();
+
+            // Для GitHub API — пробуем зеркала если оригинал не ответил
+            if (urlStr != null && urlStr.contains("api.github.com")) {
+                String[] mirrors = {
+                    urlStr,
+                    urlStr.replace("api.github.com", "api.github.moeyy.xyz"),
+                    urlStr.replace("api.github.com", "api.kgithub.com"),
+                };
+                for (String mirrorUrl : mirrors) {
+                    String result = nativeFetchInternal(mirrorUrl, proxy);
+                    try {
+                        org.json.JSONObject r = new org.json.JSONObject(result);
+                        if (r.optBoolean("ok", false)) {
+                            log.i(TAG, "nativeFetch github mirror OK: " + mirrorUrl);
+                            return result;
+                        }
+                    } catch (Exception ignored) {}
+                    log.w(TAG, "nativeFetch github mirror failed: " + mirrorUrl);
+                }
+                // Все зеркала провалились — вернём последний результат
+                return nativeFetchInternal(urlStr, proxy);
+            }
+
+            return nativeFetchInternal(urlStr, proxy);
         }
 
         /**
@@ -893,73 +918,117 @@ public class MainActivity extends Activity {
          * стандартный диалог "Установить" — пользователю нужна одна кнопка.
          */
         @JavascriptInterface
-        public void downloadAndInstallApk(String urlStr) {
-            log.i(TAG, "downloadAndInstallApk: " + urlStr);
-            // Скачивание в фоне, установка в UI-потоке
+        public void downloadAndInstallApk(String originalUrl) {
+            log.i(TAG, "downloadAndInstallApk: " + originalUrl);
+
+            // Список URL для попытки: оригинал + зеркала ghproxy для России
+            final String[] candidates = {
+                originalUrl,
+                "https://ghproxy.com/"          + originalUrl,
+                "https://mirror.ghproxy.com/"   + originalUrl,
+                "https://ghfast.top/"            + originalUrl,
+                "https://gh.con.sh/"             + originalUrl,
+                "https://gitproxy.click/"        + originalUrl,
+            };
+
             new Thread(() -> {
-                try {
-                    // Папка для APK
-                    java.io.File apkDir = new java.io.File(getFilesDir(), "apk");
-                    if (!apkDir.exists()) apkDir.mkdirs();
-                    java.io.File apkFile = new java.io.File(apkDir, "update.apk");
-                    if (apkFile.exists()) apkFile.delete();
+                java.io.File apkDir = new java.io.File(getFilesDir(), "apk");
+                if (!apkDir.exists()) apkDir.mkdirs();
+                java.io.File apkFile = new java.io.File(apkDir, "update.apk");
+                if (apkFile.exists()) apkFile.delete();
 
-                    // Скачиваем
-                    java.net.URL url = new java.net.URL(urlStr);
-                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                    conn.setRequestMethod("GET");
-                    conn.setConnectTimeout(30000);
-                    conn.setReadTimeout(60000);
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp/" + getVersionName());
-                    conn.setInstanceFollowRedirects(true);
-
-                    int status = conn.getResponseCode();
-                    if (status < 200 || status >= 300) {
-                        log.e(TAG, "downloadAndInstallApk HTTP error: " + status);
+                Exception lastError = null;
+                for (String urlStr : candidates) {
+                    try {
+                        log.i(TAG, "downloadAndInstallApk trying: " + urlStr);
+                        final String displayUrl = urlStr.length() > 60
+                            ? urlStr.substring(0, 60) + "..." : urlStr;
                         runOnUiThread(() -> webView.evaluateJavascript(
-                            "if(typeof toast==='function')toast('❌ Ошибка скачивания: HTTP " + status + "')", null));
-                        return;
-                    }
+                            "var _otaLbl=document.getElementById('ota-progress-label');" +
+                            "if(_otaLbl)_otaLbl.textContent='⏬ Пробую зеркало...'", null));
 
-                    java.io.InputStream is = conn.getInputStream();
-                    java.io.FileOutputStream fos = new java.io.FileOutputStream(apkFile);
-                    byte[] buf = new byte[16384];
-                    int n;
-                    while ((n = is.read(buf)) != -1) fos.write(buf, 0, n);
-                    fos.close();
-                    is.close();
-                    conn.disconnect();
-                    log.i(TAG, "APK downloaded: " + apkFile.length() + " bytes");
+                        java.net.URL url = new java.net.URL(urlStr);
+                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                        conn.setRequestMethod("GET");
+                        conn.setConnectTimeout(20000);
+                        conn.setReadTimeout(60000);
+                        conn.setRequestProperty("User-Agent",
+                            "Mozilla/5.0 ScheduleApp/" + getVersionName());
+                        conn.setInstanceFollowRedirects(true);
 
-                    // Открываем установщик через FileProvider
-                    runOnUiThread(() -> {
-                        try {
-                            android.net.Uri apkUri = androidx.core.content.FileProvider.getUriForFile(
-                                MainActivity.this,
-                                getPackageName() + ".fileprovider",
-                                apkFile
-                            );
-                            android.content.Intent intent = new android.content.Intent(
-                                android.content.Intent.ACTION_INSTALL_PACKAGE);
-                            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
-                            intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                            // Разрешаем установку не из маркета
-                            intent.putExtra(android.content.Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-                            startActivity(intent);
-                            log.i(TAG, "Installer launched");
-                        } catch (Exception e) {
-                            log.e(TAG, "Launch installer error: " + e.getMessage());
-                            webView.evaluateJavascript(
-                                "if(typeof toast==='function')toast('❌ Не удалось открыть установщик')", null);
+                        int status = conn.getResponseCode();
+                        if (status < 200 || status >= 300) {
+                            conn.disconnect();
+                            lastError = new Exception("HTTP " + status + " от " + displayUrl);
+                            log.w(TAG, "Mirror failed HTTP " + status + ": " + urlStr);
+                            continue;
                         }
-                    });
 
-                } catch (Exception e) {
-                    log.e(TAG, "downloadAndInstallApk error: " + e.getMessage());
-                    runOnUiThread(() -> webView.evaluateJavascript(
-                        "if(typeof toast==='function')toast('❌ " + e.getMessage() + "')", null));
+                        // Качаем файл
+                        long total = conn.getContentLengthLong();
+                        java.io.InputStream is = conn.getInputStream();
+                        java.io.FileOutputStream fos = new java.io.FileOutputStream(apkFile);
+                        byte[] buf = new byte[16384];
+                        long downloaded = 0;
+                        int n;
+                        while ((n = is.read(buf)) != -1) {
+                            fos.write(buf, 0, n);
+                            downloaded += n;
+                            if (total > 0) {
+                                final int pct = (int)(downloaded * 100 / total);
+                                runOnUiThread(() -> webView.evaluateJavascript(
+                                    "var b=document.getElementById('ota-progress-bar');" +
+                                    "var l=document.getElementById('ota-progress-label');" +
+                                    "if(b)b.style.width='" + pct + "%';" +
+                                    "if(l)l.textContent='" + pct + "% — Скачиваю...'", null));
+                            }
+                        }
+                        fos.close();
+                        is.close();
+                        conn.disconnect();
+                        log.i(TAG, "APK downloaded: " + apkFile.length() + " bytes via " + urlStr);
+
+                        // Запускаем установщик
+                        runOnUiThread(() -> {
+                            try {
+                                android.net.Uri apkUri = androidx.core.content.FileProvider.getUriForFile(
+                                    MainActivity.this,
+                                    getPackageName() + ".fileprovider",
+                                    apkFile
+                                );
+                                android.content.Intent intent = new android.content.Intent(
+                                    android.content.Intent.ACTION_INSTALL_PACKAGE);
+                                intent.setDataAndType(apkUri,
+                                    "application/vnd.android.package-archive");
+                                intent.addFlags(
+                                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                intent.addFlags(
+                                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                                intent.putExtra(
+                                    android.content.Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+                                startActivity(intent);
+                                log.i(TAG, "Installer launched");
+                            } catch (Exception e) {
+                                log.e(TAG, "Launch installer error: " + e.getMessage());
+                                webView.evaluateJavascript(
+                                    "if(typeof toast==='function')toast('❌ Не удалось открыть установщик')",
+                                    null);
+                            }
+                        });
+                        return; // успех — выходим из цикла
+
+                    } catch (Exception e) {
+                        lastError = e;
+                        log.w(TAG, "Mirror error: " + urlStr + " → " + e.getMessage());
+                    }
                 }
+
+                // Все зеркала провалились
+                final String errMsg = lastError != null ? lastError.getMessage() : "Неизвестная ошибка";
+                log.e(TAG, "downloadAndInstallApk all mirrors failed: " + errMsg);
+                runOnUiThread(() -> webView.evaluateJavascript(
+                    "if(typeof toast==='function')toast('❌ Все зеркала недоступны: " +
+                    errMsg.replace("'", "") + "')", null));
             }).start();
         }
 
