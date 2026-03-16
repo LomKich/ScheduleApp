@@ -2140,7 +2140,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.2.4 — Android</div>
+        <div class="item-sub" id="app-version-str">4.2.5 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2966,12 +2966,53 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     <button class="diff-btn active" onclick="bubDifficulty='normal';updateDiffBtns('bubbles')">⚡ Normal</button>
     <button class="diff-btn" onclick="bubDifficulty='hard';updateDiffBtns('bubbles')">💀 Hard</button>
   </div>
-  <!-- Загрузка аудио -->
-  <label style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:var(--rb);padding:9px 14px;cursor:pointer;font-size:12px;font-weight:600;color:var(--accent);width:100%;max-width:380px;margin-bottom:4px">
-    <span style="font-size:16px">🎵</span>
-    <span id="bub-audio-info">Загрузить аудио для ритм-режима</span>
-    <input type="file" accept="audio/*" style="display:none" onchange="osuLoadAudio(this.files[0])">
-  </label>
+  <!-- ═══ АУДИО ЗОНА — drag & drop ═══ -->
+  <div id="osu-audio-zone"
+    ondragover="event.preventDefault();osuDragOver(true)"
+    ondragleave="osuDragOver(false)"
+    ondrop="event.preventDefault();osuDragOver(false);osuLoadAudio(event.dataTransfer.files[0])"
+    onclick="document.getElementById('osu-file-input').click()"
+    style="
+      position:relative;width:100%;max-width:380px;min-height:86px;
+      margin-bottom:6px;border-radius:16px;cursor:pointer;overflow:hidden;
+      border:2px dashed rgba(255,102,170,0.45);
+      background:rgba(255,102,170,0.04);
+      transition:border-color .2s,background .2s;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px
+    ">
+    <!-- Состояние: ожидание -->
+    <div id="osu-zone-idle" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 0">
+      <div style="font-size:26px;line-height:1;filter:drop-shadow(0 0 10px rgba(255,102,170,.7))">🎵</div>
+      <div style="font-size:12px;font-weight:700;color:#ff66aa;letter-spacing:.04em">ЗАГРУЗИТЬ АУДИО</div>
+      <div style="font-size:10px;color:rgba(255,102,170,.55)">drag & drop или нажми · mp3 / ogg / wav</div>
+    </div>
+    <!-- Состояние: анализ -->
+    <div id="osu-zone-loading" style="display:none;flex-direction:column;align-items:center;gap:8px;padding:10px 14px;width:100%">
+      <div id="osu-load-icon" style="font-size:22px;line-height:1">⏳</div>
+      <div id="osu-load-stage" style="font-size:11px;font-weight:700;color:#ff66aa;letter-spacing:.05em">ЧИТАЮ ФАЙЛ...</div>
+      <!-- Прогресс-бар -->
+      <div style="width:100%;height:4px;background:rgba(255,102,170,.15);border-radius:2px;overflow:hidden">
+        <div id="osu-load-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#ff66aa,#ffaa66);border-radius:2px;transition:width .3s ease"></div>
+      </div>
+      <!-- Мини-осциллограмма (рисуется во время анализа) -->
+      <canvas id="osu-wave-mini" width="320" height="28" style="width:100%;max-width:320px;opacity:.8;border-radius:4px"></canvas>
+    </div>
+    <!-- Состояние: готово -->
+    <div id="osu-zone-done" style="display:none;flex-direction:column;align-items:center;gap:4px;padding:6px 14px;width:100%">
+      <div style="display:flex;align-items:center;gap:10px;width:100%">
+        <div id="osu-done-emoji" style="font-size:22px;line-height:1;flex-shrink:0">🎵</div>
+        <div style="flex:1;min-width:0">
+          <div id="osu-done-filename" style="font-size:11px;font-weight:700;color:#ff66aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+          <div id="osu-done-bpm" style="font-size:10px;color:rgba(255,255,255,.5);margin-top:1px"></div>
+        </div>
+        <!-- BPM pulse dot -->
+        <div id="osu-bpm-dot" style="width:10px;height:10px;border-radius:50%;background:#ff66aa;flex-shrink:0;box-shadow:0 0 8px #ff66aa;transition:transform .05s,opacity .05s"></div>
+      </div>
+      <!-- Waveform -->
+      <canvas id="osu-wave-full" width="340" height="32" style="width:100%;max-width:340px;border-radius:4px;opacity:.7"></canvas>
+    </div>
+    <input type="file" id="osu-file-input" accept="audio/*" style="display:none" onchange="osuLoadAudio(this.files[0])">
+  </div>
   <div id="bub-score-label" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#ff66aa;margin:2px 0 6px;letter-spacing:.04em;text-align:center">Счёт: 0 • Рекорд: 0 • BPM: 120 • ❤️❤️❤️</div>
   <canvas id="bub-canvas" style="border-radius:14px;border:1.5px solid rgba(255,102,170,0.35);display:block;touch-action:none;box-shadow:0 0 24px rgba(255,102,170,0.18);max-width:100%"></canvas>
   <button class="btn btn-surface3" style="width:auto;padding:8px 20px;margin-top:10px;font-size:12px" onclick="bubRestart()">🔄 Restart</button>
@@ -5475,7 +5516,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.2.4';
+const APP_VERSION='4.2.5';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -7680,6 +7721,7 @@ function eggStartGame(name) {
 // Закрыть osu-режим
 function bubbleClose() {
   bubStop();
+  osuStopBpmDot();
   document.getElementById('egg-bubbles').style.display = 'none';
   eggOpen();
 }
@@ -10118,33 +10160,213 @@ function bubInit() {
   bubRestart();
 }
 
+function osuDragOver(active) {
+  const zone = document.getElementById('osu-audio-zone');
+  if (!zone) return;
+  zone.style.borderColor  = active ? '#ff66aa' : 'rgba(255,102,170,0.45)';
+  zone.style.background   = active ? 'rgba(255,102,170,0.12)' : 'rgba(255,102,170,0.04)';
+  zone.style.transform    = active ? 'scale(1.01)' : '';
+}
+
 function osuUpdateAudioUI() {
+  // legacy — kept for compatibility but no longer drives the new UI
   const info = document.getElementById('bub-audio-info');
-  if (!info) return;
-  if (bubAudioBuf) {
-    info.textContent = '🎵 BPM: ' + bubBPM + ' • Ритм-режим включён';
-    info.style.color = 'var(--success, #4a9e5c)';
-  } else {
-    info.textContent = '⬆️ Загрузи аудио для синхронизации с ритмом';
-    info.style.color = 'var(--muted)';
+  if (info) {
+    info.textContent = bubAudioBuf
+      ? '🎵 BPM: ' + bubBPM + ' • Ритм-режим включён'
+      : '⬆️ Загрузи аудио для синхронизации с ритмом';
+    info.style.color = bubAudioBuf ? 'var(--success,#4a9e5c)' : 'var(--muted)';
   }
 }
 
+// ── Waveform renderer ─────────────────────────────────────────────
+function osuDrawWaveform(canvasId, audioBuffer, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !audioBuffer) return;
+  const ctx   = canvas.getContext('2d');
+  const w     = canvas.width, h = canvas.height;
+  const data  = audioBuffer.getChannelData(0);
+  const step  = Math.ceil(data.length / w);
+  ctx.clearRect(0, 0, w, h);
+
+  // Background
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(0, 0, w, h);
+
+  // Gradient
+  const grad = ctx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0,   color + '88');
+  grad.addColorStop(0.5, color + 'ee');
+  grad.addColorStop(1,   color + '88');
+  ctx.fillStyle = grad;
+
+  for (let i = 0; i < w; i++) {
+    let min = 1, max = -1;
+    for (let j = 0; j < step; j++) {
+      const v = data[i * step + j] || 0;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const yMin = Math.round((0.5 + min * 0.45) * h);
+    const yMax = Math.round((0.5 + max * 0.45) * h);
+    ctx.fillRect(i, yMin, 1, Math.max(1, yMax - yMin));
+  }
+
+  // Center line
+  ctx.strokeStyle = color + '33';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+}
+
+// ── Анимированный мини-спектр во время анализа ────────────────────
+let _osuWaveAnimId = null;
+function osuAnimateMiniWave(canvasId, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  let t = 0;
+  cancelAnimationFrame(_osuWaveAnimId);
+  function frame() {
+    t += 0.06;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(0, 0, w, h);
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0,   color + '44');
+    grad.addColorStop(0.5, color + 'cc');
+    grad.addColorStop(1,   color + '44');
+    ctx.fillStyle = grad;
+    const bars = 40;
+    const bw = w / bars;
+    for (let i = 0; i < bars; i++) {
+      const phase = i / bars * Math.PI * 4 - t;
+      const amp   = Math.abs(Math.sin(phase)) * 0.6 + Math.abs(Math.sin(phase * 1.7 + t)) * 0.4;
+      const bh    = Math.max(2, amp * (h - 4));
+      ctx.fillRect(i * bw + 1, (h - bh) / 2, Math.max(1, bw - 2), bh);
+    }
+    _osuWaveAnimId = requestAnimationFrame(frame);
+  }
+  frame();
+}
+function osuStopMiniAnim() {
+  cancelAnimationFrame(_osuWaveAnimId);
+  _osuWaveAnimId = null;
+}
+
+// ── BPM dot pulse ─────────────────────────────────────────────────
+let _osuBpmDotTimer = null;
+function osuStartBpmDot(bpmMs) {
+  clearInterval(_osuBpmDotTimer);
+  const dot = document.getElementById('osu-bpm-dot');
+  if (!dot) return;
+  _osuBpmDotTimer = setInterval(() => {
+    dot.style.transform = 'scale(1.6)';
+    dot.style.opacity   = '1';
+    setTimeout(() => {
+      dot.style.transform = 'scale(1)';
+      dot.style.opacity   = '0.5';
+    }, 120);
+  }, bpmMs);
+}
+function osuStopBpmDot() {
+  clearInterval(_osuBpmDotTimer);
+  const dot = document.getElementById('osu-bpm-dot');
+  if (dot) { dot.style.transform = ''; dot.style.opacity = '0.5'; }
+}
+
+// ── Этапы загрузки ────────────────────────────────────────────────
+function osuSetLoadStage(icon, text, barPct) {
+  const ic  = document.getElementById('osu-load-icon');
+  const st  = document.getElementById('osu-load-stage');
+  const bar = document.getElementById('osu-load-bar');
+  if (ic)  ic.textContent    = icon;
+  if (st)  st.textContent    = text;
+  if (bar) bar.style.width   = barPct + '%';
+}
+
 async function osuLoadAudio(file) {
+  if (!file) return;
+  const zone    = document.getElementById('osu-audio-zone');
+  const idle    = document.getElementById('osu-zone-idle');
+  const loading = document.getElementById('osu-zone-loading');
+  const done    = document.getElementById('osu-zone-done');
+
+  // Показываем loading
+  if (idle)    idle.style.display    = 'none';
+  if (done)    done.style.display    = 'none';
+  if (loading) loading.style.display = 'flex';
+
+  osuSetLoadStage('📂', 'ЧИТАЮ ФАЙЛ...', 10);
+  osuAnimateMiniWave('osu-wave-mini', '#ff66aa');
+
   try {
-    const info = document.getElementById('bub-audio-info');
-    if (info) { info.textContent = '⏳ Анализирую BPM...'; info.style.color = 'var(--accent)'; }
     if (!bubAudioCtx) bubAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Этап 1: читаем файл
     const arrBuf = await file.arrayBuffer();
+    osuSetLoadStage('🔊', 'ДЕКОДИРУЮ АУДИО...', 35);
+    await new Promise(r => setTimeout(r, 60)); // пауза чтобы UI обновился
+
+    // Этап 2: декодируем
     bubAudioBuf = await bubAudioCtx.decodeAudioData(arrBuf);
+    osuSetLoadStage('📊', 'АНАЛИЗИРУЮ BPM...', 60);
+    await new Promise(r => setTimeout(r, 80));
+
+    // Этап 3: BPM
     bubBPM = await osuDetectBPM(bubAudioBuf);
     bubBeatInterval = 60000 / bubBPM;
     bubAutoMode = false;
+    osuSetLoadStage('✅', 'ГОТОВО!', 100);
+    await new Promise(r => setTimeout(r, 320));
+
+    osuStopMiniAnim();
+
+    // Показываем done
+    if (loading) loading.style.display = 'none';
+    if (done)    done.style.display    = 'flex';
+
+    // Имя файла
+    const nameEl = document.getElementById('osu-done-filename');
+    if (nameEl) nameEl.textContent = file.name.replace(/\.[^.]+$/, '');
+
+    // BPM + длительность
+    const bpmEl  = document.getElementById('osu-done-bpm');
+    const dur    = Math.round(bubAudioBuf.duration);
+    const mm     = Math.floor(dur / 60);
+    const ss     = String(dur % 60).padStart(2, '0');
+    if (bpmEl) bpmEl.textContent = `BPM: ${bubBPM} · ${mm}:${ss} · ритм-режим ✓`;
+
+    // Рисуем waveform
+    osuDrawWaveform('osu-wave-full', bubAudioBuf, '#ff66aa');
+
+    // Запускаем BPM dot
+    osuStartBpmDot(bubBeatInterval);
+
+    // Граница зоны — solid, зелёная
+    if (zone) {
+      zone.style.borderStyle = 'solid';
+      zone.style.borderColor = '#4aff8a';
+      zone.style.background  = 'rgba(74,255,138,0.04)';
+    }
+
     osuUpdateAudioUI();
     bubRestart();
+
   } catch(e) {
-    const info = document.getElementById('bub-audio-info');
-    if (info) { info.textContent = '❌ Ошибка: ' + e.message; info.style.color = 'var(--danger, #c94f4f)'; }
+    osuStopMiniAnim();
+    if (loading) loading.style.display = 'none';
+    if (idle)    idle.style.display    = 'flex';
+    if (zone)    zone.style.borderColor = '#ff4455';
+    osuSetLoadStage('❌', 'ОШИБКА: ' + (e.message || e), 0);
+    const st = document.getElementById('osu-load-stage');
+    if (st) st.style.color = '#ff4455';
+    if (loading) loading.style.display = 'flex';
+    setTimeout(() => {
+      if (loading) loading.style.display = 'none';
+      if (idle)    idle.style.display    = 'flex';
+      if (zone) { zone.style.borderColor = 'rgba(255,102,170,0.45)'; zone.style.borderStyle = 'dashed'; }
+    }, 2500);
   }
 }
 
