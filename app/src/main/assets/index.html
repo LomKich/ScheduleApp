@@ -447,6 +447,8 @@ body[data-theme="candy"] {--accent-text:#000}
   opacity:0;z-index:999;max-width:88vw;overflow:hidden;text-overflow:ellipsis
 }
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+/* ── Мультиселект чатов ── */
+.chat-selected{background:color-mix(in srgb,var(--accent) 15%,var(--bg))!important;}
 /* iOS-style notification banners */
 #ios-notif-container{position:fixed;top:calc(var(--safe-top) + 10px);left:50%;transform:translateX(-50%);z-index:1100;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:calc(100% - 32px);max-width:390px;}
 .ios-notif{width:100%;background:rgba(30,30,30,0.93);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,0.14);border-radius:20px;padding:12px 14px;display:flex;align-items:center;gap:11px;box-shadow:0 8px 40px rgba(0,0,0,0.55);pointer-events:all;cursor:pointer;transform:translateY(-110%) scale(0.88);opacity:0;transition:transform 0.42s cubic-bezier(0.34,1.26,0.64,1),opacity 0.28s ease;will-change:transform;}
@@ -2138,7 +2140,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.2.2 — Android</div>
+        <div class="item-sub" id="app-version-str">4.2.3 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2221,7 +2223,11 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
           maxlength="8"
           style="background:var(--surface2);border:2px solid var(--surface3);border-radius:12px;padding:10px 14px;font-size:22px;color:var(--text);font-family:inherit;outline:none;flex:1;min-width:0;transition:border-color .15s"
           oninput="editCustomEmojiInput(this)">
-        <div id="edit-custom-emoji-preview" style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0"></div>
+        <div id="edit-custom-emoji-preview"
+          onclick="randomEmojiPick('edit')"
+          title="Случайный эмодзи"
+          style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;cursor:pointer;transition:transform .15s,border-color .15s;active:scale(.9)"
+          ontouchstart="this.style.transform='scale(.88)'" ontouchend="this.style.transform=''">🎲</div>
       </div>
       <div id="edit-custom-emoji-error" style="font-size:11px;color:var(--danger,#c94f4f);min-height:14px;margin-bottom:8px;padding-left:4px"></div>
     </div>
@@ -2260,7 +2266,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
     </div>
 
     <div class="sep"></div>
-    <button class="btn" style="background:var(--danger,#c94f4f);color:#fff;margin-top:8px" onclick="profileLogout()">🚪 Выйти из аккаунта</button>
+    <button class="btn" style="background:var(--danger,#c94f4f);color:#fff;margin-top:8px" onclick="profileDeleteAccount()">🗑 Выйти и удалить аккаунт</button>
   </div>
 </div>
 
@@ -2305,7 +2311,11 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
           maxlength="8"
           style="background:var(--surface2);border:2px solid var(--surface3);border-radius:12px;padding:10px 14px;font-size:22px;color:var(--text);font-family:inherit;outline:none;flex:1;min-width:0;transition:border-color .15s"
           oninput="loginCustomEmojiInput(this)">
-        <div id="login-custom-emoji-preview" style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0"></div>
+        <div id="login-custom-emoji-preview"
+          onclick="randomEmojiPick('login')"
+          title="Случайный эмодзи"
+          style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;cursor:pointer;transition:transform .15s,border-color .15s"
+          ontouchstart="this.style.transform='scale(.88)'" ontouchend="this.style.transform=''">🎲</div>
       </div>
       <div id="login-custom-emoji-error" style="font-size:11px;color:var(--danger,#c94f4f);min-height:14px;margin-bottom:6px;padding-left:4px"></div>
       <div id="login-emoji-grid" style="display:none"></div>
@@ -2391,10 +2401,15 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 <div id="sb-status" style="display:none"></div>
 <!-- MESSENGER_SCREEN_LIST -->
 <div class="screen" id="s-messenger">
-  <div class="hdr">
+  <div class="hdr" id="msg-hdr-normal">
     <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
     <div class="hdr-title">💬 Сообщения</div>
     <button style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;padding:8px;cursor:pointer" onclick="profileRenderOnline();showScreen('s-online')">Новый чат</button>
+  </div>
+  <div class="hdr" id="msg-hdr-select" style="display:none">
+    <button style="background:none;border:none;color:var(--muted);font-size:14px;font-weight:700;padding:8px;cursor:pointer" onclick="msgSelectCancel()">Отмена</button>
+    <div class="hdr-title" id="msg-select-count">Выбрано: 0</div>
+    <button style="background:none;border:none;color:var(--danger,#c94f4f);font-size:14px;font-weight:700;padding:8px;cursor:pointer" onclick="msgDeleteSelected()">Удалить</button>
   </div>
   <!-- Search bar -->
   <div style="padding:8px 16px 4px;flex-shrink:0">
@@ -5460,7 +5475,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.2.2';
+const APP_VERSION='4.2.3';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -11966,6 +11981,93 @@ function isEmoji(str) {
   );
 }
 
+// ── Рандомный эмодзи ──────────────────────────────────────────────
+const _ALL_EMOJI = [
+  // Смайлики и люди
+  '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩',
+  '😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐',
+  '🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒',
+  '🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕',
+  '😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱',
+  '😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩',
+  '🤡','👹','👺','👻','👽','👾','🤖','😺','😸','😹','😻','😼','😽','🙀','😿','😾',
+  // Жесты и тело
+  '👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆',
+  '🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️',
+  '💅','🤳','💪','🦾','🦵','🦶','👂','🦻','👃','🧠','🦷','🦴','👀','👁️','👅','👄',
+  // Люди
+  '👶','🧒','👦','👧','🧑','👱','👨','🧔','👩','🧓','👴','👵','🙍','🙎','🙅','🙆',
+  '💁','🙋','🧏','🙇','🤦','🤷','👮','🕵️','💂','🥷','👷','🤴','👸','👳','👲','🧕',
+  '🤵','👰','🤰','🤱','👼','🎅','🤶','🦸','🦹','🧙','🧚','🧛','🧜','🧝','🧞','🧟',
+  '💆','💇','🚶','🧍','🧎','🏃','💃','🕺','🕴️','👯','🧖','🧗','🏌️','🏇','🧘','🏄',
+  // Животные
+  '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈',
+  '🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱',
+  '🐛','🦋','🐌','🐞','🐜','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑',
+  '🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧',
+  '🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑',
+  '🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇',
+  '🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔',
+  // Еда
+  '🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝',
+  '🍅','🥑','🍆','🥔','🥕','🌽','🌶️','🫑','🥒','🥬','🥦','🧄','🧅','🍄','🥜','🌰',
+  '🍞','🥐','🥖','🥨','🧀','🍳','🥚','🍔','🍟','🌭','🍕','🌮','🌯','🫔','🥙','🧆',
+  '🍜','🍝','🍛','🍣','🍱','🍤','🍙','🍘','🍥','🥮','🍢','🧁','🍰','🎂','🍮','🍭',
+  '🍬','🍫','🍿','🧂','🍩','🍪','🌰','🍯','🧃','🥤','🧋','☕','🍵','🧉','🍺','🍻',
+  // Природа
+  '🌸','🌺','🌻','🌹','🪷','🌷','🌼','🌱','🌿','☘️','🍀','🎍','🪴','🍁','🍂','🍃',
+  '🍄','🌾','💐','🌵','🎋','🌲','🌳','🌴','🪵','🪨','🌊','💧','🔥','🌈','⭐','🌟',
+  '✨','💫','⚡','🌙','☀️','🌤️','⛅','🌦️','🌧️','⛈️','🌩️','❄️','💨','🌀','🌈',
+  // Предметы
+  '⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🥊','🥋','🎯',
+  '⛸️','🎿','🛷','🎮','🎲','🧩','🧸','🪁','🎭','🎨','🖼️','🎪','🎤','🎧','🎵','🎶',
+  '🎸','🎹','🎷','🎺','🎻','🪘','🥁','📱','💻','⌨️','🖥️','🖨️','📷','📸','📹','🎥',
+  '📺','📻','🎙️','⏰','⌛','⏳','📡','🔋','💡','🔦','🕯️','💎','🔮','🪄','🧲','🔑',
+  '🗝️','🔒','🔓','🔨','🪛','🔧','⚙️','🪤','🧰','🗡️','🛡️','🪝','🧲','🎁','🎀',
+  '🎈','🎉','🎊','🎏','🎐','🎑','🎃','🎄','🎆','🎇','✉️','📦','🏆','🥇','🥈','🥉',
+  // Места и символы
+  '🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏪','🏫','🏬','🏭','🏯','🏰','🗼','🗽',
+  '⛪','🕌','🛕','⛩️','🕍','🗾','🏔️','⛰️','🌋','🗻','🏕️','🏖️','🏜️','🏝️','🌅',
+  '🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍️',
+  '🛵','🚲','🛴','🛺','🚁','🛸','✈️','🚀','🛩️','⛵','🚢','🚂','🚃','🚄','🚅',
+  // Флаги/символы
+  '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖',
+  '💘','💝','💟','☮️','✝️','☯️','🆒','🆓','🆕','🆙','🆚','🈵','🔴','🟠','🟡','🟢',
+  '🔵','🟣','⚫','⚪','🟤','🔺','🔻','💠','🔷','🔶','🔹','🔸','▪️','▫️','🔲','🔳',
+];
+
+function randomEmojiPick(ctx) {
+  const emoji = _ALL_EMOJI[Math.floor(Math.random() * _ALL_EMOJI.length)];
+  if (ctx === 'edit') {
+    _editSelectedEmoji = emoji;
+    _profileAvatarMode = 'emoji';
+    const preview = document.getElementById('edit-custom-emoji-preview');
+    const inner   = document.getElementById('edit-avatar-inner');
+    const inp     = document.getElementById('edit-custom-emoji-input');
+    if (preview) preview.textContent = emoji;
+    if (inner)   inner.textContent   = emoji;
+    if (inp)     inp.value           = emoji;
+    // Сброс фото-режима
+    const editScreen = document.getElementById('s-profile-edit');
+    if (editScreen) {
+      const imgEl = editScreen.querySelector('#edit-avatar-preview img');
+      if (imgEl) imgEl.remove();
+    }
+  } else {
+    _loginSelectedEmoji = emoji;
+    const preview = document.getElementById('login-custom-emoji-preview');
+    const inp     = document.getElementById('login-custom-emoji-input');
+    if (preview) preview.textContent = emoji;
+    if (inp)     inp.value           = emoji;
+  }
+  // Маленькая анимация
+  const previewEl = document.getElementById(ctx + '-custom-emoji-preview');
+  if (previewEl) {
+    previewEl.style.transform = 'scale(1.35) rotate(10deg)';
+    setTimeout(() => { previewEl.style.transform = ''; }, 200);
+  }
+}
+
 // Извлечь первый эмодзи из строки
 function extractFirstEmoji(str) {
   if (!str) return null;
@@ -12280,6 +12382,15 @@ function profileRenderScreen() {
         <div class="settings-row-sub" id="profile-p2p-status">${_profilePeerReady ? '🟢 Подключено' : '🔴 Отключено'}</div>
       </div>
       <button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="profileConnect(profileLoad())">Переподключить</button>
+    </div>
+
+    <!-- Push уведомления -->
+    <div class="settings-row" style="margin-bottom:8px" id="push-notif-row">
+      <div>
+        <div style="font-size:13px;font-weight:700">🔔 Уведомления на телефон</div>
+        <div class="settings-row-sub" id="push-notif-status">${pushGetStatusText()}</div>
+      </div>
+      <button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="pushRequestPermission()" id="push-notif-btn">${pushGetBtnText()}</button>
     </div>
 
     <!-- Кнопки -->
@@ -12792,39 +12903,169 @@ window.onNativeBgImagePicked = function(dataUrl) {
   }
 };
 
-function profileSaveEdit() {
+async function profileSaveEdit() {
   const p = profileLoad();
   if (!p) return;
-  const name = (document.getElementById('edit-name')?.value || '').trim();
+  const name     = (document.getElementById('edit-name')?.value     || '').trim();
   const username = (document.getElementById('edit-username')?.value || '').trim().toLowerCase();
-  const bio = (document.getElementById('edit-bio')?.value || '').trim();
+  const bio      = (document.getElementById('edit-bio')?.value      || '').trim();
   if (!name || username.length < 3) { toast('❌ Заполни имя и юзернейм'); return; }
 
-  p.name = name;
+  const oldUsername = p.username;
+  const oldName     = p.name;
+  const usernameChanged = (oldUsername !== username);
+  const nameChanged     = (oldName     !== name);
+
+  p.name     = name;
   p.username = username;
-  p.bio = bio;
-  p.status = _editSelectedStatus;
-  p.color = _editSelectedColor;
+  p.bio      = bio;
+  p.status   = _editSelectedStatus;
+  p.color    = _editSelectedColor;
   if (_profileAvatarMode === 'photo' && window._profileTempAvatarData) {
     p.avatarType = 'photo';
     p.avatarData = window._profileTempAvatarData;
     window._profileTempAvatarData = null;
   } else {
     p.avatarType = 'emoji';
-    p.avatar = _editSelectedEmoji;
+    p.avatar     = _editSelectedEmoji;
     delete p.avatarData;
   }
-  profileSave(p);
 
-  // Обновить peer ID если юзернейм изменился
+  // ── Миграция данных при смене username ────────────────────────────
+  if (usernameChanged) {
+    toast('⏳ Переименовываем аккаунт...');
+
+    // 1. accounts: переносим ключ
+    const accounts = accountsLoad();
+    if (accounts[oldUsername]) {
+      accounts[username] = { ...accounts[oldUsername], name, avatar: p.avatar };
+      delete accounts[oldUsername];
+      accountsSave(accounts);
+    }
+
+    // 2. Локальные сообщения: обновляем поля from/to
+    const msgs  = msgLoad();
+    const newMsgs = {};
+    Object.entries(msgs).forEach(([chatKey, arr]) => {
+      newMsgs[chatKey] = arr.map(m => ({
+        ...m,
+        from: m.from === oldUsername ? username : m.from,
+        to:   m.to   === oldUsername ? username : m.to,
+      }));
+    });
+    msgSave(newMsgs);
+
+    // 3. friends — не меняются (это список ДРУГИХ пользователей)
+
+    // 4. Supabase: обновляем messages
+    //    Для каждого чата: fetch → delete old → insert new с новыми ключами
+    if (sbReady()) {
+      const chats = chatsLoad();
+      for (const otherUser of chats) {
+        const oldKey = sbChatKey(oldUsername, otherUser);
+        const newKey = sbChatKey(username,    otherUser);
+        try {
+          // Получаем все сообщения по старому ключу
+          const rows = await sbGet('messages',
+            `select=*&chat_key=eq.${encodeURIComponent(oldKey)}&order=ts.asc&limit=1000`);
+          if (!Array.isArray(rows) || rows.length === 0) continue;
+
+          // Удаляем старые
+          await sbDelete('messages', `chat_key=eq.${encodeURIComponent(oldKey)}`);
+
+          // Вставляем заново с новыми полями
+          const updated = rows.map(r => ({
+            chat_key:  newKey,
+            from_user: r.from_user === oldUsername ? username : r.from_user,
+            to_user:   r.to_user   === oldUsername ? username : r.to_user,
+            text:      r.text,
+            ts:        r.ts,
+          }));
+          // Вставляем батчем
+          await fetch(`${sbUrl()}/rest/v1/messages`, {
+            method: 'POST',
+            headers: {
+              apikey: sbKey(), Authorization: `Bearer ${sbKey()}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal',
+            },
+            body: JSON.stringify(updated),
+          });
+        } catch(e) {}
+
+        // Обновляем _fbLastMsgTs ключи
+        if (_fbLastMsgTs[oldKey]) {
+          _fbLastMsgTs[newKey] = _fbLastMsgTs[oldKey];
+          delete _fbLastMsgTs[oldKey];
+        }
+      }
+
+      // Суpabase presence: старая запись удалится через DELETE+INSERT в profileConnect
+      await sbDelete('presence', `username=eq.${encodeURIComponent(oldUsername)}`);
+
+      // leaderboard
+      await fetch(`${sbUrl()}/rest/v1/leaderboard?username=eq.${encodeURIComponent(oldUsername)}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: sbKey(), Authorization: `Bearer ${sbKey()}`,
+          'Content-Type': 'application/json', 'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ username }),
+      }).catch(() => {});
+    }
+
+    // 5. Перезапускаем потоки с новыми chat_key
+    Object.values(_fbMsgStreams).forEach(t => clearInterval(t));
+    _fbMsgStreams = {};
+  }
+
+  // Если изменилось только имя — обновляем в presence через profileConnect
+  profileSave(p);
   profileConnect(p);
   updateNavProfileIcon(p);
-  // Broadcast обновление профиля всем подключённым
   profileBroadcast({ type: 'profile_update', profile: profilePublicData(p) });
 
   showScreen('s-profile', 'back');
   setTimeout(profileRenderScreen, 100);
-  toast('✅ Профиль сохранён');
+  toast(usernameChanged ? '✅ Юзернейм изменён — чаты сохранены' : '✅ Профиль сохранён');
+}
+
+async function profileDeleteAccount() {
+  const p = profileLoad();
+  if (!p) return;
+  // Двойное подтверждение
+  if (!confirm('Удалить аккаунт @' + p.username + '?\n\nЭто действие необратимо: профиль, все сообщения и данные будут удалены.')) return;
+  if (!confirm('Точно удалить аккаунт @' + p.username + '? Отмены нет.')) return;
+
+  toast('⏳ Удаляем аккаунт...');
+  profileDisconnect();
+
+  // 1. Supabase: удаляем presence
+  if (sbReady()) {
+    await sbDelete('presence', 'username=eq.' + encodeURIComponent(p.username));
+    // 2. Supabase: удаляем все сообщения где участвует этот юзер
+    await sbDelete('messages', 'from_user=eq.' + encodeURIComponent(p.username));
+    await sbDelete('messages', 'to_user=eq.'   + encodeURIComponent(p.username));
+    // 3. Supabase: удаляем из leaderboard
+    await sbDelete('leaderboard', 'username=eq.' + encodeURIComponent(p.username));
+  }
+
+  // 4. Локальное хранилище: удаляем профиль из accounts
+  const accounts = accountsLoad();
+  delete accounts[p.username];
+  accountsSave(accounts);
+
+  // 5. Очищаем все личные данные
+  localStorage.removeItem(PROFILE_KEY);
+  localStorage.removeItem(FRIENDS_KEY);
+  localStorage.removeItem(MSG_STORE_KEY);
+  localStorage.removeItem(MSG_CHATS_KEY);
+
+  updateNavProfileIcon(null);
+  profileInitLoginScreen();
+  showScreen('s-login');
+  loginShowRegister();
+  toast('✅ Аккаунт удалён');
 }
 
 function profileLogout() {
@@ -12996,6 +13237,8 @@ async function sbInitTables() {
 async function profileConnect(p) {
   if (!p) return;
 
+  // Сбрасываем флаг первого входа — каждый connect делает DELETE+INSERT
+  _presenceFirstPut = true;
   // Инкрементируем session ID — все предыдущие вызовы становятся "устаревшими"
   const sessionId = ++_connectSessionId;
 
@@ -13277,6 +13520,9 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
     }
     if (!msgs[otherUsername]) msgs[otherUsername] = [];
     const exists = msgs[otherUsername].some(m => m.ts === msg.ts && m.from === msg.from_user);
+    // ВСЕГДА обновляем ts — даже если сообщение уже есть локально,
+    // иначе _fbLastMsgTs застревает на 0 и мы вечно тянем одно и то же
+    _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
     if (!exists) {
       const alreadyRead = _msgCurrentChat === otherUsername;
       msgs[otherUsername].push({
@@ -13284,7 +13530,6 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         text: msg.text, ts: msg.ts,
         delivered: true, read: alreadyRead
       });
-      _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
       hasNew = true;
     }
   });
@@ -13299,20 +13544,68 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       const lastMsg = msgs[otherUsername]?.[msgs[otherUsername].length-1];
       messengerUpdateBadge();
       if (lastMsg && lastMsg.from !== myUsername) {
+        const senderName = peer.name || ('@' + otherUsername);
+        const msgText    = lastMsg.text.slice(0, 60);
         showIosNotif({
-          sender: peer.name || ('@' + otherUsername),
-          text: lastMsg.text.slice(0, 60),
+          sender: senderName,
+          text: msgText,
           avatar: peer.avatar,
           avatarType: peer.avatarType,
           color: peer.color,
           onTap: function() { messengerOpenChat(otherUsername); },
         });
+        // Push на телефон (только если приложение свёрнуто)
+        pushSend(senderName, msgText);
       }
     }
   }
 }
 
 // Отправка сообщений
+
+// ══ PUSH УВЕДОМЛЕНИЯ ══════════════════════════════════════════════
+function pushGetPermission() {
+  if (!('Notification' in window)) return 'unsupported';
+  return Notification.permission;
+}
+function pushGetStatusText() {
+  const p = pushGetPermission();
+  if (p === 'unsupported') return '\u26a0\ufe0f \u041d\u0435 \u043f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044f \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u043e\u043c';
+  if (p === 'granted')     return '\U0001f7e2 \u0412\u043a\u043b\u044e\u0447\u0435\u043d\u044b';
+  if (p === 'denied')      return '\U0001f534 \u0417\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u043d\u044b (\u0440\u0430\u0437\u0440\u0435\u0448\u0438 \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445)';
+  return '\u26aa\ufe0f \u041d\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d\u044b';
+}
+function pushGetBtnText() {
+  const p = pushGetPermission();
+  if (p === 'granted')     return '\u0412\u043a\u043b\u044e\u0447\u0435\u043d\u044b \u2713';
+  if (p === 'denied')      return '\u0417\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u043d\u044b';
+  if (p === 'unsupported') return '\u041d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e';
+  return '\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c';
+}
+async function pushRequestPermission() {
+  if (!('Notification' in window)) { toast('\u274c \u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f \u043d\u0435 \u043f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u044e\u0442\u0441\u044f'); return; }
+  if (Notification.permission === 'granted') { toast('\u2705 \u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f \u0443\u0436\u0435 \u0432\u043a\u043b\u044e\u0447\u0435\u043d\u044b'); return; }
+  if (Notification.permission === 'denied') { toast('\U0001f534 \u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f \u0437\u0430\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u043d\u044b \u2014 \u0440\u0430\u0437\u0440\u0435\u0448\u0438 \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445'); return; }
+  const result = await Notification.requestPermission();
+  const statusEl = document.getElementById('push-notif-status');
+  const btnEl    = document.getElementById('push-notif-btn');
+  if (statusEl) statusEl.textContent = pushGetStatusText();
+  if (btnEl)    btnEl.textContent    = pushGetBtnText();
+  if (result === 'granted') {
+    toast('\U0001f514 \u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f \u0432\u043a\u043b\u044e\u0447\u0435\u043d\u044b!');
+    setTimeout(() => pushSend('\u0420\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435', '\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d\u044b \u2705'), 600);
+  } else {
+    toast('\u274c \u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f \u043d\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u044b');
+  }
+}
+function pushSend(title, body) {
+  if (pushGetPermission() !== 'granted') return;
+  if (document.visibilityState === 'visible') return;
+  try {
+    const n = new Notification(title, { body, tag: 'sapp-msg', renotify: true });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch(e) {}
+}
 
 // iOS-style notification banners
 let _iosNotifQueue = [];
@@ -13425,6 +13718,7 @@ async function onlineRefresh() {
   if (btn) { btn.textContent = '↻ Обновить'; btn.disabled = false; }
 }
 
+let _onlineSearchTimer = null;
 function profileRenderOnline() {
   const list = document.getElementById('online-list');
   const hdr = document.getElementById('online-count-hdr');
@@ -13444,15 +13738,45 @@ function profileRenderOnline() {
   let peers = [...me, ...sourceList];
   if (searchVal) {
     peers = peers.filter(u =>
-      u.username?.toLowerCase().includes(searchVal) ||
-      u.name?.toLowerCase().includes(searchVal)
+      u.username?.toLowerCase().includes(searchVal)
     );
   }
 
   if (peers.length === 0) {
     list.innerHTML = searchVal
-      ? '<div style="color:var(--muted);text-align:center;padding:30px">Никого не найдено</div>'
+      ? '<div style="color:var(--muted);text-align:center;padding:30px" id="online-empty-msg">Ищем...</div>'
       : '<div style="color:var(--muted);text-align:center;padding:30px">Никого нет онлайн</div>';
+    // Прямой поиск по Supabase если нет результатов в кэше
+    if (searchVal && sbReady()) {
+      clearTimeout(_onlineSearchTimer);
+      _onlineSearchTimer = setTimeout(async () => {
+        try {
+          const q = encodeURIComponent(searchVal);
+          // Ищем по username
+          // Ищем только по username (точный ilike-поиск)
+          const byUser = await sbGet('presence', `select=*&username=ilike.*${q}*&limit=20`);
+          const combined = [];
+          const seen2 = new Set();
+          (Array.isArray(byUser) ? byUser : []).forEach(u => {
+            if (!seen2.has(u.username) && u.username !== p?.username) {
+              seen2.add(u.username);
+              combined.push({ username:u.username, name:u.name, avatar:u.avatar, avatarType:u.avatar_type, color:u.color, status:u.status, vip:u.vip, badge:u.badge, _online:false });
+            }
+          });
+          if (combined.length > 0) {
+            // Добавляем в кэш и перерисовываем
+            combined.forEach(u => { if (!_allKnownUsers.some(x => x.username===u.username)) _allKnownUsers.push(u); });
+            profileRenderOnline();
+          } else {
+            const emptyEl = document.getElementById('online-empty-msg');
+            if (emptyEl) emptyEl.textContent = 'Никого не найдено';
+          }
+        } catch(e) {
+          const emptyEl = document.getElementById('online-empty-msg');
+          if (emptyEl) emptyEl.textContent = 'Никого не найдено';
+        }
+      }, 400);
+    }
     return;
   }
   list.innerHTML = peers.map(u => {
@@ -13809,6 +14133,91 @@ function chatsSave(d) { localStorage.setItem(MSG_CHATS_KEY, JSON.stringify(d)); 
 function messengerOpen() { showScreen('s-messenger'); }
 
 // ── Список чатов ─────────────────────────────────────────────────
+// ── Мультиселект чатов ────────────────────────────────────────────
+let _msgSelectMode = false;
+const _msgSelected = new Set();
+
+function msgSelectEnter(username) {
+  _msgSelectMode = true;
+  _msgSelected.clear();
+  _msgSelected.add(username);
+  document.getElementById('msg-hdr-normal').style.display = 'none';
+  document.getElementById('msg-hdr-select').style.display = '';
+  messengerRenderList();
+  _msgUpdateSelectCount();
+  SFX.play('btnClick');
+}
+
+function msgSelectCancel() {
+  _msgSelectMode = false;
+  _msgSelected.clear();
+  document.getElementById('msg-hdr-normal').style.display = '';
+  document.getElementById('msg-hdr-select').style.display = 'none';
+  messengerRenderList();
+}
+
+function msgToggleSelect(username, e) {
+  e.stopPropagation();
+  if (_msgSelected.has(username)) _msgSelected.delete(username);
+  else _msgSelected.add(username);
+  _msgUpdateSelectCount();
+  // Обновить визуал конкретной строки
+  const row = document.querySelector(`[data-chat-user="${CSS.escape(username)}"]`);
+  if (row) row.classList.toggle('chat-selected', _msgSelected.has(username));
+}
+
+function _msgUpdateSelectCount() {
+  const el = document.getElementById('msg-select-count');
+  if (el) el.textContent = 'Выбрано: ' + _msgSelected.size;
+}
+
+function msgDeleteSelected() {
+  if (_msgSelected.size === 0) return;
+  if (!confirm('Удалить ' + _msgSelected.size + ' чат(ов)?')) return;
+  const msgs   = msgLoad();
+  const chats  = chatsLoad();
+  _msgSelected.forEach(u => {
+    delete msgs[u];
+    const idx = chats.indexOf(u);
+    if (idx !== -1) chats.splice(idx, 1);
+    // Остановить polling
+    const p = profileLoad();
+    if (p) {
+      const key = sbChatKey(p.username, u);
+      clearInterval(_fbMsgStreams[key]);
+      delete _fbMsgStreams[key];
+    }
+  });
+  msgSave(msgs);
+  chatsSave(chats);
+  msgSelectCancel();
+  messengerUpdateBadge();
+}
+
+// ── Удаление одного чата изнутри ─────────────────────────────────
+function messengerDeleteCurrentChat() {
+  const username = _msgCurrentChat;
+  if (!username) return;
+  if (!confirm('Удалить чат с @' + username + '?')) return;
+  const msgs  = msgLoad();
+  const chats = chatsLoad();
+  delete msgs[username];
+  const idx = chats.indexOf(username);
+  if (idx !== -1) chats.splice(idx, 1);
+  msgSave(msgs);
+  chatsSave(chats);
+  const p = profileLoad();
+  if (p) {
+    const key = sbChatKey(p.username, username);
+    clearInterval(_fbMsgStreams[key]);
+    delete _fbMsgStreams[key];
+  }
+  showScreen('s-messenger', 'back');
+  messengerRenderList();
+  messengerUpdateBadge();
+  toast('🗑 Чат удалён');
+}
+
 function messengerRenderList(filter) {
   const list = document.getElementById('messenger-list');
   if (!list) return;
@@ -13817,7 +14226,7 @@ function messengerRenderList(filter) {
   if (filter) chats = chats.filter(u => u.toLowerCase().includes(filter.toLowerCase()));
   const msgs = msgLoad();
 
-  if (chats.length === 0) {
+  if (chats.length === 0 && !_msgSelectMode) {
     list.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;padding:60px 20px;color:var(--muted);gap:12px">
         <div style="font-size:52px">💬</div>
@@ -13828,31 +14237,48 @@ function messengerRenderList(filter) {
     return;
   }
 
-  // Сортируем по последнему сообщению
   const sorted = [...chats].sort((a, b) => {
-    const la = msgs[a]?.slice(-1)[0]?.ts || 0;
+    const la  = msgs[a]?.slice(-1)[0]?.ts || 0;
     const lb2 = msgs[b]?.slice(-1)[0]?.ts || 0;
     return lb2 - la;
   });
 
   list.innerHTML = sorted.map(username => {
     const chatMsgs = msgs[username] || [];
-    const last = chatMsgs[chatMsgs.length - 1];
-    const unread = chatMsgs.filter(m => m.from !== p?.username && !m.read).length;
-    const peer = _profileOnlinePeers.find(u => u.username === username);
-    const isOnline = !!peer;
-    const name = peer?.name || username;
-    const avatar = peer?.avatar || '😊';
-    const color = peer?.color || 'var(--surface3)';
-    const preview = last
-      ? (last.from === p?.username ? `<span style="color:var(--accent)">Ты: </span>` : '') + escHtml(last.text?.slice(0, 50) || '')
+    const last     = chatMsgs[chatMsgs.length - 1];
+    const unread   = chatMsgs.filter(m => m.from !== p?.username && !m.read).length;
+    const peer     = _profileOnlinePeers.find(u => u.username === username)
+                   || _allKnownUsers.find(u => u.username === username);
+    const isOnline = !!_profileOnlinePeers.find(u => u.username === username);
+    const name     = peer?.name || username;
+    const avatar   = peer?.avatar || '😊';
+    const color    = peer?.color || 'var(--surface3)';
+    const preview  = last
+      ? (last.from === p?.username ? '<span style="color:var(--accent)">Ты: </span>' : '') + escHtml(last.text?.slice(0, 50) || '')
       : '<span style="color:var(--muted)">Нет сообщений</span>';
-    const timeStr = last ? msgFormatTime(last.ts) : '';
+    const timeStr  = last ? msgFormatTime(last.ts) : '';
+    const isSel    = _msgSelected.has(username);
 
-    return `<div onclick="messengerOpenChat('${username}')" style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s;-webkit-tap-highlight-color:rgba(255,255,255,.05)" ontouchstart="this.style.background='var(--surface2)'" ontouchend="this.style.background=''">
+    const rowClick  = _msgSelectMode
+      ? `msgToggleSelect('${username}', event)`
+      : `messengerOpenChat('${username}')`;
+
+    return `<div
+        data-chat-user="${escHtml(username)}"
+        onclick="${rowClick}"
+        oncontextmenu="event.preventDefault();msgSelectEnter('${username}')"
+        ontouchstart="msgRowTouchStart(this,'${escHtml(username)}')"
+        ontouchend="msgRowTouchEnd()"
+        ontouchmove="msgRowTouchEnd()"
+        class="${isSel ? 'chat-selected' : ''}"
+        style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);transition:background .15s;${isSel ? 'background:color-mix(in srgb,var(--accent) 18%,var(--surface));' : ''}">
+      ${_msgSelectMode ? `
+        <div style="width:24px;height:24px;border-radius:50%;border:2.5px solid ${isSel ? 'var(--accent)' : 'var(--muted)'};background:${isSel ? 'var(--accent)' : 'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-size:13px">
+          ${isSel ? '✓' : ''}
+        </div>` : ''}
       <div style="position:relative;flex-shrink:0">
         <div style="width:52px;height:52px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:28px">${avatar}</div>
-        ${isOnline ? `<div style="position:absolute;bottom:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#4caf7d;border:2.5px solid var(--bg)"></div>` : ''}
+        ${isOnline ? '<div style="position:absolute;bottom:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#4caf7d;border:2.5px solid var(--bg)"></div>' : ''}
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
@@ -13861,7 +14287,7 @@ function messengerRenderList(filter) {
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div style="font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%">${preview}</div>
-          ${unread > 0 ? `<div style="background:var(--accent);color:var(--btn-text,#000);border-radius:10px;font-size:11px;font-weight:800;padding:2px 7px;flex-shrink:0;min-width:20px;text-align:center">${unread}</div>` : ''}
+          ${unread > 0 ? '<div style="background:var(--accent);color:var(--btn-text,#000);border-radius:10px;font-size:11px;font-weight:800;padding:2px 7px;flex-shrink:0;min-width:20px;text-align:center">'+unread+'</div>' : ''}
         </div>
       </div>
     </div>`;
@@ -13870,6 +14296,20 @@ function messengerRenderList(filter) {
   messengerUpdateBadge();
 }
 
+
+// Long-press для мобильного (зажатие → мультиселект)
+let _msgLongPressTimer = null;
+function msgRowTouchStart(el, username) {
+  el.style.background = 'var(--surface2)';
+  _msgLongPressTimer = setTimeout(() => {
+    el.style.background = '';
+    if (!_msgSelectMode) msgSelectEnter(username);
+    else msgToggleSelect(username, { stopPropagation: () => {} });
+  }, 500);
+}
+function msgRowTouchEnd() {
+  clearTimeout(_msgLongPressTimer);
+}
 function messengerFilterChats(q) { messengerRenderList(q); }
 
 // ── Открытие чата ─────────────────────────────────────────────────
@@ -14174,10 +14614,11 @@ function peerProfileOpen(username) {
       </div>
       ${peer.bio ? `<div style="font-size:13px;color:var(--text);margin-top:10px;line-height:1.5;white-space:pre-wrap">${escHtml(peer.bio)}</div>` : ''}
     </div>
-    <div style="padding:0 16px">
+    <div style="padding:0 16px;display:flex;flex-direction:column;gap:8px">
       <button class="btn btn-accent" onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')">
         💬 Написать сообщение
       </button>
+      ${!friendsLoad().includes(username) ? `<button class="btn btn-surface" onclick="profileAddFriend('${username}');this.textContent='✅ Добавлен в друзья';this.disabled=true">👥 Добавить в друзья</button>` : '<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">👥 Уже в друзьях</div>'}
     </div>
   `;
 
