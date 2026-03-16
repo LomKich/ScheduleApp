@@ -2138,7 +2138,7 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.2.1 — Android</div>
+        <div class="item-sub" id="app-version-str">4.2.2 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -5110,7 +5110,7 @@ showScreen = function(id, dir) {
         const fromEl   = document.getElementById(cur);
         if (g.mode === 'tab-h') {
           // Единая модель: текущий (prev) z:2 сверху уезжает, цель z:1 снизу появляется
-          const nextStartX = g.dir === 'left' ? w * 0.28 : -w * 0.28;
+          const nextStartX = g.dir === 'left' ? W() * 0.28 : -W() * 0.28;
           if (targetEl) { setNoTransition(targetEl); applyT(targetEl, nextStartX, 0, 0.65, 1); }
           if (fromEl)   { setNoTransition(fromEl);   fromEl.style.zIndex = '2'; }
         } else if (g.mode === 'back-h') {
@@ -5460,7 +5460,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.2.1';
+const APP_VERSION='4.2.2';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -6238,9 +6238,11 @@ function renderTeacherSchedule(teacher, hdr, entries, filename){
     if(!isEmpty){
       detailsHtml='<div class="pair-details">';
       for(const e of pairEntries){
-        detailsHtml+=`<div style="margin-bottom:5px"><span style="font-weight:700;color:var(--text)">${e.group}</span>`;
-        if(e.subject) detailsHtml+=`<br><span>${e.subject}</span>`;
-        if(e.cabinet) detailsHtml+=`<br><span>кабинет ${e.cabinet}${e.korpus?' корп.'+e.korpus:''}</span>`;
+        // Группа уже показана в заголовке карточки — не дублируем
+        // Показываем только предмет мелким шрифтом + кабинет (без инициалов препода)
+        if(e.subject) detailsHtml+=`<div style="margin-bottom:4px"><span style="font-size:12px;color:var(--muted)">${e.subject}</span>`;
+        else detailsHtml+=`<div style="margin-bottom:4px">`;
+        if(e.cabinet) detailsHtml+=`<span style="font-size:11px;color:var(--muted);display:block">кабинет ${e.cabinet}${e.korpus?' корп.'+e.korpus:''}</span>`;
         detailsHtml+=`</div>`;
       }
       detailsHtml+='</div>';
@@ -13041,22 +13043,63 @@ async function profileConnect(p) {
 
 // Восстанавливаем присутствие когда вкладка снова становится активной
 let _visibilityDebounce = null;
+let _lastVisibleTs = Date.now();
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible') return;
+  if (document.visibilityState !== 'visible') {
+    _lastVisibleTs = Date.now();
+    return;
+  }
   clearTimeout(_visibilityDebounce);
   _visibilityDebounce = setTimeout(() => {
     const p = profileLoad();
     if (!p || !sbReady()) return;
     if (_sbPresenceTimer) {
-      // Таймеры живы — просто обновляем присутствие
+      // Таймеры живы — обновляем присутствие и ПРИНУДИТЕЛЬНО проверяем все сообщения
       sbPresencePut(p);
       sbPollPresence();
+      // Принудительный немедленный poll всех чатов — ловим пропущенные за время фона
+      _sbForcePollAllChats(p);
     } else {
-      // Таймеры умерли (долгое сворачивание) — переподключаемся
+      // Таймеры умерли (долгое сворачивание) — переподключаемся полностью
       profileConnect(p);
     }
-  }, 500); // 500ms дебаунс — Android может стрелять несколько раз подряд
+  }, 300);
 });
+
+// Принудительно опрашивает все известные чаты + inbox прямо сейчас
+async function _sbForcePollAllChats(p) {
+  if (!p || !sbReady()) return;
+  // 1. Inbox — сообщения пришедшие за время пока были в фоне
+  try {
+    const sinceTs = Math.max(0, _fbInboxLastTs, _lastVisibleTs - 5000);
+    const data = await sbGet('messages',
+      `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
+    );
+    if (Array.isArray(data) && data.length > 0) {
+      const bySender = {};
+      data.forEach(msg => {
+        if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
+        bySender[msg.from_user].push(msg);
+        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+      });
+      Object.entries(bySender).forEach(([sender, msgs]) => {
+        sbPollChat(p.username, sender);
+        sbHandleIncomingMessages(p.username, sender, msgs);
+      });
+    }
+  } catch(e) {}
+  // 2. Убиваем и перезапускаем все per-chat таймеры (Android мог их throttle-нуть)
+  const deadKeys = Object.keys(_fbMsgStreams);
+  deadKeys.forEach(key => {
+    clearInterval(_fbMsgStreams[key]);
+    delete _fbMsgStreams[key];
+  });
+  // Перезапуск polling для всех известных чатов
+  const chats = chatsLoad();
+  chats.forEach(username => sbPollChat(p.username, username));
+  // Перезапуск inbox polling
+  sbStartInboxPolling(p);
+}
 
 function profileDisconnect() {
   _profilePeerReady = false;
@@ -13855,6 +13898,13 @@ function messengerOpenChat(username) {
 
   showScreen('s-messenger-chat');
   messengerRenderMessages();
+
+  // Фокус на поле ввода — вызывает клавиатуру на Android
+  // Задержка чуть больше длины анимации перехода экрана (280ms)
+  setTimeout(() => {
+    const inp = document.getElementById('mc-input');
+    if (inp) inp.focus();
+  }, 320);
 
   // Запустить polling для этого чата
   clearInterval(_mcPollTimer);
