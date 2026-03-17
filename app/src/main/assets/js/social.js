@@ -2384,9 +2384,8 @@ function profileRenderOnline() {
     // Без поиска — только онлайн
     peers = [...me, ..._profileOnlinePeers];
   } else if (isAtSearch) {
-    // @поиск — только по username, только не-друзья
+    // @поиск — по username среди всех пользователей (включая друзей)
     const candidates = _allKnownUsers.filter(u =>
-      !friends.includes(u.username) &&
       u.username !== p?.username &&
       u.username?.toLowerCase().includes(searchVal)
     );
@@ -2404,7 +2403,7 @@ function profileRenderOnline() {
   const hintEl = document.getElementById('online-search-hint');
   if (hintEl) {
     if (!raw)           hintEl.textContent = '';
-    else if (isAtSearch) hintEl.textContent = '🔍 Поиск по @юзернейму';
+    else if (isAtSearch) hintEl.textContent = '🔍 Поиск по @юзернейму среди всех';
     else                 hintEl.textContent = '👥 Поиск по имени среди друзей';
   }
 
