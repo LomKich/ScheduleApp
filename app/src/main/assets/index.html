@@ -78,8 +78,8 @@ body.glass-mode #s-home.active{
   background:var(--surface)
 }
 .hdr-back{
-  background:var(--surface2);border:none;color:var(--accent);
-  width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;
+  background:none;border:none;color:var(--accent);
+  width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:22px;
   display:flex;align-items:center;justify-content:center;
   position:relative;overflow:hidden;flex-shrink:0
 }
@@ -494,17 +494,25 @@ body[data-theme="candy"] {--accent-text:#000}
 .ios-notif-text{font-size:13px;color:rgba(240,237,232,0.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
 
 
-/* ── Telegram-style message send animation ── */
-@keyframes msg-fly-in-right {
-  from { opacity:0; transform:translateY(14px) scale(.92); }
-  to   { opacity:1; transform:translateY(0) scale(1); }
+/* ── Telegram-style message animations ── */
+@keyframes msg-appear-right {
+  0%   { opacity:0; transform:scale(.72) translateY(8px); }
+  60%  { opacity:1; transform:scale(1.04) translateY(-2px); }
+  100% { opacity:1; transform:scale(1) translateY(0); }
 }
-@keyframes msg-fly-in-left {
-  from { opacity:0; transform:translateY(14px) scale(.92); }
-  to   { opacity:1; transform:translateY(0) scale(1); }
+@keyframes msg-appear-left {
+  0%   { opacity:0; transform:scale(.72) translateY(8px); }
+  60%  { opacity:1; transform:scale(1.04) translateY(-2px); }
+  100% { opacity:1; transform:scale(1) translateY(0); }
 }
-.msg-anim-out { animation: msg-fly-in-right .22s cubic-bezier(.34,1.56,.64,1) both; transform-origin: right bottom; }
-.msg-anim-in  { animation: msg-fly-in-left  .22s cubic-bezier(.34,1.56,.64,1) both; transform-origin: left bottom; }
+.msg-anim-out {
+  animation: msg-appear-right .24s cubic-bezier(.34,1.4,.64,1) both;
+  transform-origin: right bottom;
+}
+.msg-anim-in {
+  animation: msg-appear-left .24s cubic-bezier(.34,1.4,.64,1) both;
+  transform-origin: left bottom;
+}
 
 /* ── VIP badge animated ── */
 @keyframes vip-glow {
@@ -2038,6 +2046,12 @@ button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margi
   from { opacity:0; transform:translateY(12px) scale(.92); }
   to   { opacity:1; transform:translateY(0) scale(1); }
 }
+/* Глобальные анимации шторок */
+@keyframes mcSlideUp   { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
+@keyframes mcSlideDown { from{transform:translateY(0);opacity:1}    to{transform:translateY(110%);opacity:0} }
+@keyframes mcFadeIn    { from{opacity:0} to{opacity:1} }
+@keyframes mcFadeOut   { from{opacity:1} to{opacity:0} }
+@keyframes mcEmojiIn   { from{transform:translateY(16px) scale(.85);opacity:0} to{transform:none;opacity:1} }
 
 /* ══════════════════════════════════════════════════════════════════
    TELEGRAM STYLE — полный рескин интерфейса
@@ -2199,19 +2213,18 @@ body.tg-style .inp {
 body.tg-style ::-webkit-scrollbar-track { background: var(--tg-bg) !important; }
 body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !important; }
 
-/* Chat screen keyboard fix — header always visible */
+/* Chat screen keyboard fix — adjustResize в манифесте сжимает WebView автоматически.
+   Используем height:100% чтобы экран сжимался вместе с WebView, а не оставался 100dvh */
 #s-messenger-chat {
   display: flex !important;
   flex-direction: column !important;
-  height: 100dvh !important;
+  height: 100% !important;
+  max-height: 100% !important;
   overflow: hidden !important;
 }
 #s-messenger-chat .hdr { flex-shrink: 0 !important; position: relative !important; z-index: 5 !important; }
 #mc-messages { flex: 1 1 0 !important; min-height: 0 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
 #mc-input-bar { flex-shrink: 0 !important; }
-@supports (height: 100dvh) {
-  #s-messenger-chat { height: 100dvh !important; }
-}
 /* ══════════════════════════════════════════════════════════════════
    NOTCH / CUTOUT / DYNAMIC ISLAND — поддержка вырезов камеры
    ══════════════════════════════════════════════════════════════════ */
@@ -2288,6 +2301,10 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
         <div class="hero-title" id="hero-title-text" onclick="secretVersionTap()" ontouchstart="secretVersionTap()" style="cursor:default;user-select:none;-webkit-user-select:none">колледж<br>расписание</div>
       </div>
     </div>
+
+    <!-- Одна чистая строка статуса -->
+    <div id="home-status-line" style="display:none;text-align:center;margin:-4px 0 14px;font-size:12px;color:var(--muted)"></div>
+
     <div class="mode-switch-wrap">
       <div class="mode-toggle-pill student" id="mode-toggle-pill">
         <button class="mode-pill-btn active" id="mode-btn-student" onclick="setMode('student')">📚 Ученики</button>
@@ -2322,6 +2339,28 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
       <button class="btn btn-surface" onclick="loadFiles()">🔄 Повторить</button>
     </div>
   </div>
+</div>
+
+<!-- ДОМАШНЕЕ ЗАДАНИЕ -->
+<div class="screen" id="s-homework">
+  <div class="hdr">
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
+    <div class="hdr-title">📚 Домашнее задание</div>
+    <button onclick="hwAddNew()" style="background:none;border:none;color:var(--accent);font-size:22px;padding:8px;cursor:pointer">＋</button>
+  </div>
+  <div style="padding:8px 16px;flex-shrink:0">
+    <div style="display:flex;gap:8px">
+      <button id="hw-tab-active" onclick="hwSetTab('active')"
+        style="flex:1;padding:8px;border-radius:10px;border:1.5px solid var(--accent);background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);font-size:13px;font-weight:700;cursor:pointer">
+        Активные
+      </button>
+      <button id="hw-tab-done" onclick="hwSetTab('done')"
+        style="flex:1;padding:8px;border-radius:10px;border:1.5px solid var(--surface3);background:none;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer">
+        Выполненные
+      </button>
+    </div>
+  </div>
+  <div class="body" id="hw-list" style="padding-top:8px"></div>
 </div>
 
 <!-- ГРУППЫ -->
@@ -2364,10 +2403,37 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
 <!-- РАСПИСАНИЕ -->
 <div class="screen" id="s-schedule">
   <div class="sched-header" id="sched-header-tap">
-    <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:10px;flex:1">
       <button class="hdr-back" onclick="schedBack()">‹</button>
-      <div><div class="sched-group" id="sched-group-name"></div>
-      <div class="sched-date" id="sched-date"></div></div>
+      <div style="flex:1">
+        <div class="sched-group" id="sched-group-name"></div>
+        <div class="sched-date" id="sched-date"></div>
+      </div>
+    </div>
+    <button onclick="schedSearch()" title="Поиск"
+      style="background:none;border:none;color:var(--muted);font-size:20px;padding:8px;cursor:pointer;line-height:1">🔍</button>
+    <button onclick="shareSchedule()" title="Поделиться"
+      style="background:none;border:none;color:var(--muted);font-size:20px;padding:8px;cursor:pointer;line-height:1">⬆</button>
+  </div>
+  <!-- Строка поиска (скрыта по умолчанию) -->
+  <div id="sched-search-bar" style="display:none;padding:8px 16px;flex-shrink:0;background:var(--surface)">
+    <div style="background:var(--surface2);border-radius:10px;display:flex;align-items:center;gap:8px;padding:8px 12px">
+      <span style="color:var(--muted);font-size:14px">🔍</span>
+      <input id="sched-search-inp" placeholder="Поиск по предмету..." autofocus
+        style="background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:14px;flex:1"
+        oninput="schedSearchFilter(this.value)"
+        onkeydown="if(event.key==='Escape'){schedSearchClose()}">
+      <button onclick="schedSearchClose()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0;line-height:1">×</button>
+    </div>
+  </div>
+  <!-- Живой прогресс текущей пары -->
+  <div id="sched-live-bar" style="display:none;padding:6px 16px 4px;flex-shrink:0;background:var(--surface)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+      <span id="sched-live-label" style="font-size:11px;font-weight:700;color:var(--accent)"></span>
+      <span id="sched-live-remain" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div style="height:3px;background:var(--surface3);border-radius:2px;overflow:hidden">
+      <div id="sched-live-progress" style="height:100%;background:var(--accent);border-radius:2px;transition:width 30s linear;width:0%"></div>
     </div>
   </div>
   <div class="body" id="sched-body"></div>
@@ -2485,16 +2551,6 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
 
     <!-- Стиль интерфейса -->
     <div class="section-label">Интерфейс</div>
-    <div class="settings-row" style="margin-bottom:8px">
-      <div>
-        <div style="font-size:14px;font-weight:600">✈️ Telegram Style</div>
-        <div class="settings-row-sub">Синие пузыри, округлые формы, анимации как в Telegram</div>
-      </div>
-      <label class="toggle-switch">
-        <input type="checkbox" id="tg-style-toggle" onchange="toggleTelegramStyle(this.checked)">
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
     <div class="settings-row" style="margin-bottom:8px" onclick="toggleNotchMode()">
       <div>
         <div style="font-size:14px;font-weight:600">📷 Вырез камеры</div>
@@ -2512,7 +2568,7 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.3.6 — Android</div>
+        <div class="item-sub" id="app-version-str">4.3.7 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>

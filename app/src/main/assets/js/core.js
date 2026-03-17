@@ -1980,6 +1980,7 @@ showScreen = function(id, dir) {
     's-peer-profile':   's-messenger-chat',
     's-settings':       's-home',
     's-bells':          's-home',
+    's-homework':       's-home',
   };
 
   // Экраны где свайп вниз = назад (sub-screens типа выбора группы, расписания)
@@ -2580,7 +2581,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.3.61';
+const APP_VERSION='4.3.7';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -5031,3 +5032,404 @@ function getAccent() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════
+// 🆕 НОВЫЕ ФУНКЦИИ (минимализм)
+// ══════════════════════════════════════════════════════════════════
+
+// ── Одна строка статуса под hero ────────────────────────────────
+function updateHomeWidgets() {
+  const el = document.getElementById('home-status-line');
+  if (!el) return;
+  const info = getNextBreakInfo();
+  const hwActive = typeof hwLoad === 'function' ? hwLoad().filter(h => !h.done).length : 0;
+  let parts = [];
+  if (info) {
+    if (info.type === 'pair') parts.push(`пара ${info.roman} · ${info.left} мин`);
+    else parts.push(`до пары ${info.roman} · ${info.toStart} мин`);
+  }
+  if (hwActive > 0) parts.push(`${hwActive} задан${hwActive === 1 ? 'ие' : hwActive < 5 ? 'ия' : 'ий'} ДЗ`);
+  if (parts.length) {
+    el.textContent = parts.join('  ·  ');
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
+}
+setInterval(updateHomeWidgets, 60000);
+setTimeout(updateHomeWidgets, 600);
+
+// ════════════════════════════════════════
+// ⏱ ЖИВОЙ ТАЙМЕР НА ЭКРАНЕ РАСПИСАНИЯ
+// ════════════════════════════════════════
+let _schedLiveTimer = null;
+function startSchedLiveBar() {
+  stopSchedLiveBar();
+  _schedLiveTimer = setInterval(updateSchedLiveBar, 15000);
+  updateSchedLiveBar();
+}
+function stopSchedLiveBar() {
+  if (_schedLiveTimer) { clearInterval(_schedLiveTimer); _schedLiveTimer = null; }
+}
+function updateSchedLiveBar() {
+  const bar = document.getElementById('sched-live-bar');
+  if (!bar) return;
+  const screen = document.getElementById('s-schedule');
+  if (!screen || !screen.classList.contains('active')) { stopSchedLiveBar(); return; }
+
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const dow = now.getDay();
+  const bell = dow === 1 ? BELL_MON : dow === 6 ? BELL_SAT : BELL_TUE;
+
+  for (const [roman, times] of Object.entries(bell)) {
+    if (!times[0]) continue;
+    const [sh, sm] = times[0].split(':').map(Number);
+    const endS = times[3] || times[1];
+    const [eh, em] = endS.split(':').map(Number);
+    const startMin = sh * 60 + sm, endMin = eh * 60 + em;
+    if (nowMin >= startMin && nowMin < endMin) {
+      bar.style.display = '';
+      const label = document.getElementById('sched-live-label');
+      const remain = document.getElementById('sched-live-remain');
+      const progress = document.getElementById('sched-live-progress');
+      if (label) label.textContent = '● Пара ' + roman + ' сейчас';
+      const left = endMin - nowMin;
+      if (remain) remain.textContent = 'осталось ' + left + ' мин';
+      const total = endMin - startMin;
+      const pct = Math.min(100, Math.round((nowMin - startMin) / total * 100));
+      if (progress) progress.style.width = pct + '%';
+      return;
+    }
+  }
+  bar.style.display = 'none';
+}
+// Запускаем при открытии расписания
+const _origRenderSchedule = renderSchedule;
+window.renderSchedule = function(...args) {
+  _origRenderSchedule(...args);
+  startSchedLiveBar();
+  addStarButtons(document.getElementById('sched-body'), args[0]);
+  addExcuseButtons(document.getElementById('sched-body'));
+};
+
+// ════════════════════════════════════════
+// ⭐ ИЗБРАННЫЕ (ВАЖНЫЕ) ПАРЫ
+// ════════════════════════════════════════
+const STARRED_KEY = 'sapp_starred_v1';
+function starredLoad() { try { return JSON.parse(localStorage.getItem(STARRED_KEY) || '{}'); } catch(e) { return {}; } }
+function starredSave(d) { localStorage.setItem(STARRED_KEY, JSON.stringify(d)); }
+function toggleStarPair(group, roman, btn) {
+  const d = starredLoad();
+  const key = group + '::' + roman;
+  if (d[key]) {
+    delete d[key];
+    btn.textContent = '☆';
+    btn.style.color = 'var(--muted)';
+    toast('☆ Пара убрана из важных');
+  } else {
+    d[key] = Date.now();
+    btn.textContent = '⭐';
+    btn.style.color = '#f5c518';
+    toast('⭐ Пара отмечена как важная');
+  }
+  starredSave(d);
+}
+function addStarButtons(body, group) {
+  if (!body || !group) return;
+  const starred = starredLoad();
+  body.querySelectorAll('.pair-card.has-subject').forEach(card => {
+    const roman = card.querySelector('.pair-num')?.textContent?.trim();
+    if (!roman) return;
+    const key = group + '::' + roman;
+    const isStar = !!starred[key];
+    const btn = document.createElement('button');
+    btn.style.cssText = 'position:absolute;top:10px;right:40px;background:none;border:none;font-size:16px;cursor:pointer;padding:2px;z-index:2;line-height:1';
+    btn.textContent = isStar ? '⭐' : '☆';
+    btn.style.color = isStar ? '#f5c518' : 'var(--muted)';
+    btn.onclick = (e) => { e.stopPropagation(); toggleStarPair(group, roman, btn); };
+    card.style.position = 'relative';
+    card.appendChild(btn);
+  });
+}
+
+// ════════════════════════════════════════
+// 😅 ГЕНЕРАТОР ОТМАЗОК НА КАРТОЧКЕ ПАРЫ
+// ════════════════════════════════════════
+function showExcuseCard() {
+  const excuse = EXCUSES[Math.floor(Math.random() * EXCUSES.length)];
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;bottom:calc(80px + var(--safe-bot,0px));left:16px;right:16px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:16px;padding:16px;z-index:500;font-size:13px;line-height:1.5;color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.4);cursor:pointer;animation:mcSlideUp .22s cubic-bezier(.34,1.1,.64,1)';
+  el.innerHTML = `<div style="font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.1em;margin-bottom:8px">😅 ОТМАЗКА ДЛЯ ПРЕПОДАВАТЕЛЯ</div>
+    <div style="margin-bottom:12px">${excuse}</div>
+    <button onclick="if(navigator.clipboard)navigator.clipboard.writeText('${excuse.replace(/'/g,"\\'")}').then(()=>toast('📋 Скопировано'));this.parentElement.remove()"
+      style="background:var(--accent);color:var(--btn-text,#fff);border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;width:100%">
+      📋 Скопировать
+    </button>`;
+  el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  document.body.appendChild(el);
+  setTimeout(() => el?.remove(), 10000);
+}
+function addExcuseButtons(body) {
+  if (!body) return;
+  body.querySelectorAll('.pair-card.has-subject').forEach(card => {
+    card.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      showExcuseCard();
+    });
+  });
+}
+
+// ════════════════════════════════════════
+// 📚 ДОМАШНЕЕ ЗАДАНИЕ
+// ════════════════════════════════════════
+const HW_KEY = 'sapp_homework_v2';
+let _hwTab = 'active';
+
+function hwLoad() {
+  try { return JSON.parse(localStorage.getItem(HW_KEY) || '[]'); } catch(e) { return []; }
+}
+function hwSave(items) { localStorage.setItem(HW_KEY, JSON.stringify(items)); }
+
+function hwSetTab(tab) {
+  _hwTab = tab;
+  document.getElementById('hw-tab-active').style.borderColor = tab === 'active' ? 'var(--accent)' : 'var(--surface3)';
+  document.getElementById('hw-tab-active').style.background = tab === 'active' ? 'color-mix(in srgb,var(--accent) 15%,transparent)' : 'none';
+  document.getElementById('hw-tab-active').style.color = tab === 'active' ? 'var(--accent)' : 'var(--muted)';
+  document.getElementById('hw-tab-done').style.borderColor = tab === 'done' ? 'var(--accent)' : 'var(--surface3)';
+  document.getElementById('hw-tab-done').style.background = tab === 'done' ? 'color-mix(in srgb,var(--accent) 15%,transparent)' : 'none';
+  document.getElementById('hw-tab-done').style.color = tab === 'done' ? 'var(--accent)' : 'var(--muted)';
+  hwRender();
+}
+
+function hwRender() {
+  const list = document.getElementById('hw-list');
+  if (!list) return;
+  const items = hwLoad().filter(h => _hwTab === 'active' ? !h.done : h.done);
+  if (!items.length) {
+    list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--muted)">
+      <div style="font-size:40px;margin-bottom:12px">${_hwTab === 'active' ? '✅' : '📭'}</div>
+      <div style="font-size:14px">${_hwTab === 'active' ? 'Нет активных заданий' : 'Нет выполненных заданий'}</div>
+    </div>`;
+    return;
+  }
+  list.innerHTML = items.map((h, i) => `
+    <div style="background:var(--surface2);border-radius:14px;padding:14px 16px;margin-bottom:8px;border:1.5px solid ${h.done?'var(--surface3)':h.urgent?'rgba(224,85,85,.4)':'var(--surface3)'};display:flex;gap:12px;align-items:flex-start">
+      <button onclick="hwToggleDone(${h.id})" style="width:24px;height:24px;border-radius:50%;border:2px solid ${h.done?'var(--accent)':'var(--surface3)'};background:${h.done?'var(--accent)':'transparent'};flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;margin-top:1px">
+        ${h.done?'✓':''}
+      </button>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:${h.done?'var(--muted)':'var(--text)'};text-decoration:${h.done?'line-through':''};margin-bottom:3px">${escHtml(h.subject)}</div>
+        ${h.task ? `<div style="font-size:12px;color:var(--muted);line-height:1.4">${escHtml(h.task)}</div>` : ''}
+        ${h.deadline ? `<div style="font-size:11px;color:${h.urgent?'var(--danger,#c94f4f)':'var(--muted)'};margin-top:4px;font-weight:${h.urgent?'700':'400'}">📅 ${h.deadline}${h.urgent?' ⚠️ Срочно!':''}</div>` : ''}
+      </div>
+      ${!h.done ? `<button onclick="hwDelete(${h.id})" style="background:none;border:none;color:var(--muted);font-size:18px;padding:2px;cursor:pointer;flex-shrink:0">×</button>` : ''}
+    </div>`).join('');
+}
+
+function hwToggleDone(id) {
+  const items = hwLoad();
+  const item = items.find(h => h.id === id);
+  if (item) { item.done = !item.done; hwSave(items); hwRender(); updateHomeWidgets(); SFX.play('btnClick'); }
+}
+
+function hwDelete(id) {
+  const items = hwLoad().filter(h => h.id !== id);
+  hwSave(items);
+  hwRender();
+  updateHomeWidgets();
+}
+
+function hwAddNew() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.6);display:flex;flex-direction:column;justify-content:flex-end';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(24px + var(--safe-bot,0px));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 18px"></div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:16px">📚 Новое задание</div>
+      <input id="hw-inp-subject" class="inp" placeholder="Предмет (напр. Математика)" style="margin-bottom:10px">
+      <textarea id="hw-inp-task" class="inp" placeholder="Что задали..." rows="3" style="resize:none;margin-bottom:10px"></textarea>
+      <input id="hw-inp-deadline" class="inp" type="text" placeholder="Срок сдачи (напр. 20.03.2026)" style="margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:10px;margin-bottom:16px;cursor:pointer">
+        <input type="checkbox" id="hw-inp-urgent" style="width:18px;height:18px;accent-color:var(--danger,#c94f4f)">
+        <span style="font-size:14px;color:var(--text)">⚠️ Срочное</span>
+      </label>
+      <div style="display:flex;gap:8px">
+        <button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:13px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:12px;color:var(--muted);font-size:14px;font-weight:700;cursor:pointer">Отмена</button>
+        <button onclick="hwSaveNew()" style="flex:2;padding:13px;background:var(--accent);border:none;border-radius:12px;color:var(--btn-text,#fff);font-size:14px;font-weight:700;cursor:pointer">Добавить ✓</button>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('hw-inp-subject')?.focus(), 200);
+}
+
+function hwSaveNew() {
+  const subject = document.getElementById('hw-inp-subject')?.value.trim();
+  if (!subject) { toast('Введи название предмета'); return; }
+  const task = document.getElementById('hw-inp-task')?.value.trim();
+  const deadline = document.getElementById('hw-inp-deadline')?.value.trim();
+  const urgent = document.getElementById('hw-inp-urgent')?.checked;
+  const items = hwLoad();
+  items.unshift({ id: Date.now(), subject, task, deadline, urgent, done: false, created: Date.now() });
+  hwSave(items);
+  document.querySelector('[style*="position:fixed"][style*="z-index:9900"]')?.remove();
+  hwRender();
+  updateHomeWidgets();
+  SFX.play('btnAccent');
+  toast('✅ Задание добавлено');
+}
+
+// Добавляем кнопку "+ ДЗ" прямо на карточки пары
+const _origAddNoteButtons = addNoteButtons;
+window.addNoteButtons = function(body, groupOrTeacher) {
+  _origAddNoteButtons(body, groupOrTeacher);
+  // Кнопка быстрого добавления ДЗ
+  body.querySelectorAll('.pair-card.has-subject').forEach(card => {
+    const subj = card.querySelector('.pair-subject')?.textContent?.trim();
+    if (!subj || subj === 'Окно') return;
+    const btn = document.createElement('button');
+    btn.title = 'Добавить ДЗ';
+    btn.style.cssText = 'position:absolute;bottom:10px;right:10px;background:var(--surface3);border:none;border-radius:8px;padding:3px 7px;cursor:pointer;font-size:10px;font-weight:700;color:var(--muted);z-index:2;display:flex;align-items:center;gap:3px';
+    btn.innerHTML = '📝 ДЗ';
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      hwAddNewForSubject(subj);
+    };
+    card.appendChild(btn);
+  });
+};
+
+function hwAddNewForSubject(subject) {
+  hwAddNew();
+  setTimeout(() => {
+    const inp = document.getElementById('hw-inp-subject');
+    if (inp) inp.value = subject;
+  }, 150);
+}
+
+// Инициализация экрана ДЗ
+const _origShowScreen = window.showScreen;
+// Перехватываем навигацию на s-homework
+(function() {
+  const origPatch = showScreen;
+  window.showScreen = function(id, dir) {
+    origPatch(id, dir);
+    if (id === 's-homework') { setTimeout(() => hwRender(), 60); }
+  };
+})();
+
+// Добавляем s-homework в SCREEN_PARENTS
+if (typeof SCREEN_PARENTS !== 'undefined') {
+  SCREEN_PARENTS['s-homework'] = { parent: 's-home', nav: 'nav-home' };
+}
+
+// ════════════════════════════════════════
+// 🎵 ЗВОНОК УВЕДОМЛЕНИЕ ЗА 5 МИН ДО ПАРЫ
+// ════════════════════════════════════════
+let _prebell5_lastFired = '';
+setInterval(() => {
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const dow = now.getDay();
+  const bell = dow === 1 ? BELL_MON : dow === 6 ? BELL_SAT : BELL_TUE;
+  for (const [roman, times] of Object.entries(bell)) {
+    if (!times[0]) continue;
+    const [sh, sm] = times[0].split(':').map(Number);
+    const startMin = sh * 60 + sm;
+    const diff = startMin - nowMin;
+    const fireKey = roman + ':' + now.toDateString();
+    if (diff === 5 && _prebell5_lastFired !== fireKey) {
+      _prebell5_lastFired = fireKey;
+      toast(`🔔 Пара ${roman} начинается через 5 минут! (${times[0]})`);
+      try { SFX.play('toastShow'); } catch(e) {}
+    }
+  }
+}, 30000);
+
+
+// ════════════════════════════════════════
+// 🔍 ПОИСК ПО РАСПИСАНИЮ
+// ════════════════════════════════════════
+function schedSearch() {
+  const bar = document.getElementById('sched-search-bar');
+  if (!bar) return;
+  const isOpen = bar.style.display !== 'none';
+  if (isOpen) { schedSearchClose(); return; }
+  bar.style.display = '';
+  bar.style.animation = 'mcSlideUp .18s cubic-bezier(.34,1.1,.64,1)';
+  setTimeout(() => document.getElementById('sched-search-inp')?.focus(), 80);
+}
+
+function schedSearchClose() {
+  const bar = document.getElementById('sched-search-bar');
+  if (bar) bar.style.display = 'none';
+  const inp = document.getElementById('sched-search-inp');
+  if (inp) inp.value = '';
+  schedSearchFilter('');
+}
+
+function schedSearchFilter(q) {
+  const cards = document.querySelectorAll('#sched-body .pair-card');
+  const query = q.trim().toLowerCase();
+  cards.forEach(card => {
+    if (!query) { card.style.display = ''; return; }
+    const text = card.textContent.toLowerCase();
+    card.style.display = text.includes(query) ? '' : 'none';
+  });
+}
+
+// ════════════════════════════════════════
+// ⬆ ПОДЕЛИТЬСЯ РАСПИСАНИЕМ
+// ════════════════════════════════════════
+function shareSchedule() {
+  const group = document.getElementById('sched-group-name')?.textContent?.trim();
+  const date  = document.getElementById('sched-date')?.textContent?.trim();
+  const cards = document.querySelectorAll('#sched-body .pair-card');
+  if (!cards.length) { toast('Сначала загрузи расписание'); return; }
+
+  const lines = [`📅 ${group}${date ? ' · ' + date : ''}`, ''];
+  cards.forEach(card => {
+    const num  = card.querySelector('.pair-num')?.textContent?.trim();
+    const subj = card.querySelector('.pair-subject')?.textContent?.trim();
+    const times = card.querySelector('.pair-time-val')?.textContent?.trim();
+    if (!num || !subj || subj === 'Окно') return;
+    lines.push(`${num}. ${subj}${times ? ' · ' + times : ''}`);
+  });
+  lines.push('', '📲 ScheduleApp');
+
+  const text = lines.join('\n');
+  if (navigator.share) {
+    navigator.share({ text }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => toast('📋 Расписание скопировано'));
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    toast('📋 Расписание скопировано');
+  }
+}
+
+// ════════════════════════════════════════
+// 📅 ПРОГРЕСС НЕДЕЛИ — в hero-widget
+// ════════════════════════════════════════
+function updateWeekProgress() {
+  const el = document.getElementById('hero-widget');
+  if (!el) return;
+  const dow = new Date().getDay(); // 0=вс, 1=пн … 6=сб
+  // Учебные дни: пн(1)..сб(6)
+  if (dow === 0) {
+    el.textContent = 'Воскресенье — завтра снова в бой 🔋';
+    return;
+  }
+  const done = dow - 1; // пройдено учебных дней (пн=0 пройдено, вт=1...)
+  const total = 6;      // пн-сб
+  const left = total - dow; // до воскресенья
+  const pct = Math.round(done / total * 100);
+  // Одна строка + мини-бар из символов
+  const filled = Math.round(pct / 10);
+  const bar = '▰'.repeat(filled) + '▱'.repeat(10 - filled);
+  el.innerHTML = `${bar} <span style="color:var(--accent);font-weight:700">${pct}%</span> недели · осталось ${left} дн.`;
+}
+updateWeekProgress();

@@ -96,10 +96,9 @@ function updateNavProfileIcon(p) {
   const wrap = btn?.querySelector('.nav-icon-wrap');
   if (!wrap) return;
   if (p && p.avatarType === 'emoji' && p.avatar) {
-    // Show emoji avatar in a small circle over the svg
-    wrap.innerHTML = `<span style="font-size:20px;line-height:1">${p.avatar}</span>`;
+    wrap.innerHTML = `<span style="font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center">${p.avatar}</span>`;
   } else if (p && p.avatarType === 'photo' && p.avatarData) {
-    wrap.innerHTML = `<img src="${p.avatarData}" style="width:26px;height:26px;border-radius:50%;object-fit:cover">`;
+    wrap.innerHTML = `<img src="${p.avatarData}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`;
   } else {
     wrap.innerHTML = `<svg class="nav-icon" id="nav-profile-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
   }
@@ -621,22 +620,19 @@ function profileRenderScreen() {
       ${badgeObj ? `<div style="display:inline-block;margin-top:8px;font-size:12px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
     </div>
 
-    <!-- Кнопки под аватаром: Выбрать фото · Изменить · Настройки (как в Telegram) -->
-    <div style="display:flex;gap:8px;padding:0 16px 16px;justify-content:center">
-      <button onclick="profilePickPhoto()"
-        style="flex:1;max-width:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:11px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px">
-        <span style="font-size:22px">📷</span>
-        <span style="font-size:11px;color:var(--text);font-weight:600">Выбрать фото</span>
+    <!-- Кнопки под аватаром: иконки без текста, компактные -->
+    <div style="display:flex;gap:10px;padding:0 16px 16px;justify-content:center">
+      <button onclick="profilePickPhoto()" title="Выбрать фото"
+        style="width:48px;height:48px;background:var(--surface2);border:none;border-radius:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+        📷
       </button>
-      <button onclick="profileToggleEdit()"
-        style="flex:1;max-width:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:11px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px">
-        <span style="font-size:22px">✏️</span>
-        <span style="font-size:11px;color:var(--text);font-weight:600">Изменить</span>
+      <button onclick="profileToggleEdit()" title="Изменить"
+        style="width:48px;height:48px;background:var(--surface2);border:none;border-radius:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+        ✏️
       </button>
-      <button onclick="navTo('s-settings','nav-settings')"
-        style="flex:1;max-width:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:11px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px">
-        <span style="font-size:22px">⚙️</span>
-        <span style="font-size:11px;color:var(--text);font-weight:600">Настройки</span>
+      <button onclick="navTo('s-settings','nav-settings')" title="Настройки"
+        style="width:48px;height:48px;background:var(--surface2);border:none;border-radius:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+        ⚙️
       </button>
     </div>
 
@@ -1965,12 +1961,27 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
   rows.forEach(msg => {
     if (msg.from_user === myUsername) {
       // Своё сообщение — обновляем delivered или восстанавливаем если кэш был очищен
+      // Пропускаем служебные reaction_update сообщения
+      if (msg.extra) {
+        try {
+          const ep = JSON.parse(msg.extra);
+          if (ep?.type === 'reaction') {
+            _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
+            return; // служебное — не восстанавливаем
+          }
+        } catch(_) {}
+      }
       if (!msgs[otherUsername]) msgs[otherUsername] = [];
       const local = msgs[otherUsername].find(m => m.ts === msg.ts && m.from === myUsername);
       if (local) {
         if (!local.delivered) { local.delivered = true; hasNew = true; }
       } else {
         // Кэш был очищен — восстанавливаем своё сообщение из Supabase
+        // Пропускаем пустые (могут быть артефакты)
+        if (!msg.text && !msg.sticker) {
+          _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
+          return;
+        }
         let inText = msg.text || '';
         let inSticker = msg.sticker || null;
         if (!inSticker) {
@@ -2526,33 +2537,50 @@ function showCreateGroupDialog() {
   sheet.id = 'create-group-sheet';
   sheet.style.cssText = 'position:fixed;inset:0;z-index:9900;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.6)';
   sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot));max-height:80vh;overflow-y:auto">
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot));max-height:80vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
       <div style="font-size:17px;font-weight:700;margin-bottom:12px">👥 Создать группу</div>
       <input id="grp-name-inp" class="inp" placeholder="Название группы" style="margin-bottom:12px">
       <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Участники:</div>
       <div id="grp-members-list">
         ${online.map(u => `
-          <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer">
-            <input type="checkbox" value="${u.username}" style="width:18px;height:18px;accent-color:var(--accent)">
-            <span style="font-size:20px">${u.avatar||'😊'}</span>
-            <span style="font-size:14px">${u.name||u.username}</span>
-            <span style="font-size:12px;color:var(--muted)">@${u.username}</span>
+          <label style="display:flex;align-items:center;gap:12px;padding:10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px solid rgba(255,255,255,.05)">
+            <div style="width:28px;height:28px;border-radius:8px;border:2px solid var(--surface3);background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0" class="grp-chk-box" data-val="${u.username}">
+            </div>
+            <div style="width:36px;height:36px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${u.avatar||'😊'}</div>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:600">${u.name||u.username}</div>
+              <div style="font-size:12px;color:var(--muted)">@${u.username}</div>
+            </div>
           </label>`).join('')}
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn-surface" style="flex:1" onclick="document.getElementById('create-group-sheet').remove()">Отмена</button>
-        <button class="btn btn-accent" style="flex:1" onclick="
-          const name = document.getElementById('grp-name-inp').value.trim();
-          if (!name) { toast('Введи название'); return; }
-          const checked = [...document.querySelectorAll('#grp-members-list input:checked')].map(i=>i.value);
-          if (!checked.length) { toast('Выбери хотя бы одного участника'); return; }
-          groupCreate(name, checked);
-          document.getElementById('create-group-sheet').remove();
-        ">Создать</button>
+        <button class="btn btn-accent" style="flex:1" id="grp-create-btn">Создать</button>
       </div>
     </div>`;
-  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+  // Custom checkbox toggle
+  sheet.addEventListener('click', e => {
+    if (e.target === sheet) { sheet.remove(); return; }
+    const box = e.target.closest('.grp-chk-box');
+    if (box) {
+      const selected = box.classList.toggle('selected');
+      box.style.background = selected ? 'var(--accent)' : 'var(--surface2)';
+      box.style.borderColor = selected ? 'var(--accent)' : 'var(--surface3)';
+      box.innerHTML = selected ? '✓' : '';
+      box.style.color = '#fff';
+      box.style.fontSize = '14px';
+      box.style.fontWeight = '700';
+    }
+  });
+  sheet.querySelector('#grp-create-btn').addEventListener('click', () => {
+    const name = document.getElementById('grp-name-inp')?.value.trim();
+    if (!name) { toast('Введи название'); return; }
+    const checked = [...sheet.querySelectorAll('.grp-chk-box.selected')].map(b => b.dataset.val);
+    if (!checked.length) { toast('Выбери хотя бы одного участника'); return; }
+    groupCreate(name, checked);
+    sheet.remove();
+  });
   document.body.appendChild(sheet);
 }
 
@@ -2838,7 +2866,7 @@ function peerShowMenu(username) {
   ];
 
   sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;overflow:hidden;padding-bottom:calc(8px + var(--safe-bot))">
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;overflow:hidden;padding-bottom:calc(8px + var(--safe-bot));animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:10px auto 6px"></div>
       ${items.map(it => `
         <button onclick="${it.action};document.getElementById('peer-menu-sheet')?.remove()"
@@ -3592,17 +3620,18 @@ function messengerRenderMessages(animateLast) {
   body.innerHTML = html;
   requestAnimationFrame(() => {
     body.scrollTop = body.scrollHeight;
-    // Помечаем прочитанными только если прокручено до конца (пользователь видит сообщения)
     const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
     if (atBottom) messengerMarkRead();
-    // Animate last bubble
+    // Анимируем последние 3 пузыря (новые входящие/исходящие)
     if (animateLast) {
       const bubbles = body.querySelectorAll('[data-msg-bubble]');
-      const last = bubbles[bubbles.length - 1];
-      if (last) {
-        const isMe = last.dataset.msgMe === '1';
-        last.classList.add(isMe ? 'msg-anim-out' : 'msg-anim-in');
-      }
+      // Анимируем до 3 последних с задержкой
+      const toAnimate = Array.from(bubbles).slice(-3);
+      toAnimate.forEach((b, i) => {
+        const isMe = b.dataset.msgMe === '1';
+        b.style.animationDelay = i === toAnimate.length - 1 ? '0ms' : `${(i - toAnimate.length + 1) * -30}ms`;
+        b.classList.add(isMe ? 'msg-anim-out' : 'msg-anim-in');
+      });
     }
   });
 }
@@ -3634,6 +3663,9 @@ function messengerSend() {
 
   // Звук отправки
   SFX.play('msgSend');
+
+  // Лимит 200 сообщений — удаляем старые и с сервера
+  mcEnforceMessageLimit(_msgCurrentChat);
 
   // Запустить polling
   sbPollChat(p.username, _msgCurrentChat);
@@ -4017,7 +4049,7 @@ function mcShowMsgMenu(idx) {
         </button>
         ${isMe ? `<div class="mc-action-sep"></div>
         <button class="mc-action-btn" style="color:var(--danger,#e05555)"
-          onclick="mcDeleteMsg(${idx});mcCloseMenu()">
+          onclick="mcConfirmDelete(${idx});mcCloseMenu()">
           <span style="font-size:20px">🗑</span> Удалить
         </button>` : ''}
       </div>
@@ -4064,12 +4096,79 @@ function mcCopyMsg(idx) {
   toast('📋 Скопировано');
 }
 
-function mcDeleteMsg(idx) {
+// ── Удаление сообщения (локально + с сервера) ─────────────────────
+async function mcDeleteMsg(idx) {
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) return;
+  const msg = msgs[_msgCurrentChat][idx];
+  if (!msg) return;
+
+  // Удаляем локально
   msgs[_msgCurrentChat].splice(idx, 1);
   msgSave(msgs);
   messengerRenderMessages();
+
+  // Удаляем с сервера по ts + chat_key
+  const p = profileLoad();
+  if (p && sbReady() && msg.ts) {
+    const chatKey = sbChatKey(p.username, _msgCurrentChat);
+    // Удаляем конкретное сообщение по ts и chat_key
+    sbDelete('messages',
+      `chat_key=eq.${encodeURIComponent(chatKey)}&ts=eq.${msg.ts}`
+    ).catch(() => {});
+  }
+}
+
+// ── Подтверждение удаления (Telegram-style) ───────────────────────
+function mcConfirmDelete(idx) {
+  const existing = document.getElementById('mc-delete-confirm');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'mc-delete-confirm';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9500;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.55);animation:mcFadeIn .15s ease';
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot,0px));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Удалить сообщение?</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Сообщение будет удалено у всех участников.</div>
+      <button onclick="mcDeleteMsg(${idx});document.getElementById('mc-delete-confirm')?.remove()"
+        style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
+        🗑 Удалить
+      </button>
+      <button onclick="document.getElementById('mc-delete-confirm')?.remove()"
+        style="width:100%;padding:14px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">
+        Отмена
+      </button>
+    </div>`;
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+}
+const MC_MSG_LIMIT = 200;
+
+async function mcEnforceMessageLimit(username) {
+  if (!username) return;
+  const msgs = msgLoad();
+  const chat = msgs[username];
+  if (!chat || chat.length <= MC_MSG_LIMIT) return;
+
+  // Определяем сообщения для удаления (самые старые)
+  const toDelete = chat.splice(0, chat.length - MC_MSG_LIMIT);
+  msgSave(msgs);
+
+  // Удаляем с сервера пакетно по ts
+  const p = profileLoad();
+  if (!p || !sbReady()) return;
+  const chatKey = sbChatKey(p.username, username);
+  // Supabase поддерживает IN через ts=in.(ts1,ts2,...)
+  const tsList = toDelete.map(m => m.ts).join(',');
+  if (tsList) {
+    sbDelete('messages',
+      `chat_key=eq.${encodeURIComponent(chatKey)}&ts=in.(${tsList})`
+    ).catch(() => {});
+  }
 }
 
 // ── Forward ───────────────────────────────────────────────────────
@@ -4258,24 +4357,37 @@ function mcSendImage(dataUrl) {
   });
 }
 
-// ── Keyboard: adjustResize в манифесте сжимает WebView автоматически.
-// Нам нужно только прокрутить чат вниз когда открылась клавиатура.
+// ── Клавиатура: плавное смещение поля ввода через padding-bottom ──
+// adjustResize уменьшает window.innerHeight — мы отслеживаем это
+// и плавно двигаем input bar через CSS transition.
 (function() {
+  let _prevVH = window.innerHeight;
+
   function onViewportResize() {
     const chatScreen = document.getElementById('s-messenger-chat');
     if (!chatScreen || !chatScreen.classList.contains('active')) return;
-    // Убираем любой translateY который мог остаться
-    chatScreen.style.transform = '';
-    chatScreen.style.transition = '';
-    // Прокручиваем вниз
+
+    const vv = window.visualViewport;
+    const vvH = vv ? vv.height : window.innerHeight;
+    const kbHeight = Math.max(0, window.innerHeight - vvH);
+
+    // Плавное смещение всего экрана вверх
+    chatScreen.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
+    chatScreen.style.transform = kbHeight > 50
+      ? `translateY(-${kbHeight}px)`
+      : '';
+
+    // Скролл вниз после анимации
     const list = document.getElementById('mc-messages');
-    if (list) setTimeout(() => { list.scrollTop = list.scrollHeight; }, 80);
+    if (list) setTimeout(() => { list.scrollTop = list.scrollHeight; }, 60);
   }
 
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', onViewportResize);
-    window.visualViewport.addEventListener('scroll', onViewportResize);
+    window.visualViewport.addEventListener('resize', onViewportResize, { passive: true });
+    window.visualViewport.addEventListener('scroll', onViewportResize, { passive: true });
   }
+  // Fallback через window resize (для некоторых Android WebView)
+  window.addEventListener('resize', onViewportResize, { passive: true });
 })();
 
 // ── Доп функции ───────────────────────────────────────────────────
@@ -4283,34 +4395,31 @@ function messengerShowMore() {
   const username = _msgCurrentChat;
   if (!username) return;
 
-  // Telegram-style bottom sheet
   const existing = document.getElementById('msg-action-sheet');
-  if (existing) existing.remove();
+  if (existing) { _closeSheet(existing); return; }
 
   const sheet = document.createElement('div');
   sheet.id = 'msg-action-sheet';
-  sheet.style.cssText = `
-    position:fixed;inset:0;z-index:8888;display:flex;flex-direction:column;
-    justify-content:flex-end;background:rgba(0,0,0,.5);
-    animation:fadeIn .15s ease;
-  `;
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:8888;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:mcFadeIn .15s ease';
   sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(16px + var(--safe-bot));overflow:hidden">
+    <div id="msg-action-inner" style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(16px + var(--safe-bot));overflow:hidden;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
       <div style="width:40px;height:4px;border-radius:2px;background:var(--surface3);margin:8px auto 16px"></div>
-      <button onclick="peerProfileOpen('${username}');document.getElementById('msg-action-sheet').remove()"
+      <button onclick="peerProfileOpen('${username}');_closeSheet(document.getElementById('msg-action-sheet'))"
         style="width:100%;padding:16px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
         <span style="font-size:22px">👤</span> Профиль пользователя
       </button>
       <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
-      <button onclick="messengerClearChat('${username}');document.getElementById('msg-action-sheet').remove()"
+      <button onclick="peerMuteShow('${username}');_closeSheet(document.getElementById('msg-action-sheet'))"
+        style="width:100%;padding:16px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <span style="font-size:22px">${isMuted(username)?'🔔':'🔕'}</span> ${isMuted(username)?'Включить уведомления':'Отключить уведомления'}
+      </button>
+      <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
+      <button onclick="messengerClearChat('${username}');_closeSheet(document.getElementById('msg-action-sheet'))"
         style="width:100%;padding:16px 20px;background:none;border:none;color:var(--danger,#c94f4f);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
         <span style="font-size:22px">🗑</span> Удалить чат
       </button>
-    </div>
-  `;
-  sheet.addEventListener('click', (e) => {
-    if (e.target === sheet) sheet.remove();
-  });
+    </div>`;
+  sheet.addEventListener('click', (e) => { if (e.target === sheet) _closeSheet(sheet); });
   document.body.appendChild(sheet);
 }
 
@@ -4714,4 +4823,69 @@ function _mcUpdateMuteIcon() {}
     }
     orig.call(this);
   };
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// 🎬 УТИЛИТА ЗАКРЫТИЯ ШТОРКИ С АНИМАЦИЕЙ
+// ══════════════════════════════════════════════════════════════════
+function _closeSheet(sheetEl) {
+  if (!sheetEl) return;
+  const inner = sheetEl.querySelector('[style*="border-radius:20px 20px 0 0"]');
+  if (inner) {
+    inner.style.animation = 'mcSlideDown .22s cubic-bezier(.4,0,.8,.6) forwards';
+  }
+  sheetEl.style.animation = 'mcFadeOut .22s ease forwards';
+  setTimeout(() => sheetEl?.remove(), 200);
+}
+
+// ── Патч peerShowMenu: добавляем анимацию закрытия через _closeSheet ──
+(function() {
+  const orig = window.peerShowMenu;
+  if (typeof orig !== 'function') return;
+  window.peerShowMenu = function(username) {
+    const existing = document.getElementById('peer-menu-sheet');
+    if (existing) { _closeSheet(existing); return; }
+    orig(username);
+  };
+})();
+
+// ── Патч forward sheet: добавляем анимацию и slide-up ──
+(function() {
+  const orig = window.mcForwardMsg;
+  if (typeof orig !== 'function') return;
+  window.mcForwardMsg = function(idx) {
+    orig(idx);
+    // Добавляем анимацию к inner div
+    setTimeout(() => {
+      const sheet = document.getElementById('mc-forward-sheet');
+      if (!sheet) return;
+      const inner = sheet.querySelector('[style*="border-radius:20px 20px 0 0"]');
+      if (inner && !inner.style.animation) {
+        inner.style.animation = 'mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)';
+      }
+      // Закрытие с анимацией
+      const oldListener = sheet._clickHandler;
+      sheet.removeEventListener('click', oldListener);
+      sheet._clickHandler = (e) => {
+        if (e.target === sheet) _closeSheet(sheet);
+      };
+      sheet.addEventListener('click', sheet._clickHandler);
+    }, 0);
+  };
+})();
+
+// ── Мотивация ──────────────────────────────────────────────────────
+// mcEmojiIn используется в mute sheet — убедимся что анимация определена
+(function ensureMcAnimations() {
+  if (document.getElementById('mc-menu-style')) return; // уже добавлены
+  const st = document.createElement('style');
+  st.id = 'mc-anim-global';
+  st.textContent = `
+    @keyframes mcSlideUp   { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
+    @keyframes mcSlideDown { from{transform:translateY(0);opacity:1}    to{transform:translateY(110%);opacity:0} }
+    @keyframes mcFadeIn    { from{opacity:0} to{opacity:1} }
+    @keyframes mcFadeOut   { from{opacity:1} to{opacity:0} }
+    @keyframes mcEmojiIn   { from{transform:translateY(16px) scale(.85);opacity:0} to{transform:none;opacity:1} }
+  `;
+  document.head.appendChild(st);
 })();
