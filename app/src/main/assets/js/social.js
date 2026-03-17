@@ -1386,6 +1386,7 @@ function _inboxTsSave(ts) {
   try { localStorage.setItem(INBOX_TS_KEY, String(ts)); } catch(e) {}
 }
 let _fbInboxLastTs = _inboxTsLoad();
+let _lastSuccessfulPoll = 0;
 // ── Watchdog: следит что соединение реально живо ──────────────────
 
 // ── Инициализируем таблицы Supabase при первом подключении ────────
@@ -1515,50 +1516,14 @@ document.addEventListener('visibilitychange', () => {
     if (!p || !sbReady()) return;
     const hiddenMs = Date.now() - (_lastHiddenTs || 0);
     _lastSuccessfulPoll = Date.now();
-    if (window.Android && typeof Android.log === 'function') {
-      Android.log('[VIS] Вернулся на экран, был в фоне ' + Math.round(hiddenMs/1000) + ' );
-    }
     if (hiddenMs > 30000 || !_profilePeerReady) {
-      if (window.Android && typeof Android.log === 'function') {
-        Android.log('[CONNECT] Запускаю полный profileConnect (был в фоне ' + Math.round(hiddenMs/1000) + 'с)');
-      }
       profileConnect(p);
     } else {
-      // Были в фоне мало — Java Handler уже опрашивает, просто форс-тик
-      if (window.Android && typeof Android.log === 'function') {
-        Android.log('[CONNECT] Быстрый форс-тик (был в фоне ' + Math.round(hiddenMs/1000) + 'с)');
-      }
-        }
+      if (window._javaTick) window._javaTick();
+    }
   }, 200);
 });
 
-      data.forEach(msg => {
-        if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
-        bySender[msg.from_user].push(msg);
-        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts); _inboxTsSave(_fbInboxLastTs);
-      });
-      Object.entries(bySender).forEach(([sender, msgs]) => {
-        sbHandleIncomingMessages(pr.username, sender, msgs);
-      });
-    }
-  } catch(e) {}
-
-  // Каждый тик: открытый чат
-  if (_msgCurrentChat) {
-    try {
-      const key = sbChatKey(pr.username, _msgCurrentChat);
-      const data = await sbGet('messages',
-        `select=*&chat_key=eq.${encodeURIComponent(key)}&ts=gt.${_fbLastMsgTs[key]||0}&order=ts.asc&limit=50`
-      );
-      if (Array.isArray(data) && data.length > 0) {
-        sbHandleIncomingMessages(pr.username, _msgCurrentChat, data);
-      }
-    } catch(e) {}
-  }
-
-  // Каждые 10 тиков: presence
-};
-// Каждые 2 сек: inbox + открытый чат
 
 function profileDisconnect() {
   _profilePeerReady = false;
@@ -3970,6 +3935,52 @@ function msgFormatTime(ts) {
   return d.toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit'});
 }
 
+// ── Список VIP пользователей (выданных через консоль) ────────────
+const VIP_GRANTED_KEY = 'sapp_vip_granted_v1';
+function vipGrantedLoad() { try { return JSON.parse(localStorage.getItem(VIP_GRANTED_KEY)||'{}'); } catch(e){ return {}; } }
+function vipGrantedSave(d) { localStorage.setItem(VIP_GRANTED_KEY, JSON.stringify(d)); }
+
+// Проверка: имеет ли пользователь VIP (свой или выданный)
+function vipCheckUser(username) {
+  if (!username) return vipCheck();
+  const granted = vipGrantedLoad();
+  return !!granted[username];
+}
+
+// Выдача VIP другому пользователю через Supabase
+async function vipGrantTo(username) {
+  const granted = vipGrantedLoad();
+  granted[username] = Date.now();
+  vipGrantedSave(granted);
+  // Обновляем в Supabase presence
+  if (sbReady()) {
+    try {
+      await _sbFetch('PATCH', `/rest/v1/presence?username=eq.${encodeURIComponent(username)}`, { vip: true }, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      });
+      await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`, { vip: true }, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      });
+    } catch(e) {}
+  }
+}
+
+async function vipRevokeFrom(username) {
+  const granted = vipGrantedLoad();
+  delete granted[username];
+  vipGrantedSave(granted);
+  if (sbReady()) {
+    try {
+      await _sbFetch('PATCH', `/rest/v1/presence?username=eq.${encodeURIComponent(username)}`, { vip: false }, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      });
+      await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`, { vip: false }, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      });
+    } catch(e) {}
+  }
+}
+
 // Патч CMD для /vip
 const _origCmdExecForVip2 = window.cmdExec;
 if (typeof cmdExec !== 'undefined') {
@@ -3978,17 +3989,59 @@ if (typeof cmdExec !== 'undefined') {
     const parts = raw.trim().split(/\s+/);
     const cmd = parts[0].toLowerCase();
     const arg = parts.slice(1).join(' ').trim();
+
     if (cmd === '/vip') {
-      if (!arg) { cmdPrint('info','👑 /vip <КОД> — активировать VIP'); return; }
+      if (!arg) {
+        cmdPrint('info', '👑 Использование:');
+        cmdPrint('info', '  /vip <КОД>          — активировать себе VIP');
+        cmdPrint('info', '  /vip give @ник      — выдать VIP пользователю');
+        cmdPrint('info', '  /vip revoke @ник    — забрать VIP у пользователя');
+        cmdPrint('info', '  /vip list           — список VIP пользователей');
+        return;
+      }
+
+      // /vip give @username
+      if (arg.toLowerCase().startsWith('give ')) {
+        const target = arg.slice(5).replace('@','').trim().toLowerCase();
+        if (!target) { cmdPrint('err','❌ Укажи юзернейм: /vip give @ник'); return; }
+        vipGrantTo(target).then(() => {
+          cmdPrint('ok', `👑 VIP выдан пользователю @${target}`);
+          toast(`👑 @${target} получил VIP!`);
+        });
+        return;
+      }
+
+      // /vip revoke @username
+      if (arg.toLowerCase().startsWith('revoke ')) {
+        const target = arg.slice(7).replace('@','').trim().toLowerCase();
+        if (!target) { cmdPrint('err','❌ Укажи юзернейм: /vip revoke @ник'); return; }
+        vipRevokeFrom(target).then(() => {
+          cmdPrint('ok', `✅ VIP забран у @${target}`);
+        });
+        return;
+      }
+
+      // /vip list
+      if (arg.toLowerCase() === 'list') {
+        const granted = vipGrantedLoad();
+        const list = Object.keys(granted);
+        if (list.length === 0) { cmdPrint('info', 'Нет VIP пользователей'); return; }
+        cmdPrint('info', `👑 VIP пользователи (${list.length}):`);
+        list.forEach(u => cmdPrint('out', `  @${u}`));
+        return;
+      }
+
+      // /vip КОД — активировать себе
       if (vipActivate(arg)) {
         cmdPrint('ok','👑 VIP активирован! Доступны: фото-аватар, рамки, значки, баннеры');
         toast('👑 Добро пожаловать в VIP клуб!');
         setTimeout(profileRenderScreen, 200);
       } else {
-        cmdPrint('err','❌ Неверный VIP-код');
+        cmdPrint('err','❌ Неверный VIP-код. Попробуй /vip give @ник для выдачи другому.');
       }
       return;
     }
+
     origFn(raw);
   };
 }
