@@ -1,13 +1,32 @@
 
+
+// Добавляем pulse анимацию для skeleton
+(function(){
+  const st = document.createElement('style');
+  st.textContent = '@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}';
+  document.head.appendChild(st);
+})();
 // ── Telegram Style ────────────────────────────────────────────────
 function toggleTelegramStyle(enabled) {
   if (enabled) {
     document.body.classList.add('tg-style');
     localStorage.setItem('sapp_tg_style', '1');
+    // Обновляем бейдж (он же обновит аватар в нав-баре)
+    if (typeof messengerUpdateBadge === 'function') messengerUpdateBadge();
     toast('✈️ Telegram Style включён');
   } else {
     document.body.classList.remove('tg-style');
     localStorage.removeItem('sapp_tg_style');
+    // Восстанавливаем SVG иконку профиля
+    const profileBtn = document.getElementById('nav-profile');
+    const oldAva = document.getElementById('nav-profile-avatar-tg');
+    if (oldAva) oldAva.remove();
+    if (profileBtn) {
+      const wrap = profileBtn.querySelector('.nav-icon-wrap');
+      if (wrap && !wrap.querySelector('svg')) {
+        wrap.innerHTML = '<svg class="nav-icon" id="nav-profile-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+      }
+    }
     toast('Telegram Style выключен');
   }
 }
@@ -16,10 +35,17 @@ function toggleTelegramStyle(enabled) {
 (function initTgStyle() {
   if (localStorage.getItem('sapp_tg_style') === '1') {
     document.body.classList.add('tg-style');
-    document.addEventListener('DOMContentLoaded', () => {
+    // Устанавливаем тумблер после загрузки DOM
+    function setTgToggle() {
       const toggle = document.getElementById('tg-style-toggle');
       if (toggle) toggle.checked = true;
-    });
+      else setTimeout(setTgToggle, 300);
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setTgToggle);
+    } else {
+      setTgToggle();
+    }
   }
 })();
 
@@ -2326,7 +2352,22 @@ function renderFileList(){
     const item=document.createElement('div');
     item.className='list-item'+(S.selectedFile?.name===f.name?' selected':'');
     item.innerHTML=`<span class="item-name">${f.name}</span>`;
-    item.onclick=()=>{S.selectedFile=f;renderFileList();toast('Выбран: '+f.name);};
+    item.onclick=()=>{
+      const wasSelected = S.selectedFile?.name === f.name;
+      S.selectedFile=f;
+      renderFileList();
+      // Предзагружаем файл в фоне сразу при выборе — убирает лаг при goToGroups
+      const key = f.path || f.name;
+      if (!FILE_CACHE[key]) {
+        appLog('info','preload: начинаю фоновую загрузку '+f.name);
+        getFileBuf().then(buf => {
+          appLog('ok','preload: '+f.name+' загружен в кэш ('+Math.round(buf.byteLength/1024)+'КБ)');
+        }).catch(e => {
+          appLog('warn','preload: не удалось загрузить '+f.name+': '+e.message);
+        });
+      }
+      toast('📄 Выбран: '+f.name);
+    };
     list.appendChild(item);
   });
   document.getElementById('file-section').classList.remove('hidden');
@@ -2345,24 +2386,51 @@ async function getFileBuf(){
 
 // ══ ГРУППЫ ══
 async function goToGroups(){
-  // Режим учителей — перенаправляем на список учителей
   if(typeof S!=='undefined'&&S.mode==='teacher'){
     return goToTeacherList();
   }
   if(!S.selectedFile){toast('Сначала выбери файл');return;}
+
+  // Сначала СРАЗУ переходим на экран — он уже видно
   showScreen('s-groups');
-  document.getElementById('groups-title').textContent=
-    (S.selectedFile._localBuf ? '📄 '+S.selectedFile.name : S.selectedFile.name);
-  document.getElementById('group-search').value='';
-  document.getElementById('group-list').innerHTML='';
-  setStatus('groups-status','Загружаю...');setBar('groups-bar',20);
+  const title = S.selectedFile._localBuf ? '📄 '+S.selectedFile.name : S.selectedFile.name;
+  document.getElementById('groups-title').textContent = title;
+  document.getElementById('group-search').value = '';
+
+  // Если группы уже загружены для этого файла — показываем мгновенно
+  const fileKey = S.selectedFile.path || S.selectedFile.name;
+  if (allGroups.length > 0 && S._lastGroupsFile === fileKey) {
+    appLog('info','goToGroups: группы из кэша ('+allGroups.length+')');
+    renderGroupList(allGroups);
+    setStatus('groups-status', allGroups.length + ' групп');
+    return;
+  }
+
+  // Показываем скелетон пока грузится
+  const list = document.getElementById('group-list');
+  list.innerHTML = Array(6).fill(0).map(()=>
+    '<div style="height:48px;background:var(--surface2);border-radius:10px;margin-bottom:6px;animation:pulse 1.2s ease-in-out infinite"></div>'
+  ).join('');
+  setStatus('groups-status','Загружаю...');
+  setBar('groups-bar',20);
+
   try{
-    const buf=await getFileBuf();
-    allGroups=detectGroups(buf);
-    setBar('groups-bar',100);setStatus('groups-status',`${allGroups.length} групп`);
+    appLog('info','goToGroups: загружаю файл '+S.selectedFile.name);
+    const buf = await getFileBuf();
+    appLog('info','goToGroups: определяю группы...');
+    allGroups = detectGroups(buf);
+    S._lastGroupsFile = fileKey;
+    appLog('ok','goToGroups: найдено '+allGroups.length+' групп');
+    setBar('groups-bar',100);
+    setStatus('groups-status', allGroups.length + ' групп');
     setTimeout(()=>setBar('groups-bar',0),800);
     renderGroupList(allGroups);
-  }catch(e){setBar('groups-bar',0);setStatus('groups-status','❌ '+e.message);}
+  }catch(e){
+    appLog('err','goToGroups error: '+e.message);
+    setBar('groups-bar',0);
+    setStatus('groups-status','❌ '+e.message);
+    list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">❌ '+e.message+'</div>';
+  }
 }
 function renderGroupList(groups){
   const list=document.getElementById('group-list');list.innerHTML='';
@@ -2510,7 +2578,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.2.25';
+const APP_VERSION='4.3';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();

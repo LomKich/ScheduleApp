@@ -1,3 +1,13 @@
+// ── Логирование ──────────────────────────────────────────────────
+function sLog(level, msg) {
+  try {
+    const tag = '[SOCIAL]';
+    const full = tag + ' ' + msg;
+    if (window.Android && typeof Android.log === 'function') Android.log(full);
+    if (typeof appLog === 'function') appLog(level, msg);
+  } catch(e) {}
+}
+
 // ══════════════════════════════════════════════════════════════════════
 // 👤 СИСТЕМА АККАУНТОВ И ПРОФИЛЯ
 // Хранение: localStorage. P2P онлайн: PeerJS (id = "sapp-" + username)
@@ -348,6 +358,7 @@ function loginCheckUsername(val) {
 }
 
 function profileCreate() {
+  sLog('info', 'profileCreate: попытка регистрации');
   const nameEl = document.getElementById('login-name');
   const unEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
@@ -421,6 +432,7 @@ function loginAuthUsernameInput(val) {
 }
 
 function loginDoAuth() {
+  sLog('info', 'loginDoAuth: попытка входа');
   const unEl  = document.getElementById('login-auth-username');
   const pwdEl = document.getElementById('login-auth-password');
   const errEl = document.getElementById('login-auth-error');
@@ -610,11 +622,12 @@ function profileRenderScreen() {
 
     <!-- Быстрые действия — Telegram style (3 кнопки) -->
     <div style="display:flex;gap:8px;padding:0 16px 16px">
-      <button onclick="messengerOpen()" style="flex:1;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:12px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative">
-        <span style="font-size:20px">💬</span>
-        <span style="font-size:11px;color:var(--text);font-weight:600">Чаты</span>
-        <span id="msg-unread-badge" style="display:none;position:absolute;top:6px;right:6px;background:var(--accent);color:#000;border-radius:10px;font-size:10px;font-weight:800;padding:1px 6px">0</span>
+      <button onclick="showScreen('s-leaderboard')" style="flex:1;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:12px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <span style="font-size:20px">🏆</span>
+        <span style="font-size:11px;color:var(--text);font-weight:600">Рейтинг</span>
       </button>
+      <!-- msg-unread-badge нужен для messengerUpdateBadge -->
+      <span id="msg-unread-badge" style="display:none"></span>
       <button onclick="profileRenderOnline();showScreen('s-online')" style="flex:1;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:12px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px">
         <span style="font-size:20px">👥</span>
         <span style="font-size:11px;color:var(--text);font-weight:600">Онлайн</span>
@@ -1334,6 +1347,8 @@ async function profileDeleteAccount() {
 
 function profileLogout() {
   if (!confirm('Выйти из аккаунта? Данные профиля останутся на устройстве')) return;
+  const _lp = profileLoad();
+  sLog('info', 'profileLogout: выход из @' + (_lp?.username||'?'));
   const p = profileLoad();
   // Make sure pwdHash is saved in accounts before clearing profile
   if (p) {
@@ -1369,6 +1384,47 @@ async function _sbFetch(method, path, body, extraHeaders) {
     signal: AbortSignal.timeout(8000),
   });
   return { ok: r.ok, status: r.status, json: () => r.json(), text: () => r.text() };
+}
+
+// ── Supabase REST helpers ─────────────────────────────────────────
+async function sbGet(table, query = '') {
+  if (!sbReady()) return null;
+  try {
+    const r = await _sbFetch('GET', `/rest/v1/${table}?${query}`, null, {});
+    if (!r.ok && r.status !== 200) return null;
+    _lastSuccessfulPoll = Date.now();
+    return await r.json();
+  } catch(e) { sLog('warn','sbGet '+table+' error: '+e.message); return null; }
+}
+
+async function sbUpsert(table, data) {
+  if (!sbReady()) return false;
+  try {
+    const r = await _sbFetch('POST', `/rest/v1/${table}`, data, {
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=minimal',
+    });
+    return r.ok;
+  } catch(e) { sLog('warn','sbUpsert '+table+' error: '+e.message); return false; }
+}
+
+async function sbInsert(table, data) {
+  if (!sbReady()) return null;
+  try {
+    const r = await _sbFetch('POST', `/rest/v1/${table}`, data, {
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) { sLog('warn','sbInsert '+table+' error: '+e.message); return null; }
+}
+
+async function sbDelete(table, query) {
+  if (!sbReady()) return;
+  try {
+    await _sbFetch('DELETE', `/rest/v1/${table}?${query}`, null, {});
+  } catch(e) { sLog('warn','sbDelete '+table+' error: '+e.message); }
 }
 
 // ── Переменные состояния ──────────────────────────────────────────
@@ -1456,24 +1512,30 @@ async function profileConnect(p) {
   if (!sbReady()) { profileUpdateP2PStatus('⚙️ Supabase не настроен'); return; }
 
   profileUpdateP2PStatus('⏳ Подключаюсь...');
+  sLog('info', 'profileConnect: старт для @' + p.username);
   try {
+    sLog('info', 'profileConnect: шаг 1 — регистрирую присутствие');
     await sbPresencePut(p);
     if (sessionId !== _connectSessionId) return;
 
     _profilePeerReady = true;
     profileUpdateP2PStatus('🟢 @' + p.username);
+    sLog('ok', 'profileConnect: присутствие зарегистрировано');
 
     if (!_fbInboxLastTs) _fbInboxLastTs = Date.now() - 300000;
 
+    sLog('info', 'profileConnect: шаг 2 — загружаю список онлайн');
     await sbPollPresence();
     if (sessionId !== _connectSessionId) return;
 
+    sLog('info', 'profileConnect: шаг 3 — проверяю пропущенные сообщения');
     // Подтягиваем пропущенные сообщения
     try {
       const data = await sbGet('messages',
         `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
       );
       if (Array.isArray(data) && data.length > 0) {
+        sLog('ok', 'profileConnect: найдено ' + data.length + ' пропущенных сообщений');
         const bySender = {};
         data.forEach(msg => {
           if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
@@ -1484,6 +1546,8 @@ async function profileConnect(p) {
         Object.entries(bySender).forEach(([sender, msgs]) => {
           sbHandleIncomingMessages(p.username, sender, msgs);
         });
+      } else {
+        sLog('info', 'profileConnect: новых сообщений нет');
       }
     } catch(e) {}
     if (sessionId !== _connectSessionId) return;
@@ -1493,6 +1557,7 @@ async function profileConnect(p) {
     }
   } catch(e) {
     if (sessionId === _connectSessionId) {
+      sLog('err', 'profileConnect: ошибка подключения — ' + (e?.message || e));
       profileUpdateP2PStatus('🔴 Ошибка — повтор через 5с');
       setTimeout(() => { if (sessionId === _connectSessionId) profileConnect(p); }, 5000);
     }
@@ -1524,7 +1589,6 @@ document.addEventListener('visibilitychange', () => {
   }, 200);
 });
 
-
 function profileDisconnect() {
   _profilePeerReady = false;
   _profileOnlinePeers = [];
@@ -1535,6 +1599,7 @@ function profileDisconnect() {
 let _presenceFirstPut = true;
 async function sbPresencePut(p) {
   if (!p || !sbReady()) return;
+  sLog('info', 'sbPresencePut: обновляю присутствие @' + p.username);
   // Compress photo avatar to 60x60px base64 for presence storage
   let avatarDataToStore = null;
   if (p.avatarType === 'photo' && p.avatarData) {
@@ -1590,7 +1655,8 @@ async function sbPresencePut(p) {
 async function sbPollPresence() {
   if (!sbReady()) return;
   const data = await sbGet('presence', 'select=*&order=ts.desc&limit=500');
-  if (!Array.isArray(data)) return;
+  if (!Array.isArray(data)) { sLog('warn', 'sbPollPresence: нет данных'); return; }
+  sLog('info', 'sbPollPresence: получено ' + data.length + ' записей');
   const p = profileLoad();
   const now = Date.now();
   const myUsername = p?.username;
@@ -1636,6 +1702,7 @@ function sbChatKey(a, b) { return [a, b].sort().join('__'); }
 
 function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
   if (!rows || rows.length === 0) return;
+  sLog('info', 'handleIncoming: ' + rows.length + ' строк от @' + otherUsername);
   const msgs = msgLoad();
   const key = sbChatKey(myUsername, otherUsername);
   let hasNew = false;
@@ -1664,18 +1731,30 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         if (emojiOnly.test(inText.trim())) { inSticker = inText.trim(); inText = ''; }
       }
       // Parse replyTo from extra field
+      // Проверяем не является ли это служебным reaction_update
       let inReplyTo = null;
-      try { if (msg.extra) inReplyTo = JSON.parse(msg.extra)?.replyTo || null; } catch(_){}
+      let extraParsed = null;
+      try { if (msg.extra) extraParsed = JSON.parse(msg.extra); } catch(_){}
+      if (extraParsed?.type === 'reaction') {
+        // Применяем реакцию к нужному сообщению
+        const targetTs = extraParsed.msgTs;
+        const targetMsg = msgs[otherUsername]?.find(m => m.ts === targetTs);
+        if (targetMsg) {
+          if (!targetMsg.reactions) targetMsg.reactions = {};
+          targetMsg.reactions = extraParsed.reactions || targetMsg.reactions;
+          msgSave(msgs);
+          if (_msgCurrentChat === otherUsername) messengerRenderMessages();
+        }
+        return; // служебное сообщение — не добавляем в чат
+      }
+      if (extraParsed?.replyTo) inReplyTo = extraParsed.replyTo;
       msgs[otherUsername].push({
         from: msg.from_user, to: myUsername,
         text: inText, sticker: inSticker, ts: msg.ts,
         replyTo: inReplyTo, delivered: true, read: alreadyRead
       });
       hasNew = true;
-      // Логируем получение нового сообщения
-      if (window.Android && typeof Android.log === 'function') {
-        Android.log('[MSG] Новое сообщение от @' + msg.from_user + ': "' + (inText||inSticker||'').slice(0,40) + '" ts=' + msg.ts);
-      }
+      sLog('ok', '[MSG] Новое от @' + msg.from_user + ': "' + (inText||inSticker||'').slice(0,40) + '" ts=' + msg.ts);
     }
   });
 
@@ -2065,7 +2144,7 @@ window.showScreen = function(id, dir) {
   if (id === 's-profile')     profileRenderScreen();
   if (id === 's-online')      profileRenderOnline();
   if (id === 's-leaderboard') leaderboardRender();
-  if (id === 's-messenger')   messengerRenderList();
+  if (id === 's-messenger')   { messengerRenderList(); updateNavActive('nav-messenger'); }
   if (_origShowScreen) _origShowScreen(id, dir);
 };
 
@@ -2708,7 +2787,7 @@ function messengerRenderList(filter) {
         ontouchstart="msgRowTouchStart(this,'${escHtml(username)}')"
         ontouchend="msgRowTouchEnd()"
         ontouchmove="msgRowTouchEnd()"
-        class="chat-row${isSel ? ' chat-selected' : ''}"
+        class="chat-row msg-chat-item${isSel ? ' chat-selected' : ''}"
         style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)">
       ${_msgSelectMode ? `<div class="chat-select-circle">${isSel ? '✓' : ''}</div>` : ''}
       <div style="position:relative;flex-shrink:0">
@@ -2755,9 +2834,23 @@ function messengerOpenChat(username) {
   // Обновляем шапку
   const isGroup = groupIsKey(username);
   const group   = isGroup ? groupGet(groupIdFromKey(username)) : null;
-  const peer = isGroup ? null
-             : (_profileOnlinePeers.find(u => u.username === username)
-             || _allKnownUsers.find(u => u.username === username));
+  let peer = isGroup ? null
+           : (_profileOnlinePeers.find(u => u.username === username)
+           || _allKnownUsers.find(u => u.username === username));
+  // Если не нашли — запрашиваем из Supabase в фоне
+  if (!peer && !isGroup && sbReady()) {
+    sbGet('presence', `select=*&username=eq.${encodeURIComponent(username)}&limit=1`).then(rows => {
+      if (Array.isArray(rows) && rows.length > 0) {
+        const u = rows[0];
+        const mapped = { username: u.username, name: u.name, avatar: u.avatar,
+          avatarType: u.avatar_type, avatarData: u.avatar_data, color: u.color,
+          status: u.status, vip: u.vip, badge: u.badge, _online: false };
+        if (!_allKnownUsers.some(x => x.username === username)) _allKnownUsers.push(mapped);
+        // Обновляем шапку если чат ещё открыт
+        if (_msgCurrentChat === username) messengerOpenChat(username);
+      }
+    }).catch(() => {});
+  }
   const hdrName = document.getElementById('mc-hdr-name');
   const hdrSub  = document.getElementById('mc-hdr-sub');
   const hdrAvatar = document.getElementById('mc-hdr-avatar');
@@ -2781,6 +2874,22 @@ function messengerOpenChat(username) {
   messengerRenderMessages();
 
   // Клавиатура открывается только при тапе на поле ввода
+  // Запрещаем скрытие клавиатуры при нажатии кнопок в чате
+  setTimeout(() => {
+    const bar = document.getElementById('mc-input-bar');
+    if (bar) {
+      bar.addEventListener('mousedown', e => {
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      bar.addEventListener('touchstart', e => {
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+        }
+      }, { passive: false });
+    }
+  }, 200);
 
   // Fix: принудительно перезапускаем polling при открытии чата —
   // это гарантирует немедленный запрос к Supabase, не ждём следующего тика.
@@ -2870,15 +2979,19 @@ function messengerRenderMessages(animateLast) {
       : (replyQuote + escHtml(msg.text));
 
     // Reactions display
+    const myReacts = new Set(Object.entries(msg.reactions||{}).filter(([,u])=>u.includes(p?.username)).map(([e])=>e));
     const reactionsHtml = msg.reactions && Object.keys(msg.reactions).length
-      ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">
-          ${Object.entries(msg.reactions).map(([em,users])=>
-            `<span onclick="mcToggleReaction(${idx},'${em}')" style="background:rgba(255,255,255,.12);border-radius:10px;padding:2px 7px;font-size:13px;cursor:pointer">${em} ${users.length}</span>`
-          ).join('')}
+      ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:5px">
+          ${Object.entries(msg.reactions).map(([em,users])=> {
+            const isMine = users.includes(p?.username);
+            return `<span onclick="mcToggleReaction(${idx},'${em}')" class="mc-reaction ${isMine?'mc-reaction-mine':''}"
+              style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;font-size:13px;cursor:pointer;border-radius:10px;background:rgba(255,255,255,.1);${isMine?'border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 18%,transparent)':''}"
+              >${em}<span style="font-size:11px;font-weight:700;opacity:.85">${users.length}</span></span>`;
+          }).join('')}
          </div>` : '';
 
     return `${dateSep}
-    <div data-msg-bubble data-msg-me="${isMe?'1':'0'}" data-msg-idx="${idx}"
+    <div data-msg-bubble data-msg-me="${isMe?'1':'0'}" data-msg-idx="${idx}" data-msg-tail="${showTail?'1':'0'}"
       style="display:flex;gap:6px;justify-content:${isMe?'flex-end':'flex-start'};align-items:flex-end;margin-bottom:${showTail?'4px':'1px'};position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none"
       ontouchstart="mcBubbleTouchStart(event,this,${idx})"
       ontouchmove="mcBubbleTouchMove(event,this,${idx})"
@@ -2919,6 +3032,7 @@ function messengerSend() {
   if (!inp || !_msgCurrentChat) return;
   const text = inp.value.trim();
   if (!text) return;
+  sLog('info', '[SEND] Отправляю в ' + _msgCurrentChat + ': "' + text.slice(0,40) + '"');
   inp.value = '';
   inp.style.height = '';
   const p = profileLoad();
@@ -3006,6 +3120,7 @@ function mcToggleReaction(idx, emoji) {
   const chatMsgs = msgs[_msgCurrentChat] || [];
   const msg = chatMsgs[idx];
   if (!msg) return;
+  sLog('info','mcToggleReaction: '+emoji+' на msg ts='+msg.ts);
 
   // VIP-check: платные эмодзи
   if (MC_REACTIONS_VIP.includes(emoji) && !isVip) {
@@ -3034,6 +3149,18 @@ function mcToggleReaction(idx, emoji) {
   if (users.length === 0) delete msg.reactions[emoji];
   msgSave(msgs);
   messengerRenderMessages();
+  // Синхронизируем реакцию через служебное сообщение (reaction_update)
+  if (sbReady() && p && _msgCurrentChat && msg.ts) {
+    const reactData = JSON.stringify({ type:'reaction', msgTs: msg.ts, emoji, user: p.username, reactions: msg.reactions });
+    sbInsert('messages', {
+      chat_key: sbChatKey(p.username, _msgCurrentChat),
+      from_user: p.username,
+      to_user: _msgCurrentChat,
+      text: '',
+      ts: Date.now(),
+      extra: reactData
+    }).catch(() => {});
+  }
 }
 
 // ── Bubble interaction ────────────────────────────────────────────
@@ -3917,6 +4044,21 @@ function messengerUpdateBadge() {
   // Также обновляем точку на кнопке мессенджера в nav-баре
   const navMsgDot = document.getElementById('nav-msg-dot');
   if (navMsgDot) navMsgDot.style.display = total > 0 ? '' : 'none';
+  // В TG-style — показываем фото профиля на кнопке профиля в навбаре
+  if (document.body.classList.contains('tg-style')) {
+    const profileBtn = document.getElementById('nav-profile');
+    if (profileBtn && !document.getElementById('nav-profile-avatar-tg')) {
+      const p2 = profileLoad();
+      if (p2?.avatarType === 'photo' && p2?.avatarData) {
+        const img = document.createElement('img');
+        img.id = 'nav-profile-avatar-tg';
+        img.src = p2.avatarData;
+        img.style.cssText = 'width:30px;height:30px;border-radius:50%;object-fit:cover';
+        const wrap = profileBtn.querySelector('.nav-icon-wrap');
+        if (wrap) { wrap.innerHTML = ''; wrap.appendChild(img); }
+      }
+    }
+  }
 }
 
 function messengerOpenChatFrom(username) {
