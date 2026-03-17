@@ -1883,7 +1883,7 @@ function goHome(){
 
 // navTo с правильным направлением: для вкладок всегда "forward" (единая модель),
 // для не-вкладок обычная логика
-const _TAB_ORDER_NAV = ['s-home','s-bells','s-profile','s-settings'];
+const _TAB_ORDER_NAV = ['s-home','s-bells','s-profile','s-messenger'];
 function navTo(id, navId) {
   // Для главных вкладок — всегда единая модель (target сверху)
   // Направление передаём как 'forward' или 'back' только для _doTransition,
@@ -1958,8 +1958,8 @@ showScreen = function(id, dir) {
 // ══════════════════════════════════════════════════════════════════
 (function() {
   // Порядок вкладок для горизонтального свайпа на главных экранах
-  const TAB_ORDER  = ['s-home', 's-bells', 's-profile', 's-settings'];
-  const TAB_NAVIDS = ['nav-home','nav-bells','nav-profile','nav-settings'];
+  const TAB_ORDER  = ['s-home', 's-bells', 's-profile', 's-messenger'];
+  const TAB_NAVIDS = ['nav-home','nav-bells','nav-profile','nav-messenger'];
 
   // Маршруты «Назад» для под-экранов
   const BACK_MAP = {
@@ -2574,7 +2574,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.3.3';
+const APP_VERSION='4.3.4';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -2681,10 +2681,34 @@ function saveSecret(obj){stor.set(SECRET_KEY,JSON.stringify(obj));}
 // ══ РЕКОРДЫ МНИ-ИГР ══
 const HI_KEY='sched_hiscores';
 function loadHiScores(){try{return JSON.parse(stor.get(HI_KEY)||'{}');}catch(e){return{};}}
-function saveHi(game,score){
-  const h=loadHiScores();
-  if(!h[game]||score>h[game]){h[game]=score;stor.set(HI_KEY,JSON.stringify(h));}
-  return Math.max(score,h[game]||0);
+function saveHi(game, score) {
+  const h = loadHiScores();
+  if (!h[game] || score > h[game]) {
+    h[game] = score;
+    stor.set(HI_KEY, JSON.stringify(h));
+    // Отправляем в Supabase лидерборд если пользователь авторизован
+    try {
+      if (typeof sbReady === 'function' && sbReady() &&
+          typeof profileLoad === 'function' && typeof sbUpsert === 'function') {
+        const p = profileLoad();
+        if (p) {
+          sbUpsert('leaderboard', {
+            game,
+            username: p.username,
+            name:     p.name,
+            avatar:   p.avatar,
+            color:    p.color || '#e87722',
+            score,
+            ts: Date.now()
+          });
+          if (typeof Android !== 'undefined' && typeof Android.log === 'function') {
+            Android.log('[LB] saveHi: ' + game + ' score=' + score + ' user=@' + p.username);
+          }
+        }
+      }
+    } catch(e) {}
+  }
+  return Math.max(score, h[game] || 0);
 }
 function getHi(game){return loadHiScores()[game]||0;}
 

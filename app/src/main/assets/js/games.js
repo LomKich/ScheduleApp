@@ -4004,7 +4004,7 @@ function tanksTick(dt){
   // Игрок
   const p=tanksPlayer;
   if(p.shootCd>0)p.shootCd-=dt;
-  const speed=(tanksDiff==='hard'?5.0:3.8)*dt;
+  const speed=(tanksDiff==='hard'?7.5:tanksDiff==='easy'?4.5:5.5)*dt;
   // Apply held keyboard direction
   const heldDir=tanksGetHeldDir();
   if(heldDir) tanksDir(heldDir);
@@ -4039,7 +4039,7 @@ function tanksTick(dt){
     if(e.moveCd<=0){
       e.moveCd=20+Math.floor(Math.random()*30);
       if(Math.random()<0.4) e.moveDir=Math.floor(Math.random()*4);
-      const espeed=1.5*dt;
+      const espeed=2.5*dt;
       const edx=[0,1,0,-1][e.moveDir]*espeed;
       const edy=[-1,0,1,0][e.moveDir]*espeed;
       if(!tanksCollideWalls(e.x+edx,e.y,e.w,e.h)) e.x+=edx;

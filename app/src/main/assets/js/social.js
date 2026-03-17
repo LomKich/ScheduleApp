@@ -656,16 +656,23 @@ function profileRenderScreen() {
 
     <!-- Кнопки -->
     <div style="display:flex;flex-direction:column;gap:8px">
-      <button class="btn btn-surface" onclick="profileRenderOnline();showScreen('s-online')">
-        👥 Пользователи онлайн <span style="color:var(--accent);margin-left:4px">${onlinePeers.length + 1}</span>
+      <button class="btn btn-surface" onclick="profileRenderOnline();showScreen('s-online')" style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <span style="font-size:18px;line-height:1;flex-shrink:0">👥</span>
+        <span>Пользователи онлайн</span>
+        <span style="color:var(--accent);margin-left:4px">${onlinePeers.length + 1}</span>
       </button>
-      <button class="btn btn-surface" onclick="showScreen('s-leaderboard')">
-        🏆 Таблица лидеров
+      <button class="btn btn-surface" onclick="showScreen('s-leaderboard')" style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <span style="font-size:18px;line-height:1;flex-shrink:0">🏆</span>
+        <span>Таблица лидеров</span>
       </button>
-      <!-- MESSENGER_HIDDEN_ENTRY — переместить в нав-бар после готовности -->
-      <button class="btn btn-surface" onclick="messengerOpen()" style="position:relative">
-        💬 Сообщения
+      <button class="btn btn-surface" onclick="navTo('s-messenger','nav-messenger')" style="display:flex;align-items:center;justify-content:center;gap:8px;position:relative">
+        <span style="font-size:18px;line-height:1;flex-shrink:0">💬</span>
+        <span>Сообщения</span>
         <span id="msg-unread-badge" style="display:none;position:absolute;top:8px;right:12px;background:var(--accent);color:#000;border-radius:10px;font-size:11px;font-weight:800;padding:2px 7px">0</span>
+      </button>
+      <button class="btn btn-surface" onclick="navTo('s-settings','nav-settings')" style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <span style="font-size:18px;line-height:1;flex-shrink:0">⚙️</span>
+        <span>Настройки</span>
       </button>
     </div>
   `;
@@ -1971,7 +1978,22 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       }
       // Parse replyTo from extra field
       let inReplyTo = null;
-      try { if (msg.extra) inReplyTo = JSON.parse(msg.extra)?.replyTo || null; } catch(_){}
+      let extraParsed = null;
+      try { if (msg.extra) extraParsed = JSON.parse(msg.extra); } catch(_){}
+      if (extraParsed?.replyTo) inReplyTo = extraParsed.replyTo;
+
+      // Обрабатываем reaction_update — служебное сообщение синхронизации реакций
+      if (extraParsed?.type === 'reaction' && extraParsed?.msgTs && extraParsed?.reactions !== undefined) {
+        const targetTs = extraParsed.msgTs;
+        const allMsgs = msgs[otherUsername] || [];
+        const target = allMsgs.find(m => m.ts === targetTs);
+        if (target) {
+          target.reactions = extraParsed.reactions;
+          msgSave(msgs);
+          if (_msgCurrentChat === otherUsername) messengerRenderMessages();
+        }
+        return; // не добавляем как обычное сообщение
+      }
       msgs[otherUsername].push({
         from: msg.from_user, to: myUsername,
         text: inText, sticker: inSticker, ts: msg.ts,
@@ -2357,36 +2379,51 @@ function profileAddFriend(username) {
 // ══ ХУКИ: показ экрана профиля ═══════════════════════════════════
 const _origShowScreen = window.showScreen;
 window.showScreen = function(id, dir) {
-  // При уходе из чата — закрываем меню реакций/действий
+  // При уходе из чата — закрываем ВСЕ меню и оверлеи
   if (id !== 's-messenger-chat') {
+    // Меню действий с сообщением
     const menu = document.getElementById('mc-msg-menu');
     if (menu) menu.remove();
+    // Меню пересылки
     const fwdSheet = document.getElementById('mc-forward-sheet');
     if (fwdSheet) fwdSheet.remove();
-    // Скрываем клавиатуру
-    if (id !== 's-messenger-chat') {
-      const inp = document.getElementById('mc-input');
-      if (inp) inp.blur();
-    }
+    // Стикер-панель
+    const stickerPanel = document.getElementById('mc-sticker-panel');
+    if (stickerPanel) stickerPanel.style.display = 'none';
+    _mcStickerPanelOpen = false;
+    // Бар ответа
+    mcCancelReply && mcCancelReply();
+    // Скрываем клавиатуру только при уходе с чата
+    const inp = document.getElementById('mc-input');
+    if (inp) inp.blur();
   }
   if (id === 's-profile')     profileRenderScreen();
   if (id === 's-online')      profileRenderOnline();
   if (id === 's-leaderboard') leaderboardRender();
   if (id === 's-messenger')   messengerRenderList();
-  // При заходе в чат — скролл вниз без клавиатуры
+  // При заходе в чат — сразу скроллим вниз, клавиатуру НЕ открываем
   if (id === 's-messenger-chat') {
+    // Убеждаемся что фокус НЕ на поле ввода при входе
+    const inp = document.getElementById('mc-input');
+    if (inp && document.activeElement === inp) inp.blur();
+    // Скролл вниз — сразу после рендера
+    requestAnimationFrame(() => {
+      const body = document.getElementById('mc-messages');
+      if (body) body.scrollTop = body.scrollHeight;
+    });
+    // И ещё раз через 100мс после полной отрисовки
     setTimeout(() => {
       const body = document.getElementById('mc-messages');
       if (body) body.scrollTop = body.scrollHeight;
-    }, 150);
+    }, 100);
   }
   if (_origShowScreen) _origShowScreen(id, dir);
 };
 
-// Обновить nav items (4 кнопки)
+// Обновить nav items (4 кнопки: home, bells, profile, messenger)
 const _origUpdateNavActive = window.updateNavActive;
 window.updateNavActive = function(aid) {
-  ['nav-home','nav-bells','nav-profile','nav-settings'].forEach(id =>
+  ['nav-home','nav-bells','nav-profile','nav-messenger'].forEach(id =>
     document.getElementById(id)?.classList.toggle('active', id === aid)
   );
   if (typeof _navMovePill === 'function') _navMovePill(aid);
@@ -2678,7 +2715,7 @@ async function vipRevokeFrom(username) {
 
 // ══ ЗАПУСК ════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(profileBootstrap, 500);
+  setTimeout(profileBootstrap, 50);
   // Twemoji: parse initial DOM then watch mutations
   _initTwemoji();
 });
@@ -3194,19 +3231,32 @@ function messengerOpenChat(username) {
   const p = profileLoad();
   messengerUpdateBadge();
 
-  // Обновляем шапку
-  const peer = _profileOnlinePeers.find(u => u.username === username);
+  // Слушатель скролла — помечаем прочитанными только когда прокрутили до конца
+  const msgBody = document.getElementById('mc-messages');
+  if (msgBody && !msgBody._readListener) {
+    msgBody._readListener = true;
+    msgBody.addEventListener('scroll', () => {
+      const atBottom = msgBody.scrollHeight - msgBody.scrollTop - msgBody.clientHeight < 60;
+      if (atBottom) messengerMarkRead();
+    }, { passive: true });
+  }
+
+  // Обновляем шапку — ищем и онлайн и оффлайн пользователей
+  const peer = _profileOnlinePeers.find(u => u.username === username)
+             || _allKnownUsers.find(u => u.username === username);
   const hdrName = document.getElementById('mc-hdr-name');
   const hdrSub  = document.getElementById('mc-hdr-sub');
   const hdrAvatar = document.getElementById('mc-hdr-avatar');
   if (hdrName) hdrName.textContent = peer?.name || username;
-  if (hdrSub)  hdrSub.textContent  = peer ? '🟢 В сети' : '@' + username;
+  if (hdrSub)  hdrSub.textContent  = peer
+    ? (_profileOnlinePeers.find(u => u.username === username) ? '🟢 В сети' : '⚫ Не в сети')
+    : ('@' + username);
   if (hdrAvatar) {
     const hasPhoto = (peer?.avatarType === 'photo') && peer?.avatarData;
     hdrAvatar.style.background = hasPhoto ? 'transparent' : (peer?.color || 'var(--surface3)');
     hdrAvatar.innerHTML = hasPhoto
       ? `<img src="${peer.avatarData}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">`
-      : (peer?.avatar || '😊');
+      : (peer?.avatar || peer?.name?.charAt(0) || username.charAt(0).toUpperCase() || '?');
   }
 
   showScreen('s-messenger-chat');
@@ -3331,7 +3381,9 @@ function messengerRenderMessages(animateLast) {
   body.innerHTML = html;
   requestAnimationFrame(() => {
     body.scrollTop = body.scrollHeight;
-    messengerMarkRead();
+    // Помечаем прочитанными только если прокручено до конца (пользователь видит сообщения)
+    const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+    if (atBottom) messengerMarkRead();
     // Animate last bubble
     if (animateLast) {
       const bubbles = body.querySelectorAll('[data-msg-bubble]');
@@ -3462,6 +3514,26 @@ function mcToggleReaction(idx, emoji) {
   if (users.length === 0) delete msg.reactions[emoji];
   msgSave(msgs);
   messengerRenderMessages();
+
+  // Синхронизируем реакцию через служебное сообщение в Supabase
+  // Получатель увидит обновление при следующем polling
+  if (sbReady() && p && _msgCurrentChat && msg.ts) {
+    const reactData = JSON.stringify({
+      type: 'reaction',
+      msgTs: msg.ts,
+      emoji,
+      user: p.username,
+      reactions: msg.reactions
+    });
+    sbInsert('messages', {
+      chat_key: sbChatKey(p.username, _msgCurrentChat),
+      from_user: p.username,
+      to_user: _msgCurrentChat,
+      text: '',
+      ts: Date.now(),
+      extra: reactData
+    }).catch(() => {});
+  }
 }
 
 // ── Bubble interaction ────────────────────────────────────────────
@@ -3895,10 +3967,7 @@ function mcSendSticker(emoji) {
   messengerRenderMessages(true);
   SFX.play && SFX.play('msgSend');
   sbInsert('messages', { chat_key: sbChatKey(p.username, _msgCurrentChat), from_user: p.username, to_user: _msgCurrentChat, text: emoji, ts });
-  // close panel
-  _mcStickerPanelOpen = false;
-  const panel = document.getElementById('mc-sticker-panel');
-  if (panel) panel.style.display = 'none';
+  // Панель остаётся открытой для удобства — пользователь закрывает сам
 }
 
 function mcAutoResize(el) {
@@ -4189,10 +4258,15 @@ function messengerUpdateBadge() {
   Object.values(msgs).forEach(chatMsgs => {
     total += (chatMsgs||[]).filter(m => m.from !== p?.username && !m.read).length;
   });
-  // Бейдж внутри кнопки "Сообщения" в профиле
+  // Бейдж внутри кнопки «Сообщения» в профиле
   const badge = document.getElementById('msg-unread-badge');
   if (badge) { badge.style.display = total > 0 ? '' : 'none'; badge.textContent = total; }
-  // Красная точка на кнопке профиля в nav-баре
+
+  // Красная точка на кнопке мессенджера в нав-баре
+  const navMsgDot = document.getElementById('nav-msg-dot');
+  if (navMsgDot) navMsgDot.style.display = total > 0 ? '' : 'none';
+
+  // Также точка на кнопке профиля (если вдруг оба используются)
   let navDot = document.getElementById('nav-profile-msg-dot');
   const navProfile = document.getElementById('nav-profile');
   if (navProfile && !navDot) {
