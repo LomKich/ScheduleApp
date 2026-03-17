@@ -1710,7 +1710,15 @@ let _fbMsgStreams         = {};
 let _fbLastMsgTs         = {};
 let _connectSessionId    = 0;
 let _fbInboxTimer        = null;
-let _fbInboxLastTs       = 0;
+// _fbInboxLastTs сохраняется в localStorage чтобы не сбрасываться при перезапуске
+const INBOX_TS_KEY = 'sapp_inbox_last_ts';
+function _inboxTsLoad() {
+  try { return parseInt(localStorage.getItem(INBOX_TS_KEY) || '0') || 0; } catch(e) { return 0; }
+}
+function _inboxTsSave(ts) {
+  try { localStorage.setItem(INBOX_TS_KEY, String(ts)); } catch(e) {}
+}
+let _fbInboxLastTs = _inboxTsLoad();
 let _superPoller         = null; // единый таймер вместо всех отдельных
 // ── Watchdog: следит что соединение реально живо ──────────────────
 let _watchdogTimer      = null;
@@ -1868,7 +1876,7 @@ async function profileConnect(p) {
       data.forEach(msg => {
         if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
         bySender[msg.from_user].push(msg);
-        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts); _inboxTsSave(_fbInboxLastTs);
       });
       Object.entries(bySender).forEach(([sender, msgs]) => {
         sbHandleIncomingMessages(p.username, sender, msgs);
@@ -1946,7 +1954,7 @@ async function _sbForcePollAllChats(p) {
       data.forEach(msg => {
         if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
         bySender[msg.from_user].push(msg);
-        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts); _inboxTsSave(_fbInboxLastTs);
       });
       Object.entries(bySender).forEach(([sender, msgs]) => {
         sbPollChat(p.username, sender);
@@ -1989,7 +1997,7 @@ window._javaTick = async function() {
       data.forEach(msg => {
         if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
         bySender[msg.from_user].push(msg);
-        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts); _inboxTsSave(_fbInboxLastTs);
       });
       Object.entries(bySender).forEach(([sender, msgs]) => {
         sbHandleIncomingMessages(pr.username, sender, msgs);
@@ -2192,7 +2200,7 @@ function sbStartInboxPolling(p) {
     data.forEach(msg => {
       if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
       bySender[msg.from_user].push(msg);
-      _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+      _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts); _inboxTsSave(_fbInboxLastTs);
     });
     // Для каждого нового отправителя — запускаем полноценный poll и обрабатываем
     Object.entries(bySender).forEach(([sender, msgs]) => {

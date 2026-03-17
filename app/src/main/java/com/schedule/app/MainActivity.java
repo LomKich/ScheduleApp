@@ -152,8 +152,10 @@ public class MainActivity extends Activity {
         // Разрешаем iframe-ам из file:// загружать другие локальные файлы (doom.html, minecraft.html, quake.html)
         ws.setAllowFileAccessFromFileURLs(true);
         ws.setAllowUniversalAccessFromFileURLs(true);
-        // Агрессивное кэширование — страница грузится из кэша, обновляется только при изменениях
-        ws.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        // Для локальных asset-файлов используем LOAD_DEFAULT —
+        // браузерный кэш работает, но при изменении файла подхватывает новую версию.
+        // LOAD_CACHE_ELSE_NETWORK слишком агрессивен — не видит обновлений JS.
+        ws.setCacheMode(WebSettings.LOAD_DEFAULT);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         // Отключаем pinch-to-zoom
         ws.setSupportZoom(false);
@@ -173,7 +175,7 @@ public class MainActivity extends Activity {
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
         webView.setScrollbarFadingEnabled(false);
-        log.i(TAG, "WebSettings: JS=on DomStorage=on FileAccess=on MixedContent=ALWAYS_ALLOW Hardware=on Cache=CACHE_ELSE_NETWORK");
+        log.i(TAG, "WebSettings: JS=on DomStorage=on FileAccess=on MixedContent=ALWAYS_ALLOW Hardware=on Cache=LOAD_DEFAULT");
 
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
         log.i(TAG, "JavascriptInterface 'Android' зарегистрирован");
