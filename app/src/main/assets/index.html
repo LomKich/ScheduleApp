@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d0d0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1993,276 +1993,6 @@ img.emoji {
 .ios-notif        img.emoji { height:1em; width:1em; vertical-align:-.1em; }
 /* Кнопки */
 button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margin:0 .05em; }
-
-/* Keyboard fix — input always visible */
-#s-messenger-chat { height:100dvh!important; max-height:100dvh!important; }
-#mc-messages { flex:1 1 0!important; min-height:0!important; overflow-y:auto!important; }
-#mc-input-bar { flex-shrink:0!important; position:sticky!important; bottom:0!important; }
-
-/* ══════════════════════════════════════════════════════════════════
-   TELEGRAM STYLE — полный рескин интерфейса
-   ══════════════════════════════════════════════════════════════════ */
-body.tg-style {
-  /* Telegram цвета */
-  --tg-blue:        #2AABEE;
-  --tg-blue-dark:   #229ED9;
-  --tg-bg:          #17212B;
-  --tg-surface:     #1E2C3A;
-  --tg-surface2:    #242F3D;
-  --tg-surface3:    #2B3A4E;
-  --tg-text:        #FFFFFF;
-  --tg-muted:       #708997;
-  --tg-border:      rgba(255,255,255,0.06);
-  --tg-accent:      #2AABEE;
-  --tg-msg-out:     #2B5278;
-  --tg-msg-in:      #1E2C3A;
-  --tg-danger:      #e05555;
-
-  /* Переопределяем переменные темы */
-  --bg:       var(--tg-bg)       !important;
-  --surface:  var(--tg-surface)  !important;
-  --surface2: var(--tg-surface2) !important;
-  --surface3: var(--tg-surface3) !important;
-  --text:     var(--tg-text)     !important;
-  --muted:    var(--tg-muted)    !important;
-  --accent:   var(--tg-blue)     !important;
-  --btn-text: #ffffff             !important;
-}
-
-/* ── Навбар — Telegram: плоский, полная ширина ── */
-body.tg-style .bottom-nav {
-  border-radius: 0 !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  left: 0 !important;
-  bottom: 0 !important;
-  transform: none !important;
-  border-top: 1px solid var(--tg-border) !important;
-  border-left: none !important;
-  border-right: none !important;
-  border-bottom: none !important;
-  box-shadow: none !important;
-  background: var(--tg-surface) !important;
-  padding-bottom: var(--safe-bot) !important;
-  height: calc(52px + var(--safe-bot)) !important;
-}
-body.tg-style .screen {
-  padding-bottom: calc(var(--safe-bot) + 56px) !important;
-}
-body.tg-style .nav-item { color: var(--tg-muted) !important; }
-body.tg-style .nav-item.active { color: var(--tg-blue) !important; }
-
-/* ── Шапки экранов ── */
-body.tg-style .hdr {
-  background: var(--tg-surface) !important;
-  border-bottom: 1px solid var(--tg-border) !important;
-  box-shadow: none !important;
-}
-
-/* ── Список чатов — Telegram style ── */
-body.tg-style #messenger-list {
-  background: var(--tg-bg) !important;
-  padding: 0 !important;
-}
-body.tg-style .msg-chat-item {
-  padding: 10px 16px !important;
-  border-radius: 0 !important;
-  border-bottom: 1px solid rgba(255,255,255,0.04) !important;
-  background: transparent !important;
-  margin: 0 !important;
-}
-body.tg-style .msg-chat-item:active {
-  background: rgba(255,255,255,0.05) !important;
-}
-
-/* ── Чат — фон и пузыри ── */
-body.tg-style #mc-messages {
-  background: var(--tg-bg) !important;
-  background-image: none !important;
-}
-/* Исходящие пузыри */
-body.tg-style [data-msg-me="1"] .mc-bubble-inner {
-  background: var(--tg-msg-out) !important;
-  color: #fff !important;
-  border-radius: 18px 18px 4px 18px !important;
-}
-/* Входящие пузыри */
-body.tg-style [data-msg-me="0"] .mc-bubble-inner {
-  background: var(--tg-msg-in) !important;
-  color: #fff !important;
-  border-radius: 18px 18px 18px 4px !important;
-}
-/* Хвостики — псевдоэлементы */
-body.tg-style [data-msg-tail="1"][data-msg-me="1"] .mc-bubble-inner::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  right: -7px;
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 0 0 10px 9px;
-  border-color: transparent transparent var(--tg-msg-out) transparent;
-}
-body.tg-style [data-msg-tail="1"][data-msg-me="0"] .mc-bubble-inner::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: -7px;
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 0 9px 10px 0;
-  border-color: transparent var(--tg-msg-in) transparent transparent;
-}
-
-/* ── Поле ввода — как в Telegram ── */
-body.tg-style #mc-input-bar {
-  background: var(--tg-surface) !important;
-  border-top: 1px solid var(--tg-border) !important;
-  padding: 8px 8px calc(8px + var(--safe-bot)) !important;
-}
-body.tg-style #mc-input {
-  border-radius: 22px !important;
-  background: var(--tg-surface2) !important;
-  border: 1px solid var(--tg-border) !important;
-}
-body.tg-style #mc-send-btn {
-  background: var(--tg-blue) !important;
-  color: #fff !important;
-}
-
-/* ── Шапка чата ── */
-body.tg-style #s-messenger-chat .hdr {
-  background: var(--tg-surface) !important;
-}
-
-/* ── Кнопки и карточки ── */
-body.tg-style .btn {
-  border-radius: 10px !important;
-}
-body.tg-style .btn-accent {
-  background: var(--tg-blue) !important;
-  color: #fff !important;
-}
-body.tg-style .settings-row {
-  background: var(--tg-surface2) !important;
-  border-color: var(--tg-border) !important;
-  border-radius: 12px !important;
-}
-body.tg-style .list-item {
-  border-radius: 0 !important;
-  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
-  background: var(--tg-surface2) !important;
-}
-body.tg-style .profile-card {
-  background: var(--tg-surface2) !important;
-  border-radius: 14px !important;
-}
-
-/* ── Аватар в навбаре — показываем фото пользователя ── */
-body.tg-style #nav-profile {
-  position: relative;
-}
-body.tg-style #nav-profile-avatar-tg {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  object-fit: cover;
-  display: block;
-}
-
-/* ── Реакции — Telegram bubble style ── */
-body.tg-style .mc-reaction {
-  background: var(--tg-surface3) !important;
-  border: 1px solid rgba(42,171,238,0.3) !important;
-  border-radius: 10px !important;
-}
-body.tg-style .mc-reaction-mine {
-  background: rgba(42,171,238,0.2) !important;
-  border-color: var(--tg-blue) !important;
-}
-
-/* ── Стикер-панель ── */
-body.tg-style #mc-sticker-panel {
-  background: var(--tg-surface) !important;
-  border-top: 1px solid var(--tg-border) !important;
-}
-
-/* ── Telegram: дата-пин в чате ── */
-body.tg-style #mc-date-pin {
-  background: rgba(0,0,0,0.45) !important;
-  backdrop-filter: blur(6px) !important;
-}
-
-/* ── Профиль — Telegram header ── */
-body.tg-style #s-profile .hdr {
-  background: var(--tg-surface) !important;
-}
-
-/* ── Секции настроек ── */
-body.tg-style .section-label {
-  color: var(--tg-blue) !important;
-  font-size: 12px !important;
-  font-weight: 700 !important;
-}
-
-/* ── Переключатели ── */
-body.tg-style input:checked + .toggle-slider {
-  background: var(--tg-blue) !important;
-}
-
-/* ── Поиск в мессенджере ── */
-body.tg-style #msg-search,
-body.tg-style #msg-search + * {
-  background: var(--tg-surface2) !important;
-}
-body.tg-style #s-messenger .body > div:first-child {
-  background: var(--tg-surface) !important;
-  border-bottom: 1px solid var(--tg-border) !important;
-}
-
-/* ── inp поля ── */
-body.tg-style .inp {
-  background: var(--tg-surface2) !important;
-  border-color: var(--tg-border) !important;
-  color: var(--tg-text) !important;
-}
-
-/* ── Scrollbar ── */
-body.tg-style ::-webkit-scrollbar-track {
-  background: var(--tg-bg) !important;
-}
-body.tg-style ::-webkit-scrollbar-thumb {
-  background: var(--tg-surface3) !important;
-}
-
-
-/* Chat screen keyboard fix — header always visible */
-#s-messenger-chat {
-  display: flex !important;
-  flex-direction: column !important;
-  height: 100dvh !important;
-  overflow: hidden !important;
-}
-#s-messenger-chat .hdr {
-  flex-shrink: 0 !important;
-  position: relative !important;
-  z-index: 5 !important;
-}
-#mc-messages {
-  flex: 1 1 0 !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch !important;
-}
-#mc-input-bar {
-  flex-shrink: 0 !important;
-}
-/* Когда клавиатура открыта — весь экран сжимается, шапка остаётся */
-@supports (height: 100dvh) {
-  #s-messenger-chat { height: 100dvh !important; }
-}
 </style>
 <body>
 <div id="bg-layer"></div>
@@ -2452,20 +2182,6 @@ body.tg-style ::-webkit-scrollbar-thumb {
     </div>
 
     <!-- Звук -->
-    <!-- Стиль интерфейса -->
-    <div class="section-label">Интерфейс</div>
-    <div class="settings-row" style="margin-bottom:8px">
-      <div>
-        <div style="font-size:14px;font-weight:600">✈️ Telegram Style</div>
-        <div class="settings-row-sub">Синие пузыри, округлые формы, анимации как в Telegram</div>
-      </div>
-      <label class="toggle-switch">
-        <input type="checkbox" id="tg-style-toggle" onchange="toggleTelegramStyle(this.checked)">
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
-    <div class="sep"></div>
-
     <div class="section-label">Звук</div>
     <div class="list-item" onclick="toggleMute()" style="margin-bottom:8px">
       <div>
@@ -2499,7 +2215,7 @@ body.tg-style ::-webkit-scrollbar-thumb {
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.3.1 — Android</div>
+        <div class="item-sub" id="app-version-str">4.3.2 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2740,12 +2456,13 @@ body.tg-style ::-webkit-scrollbar-thumb {
 
 <!-- ══ МЕССЕНДЖЕР (HIDDEN — TODO: переместить в нав-бар) ══ -->
 <!-- PEER PROFILE SCREEN -->
-<div class="screen" id="s-peer-profile" style="padding:0">
-  <div class="hdr" id="peer-profile-hdr" style="position:absolute;top:0;left:0;right:0;z-index:10;background:transparent;border:none;box-shadow:none;padding-top:var(--safe-top)">
-    <!-- Заполняется через JS -->
+<div class="screen" id="s-peer-profile">
+  <div class="hdr">
+    <button class="hdr-back" onclick="SFX.play('screenBack');history.back||showScreen('s-messenger-chat','back')">‹</button>
+    <div class="hdr-title" id="peer-profile-title">Профиль</div>
   </div>
-  <div id="peer-profile-body" style="height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <div style="text-align:center;padding:80px 20px;color:var(--muted)">Загрузка...</div>
+  <div class="body" id="peer-profile-body" style="padding:0">
+    <div style="text-align:center;padding:40px;color:var(--muted)">Загрузка...</div>
   </div>
 </div>
 
@@ -2763,10 +2480,7 @@ body.tg-style ::-webkit-scrollbar-thumb {
   <div class="hdr" id="msg-hdr-normal">
     <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
     <div class="hdr-title">💬 Сообщения</div>
-    <div style="display:flex;gap:4px">
-      <button style="background:none;border:none;color:var(--accent);font-size:20px;padding:6px;cursor:pointer" title="Создать группу" onclick="showCreateGroupDialog()">👥</button>
-      <button style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;padding:8px;cursor:pointer" onclick="profileRenderOnline();showScreen('s-online')">Новый</button>
-    </div>
+    <button style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;padding:8px;cursor:pointer" onclick="profileRenderOnline();showScreen('s-online')">Новый чат</button>
   </div>
   <div class="hdr" id="msg-hdr-select" style="display:none">
     <button style="background:none;border:none;color:var(--muted);font-size:14px;font-weight:700;padding:8px;cursor:pointer" onclick="msgSelectCancel()">Отмена</button>
@@ -2811,7 +2525,7 @@ body.tg-style ::-webkit-scrollbar-thumb {
     </div>
   </div>
   <!-- Input bar -->
-  <div id="mc-input-bar" style="display:flex;align-items:flex-end;gap:8px;padding:8px 12px calc(8px + var(--safe-bot));background:var(--surface);border-top:1px solid rgba(255,255,255,.06);flex-shrink:0;position:relative;z-index:10">
+  <div id="mc-input-bar" style="display:flex;align-items:flex-end;gap:8px;padding:8px 12px calc(8px + var(--safe-bot));background:var(--surface);border-top:1px solid rgba(255,255,255,.06);flex-shrink:0">
     <button id="mc-sticker-btn" onclick="mcToggleStickerPanel()"
       style="width:38px;height:38px;border-radius:50%;background:var(--surface2);border:none;color:var(--muted);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s;margin-bottom:2px"
       ontouchstart="this.style.transform='scale(.9)'" ontouchend="this.style.transform=''">🎭</button>
@@ -2860,18 +2574,17 @@ body.tg-style ::-webkit-scrollbar-thumb {
       <span class="nav-badge" id="nav-bells-badge" style="display:none"></span>
     </div>
   </button>
-  <button class="nav-item" id="nav-messenger" onclick="SFX.play('btnClick');navTo('s-messenger','nav-messenger')">
-    <div class="nav-icon-wrap" style="position:relative">
-      <svg class="nav-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
-      </svg>
-      <span id="nav-msg-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#e05555;border:2px solid var(--surface)"></span>
-    </div>
-  </button>
   <button class="nav-item" id="nav-profile" onclick="SFX.play('navSettings');navTo('s-profile','nav-profile')">
     <div class="nav-icon-wrap">
       <svg class="nav-icon" id="nav-profile-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+      </svg>
+    </div>
+  </button>
+  <button class="nav-item" id="nav-settings" onclick="SFX.play('navSettings');navTo('s-settings','nav-settings')">
+    <div class="nav-icon-wrap">
+      <svg class="nav-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
       </svg>
     </div>
   </button>
