@@ -12,8 +12,6 @@ const PROFILE_STATUSES = [
   { id:'study',   emoji:'📚', label:'Учусь',         color:'#60cdff' },
   { id:'busy',    emoji:'🔴', label:'Занят',          color:'#c94f4f' },
   { id:'sleep',   emoji:'😴', label:'Сплю',           color:'#a78bfa' },
-  { id:'game',    emoji:'🎮', label:'Играю',          color:'#f5c518' },
-  { id:'away',    emoji:'🌙', label:'Отошёл',         color:'#e87722' },
 ];
 
 const PROFILE_COLORS = [
@@ -624,12 +622,13 @@ function profileRenderScreen() {
         <div style="font-size:13px;font-weight:700">📡 P2P соединение</div>
         <div class="settings-row-sub" id="profile-p2p-status">${_profilePeerReady ? '🟢 Подключено' : '🔴 Отключено'}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:2px" id="profile-p2p-strategy">
-          ${(() => { const s = p2pActiveStrategy(); return s.emoji + ' Канал: ' + s.label; })()}
+          ${p2pIsDisabled() ? '🔒 P2P выключен — только прямое' : (() => { const s = p2pActiveStrategy(); return s.emoji + ' Канал: ' + s.label; })()}
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         <button class="btn btn-surface" style="width:auto;padding:6px 10px;font-size:11px" onclick="profileConnect(profileLoad())">↺ Переподк.</button>
         <button class="btn btn-surface" style="width:auto;padding:6px 10px;font-size:11px" onclick="p2pManualSwitch()">⚡ Канал</button>
+        <button class="btn btn-surface" id="p2p-toggle-btn" style="width:auto;padding:6px 10px;font-size:11px;color:${p2pIsDisabled()?'#4caf7d':'#c94f4f'}" onclick="p2pToggleDisabled()">${p2pIsDisabled() ? '✓ P2P выкл' : 'Выкл P2P'}</button>
       </div>
     </div>
 
@@ -1460,7 +1459,15 @@ let _p2pCheckTimer    = null;     // фоновый health-check
 let _p2pSwitching     = false;    // флаг: идёт переключение
 const P2P_FAIL_THRESH = 3;        // сбоев до переключения
 const P2P_CHECK_INTERVAL = 20000; // мс между health-check
-const P2P_STRATEGY_KEY = 'sapp_p2p_strategy';
+const P2P_STRATEGY_KEY  = 'sapp_p2p_strategy';
+const P2P_DISABLED_KEY  = 'sapp_p2p_disabled';
+
+function p2pIsDisabled() {
+  try { return localStorage.getItem(P2P_DISABLED_KEY) === '1'; } catch(e){ return false; }
+}
+function p2pSetDisabled(val) {
+  try { localStorage.setItem(P2P_DISABLED_KEY, val ? '1' : '0'); } catch(e){}
+}
 
 function p2pActiveStrategy() {
   return _P2P_STRATEGIES[_p2pActiveIdx] || _P2P_STRATEGIES[0];
@@ -1580,6 +1587,10 @@ function p2pSetStatus(text) {
 
 // ── Обёртка fetch через активную стратегию ───────────────────────
 async function p2pFetch(method, path, body, extraHeaders) {
+  // Если P2P отключён — всегда используем только прямое подключение
+  if (p2pIsDisabled()) {
+    return await _P2P_STRATEGIES[0].fetch(method, path, body, extraHeaders || {});
+  }
   const s = p2pActiveStrategy();
   try {
     const r = await s.fetch(method, path, body, extraHeaders || {});
@@ -1589,7 +1600,7 @@ async function p2pFetch(method, path, body, extraHeaders) {
     _p2pFailCount++;
     // Если write-метод упал — пробуем напрямую как запасной вариант
     if (method !== 'GET') {
-      try { return await _directFetch(method, path, body, extraHeaders || {}); } catch(e2) {}
+      try { return await _P2P_STRATEGIES[0].fetch(method, path, body, extraHeaders || {}); } catch(e2) {}
     }
     if (_p2pFailCount >= P2P_FAIL_THRESH && !_p2pSwitching) {
       p2pFailover();
@@ -1855,7 +1866,7 @@ async function _sbForcePollAllChats(p) {
   if (!p || !sbReady()) return;
   // 1. Inbox — сообщения пришедшие за время пока были в фоне
   try {
-    const sinceTs = Math.max(0, _fbInboxLastTs, _lastVisibleTs - 5000);
+    const sinceTs = Math.max(0, _fbInboxLastTs, _lastVisibleTs - 60000);
     const data = await sbGet('messages',
       `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
     );
@@ -2036,7 +2047,7 @@ function sbForceRecheckChat(myUsername, otherUsername) {
 
 function sbStartInboxPolling(p) {
   clearInterval(_fbInboxTimer);
-  _fbInboxLastTs = _fbInboxLastTs || (Date.now() - 30000); // смотрим за последние 30 сек
+  _fbInboxLastTs = _fbInboxLastTs || (Date.now() - 300000); // смотрим за последние 5 минут
   const doInboxCheck = async () => {
     if (!sbReady() || !p) return;
     // Ищем все сообщения адресованные МНЕ, которые я ещё не видел
@@ -2288,12 +2299,32 @@ function profileBroadcast(data) {
 function profileUpdateP2PStatus(msg) {
   const el = document.getElementById('profile-p2p-status');
   if (el) el.textContent = msg;
-  // Обновляем метку активного канала
   const sEl = document.getElementById('profile-p2p-strategy');
   if (sEl) {
-    const s = p2pActiveStrategy();
-    sEl.textContent = s.emoji + ' Канал: ' + s.label;
+    if (p2pIsDisabled()) {
+      sEl.textContent = '🔒 P2P выключен — только прямое подключение';
+    } else {
+      const s = p2pActiveStrategy();
+      sEl.textContent = s.emoji + ' Канал: ' + s.label;
+    }
   }
+}
+
+// Включение/выключение P2P
+function p2pToggleDisabled() {
+  const nowDisabled = !p2pIsDisabled();
+  p2pSetDisabled(nowDisabled);
+  if (nowDisabled) {
+    // Отключаем: останавливаем health-check, сбрасываем стратегию на прямую
+    p2pStopHealthCheck();
+    _p2pActiveIdx = 0;
+    toast('🔒 P2P выключен — используется прямое подключение');
+  } else {
+    toast('✅ P2P включён — автовыбор лучшего канала');
+  }
+  const p = profileLoad();
+  if (p) profileConnect(p);
+  setTimeout(profileRenderScreen, 300);
 }
 
 // Ручное переключение канала — показывает шит со всеми стратегиями
