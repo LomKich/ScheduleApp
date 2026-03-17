@@ -12,6 +12,8 @@ const PROFILE_STATUSES = [
   { id:'study',   emoji:'📚', label:'Учусь',         color:'#60cdff' },
   { id:'busy',    emoji:'🔴', label:'Занят',          color:'#c94f4f' },
   { id:'sleep',   emoji:'😴', label:'Сплю',           color:'#a78bfa' },
+  { id:'game',    emoji:'🎮', label:'Играю',          color:'#f5c518' },
+  { id:'away',    emoji:'🌙', label:'Отошёл',         color:'#e87722' },
 ];
 
 const PROFILE_COLORS = [
@@ -1709,6 +1711,7 @@ let _fbLastMsgTs         = {};
 let _connectSessionId    = 0;
 let _fbInboxTimer        = null;
 let _fbInboxLastTs       = 0;
+let _superPoller         = null; // единый таймер вместо всех отдельных
 // ── Watchdog: следит что соединение реально живо ──────────────────
 let _watchdogTimer      = null;
 let _lastSuccessfulPoll = 0;     // ts последнего успешного запроса к Supabase
@@ -1774,9 +1777,7 @@ async function sbLoadUser(username) {
 async function profileConnect(p) {
   if (!p) return;
 
-  // Сбрасываем флаг первого входа — каждый connect делает DELETE+INSERT
   _presenceFirstPut = true;
-  // Инкрементируем session ID — все предыдущие вызовы становятся "устаревшими"
   const sessionId = ++_connectSessionId;
 
   // Останавливаем все таймеры немедленно
@@ -1784,6 +1785,7 @@ async function profileConnect(p) {
   clearInterval(_fbPollTimer);     _fbPollTimer = null;
   clearInterval(_fbInboxTimer);    _fbInboxTimer = null;
   clearInterval(_watchdogTimer);   _watchdogTimer = null;
+  clearInterval(_superPoller);     _superPoller = null;
   p2pStopHealthCheck();
   Object.values(_fbMsgStreams).forEach(t => clearInterval(t));
   _fbMsgStreams = {};
@@ -1798,48 +1800,44 @@ async function profileConnect(p) {
   profileUpdateP2PStatus(`⏳ Подключаюсь (${s.emoji} ${s.label})...`);
   try {
     await sbPresencePut(p);
-
     if (sessionId !== _connectSessionId) return;
 
     _profilePeerReady = true;
     const sNow = p2pActiveStrategy();
     profileUpdateP2PStatus(`🟢 @${p.username} · ${sNow.emoji} ${sNow.label}`);
 
-    _sbPresenceTimer = setInterval(() => {
-      const pr = profileLoad(); if(pr) sbPresencePut(pr);
-    }, 10000);
-
-    _fbPollTimer = setInterval(sbPollPresence, 10000);
-    p2pStartHealthCheck();
-    _startWatchdog(p);
-
     await sbPollPresence();
     if (sessionId !== _connectSessionId) return;
 
-    sbStartMsgPolling(p);
-    sbStartInboxPolling(p);
+    // Инициализируем inbox ts
+    if (!_fbInboxLastTs) _fbInboxLastTs = Date.now() - 300000;
 
-    // Сохраняем конфиг в нативный SharedPreferences — WorkManager читает его
-    // для фоновых уведомлений когда приложение закрыто.
+    // Запускаем единый супер-поллер вместо кучи отдельных таймеров
+    _startSuperPoller(p, sessionId);
+
+    if (!p2pIsDisabled()) {
+      p2pStartHealthCheck();
+    }
+    _startWatchdog(p);
+
     if (window.Android && typeof window.Android.savePushConfig === 'function') {
       try { window.Android.savePushConfig(p.username, sbUrl(), sbKey()); } catch(_){}
     }
   } catch(e) {
     if (sessionId === _connectSessionId) {
       profileUpdateP2PStatus('🔴 Ошибка — ищу другой канал...');
-      p2pFailover();
+      if (!p2pIsDisabled()) p2pFailover();
+      else setTimeout(() => profileConnect(p), 5000);
     }
   }
 }
 
-// Восстанавливаем присутствие когда вкладка снова становится активной
 let _visibilityDebounce = null;
 let _lastVisibleTs = Date.now();
 let _lastHiddenTs  = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') {
-    _lastVisibleTs = Date.now();
-    _lastHiddenTs  = Date.now();
+    _lastHiddenTs = Date.now();
     return;
   }
   clearTimeout(_visibilityDebounce);
@@ -1847,18 +1845,33 @@ document.addEventListener('visibilitychange', () => {
     const p = profileLoad();
     if (!p || !sbReady()) return;
     const hiddenMs = Date.now() - (_lastHiddenTs || 0);
-    // Если были в фоне > 60 сек — всегда переподключаемся полностью
-    // (Android мог заморозить/убить таймеры)
-    if (hiddenMs > 60000 || !_profilePeerReady) {
+    _lastSuccessfulPoll = Date.now();
+    // Если были в фоне больше 30 сек — полный переподключение
+    // (Android мог убить таймер)
+    if (hiddenMs > 30000 || !_profilePeerReady || !_superPoller) {
       profileConnect(p);
-      return;
+    } else {
+      // Были в фоне мало — просто форс-чек inbox
+      sbPresencePut(p).catch(() => {});
+      sbPollPresence().catch(() => {});
+      if (_fbInboxLastTs) {
+        sbGet('messages',
+          `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
+        ).then(data => {
+          if (!Array.isArray(data) || data.length === 0) return;
+          const bySender = {};
+          data.forEach(msg => {
+            if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
+            bySender[msg.from_user].push(msg);
+            _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+          });
+          Object.entries(bySender).forEach(([sender, msgs]) => {
+            sbHandleIncomingMessages(p.username, sender, msgs);
+          });
+        }).catch(() => {});
+      }
     }
-    // Были в фоне меньше — просто обновляем и проверяем пропущенные
-    _lastSuccessfulPoll = Date.now(); // сбрасываем watchdog
-    sbPresencePut(p);
-    sbPollPresence();
-    _sbForcePollAllChats(p);
-  }, 300);
+  }, 200);
 });
 
 // Принудительно опрашивает все известные чаты + inbox прямо сейчас
@@ -1896,12 +1909,73 @@ async function _sbForcePollAllChats(p) {
   sbStartInboxPolling(p);
 }
 
+// ── Единый супер-поллер — заменяет все отдельные таймеры ─────────
+// Каждые 2 сек: inbox + открытый чат
+// Каждые 10 сек: presence heartbeat + список онлайн
+// Android убивает кучу мелких таймеров, но один активный — живёт
+let _superPollerTick = 0;
+function _startSuperPoller(p, sessionId) {
+  clearInterval(_superPoller);
+  _superPollerTick = 0;
+
+  _superPoller = setInterval(async () => {
+    // Если сессия устарела (переподключение) — останавливаемся
+    if (sessionId !== _connectSessionId) {
+      clearInterval(_superPoller);
+      return;
+    }
+    const pr = profileLoad();
+    if (!pr || !sbReady()) return;
+
+    _superPollerTick++;
+
+    // ── Каждые 2 сек: проверяем inbox (новые сообщения от кого угодно) ──
+    try {
+      const data = await sbGet('messages',
+        `select=*&to_user=eq.${encodeURIComponent(pr.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
+      );
+      if (Array.isArray(data) && data.length > 0) {
+        const bySender = {};
+        data.forEach(msg => {
+          if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
+          bySender[msg.from_user].push(msg);
+          _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+        });
+        Object.entries(bySender).forEach(([sender, msgs]) => {
+          sbHandleIncomingMessages(pr.username, sender, msgs);
+        });
+      }
+    } catch(e) {}
+
+    // ── Каждые 2 сек: проверяем открытый чат (если есть) ─────────────
+    if (_msgCurrentChat) {
+      try {
+        const key = sbChatKey(pr.username, _msgCurrentChat);
+        const data = await sbGet('messages',
+          `select=*&chat_key=eq.${encodeURIComponent(key)}&ts=gt.${_fbLastMsgTs[key]||0}&order=ts.asc&limit=50`
+        );
+        if (Array.isArray(data) && data.length > 0) {
+          sbHandleIncomingMessages(pr.username, _msgCurrentChat, data);
+        }
+      } catch(e) {}
+    }
+
+    // ── Каждые 10 сек (каждый 5й тик): presence heartbeat + список онлайн ──
+    if (_superPollerTick % 5 === 0) {
+      sbPresencePut(pr).catch(() => {});
+      sbPollPresence().catch(() => {});
+    }
+
+  }, 2000);
+}
+
 function profileDisconnect() {
   _profilePeerReady = false;
   clearInterval(_sbPresenceTimer);
   clearInterval(_fbPollTimer);
   clearInterval(_fbInboxTimer);  _fbInboxTimer = null;
   clearInterval(_watchdogTimer); _watchdogTimer = null;
+  clearInterval(_superPoller);   _superPoller = null;
   p2pStopHealthCheck();
   Object.values(_fbMsgStreams).forEach(t => clearInterval(t));
   _fbMsgStreams = {};
