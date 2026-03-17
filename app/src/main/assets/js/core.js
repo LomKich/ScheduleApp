@@ -2484,7 +2484,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.2.19';
+const APP_VERSION='4.2.20';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();

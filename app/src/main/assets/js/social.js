@@ -1774,13 +1774,24 @@ async function sbLoadUser(username) {
   return null;
 }
 
+// Хелпер: ждать N миллисекунд
+function _delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Хелпер: лог и в файл и в UI статус
+function _connectLog(msg) {
+  profileUpdateP2PStatus(msg);
+  if (window.Android && typeof Android.log === 'function') {
+    Android.log('[CONNECT] ' + msg);
+  }
+}
+
 async function profileConnect(p) {
   if (!p) return;
 
   _presenceFirstPut = true;
   const sessionId = ++_connectSessionId;
 
-  // Останавливаем все таймеры немедленно
+  // Останавливаем все таймеры
   clearInterval(_sbPresenceTimer); _sbPresenceTimer = null;
   clearInterval(_fbPollTimer);     _fbPollTimer = null;
   clearInterval(_fbInboxTimer);    _fbInboxTimer = null;
@@ -1796,40 +1807,94 @@ async function profileConnect(p) {
     return;
   }
 
-  const s = p2pActiveStrategy();
-  profileUpdateP2PStatus(`⏳ Подключаюсь (${s.emoji} ${s.label})...`);
-  try {
-    await sbPresencePut(p);
+  // ── ШАГ 1: Проверяем соединение ──────────────────────────────────
+  _connectLog('⏳ Шаг 1/5 — проверка соединения...');
+  const connOk = await p2pTestStrategy(_p2pActiveIdx);
+  if (sessionId !== _connectSessionId) return;
+
+  if (!connOk) {
+    _connectLog('🔴 Шаг 1/5 — нет соединения, жду 3с...');
+    await _delay(3000);
     if (sessionId !== _connectSessionId) return;
-
-    _profilePeerReady = true;
-    const sNow = p2pActiveStrategy();
-    profileUpdateP2PStatus(`🟢 @${p.username} · ${sNow.emoji} ${sNow.label}`);
-
-    await sbPollPresence();
-    if (sessionId !== _connectSessionId) return;
-
-    // Инициализируем inbox ts
-    if (!_fbInboxLastTs) _fbInboxLastTs = Date.now() - 300000;
-
-    // Запускаем единый супер-поллер вместо кучи отдельных таймеров
-    _startSuperPoller(p, sessionId);
-
-    if (!p2pIsDisabled()) {
-      p2pStartHealthCheck();
-    }
-    _startWatchdog(p);
-
-    if (window.Android && typeof window.Android.savePushConfig === 'function') {
-      try { window.Android.savePushConfig(p.username, sbUrl(), sbKey()); } catch(_){}
-    }
-  } catch(e) {
-    if (sessionId === _connectSessionId) {
-      profileUpdateP2PStatus('🔴 Ошибка — ищу другой канал...');
+    // Повторная проверка
+    const retry = await p2pTestStrategy(_p2pActiveIdx);
+    if (!retry) {
+      _connectLog('🔴 Нет сети — ищу другой канал...');
       if (!p2pIsDisabled()) p2pFailover();
       else setTimeout(() => profileConnect(p), 5000);
+      return;
     }
   }
+  _connectLog('✅ Шаг 1/5 — соединение есть');
+
+  // ── ШАГ 2: Регистрируем присутствие ──────────────────────────────
+  await _delay(3000);
+  if (sessionId !== _connectSessionId) return;
+  _connectLog('⏳ Шаг 2/5 — регистрирую присутствие...');
+  try {
+    await sbPresencePut(p);
+    _profilePeerReady = true;
+    _connectLog('✅ Шаг 2/5 — присутствие зарегистрировано');
+  } catch(e) {
+    _connectLog('⚠️ Шаг 2/5 — ошибка присутствия, продолжаю...');
+  }
+  if (sessionId !== _connectSessionId) return;
+
+  // ── ШАГ 3: Загружаем список онлайн ───────────────────────────────
+  await _delay(3000);
+  if (sessionId !== _connectSessionId) return;
+  _connectLog('⏳ Шаг 3/5 — загружаю список онлайн...');
+  try {
+    await sbPollPresence();
+    const cnt = _profileOnlinePeers.length + 1;
+    _connectLog('✅ Шаг 3/5 — онлайн: ' + cnt + ' польз.');
+  } catch(e) {
+    _connectLog('⚠️ Шаг 3/5 — ошибка списка онлайн, продолжаю...');
+  }
+  if (sessionId !== _connectSessionId) return;
+
+  // ── ШАГ 4: Проверяем пропущенные сообщения ───────────────────────
+  await _delay(3000);
+  if (sessionId !== _connectSessionId) return;
+  _connectLog('⏳ Шаг 4/5 — проверяю пропущенные сообщения...');
+  if (!_fbInboxLastTs) _fbInboxLastTs = Date.now() - 300000;
+  try {
+    const data = await sbGet('messages',
+      `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
+    );
+    if (Array.isArray(data) && data.length > 0) {
+      _connectLog('✅ Шаг 4/5 — нашёл ' + data.length + ' пропущенных сообщений!');
+      const bySender = {};
+      data.forEach(msg => {
+        if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
+        bySender[msg.from_user].push(msg);
+        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+      });
+      Object.entries(bySender).forEach(([sender, msgs]) => {
+        sbHandleIncomingMessages(p.username, sender, msgs);
+      });
+    } else {
+      _connectLog('✅ Шаг 4/5 — новых сообщений нет');
+    }
+  } catch(e) {
+    _connectLog('⚠️ Шаг 4/5 — ошибка проверки сообщений, продолжаю...');
+  }
+  if (sessionId !== _connectSessionId) return;
+
+  // ── ШАГ 5: Запускаем фоновые службы ─────────────────────────────
+  await _delay(3000);
+  if (sessionId !== _connectSessionId) return;
+  _connectLog('⏳ Шаг 5/5 — запускаю фоновые службы...');
+
+  if (!p2pIsDisabled()) p2pStartHealthCheck();
+  _startWatchdog(p);
+
+  if (window.Android && typeof window.Android.savePushConfig === 'function') {
+    try { window.Android.savePushConfig(p.username, sbUrl(), sbKey()); } catch(_){}
+  }
+
+  const sNow = p2pActiveStrategy();
+  _connectLog('🟢 @' + p.username + ' · ' + sNow.emoji + ' ' + sNow.label);
 }
 
 let _visibilityDebounce = null;
@@ -1854,34 +1919,15 @@ document.addEventListener('visibilitychange', () => {
     }
     if (hiddenMs > 30000 || !_profilePeerReady) {
       if (window.Android && typeof Android.log === 'function') {
-        Android.log('[VIS] Запускаю полный profileConnect');
+        Android.log('[CONNECT] Запускаю полный profileConnect (был в фоне ' + Math.round(hiddenMs/1000) + 'с)');
       }
       profileConnect(p);
     } else {
+      // Были в фоне мало — Java Handler уже опрашивает, просто форс-тик
       if (window.Android && typeof Android.log === 'function') {
-        Android.log('[VIS] Форс-чек inbox inboxLastTs=' + _fbInboxLastTs);
+        Android.log('[CONNECT] Быстрый форс-тик (был в фоне ' + Math.round(hiddenMs/1000) + 'с)');
       }
-      sbPresencePut(p).catch(() => {});
-      sbPollPresence().catch(() => {});
-      if (_fbInboxLastTs) {
-        sbGet('messages',
-          `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
-        ).then(data => {
-          if (!Array.isArray(data) || data.length === 0) return;
-          if (window.Android && typeof Android.log === 'function') {
-            Android.log('[VIS] Форс-чек нашёл ' + data.length + ' сообщений');
-          }
-          const bySender = {};
-          data.forEach(msg => {
-            if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
-            bySender[msg.from_user].push(msg);
-            _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
-          });
-          Object.entries(bySender).forEach(([sender, msgs]) => {
-            sbHandleIncomingMessages(p.username, sender, msgs);
-          });
-        }).catch(() => {});
-      }
+      if (typeof window._javaTick === 'function') window._javaTick();
     }
   }, 200);
 });
