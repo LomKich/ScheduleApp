@@ -1,3 +1,13 @@
+// ── Логирование ──────────────────────────────────────────────────
+function sLog(level, msg) {
+  try {
+    const tag = '[SOCIAL]';
+    const full = tag + ' ' + msg;
+    if (window.Android && typeof Android.log === 'function') Android.log(full);
+    if (typeof appLog === 'function') appLog(level, msg);
+  } catch(e) {}
+}
+
 // ══════════════════════════════════════════════════════════════════════
 // 👤 СИСТЕМА АККАУНТОВ И ПРОФИЛЯ
 // Хранение: localStorage. P2P онлайн: PeerJS (id = "sapp-" + username)
@@ -352,6 +362,7 @@ function profileCreate() {
   const unEl = document.getElementById('login-username');
   const pwdEl = document.getElementById('login-password');
   const errEl = document.getElementById('login-error');
+  sLog('info', 'profileCreate: попытка регистрации');
   const name = (nameEl?.value || '').trim();
   const username = (unEl?.value || '').trim().toLowerCase();
   const pwd = (pwdEl?.value || '');
@@ -425,6 +436,7 @@ function loginDoAuth() {
   const pwdEl = document.getElementById('login-auth-password');
   const errEl = document.getElementById('login-auth-error');
   const btnEl = document.querySelector('#login-auth-form button');
+  sLog('info', 'loginDoAuth: попытка входа');
   const username = (unEl?.value || '').trim().toLowerCase();
   const pwd = pwdEl?.value || '';
   if (!username) { if(errEl) errEl.textContent = 'Введи юзернейм'; return; }
@@ -2322,6 +2334,13 @@ function profileRenderOnline() {
   }).join('');
 }
 
+function profileRemoveFriend(username) {
+  const friends = friendsLoad();
+  friendsSave(friends.filter(u => u !== username));
+  toast('❌ @' + username + ' удалён из друзей');
+  profileRenderOnline();
+}
+
 function profileAddFriend(username) {
   const friends = friendsLoad();
   if (!friends.includes(username)) {
@@ -2372,6 +2391,290 @@ window.updateNavActive = function(aid) {
   );
   if (typeof _navMovePill === 'function') _navMovePill(aid);
 };
+
+// ══════════════════════════════════════════════════════════════════════
+// 👥 ГРУППЫ
+// ══════════════════════════════════════════════════════════════════════
+const GROUPS_KEY = 'sapp_groups_v1';
+function groupsLoad() {
+  try { return JSON.parse(localStorage.getItem(GROUPS_KEY) || '[]'); } catch(e) { return []; }
+}
+function groupsSave(g) { localStorage.setItem(GROUPS_KEY, JSON.stringify(g)); }
+
+function groupCreate(name, members) {
+  const groups = groupsLoad();
+  const id = 'grp_' + Date.now();
+  const p = profileLoad();
+  const group = {
+    id, name,
+    avatar: '👥',
+    members: [p.username, ...members.filter(u => u !== p.username)],
+    createdBy: p.username,
+    ts: Date.now()
+  };
+  groups.push(group);
+  groupsSave(groups);
+  toast('👥 Группа «' + name + '» создана!');
+  return group;
+}
+
+function groupGet(id) {
+  return groupsLoad().find(g => g.id === id) || null;
+}
+
+function groupChatKey(groupId) { return 'group_' + groupId; }
+function groupIsKey(chatKey)   { return chatKey && chatKey.startsWith('group_'); }
+function groupIdFromKey(chatKey){ return chatKey ? chatKey.replace('group_', '') : null; }
+
+async function groupSendMessage(groupId, text) {
+  const p = profileLoad();
+  const group = groupGet(groupId);
+  if (!p || !group) return;
+  const ts = Date.now();
+  const chatKey = groupChatKey(groupId);
+  const msgs = msgLoad();
+  if (!msgs[groupId]) msgs[groupId] = [];
+  const msg = { from: p.username, to: groupId, text, ts, delivered: false, read: false };
+  msgs[groupId].push(msg);
+  msgSave(msgs);
+  // Отправляем каждому участнику через Supabase
+  for (const member of group.members) {
+    if (member === p.username) continue;
+    try {
+      await sbInsert('messages', {
+        chat_key: chatKey, from_user: p.username, to_user: member, text, ts
+      });
+    } catch(e) {}
+  }
+}
+
+function showCreateGroupDialog() {
+  const online = (_profileOnlinePeers || []).filter(u => u.username !== profileLoad()?.username);
+  if (online.length === 0) { toast('Нет онлайн пользователей для группы'); return; }
+  const sheet = document.createElement('div');
+  sheet.id = 'create-group-sheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9900;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.6)';
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot));max-height:80vh;overflow-y:auto">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:12px">👥 Создать группу</div>
+      <input id="grp-name-inp" class="inp" placeholder="Название группы" style="margin-bottom:12px">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Участники:</div>
+      <div id="grp-members-list">
+        ${online.map(u => `
+          <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer">
+            <input type="checkbox" value="${u.username}" style="width:18px;height:18px;accent-color:var(--accent)">
+            <span style="font-size:20px">${u.avatar||'😊'}</span>
+            <span style="font-size:14px">${u.name||u.username}</span>
+            <span style="font-size:12px;color:var(--muted)">@${u.username}</span>
+          </label>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-surface" style="flex:1" onclick="document.getElementById('create-group-sheet').remove()">Отмена</button>
+        <button class="btn btn-accent" style="flex:1" onclick="
+          const name = document.getElementById('grp-name-inp').value.trim();
+          if (!name) { toast('Введи название'); return; }
+          const checked = [...document.querySelectorAll('#grp-members-list input:checked')].map(i=>i.value);
+          if (!checked.length) { toast('Выбери хотя бы одного участника'); return; }
+          groupCreate(name, checked);
+          document.getElementById('create-group-sheet').remove();
+        ">Создать</button>
+      </div>
+    </div>`;
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+  document.body.appendChild(sheet);
+}
+
+function showCreateGroupDialogFromMessenger() {
+  showCreateGroupDialog();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 🚫 БЛОКИРОВКА И ЗАЩИТА КОПИРОВАНИЯ
+// ══════════════════════════════════════════════════════════════════════
+const BLOCKED_KEY  = 'sapp_blocked_v1';
+const NO_COPY_KEY  = 'sapp_nocopy_v1';
+
+function blockedLoad()       { try { return JSON.parse(localStorage.getItem(BLOCKED_KEY)  || '[]'); } catch(e) { return []; } }
+function blockedSave(b)      { localStorage.setItem(BLOCKED_KEY, JSON.stringify(b)); }
+function noCopyLoad()        { try { return JSON.parse(localStorage.getItem(NO_COPY_KEY)  || '[]'); } catch(e) { return []; } }
+function noCopySave(b)       { localStorage.setItem(NO_COPY_KEY, JSON.stringify(b)); }
+function isBlocked(username) { return blockedLoad().includes(username); }
+function isCopyBlocked(username) { return noCopyLoad().includes(username); }
+
+function peerBlockToggle(username) {
+  const list = blockedLoad();
+  if (list.includes(username)) {
+    blockedSave(list.filter(u => u !== username));
+    toast('🔓 @' + username + ' разблокирован');
+  } else {
+    blockedSave([...list, username]);
+    toast('🚫 @' + username + ' заблокирован');
+  }
+  peerProfileOpen(username);
+}
+
+function peerNoCopyToggle(username) {
+  const list = noCopyLoad();
+  if (list.includes(username)) {
+    noCopySave(list.filter(u => u !== username));
+    toast('📋 Копирование разрешено');
+  } else {
+    noCopySave([...list, username]);
+    toast('🔒 Копирование запрещено');
+  }
+  peerProfileOpen(username);
+}
+
+function peerSendGift(username) {
+  const gifts = ['🎁','🌹','💎','🍫','🎂','🎀','🌟','💐','🎊','✨'];
+  const gift = gifts[Math.floor(Math.random() * gifts.length)];
+  const p = profileLoad();
+  if (!p) return;
+  const ts = Date.now();
+  const msg = { from: p.username, to: username, sticker: gift, text: '', ts, delivered: false, read: false };
+  const msgs = msgLoad();
+  if (!msgs[username]) msgs[username] = [];
+  msgs[username].push(msg);
+  msgSave(msgs);
+  const chats = chatsLoad();
+  if (!chats.includes(username)) { chats.unshift(username); chatsSave(chats); }
+  sbInsert('messages', { chat_key: sbChatKey(p.username, username), from_user: p.username, to_user: username, text: gift, ts });
+  toast('🎁 Подарок ' + gift + ' отправлен!');
+  _msgCurrentChat = username;
+  showScreen('s-messenger-chat');
+  messengerRenderMessages();
+}
+
+function peerSaveAvatar(username) {
+  const peer = _profileOnlinePeers.find(u => u.username === username)
+             || _allKnownUsers.find(u => u.username === username);
+  if (!peer) { toast('Нет данных для сохранения'); return; }
+  if (peer.avatarType === 'photo' && peer.avatarData) {
+    const a = document.createElement('a');
+    a.href = peer.avatarData;
+    a.download = username + '_avatar.jpg';
+    a.click();
+    toast('✅ Фото сохранено');
+  } else {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = peer.color || '#e87722';
+    ctx.beginPath(); ctx.arc(128,128,128,0,Math.PI*2); ctx.fill();
+    ctx.font = '120px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(peer.avatar || '😊', 128, 135);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = username + '_avatar.png';
+    a.click();
+    toast('✅ Аватар сохранён');
+  }
+}
+
+// ── Меню «три точки» профиля пользователя ────────────────────────
+function peerShowMenu(username) {
+  const existing = document.getElementById('peer-menu-sheet');
+  if (existing) { existing.remove(); return; }
+
+  const blocked  = isBlocked(username);
+  const noCopy   = isCopyBlocked(username);
+  const isFriend = friendsLoad().includes(username);
+
+  const sheet = document.createElement('div');
+  sheet.id = 'peer-menu-sheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9800;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.55)';
+
+  const items = [
+    { icon:'🚫', label: blocked ? 'Разблокировать' : 'Заблокировать',  action: `peerBlockToggle('${username}')` },
+    { icon:'🗑',  label: isFriend ? 'Удалить из друзей' : 'Добавить в друзья',
+                 action: isFriend ? `profileRemoveFriend('${username}')` : `profileAddFriend('${username}')` },
+    { icon:'🎁', label: 'Отправить подарок',      action: `peerSendGift('${username}')` },
+    { icon:'📋', label: noCopy ? 'Разрешить копирование' : 'Запретить копирование', action: `peerNoCopyToggle('${username}')` },
+    { icon:'🖼',  label: 'Сохранить фото/аватар',  action: `peerSaveAvatar('${username}')` },
+  ];
+
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;overflow:hidden;padding-bottom:calc(8px + var(--safe-bot))">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:10px auto 6px"></div>
+      ${items.map(it => `
+        <button onclick="${it.action};document.getElementById('peer-menu-sheet')?.remove()"
+          style="width:100%;padding:16px 20px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,.05);
+            color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;
+            display:flex;align-items:center;gap:16px">
+          <span style="font-size:20px;width:26px;text-align:center">${it.icon}</span>
+          <span>${it.label}</span>
+        </button>`).join('')}
+      <button onclick="document.getElementById('peer-menu-sheet').remove()"
+        style="width:100%;padding:16px 20px;background:none;border:none;color:var(--muted);
+          font-family:inherit;font-size:15px;cursor:pointer">
+        Отмена
+      </button>
+    </div>`;
+
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+  document.body.appendChild(sheet);
+}
+
+// ── messengerMarkRead ─────────────────────────────────────────────
+function messengerMarkRead() {
+  if (!_msgCurrentChat) return;
+  const p = profileLoad();
+  const msgs = msgLoad();
+  if (!msgs[_msgCurrentChat]) return;
+  let changed = false;
+  msgs[_msgCurrentChat].forEach(m => {
+    if (m.from !== p?.username && !m.read) { m.read = true; changed = true; }
+  });
+  if (changed) { msgSave(msgs); messengerUpdateBadge(); }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 👑 VIP — выдача другим пользователям
+// ══════════════════════════════════════════════════════════════════════
+const VIP_GRANTED_KEY = 'sapp_vip_granted_v1';
+function vipGrantedLoad() { try { return JSON.parse(localStorage.getItem(VIP_GRANTED_KEY)||'{}'); } catch(e) { return {}; } }
+function vipGrantedSave(d) { localStorage.setItem(VIP_GRANTED_KEY, JSON.stringify(d)); }
+
+function vipCheckUser(username) {
+  if (!username) return vipCheck();
+  const granted = vipGrantedLoad();
+  return !!granted[username];
+}
+
+async function vipGrantTo(username) {
+  const granted = vipGrantedLoad();
+  granted[username] = Date.now();
+  vipGrantedSave(granted);
+  if (sbReady()) {
+    try {
+      await _sbFetch('PATCH', `/rest/v1/presence?username=eq.${encodeURIComponent(username)}`, { vip: true }, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      });
+      await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`, { vip: true }, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      });
+    } catch(e) {}
+  }
+}
+
+async function vipRevokeFrom(username) {
+  const granted = vipGrantedLoad();
+  delete granted[username];
+  vipGrantedSave(granted);
+  if (sbReady()) {
+    try {
+      await _sbFetch('PATCH', `/rest/v1/presence?username=eq.${encodeURIComponent(username)}`, { vip: false }, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      });
+      await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`, { vip: false }, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      });
+    } catch(e) {}
+  }
+}
 
 // ══ ЗАПУСК ════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
@@ -3681,67 +3984,123 @@ function messengerShowInfo() {
 
 // ── Открытие профиля другого пользователя ─────────────────────────
 function peerProfileOpen(username) {
-  const peer = _profileOnlinePeers.find(u => u.username === username);
-  const titleEl = document.getElementById('peer-profile-title');
+  const peer = _profileOnlinePeers.find(u => u.username === username)
+             || _allKnownUsers.find(u => u.username === username);
   const body = document.getElementById('peer-profile-body');
-  if (titleEl) titleEl.textContent = peer?.name || ('@' + username);
 
-  // Update back button to go back to chat
-  const backBtn = document.querySelector('#s-peer-profile .hdr-back');
-  if (backBtn) {
-    backBtn.onclick = () => { SFX.play('screenBack'); showScreen('s-messenger-chat', 'back'); };
+  // Настраиваем шапку: прозрачная, ‹ слева и ⋯ справа
+  const hdr = document.querySelector('#s-peer-profile .hdr');
+  if (hdr) {
+    hdr.style.cssText = 'position:absolute;top:0;left:0;right:0;z-index:10;background:transparent;border:none;box-shadow:none';
+    hdr.innerHTML = `
+      <button class="hdr-back" style="background:rgba(0,0,0,.35);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)"
+        onclick="SFX.play('screenBack');showScreen('s-messenger-chat','back')">‹</button>
+      <div style="flex:1"></div>
+      <button onclick="peerShowMenu('${username}')"
+        style="background:rgba(0,0,0,.35);border:none;border-radius:50%;width:36px;height:36px;
+          display:flex;align-items:center;justify-content:center;cursor:pointer;
+          font-size:18px;color:#fff;backdrop-filter:blur(4px)">⋯</button>`;
   }
 
   if (!peer) {
     if (body) body.innerHTML = `
-      <div style="padding:32px 20px;text-align:center">
-        <div style="font-size:56px;margin-bottom:12px">😶</div>
-        <div style="font-size:16px;font-weight:700;margin-bottom:8px">@${username}</div>
-        <div style="font-size:13px;color:var(--muted)">Пользователь сейчас не в сети</div>
-        <button class="btn btn-surface" style="margin-top:20px;max-width:240px" onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')">💬 Написать</button>
+      <div style="padding-top:80px;text-align:center">
+        <div style="font-size:72px;margin-bottom:16px">😶</div>
+        <div style="font-size:17px;font-weight:700;margin-bottom:6px">@${escHtml(username)}</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:24px">Пользователь не найден</div>
+        <button class="btn btn-accent" style="max-width:240px"
+          onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')">💬 Написать</button>
       </div>`;
     showScreen('s-peer-profile');
     return;
   }
 
   const statusObj = PROFILE_STATUSES?.find(s => s.id === peer.status) || { emoji:'🟢', label:'В сети', color:'#4caf7d' };
-  const bannerGrad = `background:linear-gradient(135deg,${peer.color||'var(--accent)'}55,var(--surface2))`;
-  const isVip = peer.vip;
-  const vipHtml = isVip
-    ? `<span class="vip-badge-pill"><span class="vip-crown">👑</span> VIP</span>`
-    : '';
+  const isOnline  = !!_profileOnlinePeers.find(u => u.username === username);
+  const isFriend  = friendsLoad().includes(username);
+  const blocked   = isBlocked(username);
+  const noCopy    = isCopyBlocked(username);
 
-  const avatarHtml = (peer.avatarType === 'photo' && peer.avatarData)
-    ? `<img src="${peer.avatarData}" onclick="photoZoomOpen('${peer.avatarData}')" style="width:88px;height:88px;object-fit:cover;border-radius:50%;cursor:zoom-in">`
-    : `<span style="font-size:42px">${peer.avatar||'😊'}</span>`;
+  // Фото или градиент как фон на весь верх
+  const hasPhoto  = peer.avatarType === 'photo' && peer.avatarData;
+  const heroBg    = hasPhoto
+    ? `background:url('${peer.avatarData}') center/cover no-repeat`
+    : `background:linear-gradient(160deg,${peer.color||'#e87722'},${peer.color||'#e87722'}88,#111)`;
 
   if (body) body.innerHTML = `
-    <div style="position:relative;margin-bottom:0">
-      <div style="${bannerGrad};height:110px;width:100%;background-size:cover;background-position:center"></div>
-      <div style="position:absolute;bottom:-44px;left:20px">
-        <div style="width:88px;height:88px;border-radius:50%;border:3px solid ${peer.color||'var(--accent)'};background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden">
-          ${avatarHtml}
+    <!-- Герой — фото/аватар на весь верх -->
+    <div style="${heroBg};height:52vw;min-height:220px;max-height:340px;position:relative;flex-shrink:0">
+      ${!hasPhoto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:96px">${peer.avatar||'😊'}</div>` : ''}
+      <!-- Градиент снизу для читаемости текста -->
+      <div style="position:absolute;bottom:0;left:0;right:0;height:120px;background:linear-gradient(transparent,rgba(0,0,0,.75))"></div>
+      <!-- Имя и статус поверх фото снизу -->
+      <div style="position:absolute;bottom:14px;left:18px;right:18px">
+        <div style="font-size:22px;font-weight:800;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.5)">${escHtml(peer.name||username)}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:2px">${isOnline ? '🟢 В сети' : '⚫ ' + (peer.status === 'online' ? 'Не в сети' : statusObj.label)}</div>
+      </div>
+    </div>
+
+    <!-- Кнопки быстрых действий — как в Telegram -->
+    <div style="display:flex;gap:8px;padding:14px 16px;background:var(--surface2);border-bottom:1px solid var(--surface3)">
+      <button onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')"
+        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--accent)">
+        <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,var(--accent) 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">💬</div>
+        <span style="font-size:11px;font-weight:600">Чат</span>
+      </button>
+      <button onclick="peerSendGift('${username}')"
+        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--accent)">
+        <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,var(--accent) 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">🎁</div>
+        <span style="font-size:11px;font-weight:600">Подарок</span>
+      </button>
+      <button onclick="${isFriend ? `profileRemoveFriend('${username}')` : `profileAddFriend('${username}')`}"
+        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:${isFriend?'#e05555':'var(--accent)'}">
+        <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,${isFriend?'#e05555':'var(--accent)'} 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">${isFriend?'❌':'👥'}</div>
+        <span style="font-size:11px;font-weight:600">${isFriend?'Удалить':'В друзья'}</span>
+      </button>
+      ${blocked ? `
+      <button onclick="peerBlockToggle('${username}')"
+        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:#e05555">
+        <div style="width:44px;height:44px;border-radius:50%;background:rgba(224,85,85,.15);display:flex;align-items:center;justify-content:center;font-size:20px">🔓</div>
+        <span style="font-size:11px;font-weight:600">Разблок.</span>
+      </button>` : ''}
+    </div>
+
+    <!-- Информация о пользователе -->
+    <div style="background:var(--surface2);margin-top:8px;border-top:1px solid var(--surface3);border-bottom:1px solid var(--surface3)">
+      <!-- Username -->
+      <div style="padding:14px 20px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--surface3)">
+        <span style="font-size:20px;color:var(--accent);width:24px;text-align:center">@</span>
+        <div style="flex:1">
+          <div style="font-size:15px;color:var(--text)">@${escHtml(username)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">Имя пользователя</div>
+        </div>
+      </div>
+      <!-- Bio если есть -->
+      ${peer.bio ? `
+      <div style="padding:14px 20px;display:flex;align-items:flex-start;gap:14px;border-bottom:1px solid var(--surface3)">
+        <span style="font-size:20px;color:var(--muted);width:24px;text-align:center">📝</span>
+        <div style="flex:1">
+          <div style="font-size:15px;color:var(--text);white-space:pre-wrap;line-height:1.5">${escHtml(peer.bio)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">О себе</div>
+        </div>
+      </div>` : ''}
+      <!-- Статус онлайн -->
+      <div style="padding:14px 20px;display:flex;align-items:center;gap:14px">
+        <span style="font-size:20px;color:${statusObj.color};width:24px;text-align:center">${statusObj.emoji}</span>
+        <div style="flex:1">
+          <div style="font-size:15px;color:var(--text)">${statusObj.label}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">Статус</div>
         </div>
       </div>
     </div>
-    <div style="height:52px"></div>
-    <div style="padding:0 20px 12px">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:22px;font-weight:800">${escHtml(peer.name||username)}</span>
-        ${vipHtml}
-      </div>
-      <div style="font-size:13px;color:var(--muted);margin-top:2px">@${escHtml(username)}</div>
-      <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;margin-top:8px;background:${statusObj.color}22;color:${statusObj.color}">
-        ${statusObj.emoji} ${statusObj.label}
-      </div>
-      ${peer.bio ? `<div style="font-size:13px;color:var(--text);margin-top:10px;line-height:1.5;white-space:pre-wrap">${escHtml(peer.bio)}</div>` : ''}
-    </div>
-    <div style="padding:0 16px;display:flex;flex-direction:column;gap:8px">
-      <button class="btn btn-accent" onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')">
-        💬 Написать сообщение
-      </button>
-      ${!friendsLoad().includes(username) ? `<button class="btn btn-surface" onclick="profileAddFriend('${username}');this.textContent='✅ Добавлен в друзья';this.disabled=true">👥 Добавить в друзья</button>` : '<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">👥 Уже в друзьях</div>'}
-    </div>
+
+    <!-- Защита от копирования (если включена) -->
+    ${noCopy ? `<div style="margin:8px 16px;padding:10px 14px;background:rgba(224,85,85,.12);border-radius:10px;border:1px solid rgba(224,85,85,.3);font-size:12px;color:#e05555">🔒 Копирование сообщений запрещено</div>` : ''}
+
+    <!-- VIP badge -->
+    ${peer.vip ? `<div style="margin:8px 16px;padding:10px 14px;background:rgba(245,197,24,.12);border-radius:10px;border:1px solid rgba(245,197,24,.3);font-size:12px;color:#f5c518;display:flex;align-items:center;gap:8px"><span>👑</span><span>VIP участник</span></div>` : ''}
+
+    <div style="height:24px"></div>
   `;
 
   showScreen('s-peer-profile');
@@ -3873,13 +4232,49 @@ if (typeof cmdExec !== 'undefined') {
     const cmd = parts[0].toLowerCase();
     const arg = parts.slice(1).join(' ').trim();
     if (cmd === '/vip') {
-      if (!arg) { cmdPrint('info','👑 /vip <КОД> — активировать VIP'); return; }
+      if (!arg) {
+        cmdPrint('info', '👑 Использование:');
+        cmdPrint('info', '  /vip <КОД>          — активировать себе VIP');
+        cmdPrint('info', '  /vip give @ник      — выдать VIP пользователю');
+        cmdPrint('info', '  /vip revoke @ник    — забрать VIP у пользователя');
+        cmdPrint('info', '  /vip list           — список VIP пользователей');
+        return;
+      }
+      // /vip give @username
+      if (arg.toLowerCase().startsWith('give ')) {
+        const target = arg.slice(5).replace('@','').trim().toLowerCase();
+        if (!target) { cmdPrint('err','❌ Укажи юзернейм: /vip give @ник'); return; }
+        vipGrantTo(target).then(() => {
+          cmdPrint('ok', `👑 VIP выдан пользователю @${target}`);
+          toast(`👑 @${target} получил VIP!`);
+        });
+        return;
+      }
+      // /vip revoke @username
+      if (arg.toLowerCase().startsWith('revoke ')) {
+        const target = arg.slice(7).replace('@','').trim().toLowerCase();
+        if (!target) { cmdPrint('err','❌ Укажи юзернейм: /vip revoke @ник'); return; }
+        vipRevokeFrom(target).then(() => {
+          cmdPrint('ok', `✅ VIP забран у @${target}`);
+        });
+        return;
+      }
+      // /vip list
+      if (arg.toLowerCase() === 'list') {
+        const granted = vipGrantedLoad();
+        const list = Object.keys(granted);
+        if (list.length === 0) { cmdPrint('info', 'Нет VIP пользователей'); return; }
+        cmdPrint('info', `👑 VIP пользователи (${list.length}):`);
+        list.forEach(u => cmdPrint('out', `  @${u}`));
+        return;
+      }
+      // /vip КОД — активировать себе
       if (vipActivate(arg)) {
         cmdPrint('ok','👑 VIP активирован! Доступны: фото-аватар, рамки, значки, баннеры');
         toast('👑 Добро пожаловать в VIP клуб!');
         setTimeout(profileRenderScreen, 200);
       } else {
-        cmdPrint('err','❌ Неверный VIP-код');
+        cmdPrint('err','❌ Неверный VIP-код. Попробуй /vip give @ник для выдачи другому.');
       }
       return;
     }
