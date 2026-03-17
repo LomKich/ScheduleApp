@@ -1852,7 +1852,7 @@ document.addEventListener('visibilitychange', () => {
     if (window.Android && typeof Android.log === 'function') {
       Android.log('[VIS] Вернулся на экран, был в фоне ' + Math.round(hiddenMs/1000) + 'с superPoller=' + (!!_superPoller) + ' peerReady=' + _profilePeerReady);
     }
-    if (hiddenMs > 30000 || !_profilePeerReady || !_superPoller) {
+    if (hiddenMs > 30000 || !_profilePeerReady) {
       if (window.Android && typeof Android.log === 'function') {
         Android.log('[VIS] Запускаю полный profileConnect');
       }
@@ -1975,58 +1975,10 @@ window._javaTick = async function() {
 // Android убивает кучу мелких таймеров, но один активный — живёт
 let _superPollerTick = 0;
 function _startSuperPoller(p, sessionId) {
+  // Отключён — всю работу делает Java Handler через window._javaTick()
+  // Java Handler не замораживается Android в отличие от JS setInterval
   clearInterval(_superPoller);
-  _superPollerTick = 0;
-
-  _superPoller = setInterval(async () => {
-    // Если сессия устарела (переподключение) — останавливаемся
-    if (sessionId !== _connectSessionId) {
-      clearInterval(_superPoller);
-      return;
-    }
-    const pr = profileLoad();
-    if (!pr || !sbReady()) return;
-
-    _superPollerTick++;
-
-    // ── Каждые 2 сек: проверяем inbox (новые сообщения от кого угодно) ──
-    try {
-      const data = await sbGet('messages',
-        `select=*&to_user=eq.${encodeURIComponent(pr.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
-      );
-      if (Array.isArray(data) && data.length > 0) {
-        const bySender = {};
-        data.forEach(msg => {
-          if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
-          bySender[msg.from_user].push(msg);
-          _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
-        });
-        Object.entries(bySender).forEach(([sender, msgs]) => {
-          sbHandleIncomingMessages(pr.username, sender, msgs);
-        });
-      }
-    } catch(e) {}
-
-    // ── Каждые 2 сек: проверяем открытый чат (если есть) ─────────────
-    if (_msgCurrentChat) {
-      try {
-        const key = sbChatKey(pr.username, _msgCurrentChat);
-        const data = await sbGet('messages',
-          `select=*&chat_key=eq.${encodeURIComponent(key)}&ts=gt.${_fbLastMsgTs[key]||0}&order=ts.asc&limit=50`
-        );
-        if (Array.isArray(data) && data.length > 0) {
-          sbHandleIncomingMessages(pr.username, _msgCurrentChat, data);
-        }
-      } catch(e) {}
-    }
-
-    // ── Каждые 10 сек (каждый 5й тик): presence heartbeat + список онлайн ──
-    if (_superPollerTick % 5 === 0) {
-      sbPresencePut(pr).catch(() => {});
-      sbPollPresence().catch(() => {});
-    }
-
-  }, 2000);
+  _superPoller = null;
 }
 
 function profileDisconnect() {
