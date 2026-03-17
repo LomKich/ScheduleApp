@@ -1796,9 +1796,9 @@ async function profileConnect(p) {
 
     _sbPresenceTimer = setInterval(() => {
       const pr = profileLoad(); if(pr) sbPresencePut(pr);
-    }, 25000);
+    }, 10000);
 
-    _fbPollTimer = setInterval(sbPollPresence, 15000);
+    _fbPollTimer = setInterval(sbPollPresence, 10000);
     p2pStartHealthCheck();
     _startWatchdog(p);
 
@@ -1973,7 +1973,7 @@ async function sbPollPresence() {
     unique.push(u);
   }
 
-  // Online = seen within 90 sec
+  // Online = seen within 5 min (300 sec)
   const _mapU = u => ({
     username: u.username, name: u.name,
     avatar: u.avatar, avatarType: u.avatar_type, avatarData: u.avatar_data,
@@ -1981,12 +1981,12 @@ async function sbPollPresence() {
     vip: u.vip, badge: u.badge
   });
   _profileOnlinePeers = unique
-    .filter(u => u.username !== myUsername && (now - (u.ts||0)) < 90000)
+    .filter(u => u.username !== myUsername && (now - (u.ts||0)) < 300000)
     .map(_mapU);
   // All known users (including offline) for search
   _allKnownUsers = unique
     .filter(u => u.username !== myUsername)
-    .map(u => ({ ..._mapU(u), _online: (now - (u.ts||0)) < 90000 }));
+    .map(u => ({ ..._mapU(u), _online: (now - (u.ts||0)) < 300000 }));
   profileUpdateOnlineCount();
 }
 
