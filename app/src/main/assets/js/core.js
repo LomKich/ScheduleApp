@@ -2484,7 +2484,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.2.21';
+const APP_VERSION='4.2.23';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -3718,24 +3718,8 @@ function openRandomGroup(){
   setTimeout(()=>loadSchedule(g),300);
 }
 
-// 🌈 Пасхалка — встряска телефона открывает рандомную группу (если доступен DeviceMotion)
-(function initShake(){
-  let lastAcc={x:0,y:0,z:0},shakeTs=0;
-  if(!window.DeviceMotionEvent)return;
-  window.addEventListener('devicemotion',e=>{
-    const a=e.accelerationIncludingGravity;if(!a)return;
-    const dx=Math.abs(a.x-lastAcc.x),dy=Math.abs(a.y-lastAcc.y),dz=Math.abs(a.z-lastAcc.z);
-    lastAcc={x:a.x,y:a.y,z:a.z};
-    if(dx+dy+dz>30){
-      const now=Date.now();
-      if(now-shakeTs>3000){
-        shakeTs=now;
-        toast('📳 Потряс — открываю случайную группу!');
-        setTimeout(openRandomGroup,500);
-      }
-    }
-  },{passive:true});
-})();
+// 🌈 Пасхалка встряски отключена — слишком легко срабатывала случайно
+// (initShake удалён)
 
 // 🕐 "Осталось до конца пары" — тост если открыл расписание во время пары
 function checkCurrentPairEnd(){

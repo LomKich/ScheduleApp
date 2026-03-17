@@ -2363,8 +2363,16 @@ function bubInit() {
       bubCombo = 0;
     }
   };
-  canvas.ontouchstart = e => { e.preventDefault(); const t = e.touches[0]; handleTap(t.clientX, t.clientY); };
-  canvas.onclick = e => handleTap(e.clientX, e.clientY);
+  canvas.ontouchstart = e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const t = e.touches[0];
+    handleTap(t.clientX, t.clientY);
+  };
+  canvas.onclick = e => {
+    e.stopPropagation();
+    handleTap(e.clientX, e.clientY);
+  };
 
   // Update audio upload UI
   osuUpdateAudioUI();
@@ -3996,7 +4004,7 @@ function tanksTick(dt){
   // Игрок
   const p=tanksPlayer;
   if(p.shootCd>0)p.shootCd-=dt;
-  const speed=(tanksDiff==='hard'?2.8:2.2)*dt;
+  const speed=(tanksDiff==='hard'?5.0:3.8)*dt;
   // Apply held keyboard direction
   const heldDir=tanksGetHeldDir();
   if(heldDir) tanksDir(heldDir);

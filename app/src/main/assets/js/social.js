@@ -624,13 +624,12 @@ function profileRenderScreen() {
         <div style="font-size:13px;font-weight:700">📡 P2P соединение</div>
         <div class="settings-row-sub" id="profile-p2p-status">${_profilePeerReady ? '🟢 Подключено' : '🔴 Отключено'}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:2px" id="profile-p2p-strategy">
-          ${p2pIsDisabled() ? '🔒 P2P выключен — только прямое' : (() => { const s = p2pActiveStrategy(); return s.emoji + ' Канал: ' + s.label; })()}
+          🔗 Прямое подключение
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         <button class="btn btn-surface" style="width:auto;padding:6px 10px;font-size:11px" onclick="profileConnect(profileLoad())">↺ Переподк.</button>
-        <button class="btn btn-surface" style="width:auto;padding:6px 10px;font-size:11px" onclick="p2pManualSwitch()">⚡ Канал</button>
-        <button class="btn btn-surface" id="p2p-toggle-btn" style="width:auto;padding:6px 10px;font-size:11px;color:${p2pIsDisabled()?'#4caf7d':'#c94f4f'}" onclick="p2pToggleDisabled()">${p2pIsDisabled() ? '✓ P2P выкл' : 'Выкл P2P'}</button>
+
       </div>
     </div>
 
@@ -1363,259 +1362,29 @@ function sbUrl()  { return (sbConfig()?.url || SB_DEFAULT_URL).replace(/\/$/, ''
 function sbKey()  { return sbConfig()?.key || SB_DEFAULT_KEY; }
 function sbReady(){ return true; }
 
-// ── Стратегии подключения ─────────────────────────────────────────
-// Каждая стратегия — отдельный способ добраться до Supabase REST API.
-// Движок сам определяет какая работает и автоматически переключается.
-
-const _P2P_STRATEGIES = [
-  {
-    id: 'direct',
-    label: 'Прямое',
-    emoji: '🔗',
-    // Прямой fetch к Supabase без посредников
-    async fetch(method, path, body, extraHeaders) {
-      const url = `${sbUrl()}${path}`;
-      const r = await fetch(url, {
-        method,
-        headers: { apikey: sbKey(), Authorization: `Bearer ${sbKey()}`, ...extraHeaders },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(8000),
-      });
-      return { ok: r.ok, status: r.status, json: () => r.json(), text: () => r.text() };
-    },
-  },
-  {
-    id: 'native',
-    label: 'Нативный',
-    emoji: '📲',
-    // Через Android JavascriptInterface — обходит WebView сетевые ограничения
-    async fetch(method, path, body, extraHeaders) {
-      if (typeof window.Android?.nativeFetch !== 'function') throw new Error('no bridge');
-      // nativeFetch поддерживает только GET, для остальных — делаем запрос через мост с телом
-      const url  = `${sbUrl()}${path}`;
-      // Строим псевдо-запрос: передаём метод и тело через специальный хелпер если есть,
-      // иначе только GET
-      if (method !== 'GET') throw new Error('native only GET');
-      const raw  = await window.Android.nativeFetch(url);
-      const data = JSON.parse(raw || '{}');
-      if (!data.ok && data.status === 0) throw new Error('native fetch failed');
-      return {
-        ok: data.ok,
-        status: data.status,
-        json: async () => JSON.parse(data.body || 'null'),
-        text: async () => data.body || '',
-      };
-    },
-  },
-  {
-    id: 'allorigins',
-    label: 'Прокси A',
-    emoji: '🌐',
-    async fetch(method, path, body, extraHeaders) {
-      if (method !== 'GET') throw new Error('proxy only GET');
-      const target = encodeURIComponent(`${sbUrl()}${path}`);
-      const r = await fetch(`https://api.allorigins.win/raw?url=${target}`, {
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!r.ok) throw new Error('proxy ' + r.status);
-      return { ok: true, status: 200, json: () => r.json(), text: () => r.text() };
-    },
-  },
-  {
-    id: 'corsproxy',
-    label: 'Прокси B',
-    emoji: '🔄',
-    async fetch(method, path, body, extraHeaders) {
-      // corsproxy.io пробрасывает любой метод с заголовками
-      const url = `https://corsproxy.io/?${encodeURIComponent(`${sbUrl()}${path}`)}`;
-      const r = await fetch(url, {
-        method,
-        headers: { apikey: sbKey(), Authorization: `Bearer ${sbKey()}`, ...extraHeaders },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(10000),
-      });
-      return { ok: r.ok, status: r.status, json: () => r.json(), text: () => r.text() };
-    },
-  },
-  {
-    id: 'jsonp',
-    label: 'Прокси C',
-    emoji: '🛰',
-    async fetch(method, path, body, extraHeaders) {
-      if (method !== 'GET') throw new Error('proxy only GET');
-      const target = encodeURIComponent(`${sbUrl()}${path}`);
-      const r = await fetch(`https://thingproxy.freeboard.io/fetch/${sbUrl()}${path}`, {
-        headers: { apikey: sbKey(), Authorization: `Bearer ${sbKey()}` },
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!r.ok) throw new Error('proxy ' + r.status);
-      return { ok: true, status: 200, json: () => r.json(), text: () => r.text() };
-    },
-  },
-];
-
-// ── Движок выбора стратегии ───────────────────────────────────────
-let _p2pActiveIdx     = 0;        // индекс текущей стратегии
-let _p2pFailCount     = 0;        // кол-во последовательных сбоев
-let _p2pCheckTimer    = null;     // фоновый health-check
-let _p2pSwitching     = false;    // флаг: идёт переключение
-const P2P_FAIL_THRESH = 3;        // сбоев до переключения
-const P2P_CHECK_INTERVAL = 20000; // мс между health-check
-const P2P_STRATEGY_KEY  = 'sapp_p2p_strategy';
-const P2P_DISABLED_KEY  = 'sapp_p2p_disabled';
-
-function p2pIsDisabled() {
-  try { return localStorage.getItem(P2P_DISABLED_KEY) === '1'; } catch(e){ return false; }
-}
-function p2pSetDisabled(val) {
-  try { localStorage.setItem(P2P_DISABLED_KEY, val ? '1' : '0'); } catch(e){}
-}
-
-function p2pActiveStrategy() {
-  return _P2P_STRATEGIES[_p2pActiveIdx] || _P2P_STRATEGIES[0];
-}
-
-function p2pSaveStrategy(idx) {
-  _p2pActiveIdx = idx;
-  try { localStorage.setItem(P2P_STRATEGY_KEY, String(idx)); } catch(e) {}
-}
-
-function p2pLoadSavedStrategy() {
-  try {
-    const idx = parseInt(localStorage.getItem(P2P_STRATEGY_KEY) || '0');
-    _p2pActiveIdx = (idx >= 0 && idx < _P2P_STRATEGIES.length) ? idx : 0;
-  } catch(e) { _p2pActiveIdx = 0; }
-}
-p2pLoadSavedStrategy();
-
-// Проверяем одну стратегию (лёгкий GET к presence)
-async function p2pTestStrategy(idx) {
-  const s = _P2P_STRATEGIES[idx];
-  if (!s) return false;
-  try {
-    const r = await s.fetch('GET', `/rest/v1/presence?select=username&limit=1`, null, {});
-    return r.ok || r.status === 200 || r.status === 404 || r.status === 406;
-  } catch(e) { return false; }
-}
-
-// Находим первую работающую стратегию (обходим по порядку)
-// Параллельная гонка: все стратегии стартуют одновременно, побеждает первая
-async function p2pFindWorking(startIdx) {
-  // Сначала быстро проверяем direct и native (самые надёжные)
-  const priority = [0, 1]; // direct, native
-  for (const idx of priority) {
-    if (idx === _p2pActiveIdx) continue; // уже пробовали
-    const ok = await p2pTestStrategy(idx);
-    if (ok) return idx;
-  }
-
-  // Запускаем все остальные параллельно — кто первый ответит
-  p2pSetStatus('🔍 Ищу рабочий канал...');
-  return new Promise(resolve => {
-    let settled = false;
-    let pending  = 0;
-    for (let i = 0; i < _P2P_STRATEGIES.length; i++) {
-      if (priority.includes(i)) continue; // уже проверили выше
-      pending++;
-      p2pTestStrategy(i).then(ok => {
-        if (ok && !settled) { settled = true; resolve(i); }
-        pending--;
-        if (pending === 0 && !settled) resolve(-1);
-      }).catch(() => {
-        pending--;
-        if (pending === 0 && !settled) resolve(-1);
-      });
-    }
-    if (pending === 0 && !settled) resolve(-1);
+// ── Прямое подключение к Supabase (P2P удалён) ──────────────────
+async function _sbFetch(method, path, body, extraHeaders) {
+  const url = `${sbUrl()}${path}`;
+  const r = await fetch(url, {
+    method,
+    headers: { apikey: sbKey(), Authorization: `Bearer ${sbKey()}`, ...extraHeaders },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(8000),
   });
+  return { ok: r.ok, status: r.status, json: () => r.json(), text: () => r.text() };
 }
 
-// Вызывается после нескольких сбоев — ищем новую рабочую стратегию
-async function p2pFailover() {
-  if (_p2pSwitching) return;
-  _p2pSwitching = true;
-  _p2pFailCount  = 0;
-  _profilePeerReady = false;
+// Заглушки для совместимости с кодом который вызывает эти функции
+function p2pActiveStrategy() { return { id:'direct', label:'Прямое', emoji:'🔗' }; }
+function p2pIsDisabled()     { return false; }
+function p2pStartHealthCheck() {}
+function p2pStopHealthCheck()  {}
 
-  p2pSetStatus('⚡ Переключаю канал...');
-
-  const nextStart = (_p2pActiveIdx + 1) % _P2P_STRATEGIES.length;
-  const found = await p2pFindWorking(nextStart);
-
-  if (found >= 0) {
-    p2pSaveStrategy(found);
-    const s = _P2P_STRATEGIES[found];
-    p2pSetStatus(`✅ Канал: ${s.emoji} ${s.label}`);
-    _p2pSwitching = false;
-    const p = profileLoad();
-    if (p) profileConnect(p);
-  } else {
-    // Ничего не нашли, но всё равно пробуем прямое подключение
-    p2pSaveStrategy(0);
-    _p2pSwitching = false;
-    p2pSetStatus('⚠️ Пробую напрямую...');
-    setTimeout(() => {
-      const p = profileLoad();
-      if (p) profileConnect(p);
-    }, 5000);
-  }
-}
-
-// Фоновый health-check активной стратегии
-function p2pStartHealthCheck() {
-  clearInterval(_p2pCheckTimer);
-  _p2pCheckTimer = setInterval(async () => {
-    if (_p2pSwitching) return;
-    const ok = await p2pTestStrategy(_p2pActiveIdx);
-    if (ok) {
-      _p2pFailCount = 0;
-    } else {
-      _p2pFailCount++;
-      if (_p2pFailCount >= P2P_FAIL_THRESH) {
-        p2pFailover();
-      }
-    }
-  }, P2P_CHECK_INTERVAL);
-}
-
-function p2pStopHealthCheck() {
-  clearInterval(_p2pCheckTimer);
-  _p2pCheckTimer = null;
-}
-
-function p2pSetStatus(text) {
-  profileUpdateP2PStatus(text);
-}
-
-// ── Обёртка fetch через активную стратегию ───────────────────────
-async function p2pFetch(method, path, body, extraHeaders) {
-  // Если P2P отключён — всегда используем только прямое подключение
-  if (p2pIsDisabled()) {
-    return await _P2P_STRATEGIES[0].fetch(method, path, body, extraHeaders || {});
-  }
-  const s = p2pActiveStrategy();
-  try {
-    const r = await s.fetch(method, path, body, extraHeaders || {});
-    _p2pFailCount = 0;
-    return r;
-  } catch(e) {
-    _p2pFailCount++;
-    // Если write-метод упал — пробуем напрямую как запасной вариант
-    if (method !== 'GET') {
-      try { return await _P2P_STRATEGIES[0].fetch(method, path, body, extraHeaders || {}); } catch(e2) {}
-    }
-    if (_p2pFailCount >= P2P_FAIL_THRESH && !_p2pSwitching) {
-      p2pFailover();
-    }
-    throw e;
-  }
-}
-
-// ── Supabase REST helpers (переписаны через p2pFetch) ─────────────
+// ── Supabase REST helpers ───────────────────────────────────────────
 async function sbGet(table, query = '') {
   if (!sbReady()) return null;
   try {
-    const r = await p2pFetch('GET', `/rest/v1/${table}?${query}`, null, {});
+    const r = await _sbFetch('GET', `/rest/v1/${table}?${query}`, null, {});
     if (!r.ok && r.status !== 200) return null;
     _lastSuccessfulPoll = Date.now(); // watchdog: соединение живо
     return await r.json();
@@ -1625,7 +1394,7 @@ async function sbGet(table, query = '') {
 async function sbUpsert(table, data) {
   if (!sbReady()) return false;
   try {
-    const r = await p2pFetch('POST', `/rest/v1/${table}`, data, {
+    const r = await _sbFetch('POST', `/rest/v1/${table}`, data, {
       'Content-Type': 'application/json',
       'Prefer': 'resolution=merge-duplicates,return=minimal',
     });
@@ -1636,7 +1405,7 @@ async function sbUpsert(table, data) {
 async function sbInsert(table, data) {
   if (!sbReady()) return null;
   try {
-    const r = await p2pFetch('POST', `/rest/v1/${table}`, data, {
+    const r = await _sbFetch('POST', `/rest/v1/${table}`, data, {
       'Content-Type': 'application/json',
       'Prefer': 'return=representation',
     });
@@ -1648,24 +1417,12 @@ async function sbInsert(table, data) {
 async function sbDelete(table, query) {
   if (!sbReady()) return;
   try {
-    await p2pFetch('DELETE', `/rest/v1/${table}?${query}`, null, {});
+    await _sbFetch('DELETE', `/rest/v1/${table}?${query}`, null, {});
   } catch(e) {}
 }
 
 // ── Инициализация при старте ──────────────────────────────────────
 // Запускается в фоне — НЕ блокирует старт приложения
-(function p2pInit() {
-  // Пробуем сохранённую стратегию сразу
-  // Если не работает — тихо ищем рабочую в фоне
-  p2pTestStrategy(_p2pActiveIdx).then(ok => {
-    if (!ok) {
-      p2pFindWorking(0).then(found => {
-        if (found >= 0) p2pSaveStrategy(found);
-        // Если found === -1 — оставляем strategy=0 (direct), авось сеть поднимется
-      });
-    }
-  });
-})();
 
 function supabaseSaveConfig() {
   const url = document.getElementById('sb-url-input')?.value?.trim();
@@ -1682,7 +1439,7 @@ function supabaseSaveConfig() {
 
 async function sbTestConnection() {
   try {
-    const r = await p2pFetch('GET', `/rest/v1/presence?select=username&limit=1`, null, {});
+    const r = await _sbFetch('GET', `/rest/v1/presence?select=username&limit=1`, null, {});
     return r.ok || r.status === 404;
   } catch(e) { return false; }
 }
@@ -1766,7 +1523,7 @@ async function sbSaveUser(p) {
     created_at:  p.createdAt  || Date.now(),
   };
   try {
-    await p2pFetch('POST', '/rest/v1/users', payload, {
+    await _sbFetch('POST', '/rest/v1/users', payload, {
       'Content-Type': 'application/json',
       'Prefer': 'resolution=merge-duplicates,return=minimal',
     });
@@ -1782,8 +1539,12 @@ async function sbLoadUser(username) {
   return null;
 }
 
-// Хелпер: ждать N миллисекунд
+// Хелпер: ждать N миллисекунд с проверкой sessionId — прерывается если пришёл новый connect
 function _delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function _delayOrCancel(ms, sessionId) {
+  await _delay(ms);
+  return sessionId === _connectSessionId; // false = сессия устарела, нужно выйти
+}
 
 // Хелпер: лог и в файл и в UI статус
 function _connectLog(msg) {
@@ -1799,7 +1560,6 @@ async function profileConnect(p) {
   _presenceFirstPut = true;
   const sessionId = ++_connectSessionId;
 
-  // Останавливаем все таймеры
   clearInterval(_sbPresenceTimer); _sbPresenceTimer = null;
   clearInterval(_fbPollTimer);     _fbPollTimer = null;
   clearInterval(_fbInboxTimer);    _fbInboxTimer = null;
@@ -1815,94 +1575,50 @@ async function profileConnect(p) {
     return;
   }
 
-  // ── ШАГ 1: Проверяем соединение ──────────────────────────────────
-  _connectLog('⏳ Шаг 1/5 — проверка соединения...');
-  const connOk = await p2pTestStrategy(_p2pActiveIdx);
-  if (sessionId !== _connectSessionId) return;
-
-  if (!connOk) {
-    _connectLog('🔴 Шаг 1/5 — нет соединения, жду 3с...');
-    await _delay(3000);
-    if (sessionId !== _connectSessionId) return;
-    // Повторная проверка
-    const retry = await p2pTestStrategy(_p2pActiveIdx);
-    if (!retry) {
-      _connectLog('🔴 Нет сети — ищу другой канал...');
-      if (!p2pIsDisabled()) p2pFailover();
-      else setTimeout(() => profileConnect(p), 5000);
-      return;
-    }
-  }
-  _connectLog('✅ Шаг 1/5 — соединение есть');
-
-  // ── ШАГ 2: Регистрируем присутствие ──────────────────────────────
-  await _delay(3000);
-  if (sessionId !== _connectSessionId) return;
-  _connectLog('⏳ Шаг 2/5 — регистрирую присутствие...');
+  profileUpdateP2PStatus('⏳ Подключаюсь...');
   try {
     await sbPresencePut(p);
+    if (sessionId !== _connectSessionId) return;
+
     _profilePeerReady = true;
-    _connectLog('✅ Шаг 2/5 — присутствие зарегистрировано');
-  } catch(e) {
-    _connectLog('⚠️ Шаг 2/5 — ошибка присутствия, продолжаю...');
-  }
-  if (sessionId !== _connectSessionId) return;
+    profileUpdateP2PStatus('🟢 @' + p.username + ' · 🔗 Прямое');
 
-  // ── ШАГ 3: Загружаем список онлайн ───────────────────────────────
-  await _delay(3000);
-  if (sessionId !== _connectSessionId) return;
-  _connectLog('⏳ Шаг 3/5 — загружаю список онлайн...');
-  try {
+    if (!_fbInboxLastTs) _fbInboxLastTs = Date.now() - 300000;
+
     await sbPollPresence();
-    const cnt = _profileOnlinePeers.length + 1;
-    _connectLog('✅ Шаг 3/5 — онлайн: ' + cnt + ' польз.');
-  } catch(e) {
-    _connectLog('⚠️ Шаг 3/5 — ошибка списка онлайн, продолжаю...');
-  }
-  if (sessionId !== _connectSessionId) return;
+    if (sessionId !== _connectSessionId) return;
 
-  // ── ШАГ 4: Проверяем пропущенные сообщения ───────────────────────
-  await _delay(3000);
-  if (sessionId !== _connectSessionId) return;
-  _connectLog('⏳ Шаг 4/5 — проверяю пропущенные сообщения...');
-  if (!_fbInboxLastTs) _fbInboxLastTs = Date.now() - 300000;
-  try {
-    const data = await sbGet('messages',
-      `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
-    );
-    if (Array.isArray(data) && data.length > 0) {
-      _connectLog('✅ Шаг 4/5 — нашёл ' + data.length + ' пропущенных сообщений!');
-      const bySender = {};
-      data.forEach(msg => {
-        if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
-        bySender[msg.from_user].push(msg);
-        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts); _inboxTsSave(_fbInboxLastTs);
-      });
-      Object.entries(bySender).forEach(([sender, msgs]) => {
-        sbHandleIncomingMessages(p.username, sender, msgs);
-      });
-    } else {
-      _connectLog('✅ Шаг 4/5 — новых сообщений нет');
+    // Проверяем пропущенные сообщения
+    try {
+      const data = await sbGet('messages',
+        `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
+      );
+      if (Array.isArray(data) && data.length > 0) {
+        if (window.Android && typeof Android.log === 'function')
+          Android.log('[CONNECT] нашёл ' + data.length + ' пропущенных сообщений');
+        const bySender = {};
+        data.forEach(msg => {
+          if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
+          bySender[msg.from_user].push(msg);
+          _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts); _inboxTsSave(_fbInboxLastTs);
+        });
+        Object.entries(bySender).forEach(([sender, msgs]) => {
+          sbHandleIncomingMessages(p.username, sender, msgs);
+        });
+      }
+    } catch(e) {}
+    if (sessionId !== _connectSessionId) return;
+
+    _startWatchdog(p);
+    if (window.Android && typeof window.Android.savePushConfig === 'function') {
+      try { window.Android.savePushConfig(p.username, sbUrl(), sbKey()); } catch(_){}
     }
   } catch(e) {
-    _connectLog('⚠️ Шаг 4/5 — ошибка проверки сообщений, продолжаю...');
+    if (sessionId === _connectSessionId) {
+      profileUpdateP2PStatus('🔴 Ошибка подключения — повтор через 5с');
+      setTimeout(() => { if (sessionId === _connectSessionId) profileConnect(p); }, 5000);
+    }
   }
-  if (sessionId !== _connectSessionId) return;
-
-  // ── ШАГ 5: Запускаем фоновые службы ─────────────────────────────
-  await _delay(3000);
-  if (sessionId !== _connectSessionId) return;
-  _connectLog('⏳ Шаг 5/5 — запускаю фоновые службы...');
-
-  if (!p2pIsDisabled()) p2pStartHealthCheck();
-  _startWatchdog(p);
-
-  if (window.Android && typeof window.Android.savePushConfig === 'function') {
-    try { window.Android.savePushConfig(p.username, sbUrl(), sbKey()); } catch(_){}
-  }
-
-  const sNow = p2pActiveStrategy();
-  _connectLog('🟢 @' + p.username + ' · ' + sNow.emoji + ' ' + sNow.label);
 }
 
 let _visibilityDebounce = null;
@@ -2454,62 +2170,8 @@ function profileUpdateP2PStatus(msg) {
   }
 }
 
-// Включение/выключение P2P
-function p2pToggleDisabled() {
-  const nowDisabled = !p2pIsDisabled();
-  p2pSetDisabled(nowDisabled);
-  if (nowDisabled) {
-    // Отключаем: останавливаем health-check, сбрасываем стратегию на прямую
-    p2pStopHealthCheck();
-    _p2pActiveIdx = 0;
-    toast('🔒 P2P выключен — используется прямое подключение');
-  } else {
-    toast('✅ P2P включён — автовыбор лучшего канала');
-  }
-  const p = profileLoad();
-  if (p) profileConnect(p);
-  setTimeout(profileRenderScreen, 300);
-}
 
-// Ручное переключение канала — показывает шит со всеми стратегиями
-function p2pManualSwitch() {
-  const existing = document.getElementById('p2p-strategy-sheet');
-  if (existing) { existing.remove(); return; }
 
-  const sheet = document.createElement('div');
-  sheet.id = 'p2p-strategy-sheet';
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:8000;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.55)';
-  sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(16px + var(--safe-bot))">
-      <div style="width:40px;height:4px;border-radius:2px;background:var(--surface3);margin:10px auto 14px"></div>
-      <div style="font-size:14px;font-weight:700;padding:0 20px 10px;color:var(--text)">⚡ Выбор канала подключения</div>
-      ${_P2P_STRATEGIES.map((s, i) => `
-        <button onclick="p2pSelectStrategy(${i});document.getElementById('p2p-strategy-sheet').remove()"
-          style="width:100%;padding:14px 20px;background:${i === _p2pActiveIdx ? 'rgba(255,255,255,.07)' : 'none'};border:none;color:var(--text);font-family:inherit;font-size:14px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.04)">
-          <span style="font-size:22px">${s.emoji}</span>
-          <span style="flex:1">${s.label}</span>
-          ${i === _p2pActiveIdx ? '<span style="font-size:11px;font-weight:700;color:var(--accent)">● АКТИВЕН</span>' : ''}
-          <span id="p2p-test-${s.id}" style="font-size:11px;color:var(--muted)">...</span>
-        </button>`).join('')}
-    </div>`;
-  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
-  document.body.appendChild(sheet);
-
-  // Тестируем все стратегии в фоне
-  _P2P_STRATEGIES.forEach(async (s, i) => {
-    const el = document.getElementById('p2p-test-' + s.id);
-    const ok = await p2pTestStrategy(i);
-    if (el) { el.textContent = ok ? '✅' : '❌'; el.style.color = ok ? '#4aff8a' : '#ff4455'; }
-  });
-}
-
-async function p2pSelectStrategy(idx) {
-  p2pSaveStrategy(idx);
-  const s = _P2P_STRATEGIES[idx];
-  toast(`${s.emoji} Канал: ${s.label}`);
-  const p = profileLoad();
-  if (p) profileConnect(p);
-}
 
 // Заполнить поля настроек при открытии
 const _origShowScreenForSb = window.showScreen;
@@ -2676,10 +2338,29 @@ function profileAddFriend(username) {
 // ══ ХУКИ: показ экрана профиля ═══════════════════════════════════
 const _origShowScreen = window.showScreen;
 window.showScreen = function(id, dir) {
+  // При уходе из чата — закрываем меню реакций/действий
+  if (id !== 's-messenger-chat') {
+    const menu = document.getElementById('mc-msg-menu');
+    if (menu) menu.remove();
+    const fwdSheet = document.getElementById('mc-forward-sheet');
+    if (fwdSheet) fwdSheet.remove();
+    // Скрываем клавиатуру
+    if (id !== 's-messenger-chat') {
+      const inp = document.getElementById('mc-input');
+      if (inp) inp.blur();
+    }
+  }
   if (id === 's-profile')     profileRenderScreen();
   if (id === 's-online')      profileRenderOnline();
   if (id === 's-leaderboard') leaderboardRender();
   if (id === 's-messenger')   messengerRenderList();
+  // При заходе в чат — скролл вниз без клавиатуры
+  if (id === 's-messenger-chat') {
+    setTimeout(() => {
+      const body = document.getElementById('mc-messages');
+      if (body) body.scrollTop = body.scrollHeight;
+    }, 150);
+  }
   if (_origShowScreen) _origShowScreen(id, dir);
 };
 
@@ -2882,6 +2563,7 @@ const LEADERBOARD_GAMES = [
   { id: 'blockblast', emoji: '💥', label: 'Block Blast'   },
   { id: 'breakout',   emoji: '🏏', label: 'Арканоид'      },
   { id: 'flappy',     emoji: '🐦', label: 'Флаппи'        },
+  { id: 'bubbles',    emoji: '🎵', label: 'OSU!'          },
 ];
 const LB_STORE_KEY = 'sapp_leaderboard_v1';
 let _lbSelectedGame = 'snake';
@@ -3204,13 +2886,9 @@ function messengerFilterChats(q) { messengerRenderList(q); }
 // ── Открытие чата ─────────────────────────────────────────────────
 function messengerOpenChat(username) {
   _msgCurrentChat = username;
-  // Читаем сообщения
+  // Сообщения помечаются прочитанными только при скролле до конца (см. messengerMarkRead)
   const msgs = msgLoad();
   const p = profileLoad();
-  if (msgs[username]) {
-    msgs[username].forEach(m => { if (m.from !== p?.username) m.read = true; });
-    msgSave(msgs);
-  }
   messengerUpdateBadge();
 
   // Обновляем шапку
@@ -3231,12 +2909,7 @@ function messengerOpenChat(username) {
   showScreen('s-messenger-chat');
   messengerRenderMessages();
 
-  // Фокус на поле ввода — вызывает клавиатуру на Android
-  // Задержка чуть больше длины анимации перехода экрана (280ms)
-  setTimeout(() => {
-    const inp = document.getElementById('mc-input');
-    if (inp) inp.focus();
-  }, 320);
+  // Фокус убран — клавиатура открывается только при тапе на поле ввода
 
   // Fix: принудительно перезапускаем polling при открытии чата —
   // это гарантирует немедленный запрос к Supabase, не ждём следующего тика.
@@ -3355,6 +3028,7 @@ function messengerRenderMessages(animateLast) {
   body.innerHTML = html;
   requestAnimationFrame(() => {
     body.scrollTop = body.scrollHeight;
+    messengerMarkRead();
     // Animate last bubble
     if (animateLast) {
       const bubbles = body.querySelectorAll('[data-msg-bubble]');
@@ -3375,6 +3049,8 @@ function messengerSend() {
   if (!text) return;
   inp.value = '';
   inp.style.height = '';
+  // Возвращаем фокус чтобы клавиатура не закрывалась
+  setTimeout(() => inp.focus(), 10);
   const p = profileLoad();
   if (!p) return;
 
@@ -3935,14 +3611,13 @@ function mcAutoResize(el) {
     const vv = window.visualViewport;
     if (!vv) return;
     const kbOffset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    const t = 'transform 0.18s cubic-bezier(0.4,0,0.2,1)';
-    const ty = kbOffset > 10 ? `translateY(-${kbOffset}px)` : '';
-    // Двигаем весь экран чата — header + messages + inputbar вместе
+    const t = 'transform 0.15s cubic-bezier(0.4,0,0.2,1)';
+    // Сдвигаем весь экран (хедер + сообщения + инпут) вверх когда клавиатура открыта
     chatScreen.style.transition = t;
-    chatScreen.style.transform = ty;
-    // Скроллим сообщения вниз
+    chatScreen.style.transform = kbOffset > 10 ? `translateY(-${kbOffset}px)` : '';
+    // Скроллим вниз после сдвига
     const list = document.getElementById('mc-messages');
-    if (list) setTimeout(() => { list.scrollTop = list.scrollHeight; }, 20);
+    if (list) setTimeout(() => { list.scrollTop = list.scrollHeight; }, 30);
   }
 
   if (window.visualViewport) {
@@ -4155,8 +3830,21 @@ function messengerUpdateBadge() {
   Object.values(msgs).forEach(chatMsgs => {
     total += (chatMsgs||[]).filter(m => m.from !== p?.username && !m.read).length;
   });
+  // Бейдж внутри кнопки "Сообщения" в профиле
   const badge = document.getElementById('msg-unread-badge');
   if (badge) { badge.style.display = total > 0 ? '' : 'none'; badge.textContent = total; }
+  // Красная точка на кнопке профиля в nav-баре
+  let navDot = document.getElementById('nav-profile-msg-dot');
+  const navProfile = document.getElementById('nav-profile');
+  if (navProfile && !navDot) {
+    navDot = document.createElement('span');
+    navDot.id = 'nav-profile-msg-dot';
+    navDot.className = 'nav-badge';
+    navDot.style.cssText = 'position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#e05555;border:2px solid var(--bg,#0d0d0d);display:none';
+    const wrap = navProfile.querySelector('.nav-icon-wrap');
+    if (wrap) { wrap.style.position = 'relative'; wrap.appendChild(navDot); }
+  }
+  if (navDot) navDot.style.display = total > 0 ? '' : 'none';
 }
 
 function messengerOpenChatFrom(username) {
