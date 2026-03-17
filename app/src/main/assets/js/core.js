@@ -1,3 +1,28 @@
+
+// ── Telegram Style ────────────────────────────────────────────────
+function toggleTelegramStyle(enabled) {
+  if (enabled) {
+    document.body.classList.add('tg-style');
+    localStorage.setItem('sapp_tg_style', '1');
+    toast('✈️ Telegram Style включён');
+  } else {
+    document.body.classList.remove('tg-style');
+    localStorage.removeItem('sapp_tg_style');
+    toast('Telegram Style выключен');
+  }
+}
+
+// Восстанавливаем Telegram Style при старте
+(function initTgStyle() {
+  if (localStorage.getItem('sapp_tg_style') === '1') {
+    document.body.classList.add('tg-style');
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggle = document.getElementById('tg-style-toggle');
+      if (toggle) toggle.checked = true;
+    });
+  }
+})();
+
 // ══ Глобальные переменные — объявлены в начале во избежание TDZ ══
 var _otaApkUrl = '', _otaVersion = '';
 var _eggTaps = 0, _eggTimer = null, _eggLastTouch = 0, _eggBlockCards = false;
@@ -1136,7 +1161,6 @@ function applyBgBlurState(){
   if(row) row.style.display = (S.customBg && !S.liquidGlass) ? 'flex' : 'none';
 }
 
-
 /* ── Custom Background ── */
 function applyCustomBg(){
   const layer = document.getElementById('bg-layer');
@@ -1824,10 +1848,12 @@ function goHome(){
   document.body.classList.add('on-home-screen');
   updateNavActive('nav-home');
   updateLastGroupBtn();
+  // Не перезагружаем файлы если они уже загружены (устраняет лаг)
   const fs=document.getElementById('file-section');
   const err=document.getElementById('home-error-hint');
   const noUrl=document.getElementById('no-url-hint');
-  if(fs.classList.contains('hidden')&&err.classList.contains('hidden')&&noUrl.classList.contains('hidden')){
+  const alreadyLoaded = S.files && S.files.length > 0;
+  if(!alreadyLoaded && fs.classList.contains('hidden')&&err.classList.contains('hidden')&&noUrl.classList.contains('hidden')){
     loadFiles();
   }
 }
@@ -2484,7 +2510,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.2.23';
+const APP_VERSION='4.2.24';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -3149,7 +3175,6 @@ function cmdExec(raw){
   }
 }
 
-
 // ══ ШРИФТЫ ══
 const FONTS = [
   // ── Оригинальные (с кириллицей) ──────────────────────────────────
@@ -3212,7 +3237,6 @@ function renderFontPicker(){
   });
 }
 
-
 // ══ ЛОКАЛЬНАЯ ЗАГРУЗКА DOC ══
 var _bellTapCount=0,_bellTapTimer=null;
 function bellNavTap(){
@@ -3261,7 +3285,6 @@ function onLocalDocChosen(event){
   // reset input
   event.target.value='';
 }
-
 
 // ══ ЗАМЕТКИ К ПАРЕ ══
 function loadNotes(){try{return JSON.parse(stor.get('pair_notes')||'{}');}catch(e){return{};}}
@@ -3421,8 +3444,6 @@ function renderTeacherSchedule(teacher, hdr, entries, filename){
     body.appendChild(card);
   }
 }
-
-
 
 function loadNotes(){try{return JSON.parse(stor.get('pair_notes')||'{}');}catch(e){return{};}}
 function saveNote(key,text){const n=loadNotes();if(text.trim())n[key]=text.trim();else delete n[key];stor.set('pair_notes',JSON.stringify(n));}
@@ -3621,8 +3642,6 @@ function schedBack(){
   }
 }
 
-
-
 // ══ КАРУСЕЛЬ ШРИФТОВ ══
 var _fontIdx = 0;
 
@@ -3694,8 +3713,6 @@ function fontCarouselApply(){
   },{passive:true});
 })();
 
-
-
 // ══ ПРИКОЛЮХИ ══
 
 // 🎓 "Конец учебного года" — если дата близко к июню, особое приветствие
@@ -3744,8 +3761,6 @@ function checkCurrentPairEnd(){
     break; // только первый bell проверяем при старте
   }
 }
-
-
 
 // ══ ЛОГИРОВАНИЕ (JS) ══
 const _appLogs = [];
@@ -3805,7 +3820,6 @@ window.addEventListener('unhandledrejection', e => {
 
 // Логируем ключевые события приложения
 const _origLoadFiles = null; // будет перехвачен после определения
-
 
 // ══ ДОПОЛНИТЕЛЬНЫЕ ФИШКИ ══
 
@@ -3875,8 +3889,6 @@ function checkNightMode(){
 }
 setInterval(checkNightMode,300000);
 setTimeout(checkNightMode,1000);
-
-
 
 // ══ БОНУСНЫЕ ФИШКИ (+10) ══
 
@@ -4257,8 +4269,6 @@ function funChaosMode(){
 // Команды ⑪–⑳ встроены в cmdExec switch выше
 
 // ══ КОНЕЦ ПРИКОЛЬНЫХ ФУНКЦИЙ ══
-
-
 
 // Tanks — continuous fire/move on held touch
 var _tanksHeld={};

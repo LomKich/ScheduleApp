@@ -2251,7 +2251,6 @@ function brUpdateScore() {
   el.textContent = 'Счёт: ' + brScore + ' • Рекорд: ' + brHi + ' • ' + hearts;
 }
 
-
 // ══════════════════════════════════════════════════════════════════
 // ── 🎵 OSU! BUBBLES (v3.0.0) ─────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
@@ -4182,7 +4181,6 @@ function tanksStop(){
   document.removeEventListener('keyup',tanksKeyUp);
 }
 
-
 // ── Game iframe helpers ─────────────────────────────────────────
 function _openGame(overlayId, src) {
   const el = document.getElementById(overlayId);
@@ -4211,7 +4209,6 @@ window.addEventListener('message', function(e) {
   if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
   eggOpen();
 });
-
 
 function doomStart() {
   if (window.Android && window.Android.setOrientation) Android.setOrientation('landscape');

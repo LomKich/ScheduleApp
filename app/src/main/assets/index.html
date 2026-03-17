@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0d0d0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1993,6 +1993,51 @@ img.emoji {
 .ios-notif        img.emoji { height:1em; width:1em; vertical-align:-.1em; }
 /* Кнопки */
 button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margin:0 .05em; }
+
+/* Keyboard fix — input always visible */
+#s-messenger-chat { height:100dvh!important; max-height:100dvh!important; }
+#mc-messages { flex:1 1 0!important; min-height:0!important; overflow-y:auto!important; }
+#mc-input-bar { flex-shrink:0!important; position:sticky!important; bottom:0!important; }
+
+/* ── Telegram Style Mode ───────────────────────────────────────── */
+body.tg-style {
+  --tg-blue: #2AABEE;
+  --tg-blue-dark: #229ED9;
+  --tg-msg-out: #2AABEE;
+  --tg-msg-in: #2A2F32;
+  --tg-radius: 18px;
+}
+body.tg-style .mc-bubble-inner[style*="var(--accent)"] {
+  background: var(--tg-blue) !important;
+  border-radius: 18px 18px 4px 18px !important;
+}
+body.tg-style .bottom-nav {
+  border-radius: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  left: 0 !important;
+  transform: none !important;
+  bottom: 0 !important;
+  border-top: 1px solid rgba(255,255,255,.08) !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  padding-bottom: var(--safe-bot) !important;
+}
+body.tg-style .screen { border-radius: 0 !important; }
+body.tg-style .settings-row,
+body.tg-style .profile-card,
+body.tg-style .list-item {
+  border-radius: 12px !important;
+}
+body.tg-style .btn {
+  border-radius: 12px !important;
+}
+body.tg-style #mc-input {
+  border-radius: 22px !important;
+  background: var(--surface2) !important;
+}
 </style>
 <body>
 <div id="bg-layer"></div>
@@ -2182,6 +2227,20 @@ button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margi
     </div>
 
     <!-- Звук -->
+    <!-- Стиль интерфейса -->
+    <div class="section-label">Интерфейс</div>
+    <div class="settings-row" style="margin-bottom:8px">
+      <div>
+        <div style="font-size:14px;font-weight:600">✈️ Telegram Style</div>
+        <div class="settings-row-sub">Синие пузыри, округлые формы, анимации как в Telegram</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="tg-style-toggle" onchange="toggleTelegramStyle(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="sep"></div>
+
     <div class="section-label">Звук</div>
     <div class="list-item" onclick="toggleMute()" style="margin-bottom:8px">
       <div>
@@ -2215,7 +2274,7 @@ button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margi
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.2.23 — Android</div>
+        <div class="item-sub" id="app-version-str">4.2.24 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2456,13 +2515,12 @@ button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margi
 
 <!-- ══ МЕССЕНДЖЕР (HIDDEN — TODO: переместить в нав-бар) ══ -->
 <!-- PEER PROFILE SCREEN -->
-<div class="screen" id="s-peer-profile">
-  <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');history.back||showScreen('s-messenger-chat','back')">‹</button>
-    <div class="hdr-title" id="peer-profile-title">Профиль</div>
+<div class="screen" id="s-peer-profile" style="padding:0">
+  <div class="hdr" id="peer-profile-hdr" style="position:absolute;top:0;left:0;right:0;z-index:10;background:transparent;border:none;box-shadow:none;padding-top:var(--safe-top)">
+    <!-- Заполняется через JS -->
   </div>
-  <div class="body" id="peer-profile-body" style="padding:0">
-    <div style="text-align:center;padding:40px;color:var(--muted)">Загрузка...</div>
+  <div id="peer-profile-body" style="height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch">
+    <div style="text-align:center;padding:80px 20px;color:var(--muted)">Загрузка...</div>
   </div>
 </div>
 
@@ -2525,7 +2583,7 @@ button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margi
     </div>
   </div>
   <!-- Input bar -->
-  <div id="mc-input-bar" style="display:flex;align-items:flex-end;gap:8px;padding:8px 12px calc(8px + var(--safe-bot));background:var(--surface);border-top:1px solid rgba(255,255,255,.06);flex-shrink:0">
+  <div id="mc-input-bar" style="display:flex;align-items:flex-end;gap:8px;padding:8px 12px calc(8px + var(--safe-bot));background:var(--surface);border-top:1px solid rgba(255,255,255,.06);flex-shrink:0;position:relative;z-index:10">
     <button id="mc-sticker-btn" onclick="mcToggleStickerPanel()"
       style="width:38px;height:38px;border-radius:50%;background:var(--surface2);border:none;color:var(--muted);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s;margin-bottom:2px"
       ontouchstart="this.style.transform='scale(.9)'" ontouchend="this.style.transform=''">🎭</button>
@@ -2574,17 +2632,18 @@ button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margi
       <span class="nav-badge" id="nav-bells-badge" style="display:none"></span>
     </div>
   </button>
+  <button class="nav-item" id="nav-messenger" onclick="SFX.play('btnClick');if(typeof messengerOpen==='function')messengerOpen()">
+    <div class="nav-icon-wrap" style="position:relative">
+      <svg class="nav-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+      </svg>
+      <span id="nav-msg-dot" style="display:none;position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#e05555;border:2px solid var(--surface)"></span>
+    </div>
+  </button>
   <button class="nav-item" id="nav-profile" onclick="SFX.play('navSettings');navTo('s-profile','nav-profile')">
     <div class="nav-icon-wrap">
       <svg class="nav-icon" id="nav-profile-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-      </svg>
-    </div>
-  </button>
-  <button class="nav-item" id="nav-settings" onclick="SFX.play('navSettings');navTo('s-settings','nav-settings')">
-    <div class="nav-icon-wrap">
-      <svg class="nav-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
       </svg>
     </div>
   </button>
