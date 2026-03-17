@@ -60,6 +60,8 @@ public class MainActivity extends Activity {
     private DnsVpnService          vpnService;
     private boolean                vpnBound = false;
     private AppLogger              log;
+    private SupabaseClient         supabase;
+    private SupabaseHelper         helper;
     private ValueCallback<Uri[]>   fileChooserCallback = null;
     private boolean                isNativeBgPick = false;
 
@@ -95,6 +97,11 @@ public class MainActivity extends Activity {
         log = AppLogger.get(this);
         log.section("onCreate");
         log.i(TAG, "Приложение запускается");
+
+        supabase = SupabaseClient.get(this, log);
+        log.i(TAG, "SupabaseClient готов [URL=" + SupabaseClient.URL + "]");
+        helper = SupabaseHelper.get(this, log);
+        log.i(TAG, "SupabaseHelper готов (presence / messages / leaderboard / users / accounts)");
 
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -1211,6 +1218,594 @@ public class MainActivity extends Activity {
                     return err.toString();
                 } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
             }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // SUPABASE BRIDGE
+        // Все методы блокирующие — JS должен вызывать их в async/Worker.
+        // Каждый метод возвращает JSON-строку: {ok, status, body, error?}
+        // ══════════════════════════════════════════════════════════════════
+
+        // ── Database ──────────────────────────────────────────────────────
+
+        /**
+         * SELECT из таблицы.
+         * @param table  имя таблицы Supabase, например "messages"
+         * @param query  PostgREST query string, например "select=*&user_id=eq.42&order=created_at.desc&limit=50"
+         * @return JSON {ok, status, body} — body это JSON-массив строк
+         *
+         * Пример из JS:
+         *   const r = JSON.parse(Android.supabaseSelect("messages", "select=*&order=created_at.desc&limit=20"));
+         *   if (r.ok) { const rows = JSON.parse(r.body); }
+         */
+        @JavascriptInterface
+        public String supabaseSelect(String table, String query) {
+            log.i(TAG, "JS→supabaseSelect table=" + table + " query=" + query);
+            return supabase.select(table, query);
+        }
+
+        /**
+         * INSERT одной или нескольких строк.
+         * @param table имя таблицы
+         * @param json  одиночный объект "{…}" или массив "[{…},{…}]"
+         * @return JSON {ok, status, body} — body: вставленные строки
+         *
+         * Пример:
+         *   Android.supabaseInsert("messages", JSON.stringify({text:"Привет", user_id:1}))
+         */
+        @JavascriptInterface
+        public String supabaseInsert(String table, String json) {
+            log.i(TAG, "JS→supabaseInsert table=" + table);
+            return supabase.insert(table, json);
+        }
+
+        /**
+         * UPDATE строк по фильтру.
+         * @param table  имя таблицы
+         * @param filter PostgREST фильтр, например "id=eq.5"
+         * @param json   поля для обновления "{read:true}"
+         *
+         * Пример:
+         *   Android.supabaseUpdate("messages", "id=eq.5", JSON.stringify({read: true}))
+         */
+        @JavascriptInterface
+        public String supabaseUpdate(String table, String filter, String json) {
+            log.i(TAG, "JS→supabaseUpdate table=" + table + " filter=" + filter);
+            return supabase.update(table, filter, json);
+        }
+
+        /**
+         * UPSERT — вставить или обновить по primary key.
+         * @param table имя таблицы
+         * @param json  объект или массив объектов
+         *
+         * Пример:
+         *   Android.supabaseUpsert("profiles", JSON.stringify({id: userId, name: "Alex"}))
+         */
+        @JavascriptInterface
+        public String supabaseUpsert(String table, String json) {
+            log.i(TAG, "JS→supabaseUpsert table=" + table);
+            return supabase.upsert(table, json);
+        }
+
+        /**
+         * DELETE строк по фильтру.
+         * ВНИМАНИЕ: filter обязателен, пустая строка вернёт ошибку.
+         * @param filter PostgREST фильтр, например "id=eq.5"
+         *
+         * Пример:
+         *   Android.supabaseDelete("messages", "id=eq.42")
+         */
+        @JavascriptInterface
+        public String supabaseDelete(String table, String filter) {
+            log.i(TAG, "JS→supabaseDelete table=" + table + " filter=" + filter);
+            return supabase.delete(table, filter);
+        }
+
+        // ── RPC ───────────────────────────────────────────────────────────
+
+        /**
+         * Вызов PostgreSQL-функции через /rpc/.
+         * @param function  имя функции
+         * @param paramsJson JSON-объект с параметрами или "{}"
+         *
+         * Пример:
+         *   Android.supabaseRpc("get_unread_count", JSON.stringify({p_user_id: 1}))
+         */
+        @JavascriptInterface
+        public String supabaseRpc(String function, String paramsJson) {
+            log.i(TAG, "JS→supabaseRpc function=" + function);
+            return supabase.rpc(function, paramsJson);
+        }
+
+        // ── Auth ──────────────────────────────────────────────────────────
+
+        /**
+         * Регистрация нового пользователя.
+         * После успеха JWT автоматически сохраняется в SupabaseClient.
+         *
+         * Пример:
+         *   const r = JSON.parse(Android.supabaseSignUp("user@example.com", "password123"));
+         *   if (r.ok) { const data = JSON.parse(r.body); /* data.access_token * / }
+         */
+        @JavascriptInterface
+        public String supabaseSignUp(String email, String password) {
+            log.i(TAG, "JS→supabaseSignUp email=" + email);
+            return supabase.signUp(email, password);
+        }
+
+        /**
+         * Вход по email + password.
+         * После успеха JWT автоматически сохраняется — все последующие
+         * запросы к БД и Storage будут идти от имени этого пользователя.
+         *
+         * Пример:
+         *   const r = JSON.parse(Android.supabaseSignIn("user@example.com", "pass"));
+         *   if (r.ok) { const data = JSON.parse(r.body); saveToken(data.access_token); }
+         */
+        @JavascriptInterface
+        public String supabaseSignIn(String email, String password) {
+            log.i(TAG, "JS→supabaseSignIn email=" + email);
+            return supabase.signIn(email, password);
+        }
+
+        /**
+         * Выход — сбрасывает JWT на сервере и локально.
+         */
+        @JavascriptInterface
+        public String supabaseSignOut() {
+            log.i(TAG, "JS→supabaseSignOut");
+            return supabase.signOut();
+        }
+
+        /**
+         * Получить данные текущего аутентифицированного пользователя.
+         * Требует установленного JWT (после signIn/signUp или setToken).
+         */
+        @JavascriptInterface
+        public String supabaseGetUser() {
+            log.i(TAG, "JS→supabaseGetUser");
+            return supabase.getUser();
+        }
+
+        /**
+         * Установить JWT вручную (например, восстановленный из localStorage/SharedPrefs).
+         * После вызова все запросы будут идти с этим токеном.
+         *
+         * Пример:
+         *   Android.supabaseSetToken(localStorage.getItem("sb_token"))
+         */
+        @JavascriptInterface
+        public void supabaseSetToken(String token) {
+            log.i(TAG, "JS→supabaseSetToken len=" + (token != null ? token.length() : "null"));
+            supabase.setAuthToken(token);
+        }
+
+        /**
+         * Получить текущий JWT (для сохранения в localStorage/SharedPrefs).
+         * @return JWT-строка или пустая строка если не авторизован
+         */
+        @JavascriptInterface
+        public String supabaseGetToken() {
+            String t = supabase.getAuthToken();
+            log.i(TAG, "JS→supabaseGetToken: " + (t != null ? "token(" + t.length() + ")" : "null"));
+            return t != null ? t : "";
+        }
+
+        // ── Storage ───────────────────────────────────────────────────────
+
+        /**
+         * Загрузить файл в Storage из Base64-строки.
+         * @param bucket    имя бакета, например "avatars"
+         * @param path      путь внутри бакета, например "user_42/photo.jpg"
+         * @param base64    содержимое файла в Base64
+         * @param mimeType  MIME-тип, например "image/jpeg"
+         *
+         * Пример:
+         *   const dataUrl = "data:image/jpeg;base64,/9j/4AA..."
+         *   const b64 = dataUrl.split(",")[1]
+         *   Android.supabaseStorageUpload("avatars", "user_1/avatar.jpg", b64, "image/jpeg")
+         */
+        @JavascriptInterface
+        public String supabaseStorageUpload(String bucket, String path,
+                                             String base64, String mimeType) {
+            log.i(TAG, "JS→supabaseStorageUpload bucket=" + bucket + " path=" + path
+                    + " mime=" + mimeType + " b64_len=" + (base64 != null ? base64.length() : 0));
+            return supabase.storageUploadBase64(bucket, path, base64, mimeType);
+        }
+
+        /**
+         * Получить публичный URL файла из Storage.
+         * Не делает сетевой запрос — просто формирует URL.
+         * @return URL-строка, например "https://…/storage/v1/object/public/avatars/user_1/photo.jpg"
+         */
+        @JavascriptInterface
+        public String supabaseStorageGetUrl(String bucket, String path) {
+            log.i(TAG, "JS→supabaseStorageGetUrl bucket=" + bucket + " path=" + path);
+            return supabase.storageGetPublicUrl(bucket, path);
+        }
+
+        /**
+         * Удалить файл из Storage.
+         */
+        @JavascriptInterface
+        public String supabaseStorageDelete(String bucket, String path) {
+            log.i(TAG, "JS→supabaseStorageDelete bucket=" + bucket + " path=" + path);
+            return supabase.storageDelete(bucket, path);
+        }
+
+        /**
+         * Получить список файлов в папке бакета.
+         * @param prefix папка внутри бакета, например "user_42/"
+         *
+         * Пример:
+         *   const r = JSON.parse(Android.supabaseStorageList("uploads", "user_42/"));
+         *   if (r.ok) { const files = JSON.parse(r.body); }
+         */
+        @JavascriptInterface
+        public String supabaseStorageList(String bucket, String prefix) {
+            log.i(TAG, "JS→supabaseStorageList bucket=" + bucket + " prefix=" + prefix);
+            return supabase.storageList(bucket, prefix);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // TYPED HELPERS — типизированные методы под таблицы ScheduleApp
+        // ══════════════════════════════════════════════════════════════════
+
+        // ── PRESENCE ─────────────────────────────────────────────────────
+
+        /**
+         * Upsert присутствия (heartbeat).
+         * Вызывать каждые 15-30 секунд пока пользователь онлайн.
+         *
+         * @param username   ник
+         * @param name       отображаемое имя
+         * @param avatar     эмодзи или URL
+         * @param avatarType "emoji" | "url" | "base64"
+         * @param avatarData base64-данные аватара (или пустая строка)
+         * @param color      hex-цвет "#e87722"
+         * @param status     "online" | "away" | "offline"
+         * @param vip        1 = VIP, 0 = нет
+         * @param badge      текст бейджа или пустая строка
+         * @param pwdHash    хэш пароля (для совместимости) или пустая строка
+         *
+         * JS пример:
+         *   Android.presenceUpsert("alex","Алекс","😎","emoji","","#e87722","online",0,"","")
+         */
+        @JavascriptInterface
+        public String presenceUpsert(String username, String name, String avatar,
+                                      String avatarType, String avatarData,
+                                      String color, String status,
+                                      int vip, String badge, String pwdHash) {
+            log.i(TAG, "JS→presenceUpsert username=" + username + " status=" + status);
+            return helper.presenceUpsert(username, name, avatar, avatarType,
+                    avatarData.isEmpty() ? null : avatarData,
+                    color, status, vip == 1,
+                    badge.isEmpty() ? null : badge,
+                    pwdHash.isEmpty() ? null : pwdHash);
+        }
+
+        /**
+         * Пометить пользователя оффлайн.
+         *
+         * JS пример:
+         *   Android.presenceOffline("alex")
+         */
+        @JavascriptInterface
+        public String presenceOffline(String username) {
+            log.i(TAG, "JS→presenceOffline username=" + username);
+            return helper.presenceOffline(username);
+        }
+
+        /**
+         * Получить список онлайн-пользователей.
+         * Возвращает {ok, status, body} — body: JSON-массив presence-строк.
+         *
+         * JS пример:
+         *   const r = JSON.parse(Android.presenceGetOnline());
+         *   if (r.ok) { const users = JSON.parse(r.body); }
+         */
+        @JavascriptInterface
+        public String presenceGetOnline() {
+            log.i(TAG, "JS→presenceGetOnline");
+            return helper.presenceGetOnline();
+        }
+
+        /**
+         * Получить presence одного пользователя.
+         */
+        @JavascriptInterface
+        public String presenceGetUser(String username) {
+            log.i(TAG, "JS→presenceGetUser username=" + username);
+            return helper.presenceGetUser(username);
+        }
+
+        /**
+         * Удалить запись presence (полный выход/удаление).
+         */
+        @JavascriptInterface
+        public String presenceDelete(String username) {
+            log.i(TAG, "JS→presenceDelete username=" + username);
+            return helper.presenceDelete(username);
+        }
+
+        // ── MESSAGES ─────────────────────────────────────────────────────
+
+        /**
+         * Отправить сообщение.
+         *
+         * @param chatKey  ключ чата (обычно sorted(from,to).join("_"))
+         * @param fromUser отправитель
+         * @param toUser   получатель
+         * @param text     текст
+         *
+         * JS пример:
+         *   Android.messageSend("alex_bob", "alex", "bob", "Привет!")
+         */
+        @JavascriptInterface
+        public String messageSend(String chatKey, String fromUser, String toUser, String text) {
+            log.i(TAG, "JS→messageSend chat=" + chatKey + " from=" + fromUser + " to=" + toUser);
+            return helper.messageSend(chatKey, fromUser, toUser, text);
+        }
+
+        /**
+         * Получить историю чата.
+         *
+         * @param chatKey  ключ чата
+         * @param afterTs  timestamp — получить сообщения новее (0 = все)
+         * @param limit    максимум сообщений
+         *
+         * JS пример (polling новых):
+         *   const r = JSON.parse(Android.messageGetByChatKey("alex_bob", lastTs, 50));
+         *   if (r.ok) { const msgs = JSON.parse(r.body); }
+         */
+        @JavascriptInterface
+        public String messageGetByChatKey(String chatKey, double afterTs, int limit) {
+            log.i(TAG, "JS→messageGetByChatKey chat=" + chatKey + " afterTs=" + afterTs);
+            return helper.messageGetByChatKey(chatKey, (long) afterTs, limit);
+        }
+
+        /**
+         * Получить входящие сообщения (все to_user=username новее afterTs).
+         * Используется для глобального polling всех чатов.
+         *
+         * JS пример:
+         *   const r = JSON.parse(Android.messageGetInbox("alex", lastTs, 100));
+         */
+        @JavascriptInterface
+        public String messageGetInbox(String toUser, double afterTs, int limit) {
+            log.i(TAG, "JS→messageGetInbox to=" + toUser + " afterTs=" + afterTs);
+            return helper.messageGetInbox(toUser, (long) afterTs, limit);
+        }
+
+        /**
+         * Удалить сообщение по id.
+         */
+        @JavascriptInterface
+        public String messageDelete(double messageId) {
+            log.i(TAG, "JS→messageDelete id=" + messageId);
+            return helper.messageDelete((long) messageId);
+        }
+
+        /**
+         * Очистить весь чат по chat_key (удалить все сообщения).
+         */
+        @JavascriptInterface
+        public String messageClearChat(String chatKey) {
+            log.i(TAG, "JS→messageClearChat chat=" + chatKey);
+            return helper.messageClearChat(chatKey);
+        }
+
+        // ── LEADERBOARD ───────────────────────────────────────────────────
+
+        /**
+         * Обновить/создать запись в лидерборде.
+         *
+         * @param game     "doom" | "minecraft" | "tanks" | …
+         * @param username ник игрока
+         * @param name     отображаемое имя
+         * @param avatar   эмодзи
+         * @param color    hex-цвет
+         * @param score    очки
+         *
+         * JS пример:
+         *   Android.leaderboardUpsert("doom","alex","Алекс","😎","#e87722",1500)
+         */
+        @JavascriptInterface
+        public String leaderboardUpsert(String game, String username, String name,
+                                         String avatar, String color, int score) {
+            log.i(TAG, "JS→leaderboardUpsert game=" + game + " username=" + username + " score=" + score);
+            return helper.leaderboardUpsert(game, username, name, avatar, color, score);
+        }
+
+        /**
+         * Получить топ игроков по игре.
+         *
+         * @param game  идентификатор игры
+         * @param limit количество записей (рекомендуется 10)
+         *
+         * JS пример:
+         *   const r = JSON.parse(Android.leaderboardGet("doom", 10));
+         *   if (r.ok) { const top = JSON.parse(r.body); }
+         */
+        @JavascriptInterface
+        public String leaderboardGet(String game, int limit) {
+            log.i(TAG, "JS→leaderboardGet game=" + game + " limit=" + limit);
+            return helper.leaderboardGet(game, limit);
+        }
+
+        /**
+         * Получить запись конкретного игрока.
+         */
+        @JavascriptInterface
+        public String leaderboardGetUser(String game, String username) {
+            log.i(TAG, "JS→leaderboardGetUser game=" + game + " username=" + username);
+            return helper.leaderboardGetUser(game, username);
+        }
+
+        /**
+         * Удалить запись из лидерборда.
+         */
+        @JavascriptInterface
+        public String leaderboardDelete(String game, String username) {
+            log.i(TAG, "JS→leaderboardDelete game=" + game + " username=" + username);
+            return helper.leaderboardDelete(game, username);
+        }
+
+        // ── USERS ─────────────────────────────────────────────────────────
+
+        /**
+         * Создать профиль пользователя (при регистрации).
+         *
+         * @param username   ник
+         * @param name       отображаемое имя
+         * @param pwdHash    хэш пароля
+         * @param avatar     эмодзи
+         * @param avatarType "emoji" | "url" | "base64"
+         * @param color      hex-цвет
+         *
+         * JS пример:
+         *   Android.userCreate("alex","Алексей",sha256(password),"😎","emoji","#e87722")
+         */
+        @JavascriptInterface
+        public String userCreate(String username, String name, String pwdHash,
+                                  String avatar, String avatarType, String color) {
+            log.i(TAG, "JS→userCreate username=" + username);
+            return helper.userCreate(username, name, pwdHash, avatar, avatarType, color);
+        }
+
+        /**
+         * Получить профиль пользователя.
+         *
+         * JS пример:
+         *   const r = JSON.parse(Android.userGet("alex"));
+         *   if (r.ok) { const arr = JSON.parse(r.body); const user = arr[0]; }
+         */
+        @JavascriptInterface
+        public String userGet(String username) {
+            log.i(TAG, "JS→userGet username=" + username);
+            return helper.userGet(username);
+        }
+
+        /**
+         * Обновить произвольные поля профиля.
+         * @param fieldsJson JSON-объект с полями, например:
+         *                   {"name":"Алексей","bio":"Привет всем!","color":"#ff0000"}
+         *
+         * JS пример:
+         *   Android.userUpdate("alex", JSON.stringify({bio: "Новое описание", color: "#00ff00"}))
+         */
+        @JavascriptInterface
+        public String userUpdate(String username, String fieldsJson) {
+            log.i(TAG, "JS→userUpdate username=" + username);
+            return helper.userUpdate(username, fieldsJson);
+        }
+
+        /**
+         * Обновить аватар пользователя.
+         *
+         * @param avatarType "emoji" | "url" | "base64"
+         * @param avatar     значение (эмодзи/URL)
+         * @param avatarData base64-данные (если type=base64) или пустая строка
+         */
+        @JavascriptInterface
+        public String userUpdateAvatar(String username, String avatarType,
+                                        String avatar, String avatarData) {
+            log.i(TAG, "JS→userUpdateAvatar username=" + username + " type=" + avatarType);
+            return helper.userUpdateAvatar(username, avatarType, avatar,
+                    avatarData.isEmpty() ? null : avatarData);
+        }
+
+        /**
+         * Обновить статус ("online" | "away" | "offline").
+         */
+        @JavascriptInterface
+        public String userUpdateStatus(String username, String status) {
+            log.i(TAG, "JS→userUpdateStatus username=" + username + " status=" + status);
+            return helper.userUpdateStatus(username, status);
+        }
+
+        /**
+         * Проверить, занят ли username.
+         * Возвращает JSON: {ok, exists: true/false}
+         *
+         * JS пример:
+         *   const r = JSON.parse(Android.userExists("alex"));
+         *   if (r.ok && r.exists) { showError("Ник занят"); }
+         */
+        @JavascriptInterface
+        public String userExists(String username) {
+            log.i(TAG, "JS→userExists username=" + username);
+            return helper.userExists(username);
+        }
+
+        /**
+         * Получить список всех пользователей (контакты/поиск).
+         * @param limit максимум записей
+         */
+        @JavascriptInterface
+        public String userGetAll(int limit) {
+            log.i(TAG, "JS→userGetAll limit=" + limit);
+            return helper.userGetAll(limit);
+        }
+
+        // ── ACCOUNTS ──────────────────────────────────────────────────────
+
+        /**
+         * Зарегистрировать аккаунт.
+         *
+         * @param username  ник
+         * @param pwdHash   хэш пароля (SHA-256 в hex, делать в JS)
+         * @param name      отображаемое имя
+         * @param avatar    эмодзи
+         * @param color     hex-цвет
+         *
+         * JS пример:
+         *   const hash = await sha256(password); // в hex
+         *   const r = JSON.parse(Android.accountCreate("alex", hash, "Алексей", "😎", "#e87722"));
+         */
+        @JavascriptInterface
+        public String accountCreate(String username, String pwdHash,
+                                     String name, String avatar, String color) {
+            log.i(TAG, "JS→accountCreate username=" + username);
+            return helper.accountCreate(username, pwdHash, name, avatar, color);
+        }
+
+        /**
+         * Получить аккаунт для верификации пароля.
+         * В ответе будет pwd_hash — JS сравнивает с хэшем введённого пароля.
+         *
+         * JS пример:
+         *   const r = JSON.parse(Android.accountGet("alex"));
+         *   if (r.ok) {
+         *     const acc = JSON.parse(r.body)[0];
+         *     if (acc.pwd_hash === await sha256(enteredPassword)) { // вошли }
+         *   }
+         */
+        @JavascriptInterface
+        public String accountGet(String username) {
+            log.i(TAG, "JS→accountGet username=" + username);
+            return helper.accountGet(username);
+        }
+
+        /**
+         * Обновить поля аккаунта.
+         * @param fieldsJson JSON-объект, например {"name":"Новое имя","avatar":"🚀"}
+         */
+        @JavascriptInterface
+        public String accountUpdate(String username, String fieldsJson) {
+            log.i(TAG, "JS→accountUpdate username=" + username);
+            return helper.accountUpdate(username, fieldsJson);
+        }
+
+        /**
+         * Сменить пароль аккаунта.
+         * @param newPwdHash новый хэш пароля (SHA-256 в hex)
+         */
+        @JavascriptInterface
+        public String accountChangePassword(String username, String newPwdHash) {
+            log.i(TAG, "JS→accountChangePassword username=" + username);
+            return helper.accountChangePassword(username, newPwdHash);
         }
 
     }
