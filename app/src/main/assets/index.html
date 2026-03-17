@@ -10,8 +10,8 @@
 <title>Расписание колледжа</title>
 <!-- Twemoji: consistent cross-platform emoji (Twitter open-source set, closest free Apple look-alike) -->
 <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Nunito:wght@300;400;600;700;800&family=Rubik:wght@300;400;500;600;700;800&family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800&family=Unbounded:wght@300;400;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Comfortaa:wght@300;400;600;700&family=Jura:wght@300;400;500;600;700&family=Raleway:wght@300;400;500;600;700;800&family=Oswald:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700;800&family=Advent+Pro:wght@300;400;500;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Caveat:wght@400;500;600;700&family=Tektur:wght@400;500;600;700;800&family=Exo+2:wght@300;400;500;600;700;800&family=Fira+Code:wght@300;400;500;600;700&family=Prosto+One&family=Neucha&family=Lobster&family=Russo+One&family=Ubuntu:wght@300;400;500;700&family=PT+Sans:wght@400;700&family=PT+Serif:wght@400;700&family=Lora:wght@400;500;600;700&family=Merriweather:wght@300;400;700&family=Mulish:wght@300;400;500;600;700;800&family=Golos+Text:wght@400;500;600;700&family=Philosopher:ital,wght@0,400;0,700&family=Cormorant:wght@300;400;500;600;700&family=Podkova:wght@400;500;600;700;800&family=Forum&display=swap&subset=cyrillic" rel="stylesheet">
-<!-- Noto Color Emoji: consistent cross-platform emoji rendering -->
-<link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<!-- Twemoji JS: replaces emoji text nodes with Apple-style <img> tags -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/twemoji.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
 :root{
   --bg:#0d0d0d;--surface:#161616;--surface2:#1f1f1f;--surface3:#2a2a2a;
@@ -1966,19 +1966,33 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
 body, input, textarea, button, select {
   font-family: var(--app-font, 'Geologica'), var(--emoji-font);
 }
-/* ── Legacy twemoji img rules (kept for compat) ───────────────────── */
+/* ── Twemoji img rules — Apple-style emoji ────────────────────────── */
 img.emoji {
   height:1.1em; width:1.1em;
   margin:0 .04em 0 .04em;
   vertical-align:-0.15em;
   display:inline-block;
   pointer-events:none;
+  object-fit:contain;
   image-rendering:-webkit-optimize-contrast;
   image-rendering:crisp-edges;
 }
+/* Реакции в чате */
 .mc-reaction-btn img.emoji { height:1em; width:1em; margin:0; vertical-align:middle; }
-.mc-bubble-inner  img.emoji { height:1.15em; width:1.15em; vertical-align:-0.2em; }
+/* Текст сообщений */
+.mc-bubble-inner  img.emoji { height:1.2em; width:1.2em; vertical-align:-0.25em; }
+/* Навигационные иконки */
 .nav-icon-wrap    img.emoji { height:22px; width:22px; margin:0; vertical-align:middle; }
+/* Стикеры — должны оставаться большими (font-size у родителя 56px) */
+.mc-sticker-wrap  img.emoji { height:1em; width:1em; margin:0; vertical-align:middle; }
+/* Аватары — circle containers с font-size 26–88px, inherit корректно */
+.profile-avatar   img.emoji { height:.75em; width:.75em; margin:0; vertical-align:middle; }
+/* Стикеры в панели выбора */
+.mc-sticker-panel img.emoji { height:1em; width:1em; margin:0; vertical-align:middle; }
+/* Тосты и уведомления */
+.ios-notif        img.emoji { height:1em; width:1em; vertical-align:-.1em; }
+/* Кнопки */
+button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margin:0 .05em; }
 </style>
 <body>
 <div id="bg-layer"></div>
@@ -2201,7 +2215,7 @@ img.emoji {
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.2.12 — Android</div>
+        <div class="item-sub" id="app-version-str">4.2.13 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>

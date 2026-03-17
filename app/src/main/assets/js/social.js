@@ -2020,7 +2020,7 @@ function sbPollChat(myUsername, otherUsername) {
     sbHandleIncomingMessages(myUsername, otherUsername, data);
   };
   doCheck();
-  _fbMsgStreams[key] = setInterval(doCheck, 3000);
+  _fbMsgStreams[key] = setInterval(doCheck, 2000);
 }
 
 // Принудительно сбросить и перезапустить polling конкретного чата.
@@ -2058,7 +2058,7 @@ function sbStartInboxPolling(p) {
     });
   };
   doInboxCheck();
-  _fbInboxTimer = setInterval(doInboxCheck, 3000); // 3 сек — быстрее получаем сообщения
+  _fbInboxTimer = setInterval(doInboxCheck, 2000); // 2 сек — быстрее получаем сообщения
 }
 
 function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
@@ -2532,8 +2532,10 @@ function _twemojiParse(node) {
     ext: '.svg',
     base: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/',
     // Apple emoji: берём PNG из emoji-datasource-apple через jsDelivr
+    // Важно: фильтруем fe0f (variation selector-16) — он не входит в имена файлов Apple CDN
     callback: (icon) => {
-      return `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/${icon}.png`;
+      const cleaned = icon.split('-').filter(p => p.toLowerCase() !== 'fe0f').join('-') || icon;
+      return `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/${cleaned}.png`;
     }
   });
 }
@@ -3073,12 +3075,15 @@ function messengerOpenChat(username) {
     }
   }
 
-  // Запустить polling для этого чата (основной таймер-сторож)
+  // Запустить polling для этого чата (таймер-сторож, 2 сек)
+  // Если стрим по какой-то причине умер — перезапускаем его немедленно
   clearInterval(_mcPollTimer);
   _mcPollTimer = setInterval(() => {
     const p2 = profileLoad();
-    if (p2 && _msgCurrentChat) sbPollChat(p2.username, _msgCurrentChat);
-  }, 3000);
+    if (!p2 || !_msgCurrentChat) return;
+    const key = sbChatKey(p2.username, _msgCurrentChat);
+    if (!_fbMsgStreams[key]) sbForceRecheckChat(p2.username, _msgCurrentChat);
+  }, 2000);
 }
 
 // ── Рендер сообщений ──────────────────────────────────────────────
@@ -3142,7 +3147,7 @@ function messengerRenderMessages(animateLast) {
     const bubbleBg  = isSticker ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
     const bubblePad = isSticker ? '0' : '8px 12px 6px';
     const msgContent = isSticker
-      ? `<div style="font-size:56px;line-height:1.1;text-align:center">${escHtml(msg.sticker)}</div>`
+      ? `<div class="mc-sticker-wrap" style="font-size:56px;line-height:1.1;text-align:center">${escHtml(msg.sticker)}</div>`
       : (replyQuote + escHtml(msg.text));
 
     // Reactions display
