@@ -1734,7 +1734,7 @@ function onVpnStateChanged(active,statusText){
 let cur='s-home';
 const SCREEN_PARENTS = {
   's-groups':        {parent:'s-home',           nav:'nav-home'},
-  's-schedule':      {parent:'s-home',           nav:'nav-home'},
+  's-schedule':      {parent:'s-groups',         nav:'nav-home'},
   's-bells':         {parent:'s-home',           nav:'nav-bells'},
   's-settings':      {parent:'s-home',           nav:'nav-home'},
   's-themes':        {parent:'s-settings',       nav:null},
@@ -1752,7 +1752,7 @@ const SCREEN_PARENTS = {
 function nativeBack(){
   // 0. Попапы мессенджера
   const msgMenu = document.getElementById('mc-msg-menu');
-  if(msgMenu){ msgMenu.remove(); return true; }
+  if(msgMenu){ mcCloseMenu(); return true; }
   const fwdSheet = document.getElementById('mc-forward-sheet');
   if(fwdSheet){ fwdSheet.remove(); return true; }
   const reactPicker = document.getElementById('mc-reaction-picker');
@@ -1778,7 +1778,12 @@ function nativeBack(){
     }
     return true;
   }
-  // 4. Обычная навигация
+  // 4. Экран расписания — особая логика (учитель/студент)
+  if(cur === 's-schedule'){
+    try { schedBack(); } catch(e){ goHome(); }
+    return true;
+  }
+  // 5. Обычная навигация
   const info = SCREEN_PARENTS[cur];
   if(info){
     if(info.parent==='s-home'){
@@ -1883,7 +1888,7 @@ function goHome(){
 
 // navTo с правильным направлением: для вкладок всегда "forward" (единая модель),
 // для не-вкладок обычная логика
-const _TAB_ORDER_NAV = ['s-home','s-bells','s-profile','s-messenger'];
+const _TAB_ORDER_NAV = ['s-home','s-bells','s-messenger','s-profile'];
 function navTo(id, navId) {
   // Для главных вкладок — всегда единая модель (target сверху)
   // Направление передаём как 'forward' или 'back' только для _doTransition,
@@ -1949,6 +1954,12 @@ function updateNavVisibility(screenId) {
 // ── Patch showScreen to update nav visibility ──────────────────────────────
 const _origShowScreenNav = showScreen;
 showScreen = function(id, dir) {
+  // Закрываем меню реакций/действий при уходе из чата
+  if (id !== 's-messenger-chat') {
+    try { mcCloseMenu(); } catch(e){}
+    const fwdSheet = document.getElementById('mc-forward-sheet');
+    if (fwdSheet) fwdSheet.remove();
+  }
   _origShowScreenNav(id, dir);
   updateNavVisibility(id);
 };
@@ -1958,8 +1969,8 @@ showScreen = function(id, dir) {
 // ══════════════════════════════════════════════════════════════════
 (function() {
   // Порядок вкладок для горизонтального свайпа на главных экранах
-  const TAB_ORDER  = ['s-home', 's-bells', 's-profile', 's-messenger'];
-  const TAB_NAVIDS = ['nav-home','nav-bells','nav-profile','nav-messenger'];
+  const TAB_ORDER  = ['s-home', 's-bells', 's-messenger', 's-profile'];
+  const TAB_NAVIDS = ['nav-home','nav-bells','nav-messenger','nav-profile'];
 
   // Маршруты «Назад» для под-экранов
   const BACK_MAP = {
@@ -1974,6 +1985,8 @@ showScreen = function(id, dir) {
     's-leaderboard':    's-profile',
     's-login':          's-home',
     's-peer-profile':   's-messenger-chat',
+    's-settings':       's-home',
+    's-bells':          's-home',
   };
 
   // Экраны где свайп вниз = назад (sub-screens типа выбора группы, расписания)
@@ -2574,7 +2587,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.3.4';
+const APP_VERSION='4.3.5';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();

@@ -269,6 +269,8 @@ public class MainActivity extends Activity {
                 updateVpnStateInWeb();
                 // Запускаем Java-поллер после загрузки страницы
                 startJavaPollTimer();
+                // Передаём реальную высоту статус-бара в CSS-переменную
+                injectStatusBarHeight();
             }
 
             @Override
@@ -316,6 +318,44 @@ public class MainActivity extends Activity {
         appInForeground = true;
         pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_FG);
         log.i(TAG, "Java poll timer запущен (fg=" + POLL_INTERVAL_FG + "мс bg=" + POLL_INTERVAL_BG + "мс)");
+    }
+
+    private void injectStatusBarHeight() {
+        // Получаем реальную высоту статус-бара + вырез камеры
+        int statusBarHeight = 0;
+        int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        if (resourceId > 0) {
+            statusBarHeight = getResources().getDimensionPixelSize(resourceId);
+        }
+        // На Android 9+ дополнительно учитываем вырез (notch/cutout)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            android.view.WindowInsets insets = getWindow().getDecorView().getRootWindowInsets();
+            if (insets != null) {
+                android.view.DisplayCutout cutout = insets.getDisplayCutout();
+                if (cutout != null) {
+                    int cutoutTop = cutout.getSafeInsetTop();
+                    statusBarHeight = Math.max(statusBarHeight, cutoutTop);
+                }
+            }
+        }
+        // Дополнительный отступ снизу для навигационной панели
+        int navBarHeight = 0;
+        int navBarId = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+        if (navBarId > 0) {
+            navBarHeight = getResources().getDimensionPixelSize(navBarId);
+        }
+        float density = getResources().getDisplayMetrics().density;
+        int statusBarDp = Math.round(statusBarHeight / density);
+        int navBarDp    = Math.round(navBarHeight / density);
+        log.i(TAG, "injectStatusBarHeight: statusBar=" + statusBarDp + "dp navBar=" + navBarDp + "dp");
+        // Записываем как CSS-переменные напрямую — переопределяет env(safe-area-inset-top)
+        String js = String.format(
+            "document.documentElement.style.setProperty('--safe-top','%dpx');" +
+            "document.documentElement.style.setProperty('--safe-bot','%dpx');" +
+            "console.log('[StatusBar] safe-top=%dpx safe-bot=%dpx');",
+            statusBarDp, navBarDp, statusBarDp, navBarDp
+        );
+        webView.post(() -> webView.evaluateJavascript(js, null));
     }
 
     private void injectErrorHandler() {

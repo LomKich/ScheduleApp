@@ -579,102 +579,104 @@ function profileRenderScreen() {
   if (typeof PROFILE_FRAMES === 'undefined') { setTimeout(profileRenderScreen, 200); return; }
   const frameStyle = PROFILE_FRAMES[p.frame] || PROFILE_FRAMES['none'];
   const badgeObj = PROFILE_BADGES ? PROFILE_BADGES.find(b => b.id === p.badge) : null;
-  const hi = loadHiScores();
 
-  // Баннер — p.banner уже содержит готовый CSS вроде 'background:linear-gradient(...)'
   const bannerStyle = p.banner
     ? (p.banner.startsWith('background:') ? p.banner : `background:${p.banner}`)
-    : `background:linear-gradient(135deg,${p.color||'var(--accent)'}44,var(--surface2))`;
+    : `background:linear-gradient(135deg,${p.color||'var(--accent)'}66,${p.color||'var(--accent)'}22)`;
+
+  const avatarHtml = p.avatarType === 'photo' && p.avatarData
+    ? `<img src="${p.avatarData}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="font-size:42px;line-height:1">${p.avatar||'\u{1F60A}'}</span>`;
+
+  const friendCount = friendsLoad().length;
+  const friendWord = friendCount === 1 ? '\u0447\u0435\u043B\u043E\u0432\u0435\u043A' : friendCount < 5 ? '\u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430' : '\u0447\u0435\u043B\u043E\u0432\u0435\u043A';
 
   body.innerHTML = `
-    <!-- Баннер + аватар (Telegram-style) -->
-    <div style="position:relative;margin:-16px -18px 0;margin-bottom:0">
-      <div style="${bannerStyle};height:110px;width:100%;background-size:cover;background-position:center"></div>
-      <div style="position:absolute;bottom:-44px;left:20px">
+    <!-- \u0411\u0430\u043D\u043D\u0435\u0440 + \u0430\u0432\u0430\u0442\u0430\u0440 -->
+    <div style="position:relative;margin:-16px -18px 0">
+      <div style="${bannerStyle};height:140px;width:100%;background-size:cover;background-position:center"></div>
+      <button onclick="profileToggleEdit()" style="position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.45);border:none;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;backdrop-filter:blur(6px)">\u270F\uFE0F</button>
+      <div style="position:absolute;bottom:-50px;left:50%;transform:translateX(-50%)">
         <div style="position:relative;display:inline-block">
-          <div class="profile-avatar ${frameStyle.cls}" style="width:88px;height:88px;font-size:42px;border-color:${p.color||'var(--accent)'};${frameStyle.style}">
-            ${p.avatarType === 'photo' && p.avatarData
-              ? `<img src="${p.avatarData}" alt="avatar" style="width:88px;height:88px;object-fit:cover;border-radius:50%">`
-              : `<span>${p.avatar||'😊'}</span>`}
+          <div class="profile-avatar ${frameStyle.cls}" style="width:96px;height:96px;font-size:46px;border:3px solid ${p.color||'var(--accent)'};border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden;${frameStyle.style}">
+            ${avatarHtml}
           </div>
-          ${vip ? '<div style="position:absolute;bottom:-4px;right:-4px;font-size:20px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7))"><span class="vip-crown">👑</span></div>' : ''}
+          ${vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))"><span class="vip-crown">\u{1F451}</span></div>` : ''}
         </div>
       </div>
-      ${badgeObj ? `<div style="position:absolute;bottom:-38px;left:118px;font-size:13px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
     </div>
-    <div style="height:52px"></div>
+    <div style="height:60px"></div>
 
-    <!-- Имя и инфо -->
-    <div style="padding:0 4px 12px">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:22px;font-weight:800;color:var(--text)">${escHtml(p.name)}</span>
-        ${vip ? '<span class="vip-badge-pill"><span class="vip-crown">👑</span> VIP</span>' : ''}
+    <!-- \u0418\u043C\u044F, VIP, username, \u0441\u0442\u0430\u0442\u0443\u0441 -->
+    <div style="text-align:center;padding:0 16px 16px">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(p.name)}</span>
+        ${vip ? '<span class="vip-badge-pill"><span class="vip-crown">\u{1F451}</span> VIP</span>' : ''}
       </div>
-      <div class="profile-username" style="margin-top:2px">@${escHtml(p.username)}</div>
-      <div class="profile-status-badge" style="background:${statusObj.color}22;color:${statusObj.color};margin-top:8px">
+      <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(p.username)}</div>
+      <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${statusObj.color}22;color:${statusObj.color}">
         ${statusObj.emoji} ${statusObj.label}
       </div>
-      ${p.bio ? `<div class="profile-bio" style="margin-top:10px">${escHtml(p.bio)}</div>` : ''}
+      ${p.bio ? `<div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5">${escHtml(p.bio)}</div>` : ''}
+      ${badgeObj ? `<div style="display:inline-block;margin-top:8px;font-size:12px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
     </div>
 
-    <!-- Статистика -->
-    <div class="profile-card" style="display:flex;gap:8px;margin-top:4px">
-      <div class="profile-stat">
-        <div class="profile-stat-val">${onlinePeers.length + 1}</div>
-        <div class="profile-stat-lbl">Онлайн</div>
-      </div>
-      <div style="width:1px;background:var(--surface3)"></div>
-      <div class="profile-stat">
-        <div class="profile-stat-val">${friendsLoad().length}</div>
-        <div class="profile-stat-lbl">Друзья</div>
-      </div>
+    <!-- 2 кнопки быстрых действий -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 4px 16px">
+      <button onclick="profileRenderOnline();showScreen('s-online')" style="background:var(--surface2);border:1.5px solid var(--surface3);border-radius:16px;padding:14px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
+        <span style="font-size:26px;line-height:1;color:var(--accent)">👥</span>
+        <span style="font-size:12px;color:var(--text);font-weight:600">Онлайн</span>
+        <span style="font-size:11px;color:var(--accent);font-weight:700">${onlinePeers.length + 1}</span>
+      </button>
+      <button onclick="navTo('s-settings','nav-settings')" style="background:var(--surface2);border:1.5px solid var(--surface3);border-radius:16px;padding:14px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
+        <span style="font-size:26px;line-height:1">⚙️</span>
+        <span style="font-size:12px;color:var(--text);font-weight:600">Настройки</span>
+      </button>
     </div>
 
-    <!-- P2P статус -->
-    <div class="settings-row" style="margin-bottom:8px">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700">📡 P2P соединение</div>
-        <div class="settings-row-sub" id="profile-p2p-status">${_profilePeerReady ? '🟢 Подключено' : '🔴 Отключено'}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px" id="profile-p2p-strategy">
-          🔗 Прямое подключение
+    <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u0422\u0430\u0431\u043B\u0438\u0446\u0430 \u043B\u0438\u0434\u0435\u0440\u043E\u0432 + \u0414\u0440\u0443\u0437\u044C\u044F -->
+    <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
+      <div onclick="showScreen('s-leaderboard')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">\u{1F3C6}</span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">\u0422\u0430\u0431\u043B\u0438\u0446\u0430 \u043B\u0438\u0434\u0435\u0440\u043E\u0432</div>
+          <div style="font-size:12px;color:var(--muted)">\u0420\u0435\u043A\u043E\u0440\u0434\u044B \u0432 \u0438\u0433\u0440\u0430\u0445</div>
+        </div>
+        <span style="color:var(--muted);font-size:18px">\u203A</span>
+      </div>
+      <div onclick="profileRenderOnline();showScreen('s-online')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">\u{1F465}</span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">\u0414\u0440\u0443\u0437\u044C\u044F</div>
+          <div style="font-size:12px;color:var(--muted)">${friendCount} ${friendWord}</div>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-        <button class="btn btn-surface" style="width:auto;padding:6px 10px;font-size:11px" onclick="profileConnect(profileLoad())">↺ Переподк.</button>
+    </div>
 
+    <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 -->
+    <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:22px;width:28px;text-align:center">\u{1F4E1}</span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435</div>
+          <div style="font-size:12px;color:var(--muted)" id="profile-p2p-status">${_profilePeerReady ? '\u{1F7E2} \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E' : '\u{1F534} \u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E'}</div>
+        </div>
+        <button onclick="profileConnect(profileLoad())" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px;line-height:1">\u21BB</button>
       </div>
     </div>
 
-    <!-- Push уведомления -->
-    <div class="settings-row" style="margin-bottom:8px" id="push-notif-row">
-      <div>
-        <div style="font-size:13px;font-weight:700">🔔 Уведомления на телефон</div>
-        <div class="settings-row-sub" id="push-notif-status">${pushGetStatusText()}</div>
+    <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F -->
+    <div id="push-notif-row" style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:22px;width:28px;text-align:center">\u{1F514}</span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F</div>
+          <div style="font-size:12px;color:var(--muted)" id="push-notif-status">${pushGetStatusText()}</div>
+        </div>
+        <button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:12px;flex-shrink:0" onclick="pushRequestPermission()" id="push-notif-btn">${pushGetBtnText()}</button>
       </div>
-      <button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="pushRequestPermission()" id="push-notif-btn">${pushGetBtnText()}</button>
     </div>
-
-    <!-- Кнопки -->
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <button class="btn btn-surface" onclick="profileRenderOnline();showScreen('s-online')" style="display:flex;align-items:center;justify-content:center;gap:8px">
-        <span style="font-size:18px;line-height:1;flex-shrink:0">👥</span>
-        <span>Пользователи онлайн</span>
-        <span style="color:var(--accent);margin-left:4px">${onlinePeers.length + 1}</span>
-      </button>
-      <button class="btn btn-surface" onclick="showScreen('s-leaderboard')" style="display:flex;align-items:center;justify-content:center;gap:8px">
-        <span style="font-size:18px;line-height:1;flex-shrink:0">🏆</span>
-        <span>Таблица лидеров</span>
-      </button>
-      <button class="btn btn-surface" onclick="navTo('s-messenger','nav-messenger')" style="display:flex;align-items:center;justify-content:center;gap:8px;position:relative">
-        <span style="font-size:18px;line-height:1;flex-shrink:0">💬</span>
-        <span>Сообщения</span>
-        <span id="msg-unread-badge" style="display:none;position:absolute;top:8px;right:12px;background:var(--accent);color:#000;border-radius:10px;font-size:11px;font-weight:800;padding:2px 7px">0</span>
-      </button>
-      <button class="btn btn-surface" onclick="navTo('s-settings','nav-settings')" style="display:flex;align-items:center;justify-content:center;gap:8px">
-        <span style="font-size:18px;line-height:1;flex-shrink:0">⚙️</span>
-        <span>Настройки</span>
-      </button>
-    </div>
+    <div style="height:8px"></div>
   `;
 }
 
@@ -1895,12 +1897,13 @@ function sbStartMsgPolling(p) {
 function sbPollChat(myUsername, otherUsername) {
   const key = sbChatKey(myUsername, otherUsername);
   if (_fbMsgStreams[key]) return;
-  // Poll every 3 seconds for new messages
-  const lastTs = _fbLastMsgTs[key] || 0;
   const doCheck = async () => {
     if (!sbReady()) return;
+    const lastTs = _fbLastMsgTs[key] || 0;
+    // Если ts=0 (кэш очищен) — подтягиваем историю за последние 30 дней
+    const sinceTs = lastTs > 0 ? lastTs : (Date.now() - 30 * 24 * 60 * 60 * 1000);
     const data = await sbGet('messages',
-      `select=*&chat_key=eq.${key}&ts=gt.${_fbLastMsgTs[key]||0}&order=ts.asc&limit=50`
+      `select=*&chat_key=eq.${key}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
     );
     if (!Array.isArray(data) || data.length === 0) return;
     sbHandleIncomingMessages(myUsername, otherUsername, data);
@@ -1955,10 +1958,26 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
 
   rows.forEach(msg => {
     if (msg.from_user === myUsername) {
-      // Обновляем статус доставки
+      // Своё сообщение — обновляем delivered или восстанавливаем если кэш был очищен
       if (!msgs[otherUsername]) msgs[otherUsername] = [];
       const local = msgs[otherUsername].find(m => m.ts === msg.ts && m.from === myUsername);
-      if (local && !local.delivered) { local.delivered = true; hasNew = true; }
+      if (local) {
+        if (!local.delivered) { local.delivered = true; hasNew = true; }
+      } else {
+        // Кэш был очищен — восстанавливаем своё сообщение из Supabase
+        let inText = msg.text || '';
+        let inSticker = msg.sticker || null;
+        if (!inSticker) {
+          const emojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,2}$/u;
+          if (emojiOnly.test(inText.trim())) { inSticker = inText.trim(); inText = ''; }
+        }
+        msgs[otherUsername].push({
+          from: myUsername, to: otherUsername,
+          text: inText, sticker: inSticker, ts: msg.ts,
+          delivered: true, read: true
+        });
+        hasNew = true;
+      }
       _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
       return;
     }
@@ -1976,11 +1995,13 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         const emojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,2}$/u;
         if (emojiOnly.test(inText.trim())) { inSticker = inText.trim(); inText = ''; }
       }
-      // Parse replyTo from extra field
+      // Parse replyTo and image from extra field
       let inReplyTo = null;
+      let inImage   = null;
       let extraParsed = null;
       try { if (msg.extra) extraParsed = JSON.parse(msg.extra); } catch(_){}
       if (extraParsed?.replyTo) inReplyTo = extraParsed.replyTo;
+      if (extraParsed?.image)   inImage   = extraParsed.image;
 
       // Обрабатываем reaction_update — служебное сообщение синхронизации реакций
       if (extraParsed?.type === 'reaction' && extraParsed?.msgTs && extraParsed?.reactions !== undefined) {
@@ -1996,7 +2017,7 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       }
       msgs[otherUsername].push({
         from: msg.from_user, to: myUsername,
-        text: inText, sticker: inSticker, ts: msg.ts,
+        text: inImage ? '' : inText, sticker: inSticker, image: inImage || undefined, ts: msg.ts,
         replyTo: inReplyTo, delivered: true, read: alreadyRead
       });
       hasNew = true;
@@ -2008,6 +2029,10 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
   });
 
   if (hasNew) {
+    // Сортируем по времени — важно после восстановления из Supabase
+    if (msgs[otherUsername]) {
+      msgs[otherUsername].sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    }
     msgSave(msgs);
     const chats = chatsLoad();
     if (!chats.includes(otherUsername)) { chats.unshift(otherUsername); chatsSave(chats); }
@@ -2019,16 +2044,19 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       if (lastMsg && lastMsg.from !== myUsername) {
         const senderName = peer.name || ('@' + otherUsername);
         const msgText    = lastMsg.text.slice(0, 60);
-        showIosNotif({
-          sender: senderName,
-          text: msgText,
-          avatar: peer.avatar,
-          avatarType: peer.avatarType,
-          color: peer.color,
-          onTap: function() { messengerOpenChat(otherUsername); },
-        });
-        // Push на телефон (только если приложение свёрнуто)
-        pushSend(senderName, msgText);
+        // Проверяем mute
+        if (!isMuted(otherUsername)) {
+          showIosNotif({
+            sender: senderName,
+            text: msgText,
+            avatar: peer.avatar,
+            avatarType: peer.avatarType,
+            color: peer.color,
+            onTap: function() { messengerOpenChat(otherUsername); },
+          });
+          // Push на телефон (только если приложение свёрнуто)
+          pushSend(senderName, msgText);
+        }
       }
     }
   }
@@ -2420,10 +2448,10 @@ window.showScreen = function(id, dir) {
   if (_origShowScreen) _origShowScreen(id, dir);
 };
 
-// Обновить nav items (4 кнопки: home, bells, profile, messenger)
+// Обновить nav items (4 кнопки: home, bells, messenger, profile)
 const _origUpdateNavActive = window.updateNavActive;
 window.updateNavActive = function(aid) {
-  ['nav-home','nav-bells','nav-profile','nav-messenger'].forEach(id =>
+  ['nav-home','nav-bells','nav-messenger','nav-profile'].forEach(id =>
     document.getElementById(id)?.classList.toggle('active', id === aid)
   );
   if (typeof _navMovePill === 'function') _navMovePill(aid);
@@ -2539,6 +2567,164 @@ function noCopySave(b)       { localStorage.setItem(NO_COPY_KEY, JSON.stringify(
 function isBlocked(username) { return blockedLoad().includes(username); }
 function isCopyBlocked(username) { return noCopyLoad().includes(username); }
 
+// ══════════════════════════════════════════════════════════════════════
+// 🔕 ОТКЛЮЧЕНИЕ УВЕДОМЛЕНИЙ (mute)
+// ══════════════════════════════════════════════════════════════════════
+const MUTE_KEY = 'sapp_muted_v1';
+
+function muteLoad() { try { return JSON.parse(localStorage.getItem(MUTE_KEY) || '{}'); } catch(e) { return {}; } }
+function muteSave(d) { localStorage.setItem(MUTE_KEY, JSON.stringify(d)); }
+
+function isMuted(username) {
+  const data = muteLoad();
+  if (!data[username]) return false;
+  if (data[username] === 'forever') return true;
+  // untilTs
+  if (Date.now() < data[username]) return true;
+  // истёк — чистим
+  delete data[username];
+  muteSave(data);
+  return false;
+}
+
+function muteGetLabel(username) {
+  const data = muteLoad();
+  if (!data[username]) return null;
+  if (data[username] === 'forever') return '∞';
+  const remain = data[username] - Date.now();
+  if (remain <= 0) return null;
+  const h = Math.ceil(remain / 3600000);
+  if (h < 24) return h + 'ч';
+  return Math.ceil(h / 24) + 'д';
+}
+
+function peerMuteShow(username) {
+  const existing = document.getElementById('mute-sheet');
+  if (existing) { existing.remove(); return; }
+
+  const currently = isMuted(username);
+  const sheet = document.createElement('div');
+  sheet.id = 'mute-sheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9900;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.6)';
+
+  const options = currently ? [
+    { label: '🔔 Включить уведомления', action: () => { const d=muteLoad(); delete d[username]; muteSave(d); toast('🔔 Уведомления включены'); } },
+  ] : [
+    { label: '🔕 На 1 час',     action: () => { const d=muteLoad(); d[username]=Date.now()+3600000;   muteSave(d); toast('🔕 Уведомления выключены на 1 ч'); } },
+    { label: '🔕 На 8 часов',   action: () => { const d=muteLoad(); d[username]=Date.now()+28800000;  muteSave(d); toast('🔕 Уведомления выключены на 8 ч'); } },
+    { label: '🔕 На 2 дня',     action: () => { const d=muteLoad(); d[username]=Date.now()+172800000; muteSave(d); toast('🔕 Уведомления выключены на 2 дня'); } },
+    { label: '🔕 Навсегда',     action: () => { const d=muteLoad(); d[username]='forever';            muteSave(d); toast('🔕 Уведомления отключены'); } },
+  ];
+
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;overflow:hidden;padding-bottom:calc(8px + var(--safe-bot))">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:10px auto 12px"></div>
+      <div style="font-size:13px;font-weight:700;color:var(--muted);padding:0 20px 10px;text-transform:uppercase;letter-spacing:.06em">Уведомления</div>
+      ${options.map((o,i) => `<button id="mute-opt-${i}"
+        style="width:100%;padding:15px 20px;background:none;border:none;border-top:1px solid rgba(255,255,255,.05);
+          color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        ${o.label}
+      </button>`).join('')}
+      <button onclick="document.getElementById('mute-sheet').remove()"
+        style="width:100%;padding:15px 20px;background:none;border:none;color:var(--muted);font-family:inherit;font-size:15px;cursor:pointer;border-top:1px solid rgba(255,255,255,.05)">
+        Отмена
+      </button>
+    </div>`;
+
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+  document.body.appendChild(sheet);
+  options.forEach((o,i) => {
+    document.getElementById('mute-opt-'+i)?.addEventListener('click', () => {
+      o.action();
+      sheet.remove();
+      // обновляем иконку в хедере чата
+      _mcUpdateMuteIcon();
+    });
+  });
+}
+
+function _mcUpdateMuteIcon() {
+  const btn = document.getElementById('mc-mute-btn');
+  if (!btn || !_msgCurrentChat) return;
+  const muted = isMuted(_msgCurrentChat);
+  btn.textContent = muted ? '🔕' : '🔔';
+  btn.title = muted ? 'Уведомления выключены' : 'Уведомления включены';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 📌 ЗАКРЕПЛЁННЫЕ СООБЩЕНИЯ
+// ══════════════════════════════════════════════════════════════════════
+const PIN_KEY = 'sapp_pinned_v1';
+
+function pinnedLoad() { try { return JSON.parse(localStorage.getItem(PIN_KEY) || '{}'); } catch(e) { return {}; } }
+function pinnedSave(d) { localStorage.setItem(PIN_KEY, JSON.stringify(d)); }
+
+function mcPinMsg(idx) {
+  if (!_msgCurrentChat) return;
+  const msgs = msgLoad();
+  const chatMsgs = msgs[_msgCurrentChat] || [];
+  const msg = chatMsgs[idx];
+  if (!msg) return;
+  const pinned = pinnedLoad();
+  pinned[_msgCurrentChat] = { text: msg.text || msg.sticker || '📷 Фото', from: msg.from, ts: msg.ts, idx };
+  pinnedSave(pinned);
+  mcRenderPinBar();
+  toast('📌 Сообщение закреплено');
+}
+
+function mcUnpinMsg() {
+  if (!_msgCurrentChat) return;
+  const pinned = pinnedLoad();
+  delete pinned[_msgCurrentChat];
+  pinnedSave(pinned);
+  mcRenderPinBar();
+  toast('📌 Сообщение откреплено');
+}
+
+function mcRenderPinBar() {
+  const bar = document.getElementById('mc-pin-bar');
+  if (!bar || !_msgCurrentChat) return;
+  const pinned = pinnedLoad();
+  const p = pinned[_msgCurrentChat];
+  if (!p) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = '';
+  bar.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer"
+      onclick="mcScrollToPinned()">
+      <div style="width:3px;height:32px;background:var(--accent);border-radius:2px;flex-shrink:0"></div>
+      <div style="min-width:0;flex:1">
+        <div style="font-size:11px;font-weight:700;color:var(--accent)">📌 Закреплённое сообщение</div>
+        <div style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((p.text||'').slice(0,60))}</div>
+      </div>
+    </div>
+    <button onclick="mcUnpinMsg()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px;flex-shrink:0;line-height:1">×</button>`;
+}
+
+function mcScrollToPinned() {
+  const pinned = pinnedLoad();
+  const p = pinned[_msgCurrentChat];
+  if (!p) return;
+  const body = document.getElementById('mc-messages');
+  if (!body) return;
+  const bubbles = body.querySelectorAll('[data-msg-bubble]');
+  // Ищем сообщение по ts
+  for (const b of bubbles) {
+    const idx = parseInt(b.dataset.msgIdx);
+    const msgs = msgLoad()[_msgCurrentChat] || [];
+    if (msgs[idx] && msgs[idx].ts === p.ts) {
+      b.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      b.style.transition = 'background .2s';
+      b.style.background = 'rgba(var(--accent-rgb,224,135,34),.18)';
+      setTimeout(() => { b.style.background = ''; }, 1200);
+      return;
+    }
+  }
+  toast('Сообщение не найдено в истории');
+}
+
 function peerBlockToggle(username) {
   const list = blockedLoad();
   if (list.includes(username)) {
@@ -2619,12 +2805,17 @@ function peerShowMenu(username) {
   const blocked  = isBlocked(username);
   const noCopy   = isCopyBlocked(username);
   const isFriend = friendsLoad().includes(username);
+  const muted    = isMuted(username);
+  const muteLabel = muteGetLabel(username);
 
   const sheet = document.createElement('div');
   sheet.id = 'peer-menu-sheet';
   sheet.style.cssText = 'position:fixed;inset:0;z-index:9800;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.55)';
 
   const items = [
+    { icon: muted ? '🔔' : '🔕',
+      label: muted ? `Включить уведомления` : `Отключить уведомления`,
+      action: `peerMuteShow('${username}')` },
     { icon:'🚫', label: blocked ? 'Разблокировать' : 'Заблокировать',  action: `peerBlockToggle('${username}')` },
     { icon:'🗑',  label: isFriend ? 'Удалить из друзей' : 'Добавить в друзья',
                  action: isFriend ? `profileRemoveFriend('${username}')` : `profileAddFriend('${username}')` },
@@ -3261,8 +3452,9 @@ function messengerOpenChat(username) {
 
   showScreen('s-messenger-chat');
   messengerRenderMessages();
-
-  // Фокус убран — клавиатура открывается только при тапе на поле ввода
+  // Рендерим закреплённое сообщение и иконку mute
+  mcRenderPinBar();
+  _mcUpdateMuteIcon();
 
   // Fix: принудительно перезапускаем polling при открытии чата —
   // это гарантирует немедленный запрос к Supabase, не ждём следующего тика.
@@ -3344,11 +3536,17 @@ function messengerRenderMessages(animateLast) {
 
     // Sticker rendering
     const isSticker = msg.sticker;
-    const bubbleBg  = isSticker ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
-    const bubblePad = isSticker ? '0' : '8px 12px 6px';
+    const isImage   = msg.image;
+    const bubbleBg  = (isSticker || isImage) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
+    const bubblePad = (isSticker || isImage) ? '0' : '8px 12px 6px';
     const msgContent = isSticker
       ? `<div class="mc-sticker-wrap" style="font-size:56px;line-height:1.1;text-align:center">${escHtml(msg.sticker)}</div>`
-      : (replyQuote + escHtml(msg.text));
+      : isImage
+        ? `<div style="position:relative;border-radius:14px;overflow:hidden;max-width:240px;cursor:pointer" onclick="photoZoomOpen('${msg.image.replace(/'/g,"\\'")}')">
+            <img src="${msg.image}" style="display:block;width:100%;max-width:240px;border-radius:14px" loading="lazy">
+            <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6);display:flex;align-items:center;gap:2px">${msgFormatTime(msg.ts)}${status}</div>
+          </div>`
+        : (replyQuote + escHtml(msg.text));
 
     // Reactions display
     const reactionsHtml = msg.reactions && Object.keys(msg.reactions).length
@@ -3368,11 +3566,11 @@ function messengerRenderMessages(animateLast) {
       ondblclick="mcBubbleDblClick(event,${idx})"
       onclick="mcBubbleClick(event,${idx})">
       ${isMe ? '' : avatarEl}
-      <!-- Swipe reply-arrow hint -->
-      <div class="mc-reply-hint" style="position:absolute;${isMe?'left:2px':'right:2px'};top:50%;transform:translateY(-50%);opacity:0;transition:opacity .12s;font-size:18px;pointer-events:none;z-index:1">↩</div>
+      <!-- Swipe reply-arrow hint (свайп вправо→влево, стрелка всегда слева от пузыря) -->
+      <div class="mc-reply-hint" style="position:absolute;left:-24px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .12s;font-size:18px;pointer-events:none;z-index:1">↩</div>
       <div class="mc-bubble-inner" style="max-width:78%;padding:${bubblePad};border-radius:${bubbleRadius};background:${bubbleBg};color:${isMe?'var(--btn-text,#fff)':'var(--text)'};font-size:14px;line-height:1.5;word-break:break-word;position:relative;transition:transform .18s cubic-bezier(.4,0,.2,1)">
         ${msgContent}
-        ${isSticker ? '' : `<div style="font-size:10px;opacity:.65;text-align:right;margin-top:2px;display:flex;align-items:center;justify-content:flex-end;gap:2px">${msgFormatTime(msg.ts)}${status}</div>`}
+        ${(isSticker || isImage) ? '' : `<div style="font-size:10px;opacity:.65;text-align:right;margin-top:2px;display:flex;align-items:center;justify-content:flex-end;gap:2px">${msgFormatTime(msg.ts)}${status}</div>`}
         ${reactionsHtml}
       </div>
     </div>`;
@@ -3572,8 +3770,8 @@ function mcBubbleTouchMove(e, row, idx) {
   if (dy > 14) { clearTimeout(_mcLongPressTimer); return; } // вертикальный скролл
   if (Math.abs(dx) < 5 && !_mcDragging) return;
 
-  const isMe    = row.dataset.msgMe === '1';
-  const validDir = isMe ? dx < 0 : dx > 0;   // свои — влево, чужие — вправо
+  // Свайп справа налево (dx < 0) для всех сообщений
+  const validDir = dx < 0;
   if (!validDir && !_mcDragging) return;
 
   clearTimeout(_mcLongPressTimer);
@@ -3581,13 +3779,13 @@ function mcBubbleTouchMove(e, row, idx) {
   e.preventDefault(); // подавляем скролл
 
   const travel = Math.min(Math.abs(dx), MC_SWIPE_MAX);
-  _mcApplySwipeVisual(row, isMe, travel);
+  _mcApplySwipeVisual(row, travel);
 
   if (!_mcDragTriggered && travel >= MC_SWIPE_THRESHOLD) {
     _mcDragTriggered = true;
     try { window.Android?.vibrate?.(22); } catch(_){}
     SFX.play && SFX.play('btnClick');
-    mcShowMsgMenu(idx);
+    mcSetReply(idx); // свайп = ответить (не открывать меню)
   }
 }
 
@@ -3610,16 +3808,16 @@ function mcBubbleMouseDown(e, row, idx) {
     const dy = Math.abs(ev.clientY - _mcDragStartY);
     if (dy > 14) return;
     if (Math.abs(dx) < 5 && !_mcDragging) return;
-    const isMe    = row.dataset.msgMe === '1';
-    const validDir = isMe ? dx < 0 : dx > 0;
+    // Свайп справа налево для всех
+    const validDir = dx < 0;
     if (!validDir && !_mcDragging) return;
     _mcDragging = true;
     const travel = Math.min(Math.abs(dx), MC_SWIPE_MAX);
-    _mcApplySwipeVisual(row, isMe, travel);
+    _mcApplySwipeVisual(row, travel);
     if (!_mcDragTriggered && travel >= MC_SWIPE_THRESHOLD) {
       _mcDragTriggered = true;
       SFX.play && SFX.play('btnClick');
-      mcShowMsgMenu(idx);
+      mcSetReply(idx);
     }
   };
 
@@ -3634,13 +3832,13 @@ function mcBubbleMouseDown(e, row, idx) {
   document.addEventListener('mouseup', onUp);
 }
 
-// ── Визуал свайпа ──────────────────────────────────────────────────
-function _mcApplySwipeVisual(row, isMe, travel) {
+// ── Визуал свайпа (справа налево для всех) ──────────────────────────
+function _mcApplySwipeVisual(row, travel) {
   const bubble = row.querySelector('.mc-bubble-inner');
   const hint   = row.querySelector('.mc-reply-hint');
   if (bubble) {
     bubble.style.transition = 'none';
-    bubble.style.transform  = `translateX(${isMe ? -travel : travel}px)`;
+    bubble.style.transform  = `translateX(${-travel}px)`;
   }
   if (hint) hint.style.opacity = String(Math.min(travel / MC_SWIPE_THRESHOLD * 0.9, 0.85));
 }
@@ -3788,6 +3986,11 @@ function mcShowMsgMenu(idx) {
         <button class="mc-action-btn"
           onclick="mcSetReply(${idx});mcCloseMenu()">
           <span style="font-size:20px">↩</span> Ответить
+        </button>
+        <div class="mc-action-sep"></div>
+        <button class="mc-action-btn"
+          onclick="mcPinMsg(${idx});mcCloseMenu()">
+          <span style="font-size:20px">📌</span> Закрепить
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
@@ -3975,21 +4178,85 @@ function mcAutoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
-// ── Telegram-style: весь экран чата двигается вверх при клавиатуре ──
+// ── Отправка изображения (VIP only) ──────────────────────────────────
+function mcPickImage() {
+  if (!vipCheck()) {
+    toast('🔒 Отправка фото — только для VIP');
+    return;
+  }
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.onchange = (e) => {
+    const file = e.target.files[0];
+    inp.remove();
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { toast('❌ Фото слишком большое (макс. 8 МБ)'); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      // Сжимаем до разумного размера
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 900;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else       { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        const data = cv.toDataURL('image/jpeg', 0.82);
+        mcSendImage(data);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+
+function mcSendImage(dataUrl) {
+  const p = profileLoad();
+  if (!p || !_msgCurrentChat) return;
+  const ts = Date.now();
+  const replyTo = _mcReplyTo ? { from: _mcReplyTo.from, text: _mcReplyTo.text } : null;
+  const msg = { from: p.username, to: _msgCurrentChat, text: '', image: dataUrl, ts, delivered: false, read: false, replyTo };
+  mcCancelReply();
+  const msgs = msgLoad();
+  if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
+  msgs[_msgCurrentChat].push(msg);
+  msgSave(msgs);
+  const chats = chatsLoad();
+  if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
+  messengerRenderMessages(true);
+  SFX.play('msgSend');
+  sbPollChat(p.username, _msgCurrentChat);
+  // Отправляем изображение через extra поле (base64)
+  const chatKey = sbChatKey(p.username, _msgCurrentChat);
+  sbInsert('messages', {
+    chat_key: chatKey, from_user: p.username,
+    to_user: _msgCurrentChat, text: '📷 Фото', ts,
+    extra: JSON.stringify({ image: dataUrl, ...(replyTo ? { replyTo } : {}) })
+  }).then(res => {
+    if (res) { msg.delivered = true; msgSave(msgs); messengerRenderMessages(); }
+  });
+}
+
+// ── Keyboard: adjustResize в манифесте сжимает WebView автоматически.
+// Нам нужно только прокрутить чат вниз когда открылась клавиатура.
 (function() {
   function onViewportResize() {
     const chatScreen = document.getElementById('s-messenger-chat');
     if (!chatScreen || !chatScreen.classList.contains('active')) return;
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const kbOffset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    const t = 'transform 0.15s cubic-bezier(0.4,0,0.2,1)';
-    // Сдвигаем весь экран (хедер + сообщения + инпут) вверх когда клавиатура открыта
-    chatScreen.style.transition = t;
-    chatScreen.style.transform = kbOffset > 10 ? `translateY(-${kbOffset}px)` : '';
-    // Скроллим вниз после сдвига
+    // Убираем любой translateY который мог остаться
+    chatScreen.style.transform = '';
+    chatScreen.style.transition = '';
+    // Прокручиваем вниз
     const list = document.getElementById('mc-messages');
-    if (list) setTimeout(() => { list.scrollTop = list.scrollHeight; }, 30);
+    if (list) setTimeout(() => { list.scrollTop = list.scrollHeight; }, 80);
   }
 
   if (window.visualViewport) {
@@ -4116,6 +4383,11 @@ function peerProfileOpen(username) {
         <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,var(--accent) 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">💬</div>
         <span style="font-size:11px;font-weight:600">Чат</span>
       </button>
+      <button onclick="peerMuteShow('${username}')"
+        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:${isMuted(username)?'#e05555':'var(--accent)'}">
+        <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,${isMuted(username)?'#e05555':'var(--accent)'} 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">${isMuted(username)?'🔕':'🔔'}</div>
+        <span style="font-size:11px;font-weight:600">${isMuted(username)?'Включить':'Выключить'}</span>
+      </button>
       <button onclick="peerSendGift('${username}')"
         style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--accent)">
         <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,var(--accent) 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">🎁</div>
@@ -4153,14 +4425,6 @@ function peerProfileOpen(username) {
           <div style="font-size:12px;color:var(--muted);margin-top:2px">О себе</div>
         </div>
       </div>` : ''}
-      <!-- Статус онлайн -->
-      <div style="padding:14px 20px;display:flex;align-items:center;gap:14px">
-        <span style="font-size:20px;color:${statusObj.color};width:24px;text-align:center">${statusObj.emoji}</span>
-        <div style="flex:1">
-          <div style="font-size:15px;color:var(--text)">${statusObj.label}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px">Статус</div>
-        </div>
-      </div>
     </div>
 
     <!-- Защита от копирования (если включена) -->
