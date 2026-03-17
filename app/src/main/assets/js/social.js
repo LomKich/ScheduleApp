@@ -377,6 +377,8 @@ function profileCreate() {
   const accounts = accountsLoad();
   accounts[username] = { name, avatar: _loginSelectedEmoji, createdAt: profile.createdAt, pwdHash: profile.pwdHash };
   accountsSave(accounts);
+  // Сохранить полный профиль в Supabase users
+  sbSaveUser(profile);
   updateNavProfileIcon(profile);
   profileConnect(profile);
   profileRenderScreen();
@@ -451,16 +453,21 @@ function loginDoAuth() {
   if(errEl) errEl.textContent = '⏳ Ищем аккаунт в облаке...';
   if(btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Вход...'; }
 
-  sbGet('presence', `select=*&username=eq.${encodeURIComponent(username)}&limit=1`)
-    .then(rows => {
+  // Сначала ищем в таблице users (полный профиль с паролем)
+  // Если нет — fallback в presence (для старых аккаунтов)
+  sbLoadUser(username)
+    .then(async row => {
+      if (!row) {
+        // Fallback: presence (старые аккаунты без таблицы users)
+        const presRows = await sbGet('presence', `select=*&username=eq.${encodeURIComponent(username)}&limit=1`);
+        row = Array.isArray(presRows) && presRows.length > 0 ? presRows[0] : null;
+      }
       if(btnEl) { btnEl.disabled = false; btnEl.textContent = 'Войти'; }
-      if (!Array.isArray(rows) || rows.length === 0) {
+      if (!row) {
         if(errEl) errEl.textContent = 'Аккаунт @' + username + ' не найден';
         return;
       }
-      const row = rows[0];
       if (!row.pwd_hash) {
-        // Нет пароля в облаке — восстанавливаем без проверки
         loginRestoreFromCloud(row);
         return;
       }
@@ -482,19 +489,21 @@ function loginDoAuth() {
 // Восстановление профиля из строки Supabase presence
 function loginRestoreFromCloud(row) {
   const profile = {
-    name:       row.name       || row.username,
+    name:       row.name        || row.username,
     username:   row.username,
     avatarType: row.avatar_type || 'emoji',
-    avatar:     row.avatar     || '😊',
+    avatar:     row.avatar      || '😊',
     avatarData: row.avatar_data || null,
-    bio:        row.bio        || '',
-    status:     row.status     || 'online',
-    color:      row.color      || PROFILE_COLORS[0],
-    vip:        row.vip        || false,
-    badge:      row.badge      || null,
-    createdAt:  row.created_at || Date.now(),
-    uid:        row.uid        || Date.now().toString(36),
-    pwdHash:    row.pwd_hash   || null,
+    bio:        row.bio         || '',
+    status:     row.status      || 'online',
+    color:      row.color       || PROFILE_COLORS[0],
+    vip:        row.vip         || false,
+    badge:      row.badge       || null,
+    frame:      row.frame       || null,
+    banner:     row.banner      || null,
+    createdAt:  row.created_at  || Date.now(),
+    uid:        row.uid         || Date.now().toString(36),
+    pwdHash:    row.pwd_hash    || null,
   };
   profileSave(profile);
   // Сохраняем в локальный список аккаунтов
@@ -1261,6 +1270,7 @@ async function profileSaveEdit() {
 
   // Если изменилось только имя — обновляем в presence через profileConnect
   profileSave(p);
+  sbSaveUser(p); // синхронизируем полный профиль в облако
   profileConnect(p);
   updateNavProfileIcon(p);
   profileBroadcast({ type: 'profile_update', profile: profilePublicData(p) });
@@ -1594,6 +1604,7 @@ async function sbGet(table, query = '') {
   try {
     const r = await p2pFetch('GET', `/rest/v1/${table}?${query}`, null, {});
     if (!r.ok && r.status !== 200) return null;
+    _lastSuccessfulPoll = Date.now(); // watchdog: соединение живо
     return await r.json();
   } catch(e) { return null; }
 }
@@ -1684,9 +1695,28 @@ let _sbPresenceTimer     = null;
 let _fbPollTimer         = null;
 let _fbMsgStreams         = {};
 let _fbLastMsgTs         = {};
-let _connectSessionId    = 0; // защита от гонки при concurrent вызовах profileConnect
-let _fbInboxTimer        = null; // глобальный inbox poll — ловит НОВЫЕ входящие от незнакомцев
-let _fbInboxLastTs       = 0;    // последний ts обработанного входящего
+let _connectSessionId    = 0;
+let _fbInboxTimer        = null;
+let _fbInboxLastTs       = 0;
+// ── Watchdog: следит что соединение реально живо ──────────────────
+let _watchdogTimer      = null;
+let _lastSuccessfulPoll = 0;     // ts последнего успешного запроса к Supabase
+const WATCHDOG_INTERVAL = 30000; // проверяем каждые 30 сек
+const WATCHDOG_TIMEOUT  = 75000; // если > 75 сек без ответа — переподключаемся
+
+// ── Watchdog: детектирует смерть соединения и переподключается ──────
+function _startWatchdog(p) {
+  clearInterval(_watchdogTimer);
+  _lastSuccessfulPoll = Date.now();
+  _watchdogTimer = setInterval(() => {
+    if (!_profilePeerReady) return; // уже переподключаемся
+    const silent = Date.now() - _lastSuccessfulPoll;
+    if (silent > WATCHDOG_TIMEOUT) {
+      console.warn('[Watchdog] Нет ответа ' + Math.round(silent/1000) + 'с — переподключаюсь');
+      profileConnect(p);
+    }
+  }, WATCHDOG_INTERVAL);
+}
 
 // ── Инициализируем таблицы Supabase при первом подключении ────────
 async function sbInitTables() {
@@ -1694,6 +1724,42 @@ async function sbInitTables() {
 }
 
 // ── Подключение ───────────────────────────────────────────────────
+// ── Сохранение/загрузка полного профиля в таблице users ─────────
+async function sbSaveUser(p) {
+  if (!sbReady() || !p) return;
+  const payload = {
+    username:    p.username,
+    name:        p.name,
+    pwd_hash:    p.pwdHash    || null,
+    avatar:      p.avatar     || '😊',
+    avatar_type: p.avatarType || 'emoji',
+    avatar_data: p.avatarData || null,
+    bio:         p.bio        || '',
+    status:      p.status     || 'online',
+    color:       p.color      || '#e87722',
+    vip:         p.vip        || false,
+    badge:       p.badge      || null,
+    frame:       p.frame      || null,
+    banner:      p.banner     || null,
+    created_at:  p.createdAt  || Date.now(),
+  };
+  try {
+    await p2pFetch('POST', '/rest/v1/users', payload, {
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=minimal',
+    });
+  } catch(e) {}
+}
+
+async function sbLoadUser(username) {
+  if (!sbReady()) return null;
+  try {
+    const rows = await sbGet('users', `select=*&username=eq.${encodeURIComponent(username)}&limit=1`);
+    if (Array.isArray(rows) && rows.length > 0) return rows[0];
+  } catch(e) {}
+  return null;
+}
+
 async function profileConnect(p) {
   if (!p) return;
 
@@ -1706,6 +1772,7 @@ async function profileConnect(p) {
   clearInterval(_sbPresenceTimer); _sbPresenceTimer = null;
   clearInterval(_fbPollTimer);     _fbPollTimer = null;
   clearInterval(_fbInboxTimer);    _fbInboxTimer = null;
+  clearInterval(_watchdogTimer);   _watchdogTimer = null;
   p2pStopHealthCheck();
   Object.values(_fbMsgStreams).forEach(t => clearInterval(t));
   _fbMsgStreams = {};
@@ -1733,6 +1800,7 @@ async function profileConnect(p) {
 
     _fbPollTimer = setInterval(sbPollPresence, 15000);
     p2pStartHealthCheck();
+    _startWatchdog(p);
 
     await sbPollPresence();
     if (sessionId !== _connectSessionId) return;
@@ -1756,25 +1824,29 @@ async function profileConnect(p) {
 // Восстанавливаем присутствие когда вкладка снова становится активной
 let _visibilityDebounce = null;
 let _lastVisibleTs = Date.now();
+let _lastHiddenTs  = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') {
     _lastVisibleTs = Date.now();
+    _lastHiddenTs  = Date.now();
     return;
   }
   clearTimeout(_visibilityDebounce);
   _visibilityDebounce = setTimeout(() => {
     const p = profileLoad();
     if (!p || !sbReady()) return;
-    if (_sbPresenceTimer) {
-      // Таймеры живы — обновляем присутствие и ПРИНУДИТЕЛЬНО проверяем все сообщения
-      sbPresencePut(p);
-      sbPollPresence();
-      // Принудительный немедленный poll всех чатов — ловим пропущенные за время фона
-      _sbForcePollAllChats(p);
-    } else {
-      // Таймеры умерли (долгое сворачивание) — переподключаемся полностью
+    const hiddenMs = Date.now() - (_lastHiddenTs || 0);
+    // Если были в фоне > 60 сек — всегда переподключаемся полностью
+    // (Android мог заморозить/убить таймеры)
+    if (hiddenMs > 60000 || !_profilePeerReady) {
       profileConnect(p);
+      return;
     }
+    // Были в фоне меньше — просто обновляем и проверяем пропущенные
+    _lastSuccessfulPoll = Date.now(); // сбрасываем watchdog
+    sbPresencePut(p);
+    sbPollPresence();
+    _sbForcePollAllChats(p);
   }, 300);
 });
 
@@ -1817,7 +1889,8 @@ function profileDisconnect() {
   _profilePeerReady = false;
   clearInterval(_sbPresenceTimer);
   clearInterval(_fbPollTimer);
-  clearInterval(_fbInboxTimer); _fbInboxTimer = null;
+  clearInterval(_fbInboxTimer);  _fbInboxTimer = null;
+  clearInterval(_watchdogTimer); _watchdogTimer = null;
   p2pStopHealthCheck();
   Object.values(_fbMsgStreams).forEach(t => clearInterval(t));
   _fbMsgStreams = {};
@@ -1985,7 +2058,7 @@ function sbStartInboxPolling(p) {
     });
   };
   doInboxCheck();
-  _fbInboxTimer = setInterval(doInboxCheck, 5000);
+  _fbInboxTimer = setInterval(doInboxCheck, 3000); // 3 сек — быстрее получаем сообщения
 }
 
 function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
