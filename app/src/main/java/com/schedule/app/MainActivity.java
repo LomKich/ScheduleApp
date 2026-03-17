@@ -60,10 +60,15 @@ public class MainActivity extends Activity {
     private DnsVpnService          vpnService;
     private boolean                vpnBound = false;
     private AppLogger              log;
-    // Колбэк для file chooser (фон приложения)
     private ValueCallback<Uri[]>   fileChooserCallback = null;
-    // Флаг: true когда пикер открыт через нативный JS-мост (не через <input type="file">)
     private boolean                isNativeBgPick = false;
+
+    // Java-side poll timer — работает даже когда WebView заморожен в фоне
+    private android.os.Handler     pollHandler;
+    private Runnable               pollRunnable;
+    private static final int       POLL_INTERVAL_FG = 2000;  // мс в фоне (foreground)
+    private static final int       POLL_INTERVAL_BG = 4000;  // мс в фоне (background)
+    private boolean                appInForeground  = false;
 
     private final ServiceConnection vpnConnection = new ServiceConnection() {
         @Override
@@ -250,6 +255,8 @@ public class MainActivity extends Activity {
                 log.i(TAG, "onPageFinished: " + url);
                 injectErrorHandler();
                 updateVpnStateInWeb();
+                // Запускаем Java-поллер после загрузки страницы
+                startJavaPollTimer();
             }
 
             @Override
@@ -271,6 +278,32 @@ public class MainActivity extends Activity {
                 return super.shouldInterceptRequest(view, req);
             }
         });
+    }
+
+    /** Запускает Java-таймер который пингует JS каждые 2-4 сек.
+     *  Работает даже когда WebView заморожен Android'ом в фоне. */
+    private void startJavaPollTimer() {
+        if (pollHandler != null) {
+            pollHandler.removeCallbacks(pollRunnable);
+        }
+        pollHandler  = new android.os.Handler(android.os.Looper.getMainLooper());
+        pollRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (webView == null) return;
+                // Вызываем JS-функцию которая делает один цикл поллинга
+                webView.evaluateJavascript(
+                    "if(typeof window._javaTick==='function'){window._javaTick();}",
+                    null
+                );
+                // Перепланируем с нужным интервалом
+                int interval = appInForeground ? POLL_INTERVAL_FG : POLL_INTERVAL_BG;
+                pollHandler.postDelayed(this, interval);
+            }
+        };
+        appInForeground = true;
+        pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_FG);
+        log.i(TAG, "Java poll timer запущен (fg=" + POLL_INTERVAL_FG + "мс bg=" + POLL_INTERVAL_BG + "мс)");
     }
 
     private void injectErrorHandler() {
@@ -451,8 +484,29 @@ public class MainActivity extends Activity {
         );
     }
 
-    @Override protected void onPause()   { super.onPause();   log.i(TAG, "onPause"); }
-    @Override protected void onResume()  { super.onResume();  log.i(TAG, "onResume"); }
+    @Override
+    protected void onPause() {
+        super.onPause();
+        appInForeground = false;
+        log.i(TAG, "onPause — переключаю поллер в фоновый режим (" + POLL_INTERVAL_BG + "мс)");
+        // Переключаемся на медленный интервал в фоне — JS заморожен, но Java нет
+        if (pollHandler != null && pollRunnable != null) {
+            pollHandler.removeCallbacks(pollRunnable);
+            pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_BG);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        appInForeground = true;
+        log.i(TAG, "onResume — переключаю поллер в активный режим (" + POLL_INTERVAL_FG + "мс)");
+        // Ускоряем интервал — приложение на экране
+        if (pollHandler != null && pollRunnable != null) {
+            pollHandler.removeCallbacks(pollRunnable);
+            pollHandler.post(pollRunnable); // немедленный тик + восстановление
+        }
+    }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
@@ -472,6 +526,10 @@ public class MainActivity extends Activity {
         super.onDestroy();
         log.section("onDestroy");
         log.i(TAG, "Приложение завершается");
+        if (pollHandler != null && pollRunnable != null) {
+            pollHandler.removeCallbacks(pollRunnable);
+            pollHandler = null;
+        }
         if (vpnBound) unbindService(vpnConnection);
     }
 
@@ -627,6 +685,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void logError(String message) {
             log.e("JS:ERROR", message);
+        }
+
+        /** Короткий лог из JS: Android.log('текст') */
+        @JavascriptInterface
+        public void log(String message) {
+            log.i("JS:IN", message);
         }
 
         /** Общий лог из JS: Android.logMsg('INFO', 'текст') */

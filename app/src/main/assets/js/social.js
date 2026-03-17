@@ -1838,6 +1838,9 @@ let _lastHiddenTs  = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') {
     _lastHiddenTs = Date.now();
+    if (window.Android && typeof Android.log === 'function') {
+      Android.log('[VIS] Приложение ушло в фон ts=' + _lastHiddenTs);
+    }
     return;
   }
   clearTimeout(_visibilityDebounce);
@@ -1846,12 +1849,18 @@ document.addEventListener('visibilitychange', () => {
     if (!p || !sbReady()) return;
     const hiddenMs = Date.now() - (_lastHiddenTs || 0);
     _lastSuccessfulPoll = Date.now();
-    // Если были в фоне больше 30 сек — полный переподключение
-    // (Android мог убить таймер)
+    if (window.Android && typeof Android.log === 'function') {
+      Android.log('[VIS] Вернулся на экран, был в фоне ' + Math.round(hiddenMs/1000) + 'с superPoller=' + (!!_superPoller) + ' peerReady=' + _profilePeerReady);
+    }
     if (hiddenMs > 30000 || !_profilePeerReady || !_superPoller) {
+      if (window.Android && typeof Android.log === 'function') {
+        Android.log('[VIS] Запускаю полный profileConnect');
+      }
       profileConnect(p);
     } else {
-      // Были в фоне мало — просто форс-чек inbox
+      if (window.Android && typeof Android.log === 'function') {
+        Android.log('[VIS] Форс-чек inbox inboxLastTs=' + _fbInboxLastTs);
+      }
       sbPresencePut(p).catch(() => {});
       sbPollPresence().catch(() => {});
       if (_fbInboxLastTs) {
@@ -1859,6 +1868,9 @@ document.addEventListener('visibilitychange', () => {
           `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
         ).then(data => {
           if (!Array.isArray(data) || data.length === 0) return;
+          if (window.Android && typeof Android.log === 'function') {
+            Android.log('[VIS] Форс-чек нашёл ' + data.length + ' сообщений');
+          }
           const bySender = {};
           data.forEach(msg => {
             if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
@@ -1909,7 +1921,55 @@ async function _sbForcePollAllChats(p) {
   sbStartInboxPolling(p);
 }
 
-// ── Единый супер-поллер — заменяет все отдельные таймеры ─────────
+// ── Java-tick: вызывается из MainActivity каждые 2-4 сек ──────────
+// Это главный механизм доставки сообщений — работает даже когда
+// Android заморозил JS setInterval в WebView
+let _javaTickCount = 0;
+window._javaTick = async function() {
+  _javaTickCount++;
+  const pr = profileLoad();
+  if (!pr || !sbReady() || !_profilePeerReady) return;
+
+  // Каждый тик: inbox
+  try {
+    const data = await sbGet('messages',
+      `select=*&to_user=eq.${encodeURIComponent(pr.username)}&ts=gt.${_fbInboxLastTs}&order=ts.asc&limit=100`
+    );
+    if (Array.isArray(data) && data.length > 0) {
+      if (window.Android && typeof Android.log === 'function') {
+        Android.log('[POLL] inbox нашёл ' + data.length + ' новых сообщений (tick #' + _javaTickCount + ')');
+      }
+      const bySender = {};
+      data.forEach(msg => {
+        if (!bySender[msg.from_user]) bySender[msg.from_user] = [];
+        bySender[msg.from_user].push(msg);
+        _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts);
+      });
+      Object.entries(bySender).forEach(([sender, msgs]) => {
+        sbHandleIncomingMessages(pr.username, sender, msgs);
+      });
+    }
+  } catch(e) {}
+
+  // Каждый тик: открытый чат
+  if (_msgCurrentChat) {
+    try {
+      const key = sbChatKey(pr.username, _msgCurrentChat);
+      const data = await sbGet('messages',
+        `select=*&chat_key=eq.${encodeURIComponent(key)}&ts=gt.${_fbLastMsgTs[key]||0}&order=ts.asc&limit=50`
+      );
+      if (Array.isArray(data) && data.length > 0) {
+        sbHandleIncomingMessages(pr.username, _msgCurrentChat, data);
+      }
+    } catch(e) {}
+  }
+
+  // Каждые 10 тиков: presence
+  if (_javaTickCount % 10 === 0) {
+    sbPresencePut(pr).catch(() => {});
+    sbPollPresence().catch(() => {});
+  }
+};
 // Каждые 2 сек: inbox + открытый чат
 // Каждые 10 сек: presence heartbeat + список онлайн
 // Android убивает кучу мелких таймеров, но один активный — живёт
@@ -2184,6 +2244,10 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         replyTo: inReplyTo, delivered: true, read: alreadyRead
       });
       hasNew = true;
+      // Логируем получение нового сообщения
+      if (window.Android && typeof Android.log === 'function') {
+        Android.log('[MSG] Новое сообщение от @' + msg.from_user + ': "' + (inText||inSticker||'').slice(0,40) + '" ts=' + msg.ts);
+      }
     }
   });
 
