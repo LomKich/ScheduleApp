@@ -554,7 +554,9 @@ body[data-theme="candy"] {--accent-text:#000}
   left:50%;
   transform:translateX(-50%);
   z-index:200;
-  display:flex;align-items:center;justify-content:space-around;
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  align-items:stretch;
   background:var(--surface);
   border:1px solid rgba(255,255,255,.10);
   border-radius:28px;
@@ -564,13 +566,37 @@ body[data-theme="candy"] {--accent-text:#000}
   height:58px;
   box-shadow:0 8px 32px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.25);
   transition:background 0.3s ease, backdrop-filter 0.3s ease, opacity .2s, transform .2s;
+  /* Переменная индекса активной вкладки: 0,1,2,3 */
+  --nav-active: 0;
 }
 /* Hide nav on messenger / sub-screens */
 .bottom-nav.nav-hidden{
   opacity:0;pointer-events:none;transform:translateX(-50%) translateY(18px);
 }
+
+/* Pill — чисто CSS, позиция через --nav-active */
+#nav-pill{
+  position:absolute;
+  /* Центрирован по вертикали */
+  top:50%;
+  transform:translateY(-50%);
+  /* Ширина = 1 слот = 25% навбара */
+  width:calc(25% - 4px);
+  height:38px;
+  border-radius:19px;
+  background:color-mix(in srgb,var(--accent) 18%,transparent);
+  /* Горизонтальная позиция: слот N = N * 25% + отступ 2px */
+  left:calc(var(--nav-active) * 25% + 2px);
+  transition:left .28s cubic-bezier(.34,1.3,.64,1),
+             background .2s;
+  pointer-events:none;
+  z-index:0;
+}
+
 .nav-item{
-  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  /* Занимает ровно 1 ячейку грида */
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;
   padding:0;cursor:pointer;color:var(--muted);
   transition:color .22s;
   background:none;border:none;font-family:inherit;
@@ -580,16 +606,20 @@ body[data-theme="candy"] {--accent-text:#000}
 /* Убираем ripple внутри нижней панели */
 .bottom-nav .ripple { display:none!important; }
 .nav-item .nav-icon-wrap{
-  width:56px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+  /* Фиксированный размер, центрирован внутри кнопки */
+  width:48px;height:32px;
+  border-radius:16px;
+  display:flex;align-items:center;justify-content:center;
   position:relative;
-}
-/* Pill highlight теперь через #nav-pill */
-.nav-item.active .nav-icon-wrap{
-  background:transparent;
+  /* Не позволяем wrap выбиваться за пределы кнопки */
+  flex-shrink:0;
 }
 .nav-item .nav-icon{
-  width:24px;height:24px;transition:transform .22s cubic-bezier(.34,1.56,.64,1);
+  width:24px;height:24px;
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1);
   fill:currentColor;
+  /* Не позволяем иконке смещаться */
+  display:block;flex-shrink:0;
 }
 .nav-item.active{color:var(--accent)}
 .nav-item.active .nav-icon{transform:scale(1.08)}
@@ -2003,6 +2033,12 @@ button            img.emoji { height:1em; width:1em; vertical-align:-.1em; margi
 #mc-messages { flex:1 1 0!important; min-height:0!important; overflow-y:auto!important; }
 #mc-input-bar { flex-shrink:0!important; position:sticky!important; bottom:0!important; }
 
+/* FAB анимация */
+@keyframes fabMenuIn {
+  from { opacity:0; transform:translateY(12px) scale(.92); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
+}
+
 /* ══════════════════════════════════════════════════════════════════
    TELEGRAM STYLE — полный рескин интерфейса
    ══════════════════════════════════════════════════════════════════ */
@@ -2459,6 +2495,13 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
         <span class="toggle-slider"></span>
       </label>
     </div>
+    <div class="settings-row" style="margin-bottom:8px" onclick="toggleNotchMode()">
+      <div>
+        <div style="font-size:14px;font-weight:600">📷 Вырез камеры</div>
+        <div class="settings-row-sub" id="notch-mode-sub">Отступ под вырез камеры: <b id="notch-mode-label">авто</b></div>
+      </div>
+      <div id="notch-mode-toggle" class="toggle-switch"></div>
+    </div>
     <div class="sep"></div>
 
     <!-- Приложение / OTA -->
@@ -2469,7 +2512,7 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.3.5 — Android</div>
+        <div class="item-sub" id="app-version-str">4.3.6 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2517,7 +2560,6 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
   <div class="hdr">
     <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
     <div class="hdr-title">Профиль</div>
-    <button id="profile-edit-btn" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:700;padding:8px;cursor:pointer" onclick="profileToggleEdit()">Изменить</button>
   </div>
   <div class="body" id="profile-body">
     <!-- Заглушка — рендерится через JS -->
@@ -2733,10 +2775,6 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
   <div class="hdr" id="msg-hdr-normal">
     <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
     <div class="hdr-title">💬 Сообщения</div>
-    <div style="display:flex;gap:4px">
-      <button style="background:none;border:none;color:var(--accent);font-size:20px;padding:6px;cursor:pointer" title="Создать группу" onclick="showCreateGroupDialog()">👥</button>
-      <button style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;padding:8px;cursor:pointer" onclick="profileRenderOnline();showScreen('s-online')">Новый</button>
-    </div>
   </div>
   <div class="hdr" id="msg-hdr-select" style="display:none">
     <button style="background:none;border:none;color:var(--muted);font-size:14px;font-weight:700;padding:8px;cursor:pointer" onclick="msgSelectCancel()">Отмена</button>
@@ -2750,8 +2788,25 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
       <input id="msg-search" placeholder="Поиск" style="background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:14px;flex:1;width:100%" oninput="messengerFilterChats(this.value)">
     </div>
   </div>
-  <div class="body" id="messenger-list" style="padding-top:8px">
+  <div class="body" id="messenger-list" style="padding-top:8px;padding-bottom:80px">
     <div style="text-align:center;padding:40px;color:var(--muted)">Загрузка...</div>
+  </div>
+  <!-- FAB кнопки (как в Telegram) -->
+  <div id="msg-fab-container" style="position:absolute;bottom:calc(16px + var(--safe-bot));right:16px;display:flex;flex-direction:column;align-items:flex-end;gap:12px;z-index:50">
+    <div id="msg-fab-menu" style="display:none;flex-direction:column;align-items:flex-end;gap:8px;animation:fabMenuIn .18s cubic-bezier(.34,1.3,.64,1)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:var(--surface);padding:5px 12px;border-radius:12px;font-size:12px;font-weight:600;color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.3)">Создать группу</span>
+        <button onclick="showCreateGroupDialog();msgFabClose()"
+          style="width:46px;height:46px;border-radius:50%;background:var(--surface2);border:1.5px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.35)">👥</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="background:var(--surface);padding:5px 12px;border-radius:12px;font-size:12px;font-weight:600;color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.3)">Новый диалог</span>
+        <button onclick="profileRenderOnline();showScreen('s-online');msgFabClose()"
+          style="width:46px;height:46px;border-radius:50%;background:var(--surface2);border:1.5px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.35)">✉️</button>
+      </div>
+    </div>
+    <button id="msg-fab-btn" onclick="msgFabToggle()"
+      style="width:56px;height:56px;border-radius:50%;background:var(--accent);border:none;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;color:var(--btn-text,#fff);box-shadow:0 4px 16px rgba(0,0,0,.4);transition:transform .18s cubic-bezier(.34,1.3,.64,1)">✏️</button>
   </div>
 </div>
 
@@ -2764,9 +2819,6 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
       <div id="mc-hdr-name" style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">...</div>
       <div id="mc-hdr-sub" style="font-size:11px;color:var(--muted)"></div>
     </div>
-    <button id="mc-mute-btn" title="Уведомления включены"
-      style="background:none;border:none;color:var(--muted);font-size:18px;padding:6px;cursor:pointer;line-height:1"
-      onclick="event.stopPropagation();peerMuteShow(_msgCurrentChat)">🔔</button>
     <button style="background:none;border:none;color:var(--muted);font-size:20px;padding:8px;cursor:pointer" onclick="event.stopPropagation();messengerShowMore()">⋮</button>
   </div>
   <!-- Pinned message bar (hidden by default) -->
@@ -2818,16 +2870,8 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
 
 <!-- ГЛОБАЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ — вне .screen, чтобы backdrop-filter работал -->
 <nav class="bottom-nav" id="global-bottom-nav">
-  <!-- Sliding pill indicator -->
-  <div id="nav-pill" style="
-    position:absolute;
-    height:38px;
-    border-radius:19px;
-    background:color-mix(in srgb,var(--accent) 18%,transparent);
-    transition:left .28s cubic-bezier(.34,1.3,.64,1), width .28s cubic-bezier(.34,1.3,.64,1);
-    pointer-events:none;
-    z-index:0;
-  "></div>
+  <!-- Sliding pill indicator — позиция через CSS переменную, 0..3 -->
+  <div id="nav-pill"></div>
   <button class="nav-item active" id="nav-home" onclick="SFX.play('navHome');goHome()">
     <div class="nav-icon-wrap">
       <svg class="nav-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

@@ -351,9 +351,10 @@ public class MainActivity extends Activity {
         // Записываем как CSS-переменные напрямую — переопределяет env(safe-area-inset-top)
         String js = String.format(
             "document.documentElement.style.setProperty('--safe-top','%dpx');" +
+            "document.documentElement.style.setProperty('--safe-top-native','%dpx');" +
             "document.documentElement.style.setProperty('--safe-bot','%dpx');" +
             "console.log('[StatusBar] safe-top=%dpx safe-bot=%dpx');",
-            statusBarDp, navBarDp, statusBarDp, navBarDp
+            statusBarDp, statusBarDp, navBarDp, statusBarDp, navBarDp
         );
         webView.post(() -> webView.evaluateJavascript(js, null));
     }
@@ -1849,6 +1850,12 @@ public class MainActivity extends Activity {
         public String accountChangePassword(String username, String newPwdHash) {
             log.i(TAG, "JS→accountChangePassword username=" + username);
             return helper.accountChangePassword(username, newPwdHash);
+        }
+
+        /** Переинжектирует высоту статус-бара (нужно для восстановления после notch-toggle) */
+        @JavascriptInterface
+        public void reinjectStatusBar() {
+            runOnUiThread(() -> injectStatusBarHeight());
         }
 
     }

@@ -607,8 +607,8 @@ function profileRenderScreen() {
     </div>
     <div style="height:60px"></div>
 
-    <!-- \u0418\u043C\u044F, VIP, username, \u0441\u0442\u0430\u0442\u0443\u0441 -->
-    <div style="text-align:center;padding:0 16px 16px">
+    <!-- Имя, VIP, username, статус -->
+    <div style="text-align:center;padding:0 16px 12px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(p.name)}</span>
         ${vip ? '<span class="vip-badge-pill"><span class="vip-crown">\u{1F451}</span> VIP</span>' : ''}
@@ -621,16 +621,22 @@ function profileRenderScreen() {
       ${badgeObj ? `<div style="display:inline-block;margin-top:8px;font-size:12px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
     </div>
 
-    <!-- 2 кнопки быстрых действий -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 4px 16px">
-      <button onclick="profileRenderOnline();showScreen('s-online')" style="background:var(--surface2);border:1.5px solid var(--surface3);border-radius:16px;padding:14px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
-        <span style="font-size:26px;line-height:1;color:var(--accent)">👥</span>
-        <span style="font-size:12px;color:var(--text);font-weight:600">Онлайн</span>
-        <span style="font-size:11px;color:var(--accent);font-weight:700">${onlinePeers.length + 1}</span>
+    <!-- Кнопки под аватаром: Выбрать фото · Изменить · Настройки (как в Telegram) -->
+    <div style="display:flex;gap:8px;padding:0 16px 16px;justify-content:center">
+      <button onclick="profilePickPhoto()"
+        style="flex:1;max-width:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:11px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px">
+        <span style="font-size:22px">📷</span>
+        <span style="font-size:11px;color:var(--text);font-weight:600">Выбрать фото</span>
       </button>
-      <button onclick="navTo('s-settings','nav-settings')" style="background:var(--surface2);border:1.5px solid var(--surface3);border-radius:16px;padding:14px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
-        <span style="font-size:26px;line-height:1">⚙️</span>
-        <span style="font-size:12px;color:var(--text);font-weight:600">Настройки</span>
+      <button onclick="profileToggleEdit()"
+        style="flex:1;max-width:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:11px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px">
+        <span style="font-size:22px">✏️</span>
+        <span style="font-size:11px;color:var(--text);font-weight:600">Изменить</span>
+      </button>
+      <button onclick="navTo('s-settings','nav-settings')"
+        style="flex:1;max-width:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:11px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px">
+        <span style="font-size:22px">⚙️</span>
+        <span style="font-size:11px;color:var(--text);font-weight:600">Настройки</span>
       </button>
     </div>
 
@@ -2617,12 +2623,13 @@ function peerMuteShow(username) {
   ];
 
   sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;overflow:hidden;padding-bottom:calc(8px + var(--safe-bot))">
+    <div id="mute-sheet-inner" style="background:var(--surface);border-radius:20px 20px 0 0;overflow:hidden;padding-bottom:calc(8px + var(--safe-bot));animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:10px auto 12px"></div>
       <div style="font-size:13px;font-weight:700;color:var(--muted);padding:0 20px 10px;text-transform:uppercase;letter-spacing:.06em">Уведомления</div>
       ${options.map((o,i) => `<button id="mute-opt-${i}"
         style="width:100%;padding:15px 20px;background:none;border:none;border-top:1px solid rgba(255,255,255,.05);
-          color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+          color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;
+          animation:mcEmojiIn .18s cubic-bezier(.34,1.3,.64,1) ${i*40}ms both">
         ${o.label}
       </button>`).join('')}
       <button onclick="document.getElementById('mute-sheet').remove()"
@@ -2631,7 +2638,13 @@ function peerMuteShow(username) {
       </button>
     </div>`;
 
-  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+  sheet.addEventListener('click', e => {
+    if (e.target === sheet) {
+      const inner = document.getElementById('mute-sheet-inner');
+      if (inner) { inner.style.animation = 'mcSlideDown .2s cubic-bezier(.4,0,.8,.6) forwards'; }
+      setTimeout(() => sheet.remove(), 180);
+    }
+  });
   document.body.appendChild(sheet);
   options.forEach((o,i) => {
     document.getElementById('mute-opt-'+i)?.addEventListener('click', () => {
@@ -4416,15 +4429,14 @@ function peerProfileOpen(username) {
           <div style="font-size:12px;color:var(--muted);margin-top:2px">Имя пользователя</div>
         </div>
       </div>
-      <!-- Bio если есть -->
-      ${peer.bio ? `
-      <div style="padding:14px 20px;display:flex;align-items:flex-start;gap:14px;border-bottom:1px solid var(--surface3)">
+      <!-- Bio -->
+      <div style="padding:14px 20px;display:flex;align-items:flex-start;gap:14px${peer.bio ? ';border-bottom:1px solid var(--surface3)' : ''}">
         <span style="font-size:20px;color:var(--muted);width:24px;text-align:center">📝</span>
         <div style="flex:1">
-          <div style="font-size:15px;color:var(--text);white-space:pre-wrap;line-height:1.5">${escHtml(peer.bio)}</div>
+          <div style="font-size:15px;color:${peer.bio ? 'var(--text)' : 'var(--muted)'};white-space:pre-wrap;line-height:1.5">${peer.bio ? escHtml(peer.bio) : 'Не указано'}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px">О себе</div>
         </div>
-      </div>` : ''}
+      </div>
     </div>
 
     <!-- Защита от копирования (если включена) -->
@@ -4619,3 +4631,87 @@ if (typeof cmdExec !== 'undefined') {
     origFn(raw);
   };
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// ✏️ FAB кнопка в мессенджере
+// ══════════════════════════════════════════════════════════════════════
+let _fabOpen = false;
+function msgFabToggle() {
+  const menu = document.getElementById('msg-fab-menu');
+  const btn  = document.getElementById('msg-fab-btn');
+  if (!menu) return;
+  _fabOpen = !_fabOpen;
+  if (_fabOpen) {
+    menu.style.display = 'flex';
+    if (btn) { btn.style.transform = 'rotate(45deg)'; btn.textContent = '✕'; }
+  } else { msgFabClose(); }
+}
+function msgFabClose() {
+  const menu = document.getElementById('msg-fab-menu');
+  const btn  = document.getElementById('msg-fab-btn');
+  _fabOpen = false;
+  if (menu) menu.style.display = 'none';
+  if (btn) { btn.style.transform = ''; btn.textContent = '✏️'; }
+}
+document.addEventListener('click', (e) => {
+  if (!_fabOpen) return;
+  const c = document.getElementById('msg-fab-container');
+  if (c && !c.contains(e.target)) msgFabClose();
+}, { passive: true });
+
+// ══════════════════════════════════════════════════════════════════════
+// 📷 РЕЖИМ ВЫРЕЗА КАМЕРЫ
+// ══════════════════════════════════════════════════════════════════════
+const NOTCH_KEY = 'sapp_notch_mode_v1';
+function notchModeLoad() { try { return localStorage.getItem(NOTCH_KEY)||'auto'; } catch(e) { return 'auto'; } }
+function toggleNotchMode() {
+  const cur = notchModeLoad();
+  const next = cur==='auto' ? 'none' : 'auto';
+  try { localStorage.setItem(NOTCH_KEY, next); } catch(e) {}
+  _applyNotchMode(next);
+  _renderNotchToggle(next);
+  toast(next==='none' ? '📷 Вырез камеры: отключён' : '📷 Вырез камеры: включён');
+}
+function _applyNotchMode(mode) {
+  if (mode==='none') {
+    document.documentElement.style.setProperty('--safe-top','0px');
+  } else {
+    const nat = document.documentElement.style.getPropertyValue('--safe-top-native');
+    if (nat && nat!=='0px') document.documentElement.style.setProperty('--safe-top', nat);
+    else try { window.Android?.reinjectStatusBar?.(); } catch(_) {}
+  }
+}
+function _renderNotchToggle(mode) {
+  const t = document.getElementById('notch-mode-toggle');
+  const l = document.getElementById('notch-mode-label');
+  if (t) t.classList.toggle('on', mode==='auto');
+  if (l) l.textContent = mode==='auto' ? 'включён' : 'отключён';
+}
+(function initNotchMode() {
+  setTimeout(() => {
+    const cur = getComputedStyle(document.documentElement).getPropertyValue('--safe-top').trim();
+    if (cur && cur!=='0px') document.documentElement.style.setProperty('--safe-top-native', cur);
+    const mode = notchModeLoad();
+    if (mode==='none') _applyNotchMode('none');
+    _renderNotchToggle(mode);
+  }, 500);
+})();
+
+// ── Stub для _mcUpdateMuteIcon (кнопка удалена из хедера) ─────────────
+function _mcUpdateMuteIcon() {}
+
+// ── Анимация кнопки ⋮ в чате ─────────────────────────────────────────
+(function patchShowMore() {
+  const orig = window.messengerShowMore;
+  if (typeof orig !== 'function') return;
+  window.messengerShowMore = function() {
+    const btn = document.querySelector('#s-messenger-chat .hdr button:last-child');
+    if (btn) {
+      btn.style.transition = 'transform .15s cubic-bezier(.34,1.56,.64,1)';
+      btn.style.transform  = 'scale(1.4) rotate(90deg)';
+      setTimeout(() => { btn.style.transform = 'rotate(90deg)'; }, 160);
+      setTimeout(() => { btn.style.transform = ''; }, 400);
+    }
+    orig.call(this);
+  };
+})();

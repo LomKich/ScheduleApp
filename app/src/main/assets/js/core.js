@@ -1910,23 +1910,16 @@ function updateNavActive(aid) {
 }
 
 // ── Sliding pill indicator (как тумблер ученик/учитель) ────────────
+// Порядок вкладок для pill — совпадает с grid-template-columns
+const _NAV_PILL_IDS = ['nav-home', 'nav-bells', 'nav-messenger', 'nav-profile'];
+
 function _navMovePill(activeId) {
-  const pill = document.getElementById('nav-pill');
-  const activeBtn = document.getElementById(activeId);
   const nav = document.getElementById('global-bottom-nav');
-  if (!pill || !activeBtn || !nav) return;
-
-  const navRect = nav.getBoundingClientRect();
-  const iconWrap = activeBtn.querySelector('.nav-icon-wrap');
-  const wrapRect = (iconWrap || activeBtn).getBoundingClientRect();
-
-  const pillW = Math.max(wrapRect.width + 4, 58);
-  const pillL = wrapRect.left - navRect.left + (wrapRect.width - pillW) / 2;
-
-  pill.style.width     = pillW + 'px';
-  pill.style.left      = pillL + 'px';
-  pill.style.top       = '50%';
-  pill.style.transform = 'translateY(-50%)';
+  if (!nav) return;
+  const idx = _NAV_PILL_IDS.indexOf(activeId);
+  if (idx < 0) return;
+  // Устанавливаем CSS-переменную — pill сам сдвигается через calc()
+  nav.style.setProperty('--nav-active', String(idx));
 }
 
 // ── Показывать навигацию только на нужных экранах ──────────────────────────
@@ -2295,7 +2288,7 @@ function updateLastGroupBtn(){
   const wrap=document.getElementById('last-group-wrap'),btn=document.getElementById('last-group-btn');
   if(!wrap||!btn)return;
   const val=(typeof S!=='undefined'&&S.mode==='teacher')?S.lastTeacher:S.lastGroup;
-  if(val){btn.textContent='▶ '+val;wrap.classList.remove('hidden');}
+  if(val){btn.textContent=val;wrap.classList.remove('hidden');}
   else wrap.classList.add('hidden');
 }
 async function _jumpStudentLastGroup(){
@@ -2587,7 +2580,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.3.5';
+const APP_VERSION='4.3.61';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
