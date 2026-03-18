@@ -751,8 +751,65 @@ function profileRenderScreen() {
         <button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:12px;flex-shrink:0" onclick="pushRequestPermission()" id="push-notif-btn">${pushGetBtnText()}</button>
       </div>
     </div>
+    <!-- Фоновое соединение (Telegram-style keep-alive) -->
+    <div id="bg-service-row" style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+        </span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">Фоновое соединение</div>
+          <div style="font-size:12px;color:var(--muted)" id="bg-service-status">Проверяем...</div>
+        </div>
+        <div id="bg-service-toggle" onclick="toggleBackgroundService()"
+          style="width:51px;height:31px;border-radius:16px;position:relative;cursor:pointer;transition:background .25s;flex-shrink:0">
+          <div id="bg-service-knob"
+            style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;
+                   box-shadow:0 1px 4px rgba(0,0,0,.35);transition:left .25s"></div>
+        </div>
+      </div>
+      <div style="padding:0 16px 12px;font-size:11px;color:var(--muted);line-height:1.5">
+        Получайте сообщения даже когда приложение закрыто. Работает как в Telegram.
+      </div>
+    </div>
+
     <div style="height:8px"></div>
   `;
+  _bgServiceUpdateUI();
+}
+
+// ── Фоновый сервис: управление и UI ──────────────────────────────────────────
+
+function _bgServiceUpdateUI() {
+  const toggle = document.getElementById('bg-service-toggle');
+  const knob   = document.getElementById('bg-service-knob');
+  const status = document.getElementById('bg-service-status');
+  if (!toggle) return;
+
+  const enabled = window.Android && typeof Android.isBackgroundServiceEnabled === 'function'
+    ? Android.isBackgroundServiceEnabled()
+    : false;
+
+  toggle.style.background = enabled ? 'var(--accent)' : '#ccc';
+  if (knob) knob.style.left = enabled ? '22px' : '2px';
+  if (status) status.textContent = enabled
+    ? '🟢 Работает — сообщения приходят в фоне'
+    : '🔴 Выключено';
+}
+
+function toggleBackgroundService() {
+  if (!window.Android) { toast('⚠️ Доступно только в приложении'); return; }
+  const enabled = typeof Android.isBackgroundServiceEnabled === 'function'
+    ? Android.isBackgroundServiceEnabled() : false;
+
+  if (enabled) {
+    if (typeof Android.stopBackgroundService === 'function') Android.stopBackgroundService();
+    toast('🔴 Фоновое соединение отключено');
+  } else {
+    if (typeof Android.startBackgroundService === 'function') Android.startBackgroundService();
+    toast('🟢 Фоновое соединение включено');
+  }
+  setTimeout(_bgServiceUpdateUI, 300);
 }
 
 function escHtml(s) {
@@ -1827,7 +1884,7 @@ async function profileConnect(p) {
     _profilePeerReady = true;
     profileUpdateP2PStatus('🟢 @' + p.username + ' · 🔗 Прямое');
 
-    if (!_fbInboxLastTs) _fbInboxLastTs = Date.now() - 300000;
+    if (!_fbInboxLastTs) _fbInboxLastTs = _inboxTsLoad() || (Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     await sbPollPresence();
     if (sessionId !== _connectSessionId) return;
@@ -1914,9 +1971,28 @@ document.addEventListener('visibilitychange', () => {
 // Принудительно опрашивает все известные чаты + inbox прямо сейчас
 async function _sbForcePollAllChats(p) {
   if (!p || !sbReady()) return;
-  // 1. Inbox — сообщения пришедшие за время пока были в фоне
+
+  // Синхронизируем Java-side lastTs → JS (Java мог обновить его пока мы были в фоне)
   try {
-    const sinceTs = Math.max(0, _fbInboxLastTs, _lastVisibleTs - 60000);
+    if (window.Android && typeof Android.getJavaSbLastTs === 'function') {
+      const javaTs = parseInt(Android.getJavaSbLastTs()) || 0;
+      if (javaTs > _fbInboxLastTs) {
+        // Java видел сообщения которые JS ещё не обработал → откатываемся назад
+        // чтобы гарантированно получить их (небольшой overlap не страшен)
+        _fbInboxLastTs = Math.max(0, javaTs - 60000);
+        _inboxTsSave(_fbInboxLastTs);
+      }
+    }
+  } catch(e) {}
+
+  // sinceTs: берём последний известный ts или смотрим за 30 дней назад
+  // НЕ используем _lastVisibleTs - 60000, т.к. это только 1 минута
+  const sinceTs = _fbInboxLastTs > 0
+    ? _fbInboxLastTs
+    : (Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // 1. Inbox — все сообщения адресованные МНЕ после sinceTs
+  try {
     const data = await sbGet('messages',
       `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
     );
@@ -1954,6 +2030,20 @@ window._javaTick = async function() {
   _javaTickCount++;
   const pr = profileLoad();
   if (!pr || !sbReady() || !_profilePeerReady) return;
+
+  // При первом тике синхронизируем Java-side lastTs с JS.
+  // Java могла записывать новые ts пока JS был заморожен (оффлайн / фон).
+  if (_javaTickCount === 1 && window.Android && typeof Android.getJavaSbLastTs === 'function') {
+    try {
+      const javaTs = parseInt(Android.getJavaSbLastTs()) || 0;
+      // Если Java видела сообщения позже нашего lastTs → откатываемся назад чтобы
+      // гарантированно получить их при следующем inbox-запросе
+      if (javaTs > _fbInboxLastTs) {
+        _fbInboxLastTs = Math.max(0, javaTs - 120000); // 2 минуты overlap
+        _inboxTsSave(_fbInboxLastTs);
+      }
+    } catch(e) {}
+  }
 
   // Каждый тик: inbox
   try {
@@ -2251,7 +2341,13 @@ function sbForceRecheckChat(myUsername, otherUsername) {
 
 function sbStartInboxPolling(p) {
   clearInterval(_fbInboxTimer);
-  _fbInboxLastTs = _fbInboxLastTs || (Date.now() - 300000); // смотрим за последние 5 минут
+  // Используем сохранённый ts из localStorage (не сбрасывается при перезапуске).
+  // Fallback: 30 дней назад — чтобы не пропустить оффлайн-сообщения.
+  // При первом запуске _fbInboxLastTs=0, берём 30 дней чтобы подтянуть историю.
+  if (!_fbInboxLastTs) {
+    _fbInboxLastTs = _inboxTsLoad() || (Date.now() - 30 * 24 * 60 * 60 * 1000);
+    _inboxTsSave(_fbInboxLastTs);
+  }
   const doInboxCheck = async () => {
     if (!sbReady() || !p) return;
     // Ищем все сообщения адресованные МНЕ, которые я ещё не видел
@@ -6240,13 +6336,111 @@ function mcPickFile() {
   inp.click();
 }
 
-// ── Запись кружка (видеосообщение, как в Telegram) ────────────────
-// Telegram-принцип: кружок — это короткое видео из галереи/камеры,
-// отображается круглым в чате. В file:// WebView камера через getUserMedia
-// недоступна, поэтому используем системный видео-пикер.
+
+// ══════════════════════════════════════════════════════════════════
+// ⭕ ЗАПИСЬ КРУЖКА — нативный Camera2 Activity (Telegram-стиль)
+// Вызывает Android.startCircleRecord() → CircleRecordActivity
+// Коллбэки: onNativeCircleDone(b64, mime) / onNativeCircleCancelled() / onNativeCircleError(msg)
+// Fallback: выбор из галереи если Android API недоступен
+// ══════════════════════════════════════════════════════════════════
+
 function mcStartCircleRecord() {
-  console.log('[Circle] mcStartCircleRecord called, mode:', _mcVoiceMode);
-  // Показываем UI выбора — из галереи или из файлов
+  console.log('[Circle] mcStartCircleRecord called');
+
+  // Нативный нативный Camera2 рекордер (приоритет)
+  if (window.Android && typeof Android.startCircleRecord === 'function') {
+    console.log('[Circle] using native Camera2 recorder');
+    _mcCircleNativeWait();
+    Android.startCircleRecord();
+    return;
+  }
+
+  // Fallback: показываем выбор галерея/камера
+  _mcCircleFallbackSheet();
+}
+
+// ── Нативный путь: ожидание результата от CircleRecordActivity ─────
+
+let _mcCircleNativeActive = false;
+let _mcCircleNativeToast  = null;
+
+function _mcCircleNativeWait() {
+  _mcCircleNativeActive = true;
+  _mcShowUploadToast('video', '⭕ Открываю камеру...');
+}
+
+/** Вызывается из Java когда запись завершена и видео готово. */
+window.onNativeCircleDone = async function(b64, mime) {
+  console.log('[Circle] onNativeCircleDone, size=' + (b64 ? b64.length : 0));
+  _mcCircleNativeActive = false;
+  if (!b64 || b64.length === 0) {
+    _mcHideUploadToast(false);
+    toast('❌ Пустое видео');
+    return;
+  }
+
+  _mcShowUploadToast('video', '⭕ Видеосообщение');
+  try {
+    // Генерируем миниатюру из base64
+    const thumbData = await _mcVideoThumbFromB64(b64, mime || 'video/mp4').catch(() => null);
+    const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.mp4', mime || 'video/mp4');
+    _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle',
+      fileSize: Math.round(b64.length * 3 / 4), thumbData });
+    _mcHideUploadToast(true);
+  } catch(err) {
+    _mcHideUploadToast(false);
+    toast('❌ ' + (err.message || 'Ошибка загрузки'));
+  }
+};
+
+window.onNativeCircleCancelled = function() {
+  console.log('[Circle] onNativeCircleCancelled');
+  _mcCircleNativeActive = false;
+  _mcHideUploadToast(false);
+};
+
+window.onNativeCircleError = function(msg) {
+  console.error('[Circle] onNativeCircleError:', msg);
+  _mcCircleNativeActive = false;
+  _mcHideUploadToast(false);
+  toast('❌ Ошибка камеры: ' + (msg || ''));
+};
+
+/** Генерирует превью кружка из base64-видео. */
+async function _mcVideoThumbFromB64(b64, mime) {
+  return new Promise((resolve) => {
+    try {
+      const bin  = atob(b64.slice(0, Math.min(b64.length, 500000))); // первые ~375KB достаточно
+      const arr  = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const blob = new Blob([arr], { type: mime || 'video/mp4' });
+      const url  = URL.createObjectURL(blob);
+      const video = document.createElement('video');
+      video.src = url; video.muted = true; video.playsInline = true;
+      video.currentTime = 0.5;
+      video.onloadeddata = () => {
+        try {
+          const cv = document.createElement('canvas');
+          cv.width  = 320; cv.height = 320;
+          const ctx = cv.getContext('2d');
+          // Центрированная квадратная обрезка (как Telegram)
+          const vw = video.videoWidth || 320, vh = video.videoHeight || 320;
+          const side = Math.min(vw, vh);
+          const sx   = (vw - side) / 2, sy = (vh - side) / 2;
+          ctx.drawImage(video, sx, sy, side, side, 0, 0, 320, 320);
+          URL.revokeObjectURL(url);
+          resolve(cv.toDataURL('image/jpeg', 0.7));
+        } catch(_) { URL.revokeObjectURL(url); resolve(null); }
+      };
+      video.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      setTimeout(() => { URL.revokeObjectURL(url); resolve(null); }, 5000);
+    } catch(_) { resolve(null); }
+  });
+}
+
+// ── Fallback: выбор из галереи ──────────────────────────────────────
+
+function _mcCircleFallbackSheet() {
   const sheet = document.createElement('div');
   sheet.style.cssText = 'position:fixed;inset:0;z-index:9200;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
   sheet.innerHTML = `
@@ -6271,7 +6465,6 @@ function mcStartCircleRecord() {
 }
 
 function _mcPickCircleFile() {
-  console.log('[Circle] picking from gallery');
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'video/*'; inp.style.display = 'none';
   document.body.appendChild(inp);
@@ -6282,19 +6475,12 @@ function _mcPickCircleFile() {
     _mcShowUploadToast('video', '⭕ Видеосообщение');
     try {
       const [b64, thumbData] = await Promise.all([
-        new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(r.result.split(',')[1]);
-          r.onerror = rej;
-          r.readAsDataURL(file);
-        }),
+        new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }),
         _mcVideoThumb(file)
       ]);
       const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
       const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.' + ext, file.type || 'video/mp4');
-      // Отправляем как circle — специальный fileType
-      _mcSendMediaMsg({ url, fileName: file.name, fileType: 'circle',
-        fileSize: file.size, thumbData, _blob: file, _mime: file.type });
+      _mcSendMediaMsg({ url, fileName: file.name, fileType: 'circle', fileSize: file.size, thumbData });
       _mcHideUploadToast(true);
     } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка')); }
   };
@@ -6302,12 +6488,8 @@ function _mcPickCircleFile() {
 }
 
 function _mcPickCircleCamera() {
-  console.log('[Circle] picking from camera');
-  // Запрашиваем разрешение камеры через Java, затем открываем пикер
   if (window.Android && typeof window.Android.requestCameraPermission === 'function') {
-    console.log('[Circle] requesting camera permission via Android bridge');
     window.onCameraPermissionResult = function(result) {
-      console.log('[Circle] camera permission result:', result);
       window.onCameraPermissionResult = null;
       if (result === 'granted') { _mcPickCircleCameraActual(); }
       else { toast('📷 Нет доступа к камере'); }
@@ -6317,9 +6499,8 @@ function _mcPickCircleCamera() {
   }
   _mcPickCircleCameraActual();
 }
+
 function _mcPickCircleCameraActual() {
-  console.log('[Circle] opening camera picker');
-  // capture=user для фронтальной камеры (как Telegram)
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'video/*'; inp.capture = 'user';
   inp.style.display = 'none';
@@ -6330,17 +6511,11 @@ function _mcPickCircleCameraActual() {
     _mcShowUploadToast('video', '⭕ Видеосообщение');
     try {
       const [b64, thumbData] = await Promise.all([
-        new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(r.result.split(',')[1]);
-          r.onerror = rej;
-          r.readAsDataURL(file);
-        }),
+        new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }),
         _mcVideoThumb(file)
       ]);
       const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.mp4', file.type || 'video/mp4');
-      _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle',
-        fileSize: file.size, thumbData, _blob: file, _mime: file.type });
+      _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle', fileSize: file.size, thumbData });
       _mcHideUploadToast(true);
     } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка')); }
   };

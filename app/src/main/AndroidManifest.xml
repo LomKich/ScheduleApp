@@ -8,6 +8,7 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.BIND_VPN_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -294,6 +295,30 @@
                 <action android:name="android.net.VpnService" />
             </intent-filter>
         </service>
+
+        <!-- Фоновый сервис сообщений — работает даже когда приложение закрыто -->
+        <service
+            android:name=".MessagingForegroundService"
+            android:exported="false"
+            android:stopWithTask="false" />
+
+        <!-- Кружок: нативный Camera2 рекордер -->
+        <activity
+            android:name=".CircleRecordActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Автозапуск BgService после перезагрузки устройства -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
         <!-- FileProvider для установки APK-обновлений без MANAGE_EXTERNAL_STORAGE -->
         <provider

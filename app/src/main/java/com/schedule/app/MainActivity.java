@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
     private static final int    NOTIF_PERM_CODE   = 1003;
     private static final int    AUDIO_PERM_CODE   = 1004;
     private static final int    CAMERA_PERM_CODE  = 1005;
+    private static final int    CIRCLE_RECORD_CODE= CircleRecordActivity.REQUEST_CODE;
     private static final String NOTIF_CHANNEL_ID  = "sapp_messages";
     private static final String NOTIF_CHANNEL_NAME = "Сообщения";
     private static final int    NOTIF_ID          = 42;
@@ -739,10 +740,41 @@ public class MainActivity extends Activity {
                     fileChooserCallback = null;
                 }
             }
+        } else if (requestCode == CIRCLE_RECORD_CODE) {
+            if (resultCode == RESULT_OK && data != null) {
+                String videoPath = data.getStringExtra(CircleRecordActivity.EXTRA_VIDEO_PATH);
+                if (videoPath != null && !videoPath.isEmpty()) {
+                    log.i(TAG, "CircleRecord: got video path=" + videoPath);
+                    new Thread(() -> {
+                        try {
+                            java.io.File f = new java.io.File(videoPath);
+                            if (!f.exists()) {
+                                runOnUiThread(() -> webView.evaluateJavascript(
+                                    "if(typeof onNativeCircleError==='function')onNativeCircleError('File not found')", null));
+                                return;
+                            }
+                            byte[] bytes = new byte[(int) f.length()];
+                            java.io.FileInputStream fis = new java.io.FileInputStream(f);
+                            fis.read(bytes); fis.close();
+                            String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                            f.delete();
+                            log.i(TAG, "CircleRecord: encoded " + bytes.length + " bytes");
+                            final String fb64 = b64;
+                            runOnUiThread(() -> webView.evaluateJavascript(
+                                "if(typeof onNativeCircleDone==='function')onNativeCircleDone('" + fb64 + "','video/mp4')", null));
+                        } catch (Exception e) {
+                            log.e(TAG, "CircleRecord encode error: " + e.getMessage());
+                            runOnUiThread(() -> webView.evaluateJavascript(
+                                "if(typeof onNativeCircleError==='function')onNativeCircleError('Encode error')", null));
+                        }
+                    }).start();
+                }
+            } else {
+                log.i(TAG, "CircleRecord: cancelled");
+                webView.post(() -> webView.evaluateJavascript(
+                    "if(typeof onNativeCircleCancelled==='function')onNativeCircleCancelled()", null));
+            }
         }
-    }
-
-    private void startVpnService() {
         String dnsKey      = prefs.getString("dns_key", "system");
         String dohUrl      = prefs.getString("doh_url", "");
         String dpiStrategy = prefs.getString("dpi_strategy", "general");
@@ -2682,6 +2714,72 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void reinjectStatusBar() {
             runOnUiThread(() -> injectStatusBarHeight());
+        }
+
+        // ─── Нативная запись кружка (Camera2 + Telegram-стиль UI) ─────────────
+
+        /** Открывает CircleRecordActivity — нативный рекордер кружков. */
+        @JavascriptInterface
+        public void startCircleRecord() {
+            log.i(TAG, "startCircleRecord called");
+            runOnUiThread(() -> {
+                // Проверяем разрешение на камеру
+                boolean camOk = ContextCompat.checkSelfPermission(
+                    MainActivity.this, android.Manifest.permission.CAMERA)
+                    == PackageManager.PERMISSION_GRANTED;
+                boolean micOk = ContextCompat.checkSelfPermission(
+                    MainActivity.this, android.Manifest.permission.RECORD_AUDIO)
+                    == PackageManager.PERMISSION_GRANTED;
+
+                if (!camOk || !micOk) {
+                    ActivityCompat.requestPermissions(MainActivity.this,
+                        new String[]{
+                            android.Manifest.permission.CAMERA,
+                            android.Manifest.permission.RECORD_AUDIO
+                        }, CAMERA_PERM_CODE);
+                    return;
+                }
+                Intent intent = new Intent(MainActivity.this, CircleRecordActivity.class);
+                startActivityForResult(intent, CIRCLE_RECORD_CODE);
+            });
+        }
+
+        // ─── Фоновый сервис (Telegram-style keep-alive) ───────────────────────
+
+        /** Включает фоновый сервис и сохраняет настройку. */
+        @JavascriptInterface
+        public void startBackgroundService() {
+            log.i(TAG, "startBackgroundService called");
+            prefs.edit().putBoolean(MessagingForegroundService.PREF_BG_ENABLED, true).apply();
+            Intent intent = new Intent(MainActivity.this, MessagingForegroundService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+        }
+
+        /** Останавливает фоновый сервис и сохраняет настройку. */
+        @JavascriptInterface
+        public void stopBackgroundService() {
+            log.i(TAG, "stopBackgroundService called");
+            prefs.edit().putBoolean(MessagingForegroundService.PREF_BG_ENABLED, false).apply();
+            stopService(new Intent(MainActivity.this, MessagingForegroundService.class));
+        }
+
+        /** Возвращает true если фоновый сервис включён. */
+        @JavascriptInterface
+        public boolean isBackgroundServiceEnabled() {
+            return prefs.getBoolean(MessagingForegroundService.PREF_BG_ENABLED, false);
+        }
+
+        /**
+         * Возвращает Java-side PREF_SB_LAST_TS чтобы JS мог синхронизировать
+         * _fbInboxLastTs после долгого фонового периода.
+         */
+        @JavascriptInterface
+        public long getJavaSbLastTs() {
+            return prefs.getLong(PREF_SB_LAST_TS, 0);
         }
 
         /** Сохраняет base64-изображение в галерею телефона */

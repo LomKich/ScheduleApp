@@ -10,8 +10,8 @@ android {
         applicationId "com.schedule.app"
         minSdk 23
         targetSdk 34
-        versionCode 12
-        versionName "4.5"
+        versionCode 13
+        versionName "4.5a"
     }
 
     signingConfigs {

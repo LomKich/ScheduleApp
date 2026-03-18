@@ -5,34 +5,31 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.util.Log;
 
 /**
- * Получает BOOT_COMPLETED и QUICKBOOT_POWERON — перезапускает фоновый сервис
- * если пользователь был зарегистрирован (есть username в prefs).
+ * Получает BOOT_COMPLETED и запускает фоновый сервис если он был включён.
  */
 public class BootReceiver extends BroadcastReceiver {
-
     @Override
     public void onReceive(Context context, Intent intent) {
-        String action = intent.getAction();
-        if (!Intent.ACTION_BOOT_COMPLETED.equals(action)
-                && !"android.intent.action.QUICKBOOT_POWERON".equals(action)) return;
+        if (!Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction()) &&
+            !"android.intent.action.QUICKBOOT_POWERON".equals(intent.getAction())) return;
 
-        SharedPreferences prefs = context.getSharedPreferences(
-            BackgroundPollService.PREFS, Context.MODE_PRIVATE);
-        String username = prefs.getString(BackgroundPollService.KEY_USERNAME, null);
-        if (username == null || username.isEmpty()) return; // не зарегистрирован
+        SharedPreferences prefs = context.getSharedPreferences("sapp_prefs", Context.MODE_PRIVATE);
+        boolean bgEnabled = prefs.getBoolean(MessagingForegroundService.PREF_BG_ENABLED, false);
+        String  username  = prefs.getString(MessagingForegroundService.PREF_SB_USER, "");
 
-        // Запускаем фоновый сервис — уведомления придут даже после перезагрузки
-        try {
-            Intent svc = new Intent(context, BackgroundPollService.class);
+        if (bgEnabled && username != null && !username.isEmpty()) {
+            Log.i("BootReceiver", "Boot complete — запускаю BgService для @" + username);
+            Intent svcIntent = new Intent(context, MessagingForegroundService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(svc);
+                context.startForegroundService(svcIntent);
             } else {
-                context.startService(svc);
+                context.startService(svcIntent);
             }
-        } catch (Exception e) {
-            // Игнорируем — возможно ограничения запуска
+        } else {
+            Log.i("BootReceiver", "Boot complete — BgService отключён, пропускаю");
         }
     }
 }
