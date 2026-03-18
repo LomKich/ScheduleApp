@@ -2512,8 +2512,13 @@ function profileAddFriend(username) {
 // ══ ХУКИ: показ экрана профиля ═══════════════════════════════════
 const _origShowScreen = window.showScreen;
 window.showScreen = function(id, dir) {
-  // При уходе из чата — закрываем ВСЕ меню и оверлеи
-  if (id !== 's-messenger-chat') {
+  // Набор всех экранов чата — если уходим с любого из них, чистим меню
+  const CHAT_SCREENS = new Set(['s-messenger-chat', 's-groups-chat']);
+  const prevActive = document.querySelector('.screen.active');
+  const prevId = prevActive ? prevActive.id : null;
+
+  // При уходе из чата (не в другой чат) — закрываем ВСЕ меню и оверлеи
+  if (!CHAT_SCREENS.has(id)) {
     // Меню действий с сообщением
     const menu = document.getElementById('mc-msg-menu');
     if (menu) menu.remove();
@@ -4180,6 +4185,33 @@ function mcCloseMenu() {
   }
   setTimeout(() => overlay.remove(), 200);
 }
+
+// ── Fallback: закрываем меню при свайп-навигации (экран теряет .active без showScreen) ──
+(function _watchChatScreens() {
+  const CHAT_IDS = ['s-messenger-chat', 's-groups-chat'];
+  function _closeAllMenus() {
+    const menu = document.getElementById('mc-msg-menu');
+    if (menu) menu.remove();
+    const fwd = document.getElementById('mc-forward-sheet');
+    if (fwd) fwd.remove();
+  }
+  function _attach() {
+    CHAT_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el || el._menuWatcher) return;
+      el._menuWatcher = true;
+      new MutationObserver(mutations => {
+        for (const m of mutations) {
+          if (m.attributeName === 'class' && !el.classList.contains('active')) {
+            _closeAllMenus();
+          }
+        }
+      }).observe(el, { attributes: true, attributeFilter: ['class'] });
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _attach);
+  else _attach();
+})();
 
 // Разворачивает/сворачивает сетку эмодзи с анимацией
 function mcExpandReactions(btn) {
