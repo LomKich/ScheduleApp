@@ -2245,23 +2245,12 @@ body.kb-open .screen.active:not(#s-messenger-chat) {
    NOTCH / CUTOUT / DYNAMIC ISLAND — поддержка вырезов камеры
    ══════════════════════════════════════════════════════════════════ */
 
-/* ── Перекрытие системных зон — чтобы не было чёрных полос ── */
-/* Верхняя зона (статус-бар + вырез) — фон приложения */
+/* ── Верхняя зона (статус-бар) — фон приложения чтобы не было просветов */
 body::before {
   content:'';
   position:fixed;
   top:0;left:0;right:0;
   height:var(--safe-top,0px);
-  background:var(--bg);
-  z-index:9999;
-  pointer-events:none;
-}
-/* Нижняя зона (жест-бар) — фон приложения */
-body::after {
-  content:'';
-  position:fixed;
-  bottom:0;left:0;right:0;
-  height:var(--safe-bot,0px);
   background:var(--bg);
   z-index:9999;
   pointer-events:none;
@@ -2605,7 +2594,7 @@ body::after {
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.4.10 — Android</div>
+        <div class="item-sub" id="app-version-str">4.4.11 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>

@@ -2523,11 +2523,11 @@ window.showScreen = function(id, dir) {
     // Скрываем клавиатуру только при уходе с чата
     const inp = document.getElementById('mc-input');
     if (inp) inp.blur();
-    // Сбрасываем сдвиг чат-экрана от клавиатуры
-    const chatScreen = document.getElementById('s-messenger-chat');
-    if (chatScreen) { chatScreen.style.transition = ''; chatScreen.style.transform = ''; chatScreen.style.bottom = ''; }
-    const chatHdr = chatScreen?.querySelector('.hdr');
-    if (chatHdr) { chatHdr.style.transition = ''; chatHdr.style.transform = ''; }
+    // Сбрасываем input bar если был зафиксирован клавиатурой
+    const chatInputBar = document.getElementById('mc-input-bar');
+    if (chatInputBar) { chatInputBar.style.cssText = ''; }
+    const msgs = document.getElementById('mc-messages');
+    if (msgs) msgs.style.paddingBottom = '';
   }
   if (id === 's-profile')     profileRenderScreen();
   if (id === 's-online')      profileRenderOnline();
@@ -4702,68 +4702,68 @@ function mcSendImage(dataUrl) {
   });
 }
 
-// ── Клавиатура: сжимаем чат-экран снизу через bottom CSS ─────────
-// position:fixed + inset:0 → при трансформации всего экрана хедер улетает выше экрана.
-// Правильный подход: менять bottom экрана = keyboard height, хедер остаётся на месте.
+// ── Клавиатура: фиксируем input bar над клавиатурой ──────────────
+// НЕ трогаем весь экран — только двигаем input bar вниз через CSS bottom
+// и добавляем padding-bottom сообщениям чтобы последнее не было перекрыто
 (function() {
-  const CHAT_ID = 's-messenger-chat';
-  let _kbHeight = 0;
-  let _raf = null;
+  const CHAT_ID    = 's-messenger-chat';
+  let _kbH = 0;
 
-  function _getKbHeight() {
+  function _getKbH() {
     if (!window.visualViewport) return 0;
     const vv = window.visualViewport;
-    // На Android: innerHeight не меняется с resizes-content если layout-size фиксирован
-    // Используем offsetTop + height vs window.innerHeight
-    const kb = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
-    return Math.round(kb);
+    return Math.max(0, Math.round(window.innerHeight - (vv.height + vv.offsetTop)));
   }
 
-  function _applyKb() {
-    const kbH = _getKbHeight();
-    if (kbH === _kbHeight) return;
-    _kbHeight = kbH;
-    const screen = document.getElementById(CHAT_ID);
-    if (!screen) return;
+  function _apply() {
+    const kbH = _getKbH();
+    if (kbH === _kbH) return;
+    _kbH = kbH;
+
+    const screen   = document.getElementById(CHAT_ID);
+    const inputBar = document.getElementById('mc-input-bar');
+    const msgs     = document.getElementById('mc-messages');
+    if (!screen || !inputBar || !msgs) return;
 
     if (kbH > 0) {
-      // Сжимаем экран снизу — хедер и input bar остаются на своих местах
-      screen.style.transition = 'bottom .22s cubic-bezier(0.4,0,0.2,1)';
-      screen.style.bottom     = kbH + 'px';
-      screen.style.transform  = '';
-      // Скроллим сообщения вниз
-      const msgs = document.getElementById('mc-messages');
-      if (msgs) setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 50);
+      // Фиксируем input bar над клавиатурой
+      inputBar.style.transition = 'bottom .2s cubic-bezier(0.4,0,0.2,1)';
+      inputBar.style.position   = 'fixed';
+      inputBar.style.bottom     = kbH + 'px';
+      inputBar.style.left       = '0';
+      inputBar.style.right      = '0';
+      inputBar.style.zIndex     = '100';
+      // Добавляем padding сообщениям = высота input bar + клавиатура
+      const barH = inputBar.offsetHeight || 60;
+      msgs.style.paddingBottom  = (barH + kbH) + 'px';
+      // Скроллим вниз
+      setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 50);
     } else {
-      screen.style.transition = 'bottom .22s cubic-bezier(0.4,0,0.2,1)';
-      screen.style.bottom     = '';
-      screen.style.transform  = '';
-      setTimeout(() => {
-        if (screen) { screen.style.transition = ''; }
-      }, 250);
+      // Возвращаем в нормальный поток
+      inputBar.style.transition = 'bottom .2s cubic-bezier(0.4,0,0.2,1)';
+      inputBar.style.position   = '';
+      inputBar.style.bottom     = '';
+      inputBar.style.left       = '';
+      inputBar.style.right      = '';
+      inputBar.style.zIndex     = '';
+      msgs.style.paddingBottom  = '';
+      setTimeout(() => { inputBar.style.transition = ''; }, 220);
     }
   }
 
-  // Опрос при фокусе (visualViewport ещё не обновился в момент focusin)
-  document.addEventListener('focusin', function(e) {
+  document.addEventListener('focusin', (e) => {
     if (!e.target || e.target.id !== 'mc-input') return;
-    if (_raf) cancelAnimationFrame(_raf);
-    let attempts = 0;
-    function poll() {
-      _applyKb();
-      if (++attempts < 8) _raf = requestAnimationFrame(poll);
-    }
-    setTimeout(poll, 50); // ждём пока Android покажет клавиатуру
+    setTimeout(_apply, 80);
+    setTimeout(_apply, 300);
   }, { passive: true });
 
-  document.addEventListener('focusout', function(e) {
+  document.addEventListener('focusout', (e) => {
     if (!e.target || e.target.id !== 'mc-input') return;
-    setTimeout(_applyKb, 80);
+    setTimeout(_apply, 80);
   }, { passive: true });
 
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', _applyKb, { passive: true });
-    window.visualViewport.addEventListener('scroll', _applyKb, { passive: true });
+    window.visualViewport.addEventListener('resize', _apply, { passive: true });
   }
 })();
 
