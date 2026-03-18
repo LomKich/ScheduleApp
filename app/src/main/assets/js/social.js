@@ -3732,10 +3732,10 @@ function messengerRenderMessages(animateLast) {
     const isImage   = msg.image;
     const isVoice   = msg.fileType === 'voice';
     const isVideo   = msg.fileLink && msg.fileType === 'video';
-    const isFile    = msg.fileLink && msg.fileType === 'file';
+    const isFile    = msg.fileLink && msg.fileType === 'file' && !_isAudioFile(msg.fileName);
+    const isAudio   = msg.fileLink && msg.fileType === 'file' && _isAudioFile(msg.fileName);
     const bubbleBg  = (isSticker || isImage || isVideo) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
-    const bubblePad = (isSticker || isImage || isVideo) ? '0' : '8px 12px 6px';
-    const _fmtSize  = s => !s ? '' : s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
+    const bubblePad = (isSticker || isImage || isVideo) ? '0' : '8px 12px 6px';    const _fmtSize  = s => !s ? '' : s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
     const _fmtDur   = s => { const m=Math.floor((s||0)/60), sec=String((s||0)%60).padStart(2,'0'); return m+':'+sec; };
     const safeUrl   = escHtml(msg.fileLink || '');
     const safeName  = escHtml(msg.fileName || '');
@@ -3777,6 +3777,24 @@ function messengerRenderMessages(animateLast) {
             </div>
             <div style="position:absolute;bottom:6px;left:8px;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div>
             <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6)">${msgFormatTime(msg.ts)}${status}</div>
+          </div>`
+
+      : isAudio
+        ? `<div style="display:flex;align-items:center;gap:10px;min-width:200px;max-width:260px">
+            <button onclick="mcVoicePlay('${safeUrl}','aud_${idx}')"
+              style="width:38px;height:38px;border-radius:50%;background:${isMe?'rgba(255,255,255,.25)':'var(--accent)'};border:none;color:${isMe?'#fff':'var(--btn-text,#fff)'};font-size:16px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center"
+              id="vbtn_aud_${idx}">▶</button>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px">${safeName||'Аудио'}</div>
+              <div style="position:relative;height:4px;background:${isMe?'rgba(255,255,255,.25)':'rgba(255,255,255,.15)'};border-radius:2px;margin-bottom:4px;cursor:pointer"
+                onclick="mcVoiceSeek(event,'${safeUrl}','aud_${idx}')">
+                <div id="vprog_aud_${idx}" style="height:100%;width:0%;background:${isMe?'rgba(255,255,255,.8)':'var(--accent)'};border-radius:2px;pointer-events:none"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="font-size:11px;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">🎵</span>
+                <span id="vtime_aud_${idx}" style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">—:——</span>
+              </div>
+            </div>
           </div>`
 
       : isFile
@@ -4579,12 +4597,8 @@ function mcPickMedia() {
         <span style="font-size:22px">🎬</span> Видео
       </button>
       <button onclick="mcPickFile();document.getElementById('mc-media-sheet')?.remove()"
-        style="width:100%;padding:15px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,.06)">
-        <span style="font-size:22px">📄</span> Файл (PDF, ZIP, DOC…)
-      </button>
-      <button onclick="document.getElementById('mc-media-sheet')?.remove();mcVoiceTouchStart({preventDefault:()=>{}})"
         style="width:100%;padding:15px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
-        <span style="font-size:22px">🎤</span> Голосовое сообщение
+        <span style="font-size:22px">📄</span> Файл (PDF, ZIP, DOC…)
       </button>
     </div>`;
   sheet.addEventListener('click', () => sheet.remove());
@@ -5061,6 +5075,12 @@ function mcVideoOpen(url, name) {
         style="max-width:100%;max-height:100%;outline:none"></video>
     </div>`;
   document.body.appendChild(ov);
+}
+
+function _isAudioFile(name) {
+  if (!name) return false;
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return ['mp3','ogg','wav','flac','aac','m4a','opus','wma','ape'].includes(ext);
 }
 
 function _gdFileEmoji(name) {
