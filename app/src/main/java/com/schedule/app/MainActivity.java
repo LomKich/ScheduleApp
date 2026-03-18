@@ -1124,13 +1124,130 @@ public class MainActivity extends Activity {
         }
 
         /**
-         * OTA: открыть ссылку на APK в браузере — пользователь скачивает сам.
-         * Прямой download+install удалён: он классифицируется Play Protect как dropper.
+         * Скачивает APK через Java (без WebView, без CORS) и запускает установщик.
+         * Прогресс передаётся в JS через onOtaProgress(pct, label).
+         * Список зеркал пробуется последовательно.
          */
         @JavascriptInterface
         public void downloadAndInstallApk(String originalUrl) {
-            log.i(TAG, "downloadAndInstallApk → openUrl: " + originalUrl);
-            openUrl(originalUrl);
+            log.i(TAG, "downloadAndInstallApk: " + originalUrl);
+            final String[] candidates = {
+                originalUrl,
+                "https://ghproxy.com/"        + originalUrl,
+                "https://mirror.ghproxy.com/" + originalUrl,
+                "https://ghfast.top/"         + originalUrl,
+                "https://gh.con.sh/"          + originalUrl,
+            };
+            new Thread(() -> {
+                java.io.File apkDir  = new java.io.File(getFilesDir(), "apk");
+                if (!apkDir.exists()) apkDir.mkdirs();
+                java.io.File apkFile = new java.io.File(apkDir, "update.apk");
+                if (apkFile.exists()) apkFile.delete();
+
+                Runnable notifyProgress = null; // будет переназначен ниже
+                Exception lastError = null;
+
+                for (String urlStr : candidates) {
+                    try {
+                        log.i(TAG, "Trying: " + urlStr);
+                        _jsProgress(5, "⏳ Подключаюсь...");
+
+                        java.net.URL url = new java.net.URL(urlStr);
+                        java.net.HttpURLConnection conn =
+                            (java.net.HttpURLConnection) url.openConnection(buildProxy());
+                        conn.setRequestMethod("GET");
+                        conn.setConnectTimeout(20000);
+                        conn.setReadTimeout(60000);
+                        conn.setRequestProperty("User-Agent",
+                            "Mozilla/5.0 ScheduleApp/" + getVersionName());
+                        conn.setInstanceFollowRedirects(true);
+
+                        int status = conn.getResponseCode();
+                        if (status < 200 || status >= 300) {
+                            conn.disconnect();
+                            lastError = new Exception("HTTP " + status);
+                            log.w(TAG, "Mirror HTTP " + status + ": " + urlStr);
+                            continue;
+                        }
+
+                        long total = conn.getContentLengthLong();
+                        java.io.InputStream is = conn.getInputStream();
+                        java.io.FileOutputStream fos = new java.io.FileOutputStream(apkFile);
+                        byte[] buf = new byte[16384];
+                        long done = 0; int n;
+                        while ((n = is.read(buf)) != -1) {
+                            fos.write(buf, 0, n);
+                            done += n;
+                            if (total > 0) {
+                                // 5%–90% — реальная загрузка
+                                final int pct = 5 + (int)(done * 85 / total);
+                                final String lbl = pct + "% — Скачиваю...";
+                                _jsProgress(pct, lbl);
+                            }
+                        }
+                        fos.close(); is.close(); conn.disconnect();
+                        log.i(TAG, "Downloaded: " + apkFile.length() + " bytes");
+
+                        _jsProgress(95, "Устанавливаю...");
+
+                        // Запускаем установщик
+                        runOnUiThread(() -> {
+                            try {
+                                android.net.Uri apkUri =
+                                    androidx.core.content.FileProvider.getUriForFile(
+                                        MainActivity.this,
+                                        getPackageName() + ".fileprovider", apkFile);
+                                android.content.Intent intent = new android.content.Intent(
+                                    android.content.Intent.ACTION_INSTALL_PACKAGE);
+                                intent.setDataAndType(apkUri,
+                                    "application/vnd.android.package-archive");
+                                intent.addFlags(
+                                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(intent);
+                                _jsProgress(100, "✅ Готово!");
+                                webView.postDelayed(() -> webView.evaluateJavascript(
+                                    "if(typeof otaClose==='function')otaClose()", null), 1500);
+                            } catch (Exception e) {
+                                log.e(TAG, "Install error: " + e.getMessage());
+                                _jsError("❌ Не удалось запустить установщик: " + e.getMessage());
+                            }
+                        });
+                        return;
+
+                    } catch (Exception e) {
+                        lastError = e;
+                        log.w(TAG, "Mirror error: " + urlStr + " → " + e.getMessage());
+                    }
+                }
+
+                // Все зеркала провалились
+                final String msg = lastError != null ? lastError.getMessage() : "Нет соединения";
+                log.e(TAG, "All mirrors failed: " + msg);
+                _jsError("❌ Не удалось скачать: " + msg);
+            }).start();
+        }
+
+        private void _jsProgress(int pct, String label) {
+            final String js = String.format(
+                "var b=document.getElementById('ota-progress-bar');" +
+                "var l=document.getElementById('ota-progress-label');" +
+                "if(b)b.style.width='%d%%';" +
+                "if(l)l.textContent='%s';",
+                pct, label.replace("'", "\\'"));
+            webView.post(() -> webView.evaluateJavascript(js, null));
+        }
+
+        private void _jsError(String message) {
+            final String js = String.format(
+                "var l=document.getElementById('ota-progress-label');" +
+                "if(l)l.textContent='%s';" +
+                "var b=document.getElementById('ota-dl-btn');" +
+                "if(b){b.disabled=false;b.textContent='⬇ Попробовать снова';}" +
+                "var c=document.getElementById('ota-cancel-btn');" +
+                "if(c)c.disabled=false;",
+                message.replace("'", "\\'"));
+            webView.post(() -> webView.evaluateJavascript(js, null));
         }
 
         /**
