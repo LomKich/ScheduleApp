@@ -1673,6 +1673,13 @@ async function profileConnect(p) {
     if (window.Android && typeof window.Android.savePushConfig === 'function') {
       try { window.Android.savePushConfig(p.username, sbUrl(), sbKey()); } catch(_){}
     }
+    // Синхронизируем VIP/badge/frame с сервера (server source of truth)
+    vipSyncFromServer(p.username).catch(()=>{});
+    // Синхронизируем друзей и группы с сервера
+    syncFriendsFromServer(p.username).catch(()=>{});
+    syncGroupsFromServer(p.username).catch(()=>{});
+    // Подтягиваем список чатов и последние сообщения
+    syncChatsFromServer(p.username).catch(()=>{});
   } catch(e) {
     if (sessionId === _connectSessionId) {
       profileUpdateP2PStatus('🔴 Ошибка подключения — повтор через 5с');
@@ -2544,14 +2551,22 @@ function profileRenderOnline() {
   }).join('');
 }
 
-function profileRemoveFriend(username) {
+async function profileRemoveFriend(username) {
   const friends = friendsLoad();
   friendsSave(friends.filter(u => u !== username));
   toast('❌ @' + username + ' удалён из друзей');
   profileRenderOnline();
+  // Синхронизируем на сервер
+  const p = profileLoad();
+  if (p && sbReady()) {
+    const updated = friendsLoad();
+    _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+      { friends: JSON.stringify(updated) },
+      { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
+  }
 }
 
-function profileAddFriend(username) {
+async function profileAddFriend(username) {
   const friends = friendsLoad();
   if (!friends.includes(username)) {
     friends.push(username);
@@ -2559,9 +2574,36 @@ function profileAddFriend(username) {
     toast('👥 @' + username + ' добавлен в друзья!');
     // Запустить стрим сообщений для этого чата
     const p = profileLoad();
-    if (p) sbPollChat(p.username, username);
+    if (p) {
+      sbPollChat(p.username, username);
+      // Синхронизируем на сервер
+      if (sbReady()) {
+        _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+          { friends: JSON.stringify(friends) },
+          { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
+      }
+    }
   }
   profileRenderOnline();
+}
+
+// Синхронизация друзей с сервера при входе
+async function syncFriendsFromServer(username) {
+  if (!sbReady() || !username) return;
+  try {
+    const rows = await sbGet('users', `select=friends&username=eq.${encodeURIComponent(username)}&limit=1`);
+    if (!Array.isArray(rows) || !rows.length) return;
+    const raw = rows[0].friends;
+    if (!raw) return;
+    const serverFriends = JSON.parse(raw);
+    if (!Array.isArray(serverFriends)) return;
+    // Объединяем: локальные + серверные (union без дублей)
+    const local   = friendsLoad();
+    const merged  = [...new Set([...local, ...serverFriends])];
+    friendsSave(merged);
+    // Если изменилось — запускаем polling для новых чатов
+    serverFriends.forEach(u => { if (!local.includes(u)) sbPollChat(username, u); });
+  } catch(e) {}
 }
 
 // ══ ХУКИ: показ экрана профиля ═══════════════════════════════════
@@ -2641,7 +2683,7 @@ function groupsLoad() {
 }
 function groupsSave(g) { localStorage.setItem(GROUPS_KEY, JSON.stringify(g)); }
 
-function groupCreate(name, members) {
+async function groupCreate(name, members) {
   const groups = groupsLoad();
   const id = 'grp_' + Date.now();
   const p = profileLoad();
@@ -2655,11 +2697,74 @@ function groupCreate(name, members) {
   groups.push(group);
   groupsSave(groups);
   toast('👥 Группа «' + name + '» создана!');
+  // Сохраняем все группы пользователя на сервер
+  if (sbReady()) {
+    _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+      { groups: JSON.stringify(groups) },
+      { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
+    // Уведомляем остальных участников — они тоже сохраняют группу у себя
+    for (const member of group.members.filter(u => u !== p.username)) {
+      try {
+        const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(member)}&limit=1`);
+        const existingRaw = rows?.[0]?.groups;
+        const existing = existingRaw ? JSON.parse(existingRaw) : [];
+        if (!existing.find(g => g.id === group.id)) {
+          existing.push(group);
+          _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(member)}`,
+            { groups: JSON.stringify(existing) },
+            { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
+        }
+      } catch(e) {}
+    }
+  }
   return group;
+}
+
+// Синхронизация групп с сервера при входе
+async function syncGroupsFromServer(username) {
+  if (!sbReady() || !username) return;
+  try {
+    const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(username)}&limit=1`);
+    if (!Array.isArray(rows) || !rows.length) return;
+    const raw = rows[0].groups;
+    if (!raw) return;
+    const serverGroups = JSON.parse(raw);
+    if (!Array.isArray(serverGroups)) return;
+    const local  = groupsLoad();
+    // Merge: добавляем серверные группы которых нет локально
+    const merged = [...local];
+    serverGroups.forEach(sg => {
+      if (!merged.find(g => g.id === sg.id)) merged.push(sg);
+    });
+    groupsSave(merged);
+  } catch(e) {}
 }
 
 function groupGet(id) {
   return groupsLoad().find(g => g.id === id) || null;
+}
+
+// Подтягивает список чатов (собеседников) из Supabase при входе
+// Чтобы чаты были видны сразу после очистки кэша
+async function syncChatsFromServer(username) {
+  if (!sbReady() || !username) return;
+  try {
+    // Ищем всех с кем были сообщения (исходящие И входящие)
+    const [sent, recv] = await Promise.all([
+      sbGet('messages', `select=to_user&from_user=eq.${encodeURIComponent(username)}&order=ts.desc&limit=200`),
+      sbGet('messages', `select=from_user&to_user=eq.${encodeURIComponent(username)}&order=ts.desc&limit=200`),
+    ]);
+    const partners = new Set();
+    if (Array.isArray(sent)) sent.forEach(r => { if (r.to_user !== username) partners.add(r.to_user); });
+    if (Array.isArray(recv)) recv.forEach(r => { if (r.from_user !== username) partners.add(r.from_user); });
+    if (!partners.size) return;
+    // Объединяем с локальными
+    const local  = chatsLoad();
+    const merged = [...new Set([...local, ...partners])];
+    chatsSave(merged);
+    // Запускаем polling для каждого нового собеседника
+    partners.forEach(u => { if (!local.includes(u)) sbPollChat(username, u); });
+  } catch(e) {}
 }
 
 function groupChatKey(groupId) { return 'group_' + groupId; }
@@ -3154,12 +3259,48 @@ function _initTwemoji() {
 const VIP_CODES = ['LOMKICH2025','SAPP_VIP','SCHEDULEAPP_PRO'];
 const VIP_KEY = 'sapp_vip_v1';
 
-function vipCheck() { return !!localStorage.getItem(VIP_KEY); }
+function vipCheck() {
+  // Сначала проверяем серверный статус из профиля (server source of truth)
+  const p = profileLoad();
+  if (p && p.vip) return true;
+  // Фоллбэк на локальный ключ (для оффлайн-режима)
+  return !!localStorage.getItem(VIP_KEY);
+}
+async function vipSyncFromServer(username) {
+  // Подтягиваем VIP из Supabase users таблицы при каждом входе
+  if (!sbReady() || !username) return;
+  try {
+    const rows = await sbGet('users', `select=vip,badge,frame&username=eq.${encodeURIComponent(username)}&limit=1`);
+    if (!Array.isArray(rows) || !rows.length) return;
+    const row = rows[0];
+    const p   = profileLoad();
+    if (!p) return;
+    let changed = false;
+    if (row.vip !== undefined && p.vip !== row.vip)     { p.vip   = row.vip;   changed = true; }
+    if (row.badge !== undefined && p.badge !== row.badge){ p.badge = row.badge; changed = true; }
+    if (row.frame !== undefined && p.frame !== row.frame){ p.frame = row.frame; changed = true; }
+    if (changed) {
+      profileSave(p);
+      // Обновляем localStorage VIP ключ
+      if (row.vip) localStorage.setItem(VIP_KEY, '1');
+      else         localStorage.removeItem(VIP_KEY);
+      // Перерендериваем UI профиля если нужно
+      if (typeof profileRenderScreen === 'function') profileRenderScreen();
+    }
+  } catch(e) {}
+}
 function vipActivate(code) {
   if (!VIP_CODES.includes(code.toUpperCase())) return false;
   localStorage.setItem(VIP_KEY, '1');
   const p = profileLoad();
-  if (p) { p.vip = true; profileSave(p); }
+  if (p) {
+    p.vip = true; profileSave(p);
+    // Сохраняем на сервер немедленно
+    if (sbReady()) {
+      _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+        { vip: true }, { 'Content-Type':'application/json', 'Prefer':'return=minimal' }).catch(()=>{});
+    }
+  }
   return true;
 }
 
@@ -3516,6 +3657,47 @@ function messengerDeleteCurrentChat() {
   toast('🗑 Чат удалён');
 }
 
+// ── Telegram-style превью последнего сообщения в списке чатов ───────────────
+function _mcPreviewText(msg) {
+  if (!msg) return '';
+
+  // Стикер
+  if (msg.sticker) return msg.sticker + ' Стикер';
+
+  // Фото (base64 или URL в msg.image)
+  if (msg.image) return '📷 Фото';
+
+  // Медиа-файлы по fileType
+  if (msg.fileType === 'voice') {
+    const dur = msg.duration;
+    if (dur) {
+      const m = Math.floor(dur / 60), s = String(dur % 60).padStart(2, '0');
+      return '🎤 ' + m + ':' + s;
+    }
+    return '🎤 Голосовое';
+  }
+  if (msg.fileType === 'video') return '🎬 Видео';
+  if (msg.fileType === 'file') {
+    const name = msg.fileName || '';
+    const ext  = (name.split('.').pop() || '').toLowerCase();
+    const audioExts = ['mp3','ogg','wav','flac','aac','m4a','opus','wma'];
+    if (audioExts.includes(ext)) {
+      // Музыкальный файл — показываем имя без расширения
+      const cleanName = name.replace(/\.[^.]+$/, '');
+      return '🎵 ' + (cleanName || 'Аудио');
+    }
+    return '📎 ' + (name || 'Файл');
+  }
+
+  // Если text похож на имя файла голосового (legacy: text = fileName)
+  const txt = msg.text || '';
+  if (/^voice_\d+\.m4a$/i.test(txt.trim()))  return '🎤 Голосовое';
+  if (/^voice_\d+\.(ogg|webm|mp4)$/i.test(txt.trim())) return '🎤 Голосовое';
+
+  // Обычный текст
+  return txt.slice(0, 55) || '';
+}
+
 function messengerRenderList(filter) {
   const list = document.getElementById('messenger-list');
   if (!list) return;
@@ -3551,8 +3733,21 @@ function messengerRenderList(filter) {
     const name     = peer?.name || username;
     const avatar   = peer?.avatar || '😊';
     const color    = peer?.color || 'var(--surface3)';
-    const preview  = last
-      ? (last.from === p?.username ? '<span style="color:var(--accent)">Ты: </span>' : '') + escHtml(last.text?.slice(0, 50) || '')
+    // ── Telegram-style preview ───────────────────────────────────────────────
+    const _prevText = _mcPreviewText(last);
+    const _isMe     = last?.from === p?.username;
+    const _prevIcon = (() => {
+      if (!last) return '';
+      if (last.sticker)               return '';   // стикер — сам эмодзи
+      if (last.image)                 return '📷 ';
+      if (last.fileType === 'voice')  return '';   // уже содержит 🎤
+      if (last.fileType === 'video')  return '';   // уже содержит 🎬
+      if (last.fileType === 'file')   return '';   // уже содержит 📎/🎵
+      return '';
+    })();
+    const _mePrefix = _isMe ? `<span style="color:var(--accent);font-weight:600">Ты: </span>` : '';
+    const preview = last
+      ? _mePrefix + escHtml(_prevText)
       : '<span style="color:var(--muted)">Нет сообщений</span>';
     const timeStr  = last ? msgFormatTime(last.ts) : '';
     const isSel    = _msgSelected.has(username);
@@ -3587,7 +3782,45 @@ function messengerRenderList(filter) {
           <div style="font-size:11px;color:${unread>0?'var(--accent)':'var(--muted)'};flex-shrink:0">${timeStr}</div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%">${preview}</div>
+          <div style="font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%;display:flex;align-items:center;gap:3px">
+            ${(() => {
+              if (!last) return preview;
+              // Медиа — иконка крупнее + label
+              if (last.fileType === 'voice') {
+                const dur = last.duration;
+                const durStr = dur ? ` ${Math.floor(dur/60)}:${String(dur%60).padStart(2,'0')}` : '';
+                return (_isMe ? `<span style="color:var(--accent);font-weight:600">Ты: </span>` : '')
+                  + `<span style="color:var(--text);font-weight:500">🎤</span>`
+                  + `<span style="color:var(--muted)"> Голосовое${durStr}</span>`;
+              }
+              if (last.image) {
+                return (_isMe ? `<span style="color:var(--accent);font-weight:600">Ты: </span>` : '')
+                  + `<span style="color:var(--text);font-weight:500">📷</span>`
+                  + `<span style="color:var(--muted)"> Фото</span>`;
+              }
+              if (last.fileType === 'video') {
+                return (_isMe ? `<span style="color:var(--accent);font-weight:600">Ты: </span>` : '')
+                  + `<span style="color:var(--text);font-weight:500">🎬</span>`
+                  + `<span style="color:var(--muted)"> Видео</span>`;
+              }
+              if (last.fileType === 'file') {
+                const ext = (last.fileName||'').split('.').pop().toLowerCase();
+                const isAud = ['mp3','ogg','wav','flac','aac','m4a','opus','wma'].includes(ext);
+                const ico = isAud ? '🎵' : '📎';
+                const nm  = isAud ? (last.fileName||'').replace(/\.[^.]+$/,'') : (last.fileName||'Файл');
+                return (_isMe ? `<span style="color:var(--accent);font-weight:600">Ты: </span>` : '')
+                  + `<span style="color:var(--text);font-weight:500">${ico}</span>`
+                  + `<span style="color:var(--muted)"> ${escHtml(nm.slice(0,40))}</span>`;
+              }
+              if (last.sticker) {
+                return (_isMe ? `<span style="color:var(--accent);font-weight:600">Ты: </span>` : '')
+                  + `<span>${escHtml(last.sticker)}</span>`
+                  + `<span style="color:var(--muted)"> Стикер</span>`;
+              }
+              // Обычный текст
+              return preview;
+            })()}
+          </div>
           ${unread > 0 ? '<div style="background:var(--accent);color:var(--btn-text,#000);border-radius:10px;font-size:11px;font-weight:800;padding:2px 7px;flex-shrink:0;min-width:20px;text-align:center">'+unread+'</div>' : ''}
         </div>
       </div>
@@ -4066,12 +4299,17 @@ function mcToggleReaction(idx, emoji) {
 
 const MC_SWIPE_THRESHOLD = 52;  // px для открытия меню
 const MC_SWIPE_MAX       = 75;  // px максимальный ход пузыря
+const MC_SELECT_MAX      = 50;  // максимум выделяемых сообщений
 
 let _mcLongPressTimer = null;
 let _mcDragStartX     = 0;
 let _mcDragStartY     = 0;
 let _mcDragging       = false;
 let _mcDragTriggered  = false; // свайп уже открыл меню — блокируем click
+
+// ── Режим выделения сообщений (Telegram-style) ──────────────────────
+let _mcMultiSelect    = false;           // активен ли режим выделения
+const _mcSelectedIdxs = new Set();       // индексы выделенных сообщений
 
 // ── Touch (мобайл + Android WebView) ──────────────────────────────
 function mcBubbleTouchStart(e, row, idx) {
@@ -4082,10 +4320,20 @@ function mcBubbleTouchStart(e, row, idx) {
   _mcDragStartY = t.clientY;
   _mcDragging = false;
   _mcDragTriggered = false;
+
+  // В режиме выделения — tap сразу переключает состояние
+  if (_mcMultiSelect) {
+    _mcDragTriggered = true;
+    _mcToggleSelectBubble(row, idx);
+    return;
+  }
+
   _mcLongPressTimer = setTimeout(() => {
     _mcLongPressTimer = null;
     _mcDragTriggered = true;
-    mcShowMsgMenu(idx);
+    try { window.Android?.vibrate?.(35); } catch(_){}
+    // Входим в режим выделения при long-press (Telegram-style)
+    _mcEnterSelectMode(row, idx);
   }, 430);
 }
 
@@ -4182,11 +4430,16 @@ function _mcReturnBubble(row) {
 
 // ── Click / dblclick ──────────────────────────────────────────────
 function mcBubbleClick(e, idx) {
-  if (_mcDragTriggered) { _mcDragTriggered = false; return; } // уже обработано свайпом
+  if (_mcDragTriggered) { _mcDragTriggered = false; return; }
   if (_mcDragging) return;
-  // Не открываем меню если клик на плеере / кнопке / ссылке
   if (e.target.closest('[data-no-menu]')) return;
   if (e.target.closest('button,a,video,canvas,svg')) return;
+  // В режиме выделения — toggle
+  if (_mcMultiSelect) {
+    const row = e.currentTarget;
+    _mcToggleSelectBubble(row, idx);
+    return;
+  }
   mcShowMsgMenu(idx);
 }
 
@@ -4205,6 +4458,273 @@ function mcBubbleDblClick(e, idx) {
   mcSetReply(idx);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// ✅ ВЫДЕЛЕНИЕ СООБЩЕНИЙ — Telegram-style (1–50 штук)
+// ══════════════════════════════════════════════════════════════════════
+
+function _mcEnterSelectMode(row, idx) {
+  if (_mcMultiSelect) return;
+  _mcMultiSelect = true;
+  _mcSelectedIdxs.clear();
+  _mcSelectedIdxs.add(idx);
+  mcCloseMenu();
+  _mcRenderSelectBar();
+  _mcRefreshBubbleStates();
+  SFX.play && SFX.play('btnClick');
+}
+
+function _mcExitSelectMode() {
+  _mcMultiSelect = false;
+  _mcSelectedIdxs.clear();
+  document.getElementById('mc-select-bar')?.remove();
+  _mcRefreshBubbleStates();
+}
+
+function _mcToggleSelectBubble(row, idx) {
+  if (_mcSelectedIdxs.has(idx)) {
+    _mcSelectedIdxs.delete(idx);
+    if (_mcSelectedIdxs.size === 0) { _mcExitSelectMode(); return; }
+  } else {
+    if (_mcSelectedIdxs.size >= MC_SELECT_MAX) {
+      toast('Максимум ' + MC_SELECT_MAX + ' сообщений'); return;
+    }
+    _mcSelectedIdxs.add(idx);
+  }
+  SFX.play && SFX.play('btnClick');
+  _mcUpdateSelectBar();
+  _mcRefreshBubbleStates();
+}
+
+// Обновляет визуальное состояние всех пузырей (отмечены / не отмечены)
+function _mcRefreshBubbleStates() {
+  const body = document.getElementById('mc-messages');
+  if (!body) return;
+  body.querySelectorAll('[data-msg-bubble]').forEach(row => {
+    const idx = parseInt(row.getAttribute('data-msg-idx'), 10);
+    const sel = _mcMultiSelect && _mcSelectedIdxs.has(idx);
+    // Overlay-кружок
+    let circle = row.querySelector('.mc-sel-circle');
+    if (_mcMultiSelect) {
+      if (!circle) {
+        circle = document.createElement('div');
+        circle.className = 'mc-sel-circle';
+        circle.style.cssText = [
+          'position:absolute;left:0;top:50%;transform:translateY(-50%);',
+          'width:24px;height:24px;border-radius:50%;border:2px solid var(--accent);',
+          'background:transparent;display:flex;align-items:center;justify-content:center;',
+          'flex-shrink:0;transition:background .1s,transform .12s cubic-bezier(.34,1.3,.64,1);',
+          'z-index:2;pointer-events:none;margin-left:2px;'
+        ].join('');
+        row.style.position = 'relative';
+        row.appendChild(circle);
+      }
+      circle.style.background   = sel ? 'var(--accent)' : 'transparent';
+      circle.style.borderColor  = sel ? 'var(--accent)' : 'rgba(255,255,255,.45)';
+      circle.style.transform    = sel ? 'translateY(-50%) scale(1.1)' : 'translateY(-50%) scale(1)';
+      circle.innerHTML          = sel
+        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>'
+        : '';
+    } else {
+      circle?.remove();
+    }
+    // Подсветка выделенного фона
+    const inner = row.querySelector('.mc-bubble-inner');
+    if (inner) {
+      inner.style.transition = 'background .12s';
+      if (sel) inner.style.outline = '2px solid var(--accent)';
+      else     inner.style.outline = '';
+    }
+  });
+}
+
+// Рисует нижний тулбар выделения
+function _mcRenderSelectBar() {
+  let bar = document.getElementById('mc-select-bar');
+  if (bar) bar.remove();
+  bar = document.createElement('div');
+  bar.id = 'mc-select-bar';
+  bar.style.cssText = [
+    'position:fixed;bottom:0;left:0;right:0;z-index:9050;',
+    'background:var(--surface);border-top:1px solid rgba(255,255,255,.07);',
+    'display:flex;align-items:center;justify-content:space-between;',
+    'padding:10px 16px calc(10px + var(--safe-bot,0px));',
+    'animation:mcSlideUp .22s cubic-bezier(.34,1.1,.64,1);',
+    'gap:8px;'
+  ].join('');
+  bar.innerHTML = `
+    <button id="mc-sel-cancel"
+      style="background:none;border:none;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;padding:8px 4px;font-family:inherit;">
+      Отмена
+    </button>
+    <div id="mc-sel-count"
+      style="flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text);">
+      Выделено: 1
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button id="mc-sel-forward"
+        style="width:40px;height:40px;border-radius:50%;background:var(--surface2);border:none;color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;"
+        title="Переслать">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 8V4l8 8-8 8v-4H4V8z"/>
+        </svg>
+      </button>
+      <button id="mc-sel-delete"
+        style="width:40px;height:40px;border-radius:50%;background:var(--surface2);border:none;color:var(--danger,#e05555);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;"
+        title="Удалить">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+        </svg>
+      </button>
+    </div>
+  `;
+  document.body.appendChild(bar);
+  bar.querySelector('#mc-sel-cancel').addEventListener('click', _mcExitSelectMode);
+  bar.querySelector('#mc-sel-forward').addEventListener('click', _mcSelectionForward);
+  bar.querySelector('#mc-sel-delete').addEventListener('click', _mcSelectionDelete);
+}
+
+function _mcUpdateSelectBar() {
+  const count = document.getElementById('mc-sel-count');
+  if (count) count.textContent = 'Выделено: ' + _mcSelectedIdxs.size;
+}
+
+// Пересылка выделенных сообщений
+function _mcSelectionForward() {
+  if (!_mcSelectedIdxs.size) return;
+  const msgs   = msgLoad()[_msgCurrentChat] || [];
+  const sorted = [..._mcSelectedIdxs].sort((a,b) => a-b);
+  const toFwd  = sorted.map(i => msgs[i]).filter(Boolean);
+  if (!toFwd.length) return;
+
+  const chats = chatsLoad().filter(u => u !== _msgCurrentChat);
+  if (!chats.length) { toast('Нет других чатов'); return; }
+
+  const sheet = document.createElement('div');
+  sheet.id = 'mc-forward-sheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9200;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:mcFadeIn .12s ease';
+  const chatItems = chats.map(u => {
+    const peer = _profileOnlinePeers.find(x=>x.username===u) || _allKnownUsers.find(x=>x.username===u);
+    return `<button onclick="mcDoForwardMulti('${escHtml(u)}');document.getElementById('mc-forward-sheet').remove()"
+      style="width:100%;padding:12px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.04)">
+      <div style="width:38px;height:38px;border-radius:50%;background:${peer?.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${peer?.avatar||'😊'}</div>
+      <span style="font-weight:600">${escHtml(peer?.name||u)}</span>
+    </button>`;
+  }).join('');
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(14px + var(--safe-bot));max-height:70vh;overflow-y:auto" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:8px auto 4px"></div>
+      <div style="font-size:14px;font-weight:700;color:var(--muted);padding:8px 20px 10px">Переслать ${toFwd.length} ${toFwd.length===1?'сообщение':toFwd.length<5?'сообщения':'сообщений'}...</div>
+      ${chatItems}
+    </div>`;
+  sheet.addEventListener('click', () => sheet.remove());
+  // Сохраняем сообщения для пересылки в глобальной переменной
+  window._mcPendingFwdMsgs = toFwd;
+  document.body.appendChild(sheet);
+  _mcExitSelectMode();
+}
+
+function mcDoForwardMulti(toUsername) {
+  const msgs = window._mcPendingFwdMsgs;
+  if (!msgs || !msgs.length) return;
+  const p = profileLoad();
+  if (!p) return;
+  const allMsgs = msgLoad();
+  if (!allMsgs[toUsername]) allMsgs[toUsername] = [];
+  const chats = chatsLoad();
+  msgs.forEach(orig => {
+    const ts  = Date.now() + Math.random(); // уникальный ts
+    const fwd = {
+      from: p.username, to: toUsername,
+      text: orig.text ? '↪ ' + orig.text : '',
+      image: orig.image || null,
+      fileLink: orig.fileLink || null, fileName: orig.fileName || null,
+      fileType: orig.fileType || null, fileSize: orig.fileSize || null,
+      duration: orig.duration || null,
+      ts, delivered: false, read: false
+    };
+    allMsgs[toUsername].push(fwd);
+    sbInsert('messages', {
+      chat_key: sbChatKey(p.username, toUsername),
+      from_user: p.username, to_user: toUsername,
+      text: fwd.text || '↪ Медиа', ts,
+      ...(orig.image ? { extra: JSON.stringify({ image: orig.image }) } : {}),
+    });
+  });
+  msgSave(allMsgs);
+  if (!chats.includes(toUsername)) { chats.unshift(toUsername); chatsSave(chats); }
+  window._mcPendingFwdMsgs = null;
+  toast('↪️ Переслано ' + msgs.length + ' сообщ.');
+}
+
+// Удаление выделенных сообщений
+function _mcSelectionDelete() {
+  if (!_mcSelectedIdxs.size) return;
+  const n = _mcSelectedIdxs.size;
+  const p = profileLoad();
+  const msgs = msgLoad();
+  const chat = msgs[_msgCurrentChat] || [];
+  // Проверяем есть ли чужие сообщения
+  const sorted = [..._mcSelectedIdxs].sort((a,b) => a-b);
+  const hasOthers = sorted.some(i => chat[i] && chat[i].from !== p?.username);
+
+  const sheet = document.createElement('div');
+  sheet.id = 'mc-delete-confirm';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9500;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.55);animation:mcFadeIn .15s ease';
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot,0px));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Удалить ${n} ${n===1?'сообщение':n<5?'сообщения':'сообщений'}?</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">${hasOthers ? 'Некоторые сообщения будут удалены только у тебя.' : 'Сообщения будут удалены у всех участников.'}</div>
+      <button onclick="_mcDoDeleteSelected(${!hasOthers});document.getElementById('mc-delete-confirm')?.remove()"
+        style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
+        🗑 Удалить${!hasOthers ? ' для всех' : ''}
+      </button>
+      <button onclick="document.getElementById('mc-delete-confirm')?.remove()"
+        style="width:100%;padding:14px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">
+        Отмена
+      </button>
+    </div>`;
+  sheet.addEventListener('click', e => { if(e.target===sheet) sheet.remove(); });
+  document.body.appendChild(sheet);
+}
+
+async function _mcDoDeleteSelected(forAll) {
+  const idxs   = [..._mcSelectedIdxs].sort((a,b) => b-a); // удаляем с конца
+  const msgs   = msgLoad();
+  const chat   = msgs[_msgCurrentChat] || [];
+  const p      = profileLoad();
+  const tsList = [];
+
+  // Анимация всех пузырей
+  const body    = document.getElementById('mc-messages');
+  const bubbles = body?.querySelectorAll('[data-msg-bubble]');
+  idxs.forEach(idx => {
+    const b = bubbles?.[idx];
+    if (b) {
+      b.style.transition = 'transform .18s ease, opacity .16s ease';
+      b.style.transform  = 'scale(0.5)';
+      b.style.opacity    = '0';
+    }
+    if (chat[idx]?.ts) tsList.push(chat[idx].ts);
+  });
+
+  await new Promise(r => setTimeout(r, 200));
+  // Удаляем с конца чтобы индексы не съезжали
+  idxs.forEach(idx => { if (chat[idx]) chat.splice(idx, 1); });
+  msgs[_msgCurrentChat] = chat;
+  msgSave(msgs);
+  messengerRenderMessages();
+  _mcExitSelectMode();
+
+  // Удаляем с сервера
+  if (forAll && p && sbReady() && tsList.length) {
+    const chatKey = sbChatKey(p.username, _msgCurrentChat);
+    sbDelete('messages', `chat_key=eq.${encodeURIComponent(chatKey)}&ts=in.(${tsList.join(',')})`).catch(()=>{});
+  }
+  toast('🗑 Удалено ' + tsList.length + ' сообщ.');
+}
+
+// Также добавляем пункт «Выбрать» в обычное меню
 function mcShowBubbleMenu(el, idx) { mcShowMsgMenu(idx); }
 function mcShowReactionPicker(idx) { mcShowMsgMenu(idx); }
 
@@ -4340,6 +4860,11 @@ function mcShowMsgMenu(idx) {
           onclick="mcSaveImage(${idx});mcCloseMenu()">
           <span style="font-size:20px">💾</span> Сохранить фото
         </button>` : ''}
+        <div class="mc-action-sep"></div>
+        <button class="mc-action-btn"
+          onclick="mcCloseMenu();_mcEnterSelectMode(null,${idx})">
+          <span style="font-size:20px">☑️</span> Выбрать
+        </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn" style="color:var(--danger,#e05555)"
           onclick="mcConfirmDelete(${idx});mcCloseMenu()">
@@ -4764,9 +5289,19 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
   const ts = Date.now();
   const replyTo = _mcReplyTo ? { from: _mcReplyTo.from, text: _mcReplyTo.text } : null;
   mcCancelReply();
+  // Человекочитаемый label для превью в списке чатов
+  const _mediaLabelMap = { voice: '🎤 Голосовое', video: '🎬 Видео', file: '📎 Файл' };
+  const _mediaLabel = fileType === 'file' && fileName
+    ? (() => {
+        const ext = (fileName.split('.').pop() || '').toLowerCase();
+        const audioExts = ['mp3','ogg','wav','flac','aac','m4a','opus','wma'];
+        if (audioExts.includes(ext)) return '🎵 ' + fileName.replace(/\.[^.]+$/, '');
+        return '📎 ' + fileName;
+      })()
+    : (_mediaLabelMap[fileType] || '📎 ' + (fileName || fileType));
   const msg = {
     from: p.username, to: _msgCurrentChat,
-    text: fileName || fileType,
+    text: _mediaLabel,
     ts, delivered: false, read: false,
     fileLink: url, fileName, fileType,
     ...(fileSize  ? { fileSize  } : {}),
@@ -4917,8 +5452,10 @@ function mcVoiceTouchStart(e) {
   if (window.Android && typeof window.Android.startVoiceRecording === 'function') {
     _mcVoiceNative  = true;
     _mcVoiceSeconds = 0;
+    _mcWaveBuf.fill(0.06); _mcWaveSmooth.fill(0.06); _mcWaveHead = 0; _mcWaveTick = 0;
     window.Android.startVoiceRecording();
     _mcVoiceShowUI();
+    _mcVoiceAnimFrame = requestAnimationFrame(_mcVoiceDrawWave);
     return;
   }
 
@@ -4938,6 +5475,7 @@ function mcVoiceTouchStart(e) {
       _mcVoiceStream = null;
       if (!_mcVoiceCancelled) _mcVoiceFinalize();
     };
+    _mcWaveBuf.fill(0.06); _mcWaveSmooth.fill(0.06); _mcWaveHead = 0; _mcWaveTick = 0;
     _mcVoiceRecorder.start(100);
     _mcVoiceSeconds = 0;
     _mcVoiceTimer = setInterval(() => {
@@ -4969,19 +5507,23 @@ function mcVoiceTouchMove(e) {
   if (hint) {
     const progress = Math.min(1, Math.abs(Math.min(0, dx)) / 80);
     hint.style.opacity = String(0.4 + progress * 0.6);
-    hint.textContent   = dx < -20 ? '✖ Отпустить → отмена' : '← Свайп для отмены';
+    hint.textContent   = dx < -20 ? '✖ Отпустить → отмена' : 'Свайп для отмены';
   }
   const ui = document.getElementById('mc-voice-ui');
-  if (ui && dx < 0) ui.style.transform = 'translateX(' + Math.max(dx * 0.4, -60) + 'px)';
+  if (ui && dx < 0) {
+    const shift = Math.max(dx * 0.38, -65);
+    ui.style.transform = 'translateX(' + shift + 'px)';
+    ui.style.opacity   = String(Math.max(0.4, 1 + shift / 120));
+  }
 }
 
 // ── Отпустить: отправить (Telegram hold-to-record) ──────────────────────
 function mcVoiceTouchEnd(e) {
   // Возвращаем UI на место если был сдвинут
   const ui = document.getElementById('mc-voice-ui');
-  if (ui) ui.style.transform = '';
+  if (ui) { ui.style.transform = ''; ui.style.opacity = ''; }
   const hint = document.getElementById('mc-voice-hint');
-  if (hint) { hint.style.opacity = '1'; hint.textContent = '← Свайп для отмены'; }
+  if (hint) { hint.style.opacity = '1'; hint.textContent = 'Свайп для отмены'; }
   // Отправляем — работает и для нативного и для браузерного
   if (!_mcVoiceRecorder && !_mcVoiceNative) return;
   _mcVoiceSend();
@@ -5025,37 +5567,49 @@ function _mcVoiceShowUI() {
   if (ui) ui.remove();
   ui = document.createElement('div');
   ui.id = 'mc-voice-ui';
-  ui.style.cssText = `
-    position:fixed;bottom:0;left:0;right:0;z-index:9200;
-    background:var(--surface);border-top:1px solid rgba(255,255,255,.08);
-    display:flex;flex-direction:column;align-items:center;gap:0;
-    padding-bottom:calc(var(--safe-bot) + 8px);
-    animation:mcSlideUp .2s cubic-bezier(.34,1.1,.64,1);
-  `;
+  ui.style.cssText = 'animation:mc-voice-in .28s cubic-bezier(.34,1.1,.64,1) both';
   ui.innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;width:100%;padding:10px 16px 6px">
-      <div style="width:10px;height:10px;border-radius:50%;background:#ff4444;animation:blink 1s step-end infinite;flex-shrink:0"></div>
-      <canvas id="mc-voice-wave" width="200" height="36" style="flex:1;max-width:220px;height:36px"></canvas>
-      <div id="mc-voice-timer" style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--text);min-width:42px;text-align:right">0:00</div>
+    <div style="display:flex;align-items:center;gap:10px;padding:11px 16px 4px;width:100%;box-sizing:border-box">
+      <div class="mc-rec-dot"></div>
+      <div style="flex:1;position:relative;overflow:hidden;height:36px">
+        <canvas id="mc-voice-wave" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+      </div>
+      <div id="mc-voice-timer"
+        style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--text);min-width:44px;text-align:right;flex-shrink:0;transition:color .3s">0:00</div>
     </div>
-    <div id="mc-voice-hint" style="font-size:12px;color:var(--muted);padding:0 16px 8px;text-align:center;transition:opacity .15s">← Свайп для отмены</div>
+    <div id="mc-voice-hint-row"
+      style="display:flex;align-items:center;justify-content:center;gap:6px;padding:0 16px 10px;width:100%;box-sizing:border-box;transition:transform .2s ease,opacity .15s">
+      <span class="mc-swipe-hint-arrow" style="font-size:16px;color:var(--muted)">←</span>
+      <span id="mc-voice-hint" style="font-size:12px;font-weight:500;color:var(--muted);transition:color .15s,opacity .15s">Свайп для отмены</span>
+    </div>
   `;
   document.body.appendChild(ui);
-  // Кнопку подсвечиваем
   const btn = document.getElementById('mc-action-btn');
-  if (btn) btn.style.background = 'var(--danger,#c94f4f)';
-  const voice = document.getElementById('mc-action-voice');
-  if (voice) voice.style.fontSize = '16px';
+  if (btn) {
+    btn.classList.add('recording');
+    btn.style.transform = 'scale(1.12)';
+    setTimeout(() => { btn.style.transform = ''; }, 180);
+  }
+  requestAnimationFrame(() => {
+    const canvas = document.getElementById('mc-voice-wave');
+    if (canvas) { canvas.width = canvas.offsetWidth || 200; canvas.height = canvas.offsetHeight || 36; }
+  });
 }
 
 function _mcVoiceHideUI() {
   cancelAnimationFrame(_mcVoiceAnimFrame);
-  document.getElementById('mc-voice-ui')?.remove();
+  const ui = document.getElementById('mc-voice-ui');
+  if (ui) {
+    ui.style.animation = 'mc-voice-out .2s cubic-bezier(.4,0,.8,.6) forwards';
+    setTimeout(() => ui.remove(), 210);
+  }
   const btn = document.getElementById('mc-action-btn');
-  if (btn) btn.style.background = '';
-  const voice = document.getElementById('mc-action-voice');
-  if (voice) voice.style.fontSize = '';
-  mcUpdateActionBtn();
+  if (btn) {
+    btn.classList.remove('recording');
+    btn.style.transform = 'scale(.88)';
+    setTimeout(() => { btn.style.transform = ''; }, 150);
+  }
+  setTimeout(_mcInitActionBtn, 60);
 }
 
 function _mcVoiceUpdateTimer() {
@@ -5067,32 +5621,65 @@ function _mcVoiceUpdateTimer() {
   if (_mcVoiceSeconds >= 50) el.style.color = '#ff4444';
 }
 
+const _mcWaveBuf    = new Float32Array(50).fill(0.06);
+let   _mcWaveHead   = 0;
+let   _mcWaveTick   = 0;
+const _mcWaveSmooth = new Float32Array(50).fill(0.06);
+
+function _mcWavePush(val) {
+  _mcWaveBuf[_mcWaveHead % 50] = val;
+  _mcWaveHead++;
+}
+
 function _mcVoiceDrawWave() {
   const canvas = document.getElementById('mc-voice-wave');
   if (!canvas) return;
+  const cw = canvas.offsetWidth || 200;
+  const ch = canvas.offsetHeight || 36;
+  if (canvas.width !== cw)  canvas.width  = cw;
+  if (canvas.height !== ch) canvas.height = ch;
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
-  const bars = 28;
-  // Получаем данные от анализатора
-  let levels = new Array(bars).fill(0.15);
-  if (_mcVoiceAnalyser) {
-    const buf = new Uint8Array(_mcVoiceAnalyser.frequencyBinCount);
-    _mcVoiceAnalyser.getByteFrequencyData(buf);
-    const step = Math.floor(buf.length / bars);
-    levels = Array.from({ length: bars }, (_, i) => (buf[i * step] || 0) / 255);
+  _mcWaveTick++;
+
+  if (_mcWaveTick % 2 === 0) {
+    if (_mcVoiceAnalyser) {
+      const buf = new Uint8Array(_mcVoiceAnalyser.frequencyBinCount);
+      _mcVoiceAnalyser.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) { const v = (buf[i]-128)/128; sum += v*v; }
+      _mcWavePush(Math.min(1, Math.sqrt(sum/buf.length) * 3.5));
+    } else {
+      const base  = 0.10 + 0.07 * Math.sin(_mcWaveTick * 0.09);
+      const spike = Math.random() < 0.18 ? Math.random() * 0.55 : 0;
+      _mcWavePush(Math.min(1, base + spike));
+    }
   }
-  ctx.clearRect(0, 0, W, H);
-  const barW = (W - bars * 2) / bars;
+
+  const bars  = 44;
+  const bw    = 2.5;
+  const gap   = 1.5;
+  const total = bars * (bw + gap);
+  const sx    = (W - total) / 2;
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e87722';
-  ctx.fillStyle = accent;
-  levels.forEach((lvl, i) => {
-    const h = Math.max(4, lvl * (H - 4));
-    const x = i * (barW + 2);
-    const y = (H - h) / 2;
+
+  ctx.clearRect(0, 0, W, H);
+  for (let i = 0; i < bars; i++) {
+    const bufIdx = ((_mcWaveHead - bars + i) % 50 + 50) % 50;
+    _mcWaveSmooth[bufIdx] = _mcWaveSmooth[bufIdx] * 0.62 + _mcWaveBuf[bufIdx] * 0.38;
+    const lvl  = _mcWaveSmooth[bufIdx];
+    const h    = Math.max(3, lvl * (H - 4));
+    const x    = sx + i * (bw + gap);
+    const y    = (H - h) / 2;
+    const age  = (bars - 1 - i) / (bars - 1);
+    ctx.globalAlpha = 1 - age * 0.62;
+    ctx.fillStyle   = accent;
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(x, y, barW, h, 2) : ctx.rect(x, y, barW, h);
+    if (ctx.roundRect) ctx.roundRect(x, y, bw, h, bw/2);
+    else               ctx.rect(x, y, bw, h);
     ctx.fill();
-  });
+  }
+  ctx.globalAlpha = 1;
   _mcVoiceAnimFrame = requestAnimationFrame(_mcVoiceDrawWave);
 }
 
@@ -5581,97 +6168,403 @@ function peerProfileOpen(username) {
 
 // ── Фуллскрин видеоплеер с Telegram-стилем ────────────────────────
 function mcVideoOpen(url, name) {
-  let ov = document.getElementById('mc-video-overlay');
-  if (ov) ov.remove();
-  ov = document.createElement('div');
-  ov.id = 'mc-video-overlay';
-  ov.style.cssText = `
-    position:fixed;inset:0;z-index:9999;background:#000;
-    display:flex;flex-direction:column;
-    animation:mcFadeIn .18s ease;
-    touch-action:none;
-  `;
+  // Останавливаем предыдущий плеер
+  const prev = document.getElementById('mc-video-overlay');
+  if (prev) {
+    prev.querySelector('video')?.pause();
+    prev.remove();
+  }
+
+  const ov  = document.createElement('div');
+  ov.id     = 'mc-video-overlay';
+  ov.style.cssText = [
+    'position:fixed;inset:0;z-index:9999;background:#000;',
+    'display:flex;flex-direction:column;',
+    'touch-action:none;user-select:none;-webkit-user-select:none;',
+    'animation:mcFadeIn .18s ease;'
+  ].join('');
 
   const safeUrl  = escHtml(url);
   const safeName = escHtml(name || 'Видео');
 
   ov.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;
-      padding:calc(var(--safe-top,0px) + 10px) 14px 12px;
-      background:linear-gradient(to bottom,rgba(0,0,0,.8),transparent);
-      position:absolute;top:0;left:0;right:0;z-index:2;pointer-events:none">
-      <button id="mv-close"
-        style="pointer-events:all;background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>
-      <div style="flex:1;font-size:14px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:all">${safeName}</div>
+    <!-- HEADER -->
+    <div id="mvp-header" style="
+      position:absolute;top:0;left:0;right:0;z-index:3;
+      padding:calc(var(--safe-top,0px) + 10px) 14px 18px;
+      background:linear-gradient(to bottom,rgba(0,0,0,.82) 0%,transparent 100%);
+      display:flex;align-items:center;gap:10px;
+      transition:opacity .3s;
+      pointer-events:all;">
+      <button id="mvp-close"
+        style="background:rgba(255,255,255,.12);backdrop-filter:blur(8px);border:none;color:#fff;
+          width:36px;height:36px;border-radius:50%;cursor:pointer;
+          display:flex;align-items:center;justify-content:center;flex-shrink:0;
+          -webkit-tap-highlight-color:transparent">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+      <div style="flex:1;font-size:14px;font-weight:600;color:#fff;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div>
       <a href="${safeUrl}" download="${safeName}" target="_blank"
-        style="pointer-events:all;background:rgba(255,255,255,.15);color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0">⬇</a>
+        style="background:rgba(255,255,255,.12);backdrop-filter:blur(8px);color:#fff;
+          width:36px;height:36px;border-radius:50%;
+          display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0;
+          -webkit-tap-highlight-color:transparent">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">
+          <path d="M19 9h-4V3H9v6H5l7 7 7-7zm-14 9v2h14v-2H5z"/>
+        </svg>
+      </a>
     </div>
-    <div id="mv-area" style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden">
-      <video id="mv-video" src="${safeUrl}" controls autoplay playsinline
-        style="max-width:100%;max-height:100%;outline:none;background:#000;touch-action:auto"></video>
+
+    <!-- VIDEO -->
+    <div id="mvp-area" style="flex:1;display:flex;align-items:center;justify-content:center;position:relative">
+      <video id="mvp-video" src="${safeUrl}" playsinline preload="metadata"
+        style="max-width:100%;max-height:100%;outline:none;background:#000;display:block;"></video>
+
+      <!-- Center play/pause overlay (shows briefly on tap) -->
+      <div id="mvp-center-btn" style="
+        position:absolute;width:64px;height:64px;border-radius:50%;
+        background:rgba(0,0,0,.55);backdrop-filter:blur(4px);
+        display:flex;align-items:center;justify-content:center;
+        pointer-events:none;opacity:0;transition:opacity .18s;z-index:2">
+        <svg id="mvp-center-ico" width="28" height="28" viewBox="0 0 24 24" fill="#fff">
+          <polygon points="6,3 20,12 6,21"/>
+        </svg>
+      </div>
+
+      <!-- Loading spinner -->
+      <div id="mvp-spinner" style="
+        position:absolute;width:44px;height:44px;
+        border:3px solid rgba(255,255,255,.2);
+        border-top-color:#fff;border-radius:50%;
+        animation:mvpSpin .8s linear infinite;pointer-events:none;opacity:0;transition:opacity .2s">
+      </div>
     </div>
+
+    <!-- CONTROLS -->
+    <div id="mvp-controls" style="
+      position:absolute;bottom:0;left:0;right:0;z-index:3;
+      padding:14px 14px calc(var(--safe-bot,0px) + 14px);
+      background:linear-gradient(to top,rgba(0,0,0,.85) 0%,transparent 100%);
+      transition:opacity .3s;
+      display:flex;flex-direction:column;gap:10px;">
+
+      <!-- Progress bar -->
+      <div id="mvp-prog-wrap" style="
+        position:relative;height:20px;cursor:pointer;
+        display:flex;align-items:center;">
+        <div style="position:absolute;left:0;right:0;height:3px;background:rgba(255,255,255,.28);border-radius:3px;overflow:hidden">
+          <div id="mvp-buf"   style="height:100%;width:0%;background:rgba(255,255,255,.35);border-radius:3px;pointer-events:none"></div>
+          <div id="mvp-prog"  style="height:100%;width:0%;background:#fff;border-radius:3px;pointer-events:none;margin-top:-100%;transition:width .1s linear"></div>
+        </div>
+        <!-- Thumb -->
+        <div id="mvp-thumb" style="
+          position:absolute;left:0;width:14px;height:14px;border-radius:50%;
+          background:#fff;margin-left:-7px;box-shadow:0 1px 4px rgba(0,0,0,.5);
+          transition:left .1s linear;pointer-events:none"></div>
+      </div>
+
+      <!-- Bottom row: play | time | spacer | fullscreen -->
+      <div style="display:flex;align-items:center;gap:14px">
+        <button id="mvp-play-btn"
+          style="background:none;border:none;color:#fff;cursor:pointer;
+            width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+            -webkit-tap-highlight-color:transparent;flex-shrink:0">
+          <svg id="mvp-play-ico" width="22" height="22" viewBox="0 0 24 24" fill="#fff">
+            <polygon points="6,3 20,12 6,21"/>
+          </svg>
+        </button>
+
+        <div style="display:flex;gap:4px;align-items:center;font-size:12px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,.85);flex-shrink:0">
+          <span id="mvp-cur">0:00</span>
+          <span style="opacity:.5">/</span>
+          <span id="mvp-dur">0:00</span>
+        </div>
+
+        <div style="flex:1"></div>
+
+        <!-- Speed button -->
+        <button id="mvp-speed-btn"
+          style="background:rgba(255,255,255,.12);border:none;color:#fff;cursor:pointer;
+            height:28px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:700;
+            font-family:inherit;-webkit-tap-highlight-color:transparent">1×</button>
+
+        <!-- Fullscreen -->
+        <button id="mvp-fs-btn"
+          style="background:none;border:none;color:#fff;cursor:pointer;
+            width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+            -webkit-tap-highlight-color:transparent;flex-shrink:0">
+          <svg id="mvp-fs-ico" width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <style id="mvp-style">
+      @keyframes mvpSpin { to { transform:rotate(360deg); } }
+    </style>
   `;
 
   document.body.appendChild(ov);
 
-  // Закрытие по кнопке
-  ov.querySelector('#mv-close').addEventListener('click', () => {
-    ov.querySelector('#mv-video')?.pause();
-    ov.remove();
+  // ── Refs ──────────────────────────────────────────────────────────
+  const video      = ov.querySelector('#mvp-video');
+  const header     = ov.querySelector('#mvp-header');
+  const controls   = ov.querySelector('#mvp-controls');
+  const playBtn    = ov.querySelector('#mvp-play-btn');
+  const playIco    = ov.querySelector('#mvp-play-ico');
+  const progWrap   = ov.querySelector('#mvp-prog-wrap');
+  const progBar    = ov.querySelector('#mvp-prog');
+  const bufBar     = ov.querySelector('#mvp-buf');
+  const thumb      = ov.querySelector('#mvp-thumb');
+  const curEl      = ov.querySelector('#mvp-cur');
+  const durEl      = ov.querySelector('#mvp-dur');
+  const centerBtn  = ov.querySelector('#mvp-center-btn');
+  const centerIco  = ov.querySelector('#mvp-center-ico');
+  const spinner    = ov.querySelector('#mvp-spinner');
+  const speedBtn   = ov.querySelector('#mvp-speed-btn');
+  const fsBtn      = ov.querySelector('#mvp-fs-btn');
+  const fsIco      = ov.querySelector('#mvp-fs-ico');
+  const closeBtn   = ov.querySelector('#mvp-close');
+
+  // ── State ─────────────────────────────────────────────────────────
+  let _controlsVisible = true;
+  let _controlsTimer   = null;
+  let _fullscreen      = false;
+  const SPEEDS = [0.5, 1, 1.25, 1.5, 2];
+  let _speedIdx = 1;
+  let _seeking  = false;
+  let _seekStartX = 0;
+
+  const _fmtT = s => {
+    if (isNaN(s)) return '0:00';
+    const m = Math.floor(s/60), sec = String(Math.floor(s%60)).padStart(2,'0');
+    return m + ':' + sec;
+  };
+
+  // SVG icons
+  const ICO_PLAY  = '<polygon points="6,3 20,12 6,21"/>';
+  const ICO_PAUSE = '<rect x="5" y="3" width="4" height="18" rx="1"/><rect x="15" y="3" width="4" height="18" rx="1"/>';
+  const ICO_FS_ON  = '<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>';
+  const ICO_FS_OFF = '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>';
+
+  function _updatePlayIco(paused) {
+    playIco.innerHTML = paused ? ICO_PLAY : ICO_PAUSE;
+    centerIco.innerHTML = paused ? ICO_PLAY : ICO_PAUSE;
+  }
+
+  function _showControls(autoHide) {
+    _controlsVisible = true;
+    header.style.opacity   = '1';
+    controls.style.opacity = '1';
+    clearTimeout(_controlsTimer);
+    if (autoHide) {
+      _controlsTimer = setTimeout(_hideControls, 3000);
+    }
+  }
+
+  function _hideControls() {
+    if (video.paused) return;
+    _controlsVisible = false;
+    header.style.opacity   = '0';
+    controls.style.opacity = '0';
+  }
+
+  function _flashCenter() {
+    centerBtn.style.opacity = '1';
+    clearTimeout(centerBtn._t);
+    centerBtn._t = setTimeout(() => { centerBtn.style.opacity = '0'; }, 400);
+  }
+
+  function _updateProgress() {
+    if (!video.duration || _seeking) return;
+    const pct = video.currentTime / video.duration * 100;
+    progBar.style.width  = pct + '%';
+    thumb.style.left     = pct + '%';
+    curEl.textContent    = _fmtT(video.currentTime);
+    // Buffer
+    if (video.buffered.length) {
+      const b = video.buffered.end(video.buffered.length - 1) / video.duration * 100;
+      bufBar.style.width = b + '%';
+    }
+  }
+
+  function _setProgress(clientX) {
+    const rect = progWrap.getBoundingClientRect();
+    const pct  = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    video.currentTime = pct * (video.duration || 0);
+    progBar.style.width = (pct*100) + '%';
+    thumb.style.left    = (pct*100) + '%';
+    curEl.textContent   = _fmtT(video.currentTime);
+  }
+
+  // ── Video events ──────────────────────────────────────────────────
+  video.addEventListener('loadedmetadata', () => {
+    durEl.textContent = _fmtT(video.duration);
+  });
+  video.addEventListener('timeupdate', _updateProgress);
+  video.addEventListener('waiting',  () => { spinner.style.opacity = '1'; });
+  video.addEventListener('playing',  () => {
+    spinner.style.opacity = '0';
+    _updatePlayIco(false);
+    _showControls(true);
+  });
+  video.addEventListener('pause',    () => { _updatePlayIco(true); _showControls(false); });
+  video.addEventListener('ended',    () => {
+    _updatePlayIco(true);
+    video.currentTime = 0;
+    _showControls(false);
+  });
+  video.addEventListener('error',    () => { spinner.style.opacity = '0'; toast('❌ Ошибка видео'); });
+
+  // ── Play/pause button ─────────────────────────────────────────────
+  playBtn.addEventListener('click', () => {
+    if (video.paused) { video.play(); } else { video.pause(); }
+    _flashCenter();
+    _showControls(!video.paused);
   });
 
-  // Свайп вниз = закрыть (когда видео не перетаскивается)
-  let _swY = 0, _swDy = 0;
-  const area = ov.querySelector('#mv-area');
+  // ── Tap on video area = toggle controls + play/pause ─────────────
+  const area = ov.querySelector('#mvp-area');
+  let _tapTimer = null;
+  area.addEventListener('click', (e) => {
+    if (e.target === video || e.target === area) {
+      if (_controlsVisible) {
+        if (video.paused) {
+          video.play(); _flashCenter(); _showControls(true);
+        } else {
+          _hideControls();
+        }
+      } else {
+        _showControls(true);
+      }
+    }
+  });
+
+  // ── Progress bar touch/click ──────────────────────────────────────
+  progWrap.addEventListener('click', e => { _setProgress(e.clientX); _showControls(true); });
+  progWrap.addEventListener('touchstart', e => {
+    _seeking = true;
+    _setProgress(e.touches[0].clientX);
+    _showControls(false);
+  }, { passive: true });
+  progWrap.addEventListener('touchmove', e => {
+    _setProgress(e.touches[0].clientX);
+  }, { passive: true });
+  progWrap.addEventListener('touchend', () => {
+    _seeking = false;
+    _showControls(true);
+  }, { passive: true });
+
+  // ── Speed button ──────────────────────────────────────────────────
+  speedBtn.addEventListener('click', () => {
+    _speedIdx = (_speedIdx + 1) % SPEEDS.length;
+    const sp = SPEEDS[_speedIdx];
+    video.playbackRate = sp;
+    speedBtn.textContent = sp === 1 ? '1×' : sp + '×';
+    _showControls(true);
+  });
+
+  // ── Fullscreen ────────────────────────────────────────────────────
+  fsBtn.addEventListener('click', () => {
+    _fullscreen = !_fullscreen;
+    if (_fullscreen) {
+      // Принудительный landscape через ориентацию (если доступно)
+      try { screen.orientation?.lock('landscape'); } catch(_) {}
+      fsIco.innerHTML = ICO_FS_OFF;
+      ov.style.zIndex = '10000';
+    } else {
+      try { screen.orientation?.unlock(); } catch(_) {}
+      fsIco.innerHTML = ICO_FS_ON;
+      ov.style.zIndex = '9999';
+    }
+    _showControls(true);
+  });
+
+  // ── Close ─────────────────────────────────────────────────────────
+  function _close() {
+    video.pause();
+    try { screen.orientation?.unlock(); } catch(_) {}
+    ov.style.transition = 'opacity .18s';
+    ov.style.opacity = '0';
+    setTimeout(() => ov.remove(), 180);
+  }
+  closeBtn.addEventListener('click', _close);
+
+  // ── Swipe down = close ────────────────────────────────────────────
+  let _swY = 0, _swDy = 0, _swActive = false;
   area.addEventListener('touchstart', e => {
-    _swY = e.touches[0].clientY; _swDy = 0;
+    if (e.touches.length > 1) return;
+    _swY = e.touches[0].clientY; _swDy = 0; _swActive = true;
   }, { passive: true });
   area.addEventListener('touchmove', e => {
+    if (!_swActive || e.touches.length > 1) return;
     _swDy = e.touches[0].clientY - _swY;
-    if (_swDy > 20) {
-      ov.style.transform = `translateY(${_swDy}px)`;
-      ov.style.opacity = String(Math.max(0.3, 1 - _swDy / 300));
+    if (_swDy > 0) {
+      ov.style.transform = 'translateY(' + _swDy + 'px)';
+      ov.style.opacity   = String(Math.max(0.2, 1 - _swDy / 280));
     }
   }, { passive: true });
   area.addEventListener('touchend', () => {
-    if (_swDy > 120) {
-      ov.querySelector('#mv-video')?.pause();
-      ov.style.transition = 'transform .2s,opacity .2s';
-      ov.style.transform = 'translateY(100%)';
-      ov.style.opacity = '0';
-      setTimeout(() => ov.remove(), 200);
-    } else {
-      ov.style.transform = '';
-      ov.style.opacity = '';
-    }
+    _swActive = false;
+    if (_swDy > 110) { _close(); }
+    else { ov.style.transform = ''; ov.style.opacity = ''; }
   }, { passive: true });
+
+  // ── Keyboard (ПК) ─────────────────────────────────────────────────
+  const _onKey = (e) => {
+    if (e.key === 'Escape')      { _close(); }
+    if (e.key === ' ')           { video.paused ? video.play() : video.pause(); e.preventDefault(); }
+    if (e.key === 'ArrowRight')  { video.currentTime = Math.min(video.duration, video.currentTime + 10); }
+    if (e.key === 'ArrowLeft')   { video.currentTime = Math.max(0, video.currentTime - 10); }
+    if (e.key === 'f')           { fsBtn.click(); }
+  };
+  document.addEventListener('keydown', _onKey);
+  ov.addEventListener('remove', () => document.removeEventListener('keydown', _onKey));
+
+  // ── Autoplay ──────────────────────────────────────────────────────
+  video.play().then(() => {
+    _showControls(true);
+  }).catch(() => {
+    // autoplay заблокирован — показываем контролы
+    _showControls(false);
+  });
 }
+
 window.mcVideoOpen = mcVideoOpen;
 
 // ── Переключение кнопки действия: 🎤 ↔ ➤ ─────────────────────────
+let _mcActionState = 'voice';
 function mcUpdateActionBtn() {
-  const inp   = document.getElementById('mc-input');
-  const send  = document.getElementById('mc-action-send');
-  const voice = document.getElementById('mc-action-voice');
-  if (!send || !voice) return;
+  const inp = document.getElementById('mc-input');
+  const btn = document.getElementById('mc-action-btn');
+  if (!btn) return;
   const hasText = inp && inp.value.trim().length > 0;
-  if (hasText) {
-    send.style.display  = 'flex';
-    voice.style.display = 'none';
-    send.style.transform  = 'scale(1) rotate(0deg)';
-    send.style.opacity    = '1';
-  } else {
-    send.style.display  = 'none';
-    voice.style.display = 'flex';
-    voice.style.transform = 'scale(1)';
-    voice.style.opacity   = '1';
-  }
+  const newState = hasText ? 'send' : 'voice';
+  if (newState === _mcActionState) return;
+  _mcActionState = newState;
+  btn.classList.remove('state-voice','state-send');
+  btn.style.transform = 'scale(.85)';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    btn.style.transform = '';
+    btn.classList.add('state-' + newState);
+  }));
+}
+function _mcInitActionBtn() {
+  const btn = document.getElementById('mc-action-btn');
+  if (!btn) return;
+  btn.classList.remove('state-voice','state-send');
+  btn.classList.add('state-voice');
+  _mcActionState = 'voice';
 }
 // Инициализируем при открытии чата
 const _origMesOpenChat = window.messengerOpenChat;
 window.messengerOpenChat = function(...args) {
   if (_origMesOpenChat) _origMesOpenChat(...args);
-  setTimeout(mcUpdateActionBtn, 50);
+  setTimeout(_mcInitActionBtn, 30);
 };
 // Сбрасываем после отправки
 const _origMessengerSend = window.messengerSend;
