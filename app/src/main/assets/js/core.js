@@ -2030,16 +2030,16 @@ const SCREEN_PARENTS = {
   's-schedule':      {parent:'s-groups',         nav:'nav-home'},
   's-bells':         {parent:'s-home',           nav:'nav-bells'},
   's-settings':      {parent:'s-profile',        nav:'nav-profile'},
+  's-messenger':     {parent:'s-home',           nav:'nav-messenger'},
+  's-messenger-chat':{parent:'s-messenger',      nav:'nav-messenger'},
+  's-groups-chat':   {parent:'s-profile',        nav:'nav-messenger'},
   's-themes':        {parent:'s-settings',       nav:null},
   's-teachers':      {parent:'s-home',           nav:'nav-home'},
   's-profile-edit':  {parent:'s-profile',        nav:'nav-profile'},
   's-online':        {parent:'s-profile',        nav:'nav-profile'},
   's-leaderboard':   {parent:'s-profile',        nav:'nav-profile'},
   's-peer-profile':  {parent:'s-messenger-chat', nav:null},
-  's-messenger':     {parent:'s-profile',        nav:'nav-profile'},
-  's-messenger-chat':{parent:'s-messenger',      nav:'nav-profile'},
   's-login':         {parent:'s-home',           nav:'nav-home'},
-  's-groups-chat':   {parent:'s-profile',        nav:'nav-profile'},
 };
 
 // Вызывается из Android (кнопка Back на телефоне)
@@ -2197,7 +2197,7 @@ function navTo(id, navId) {
 }
 
 function updateNavActive(aid) {
-  ['nav-home','nav-bells','nav-settings','nav-profile'].forEach(id =>
+  ['nav-home','nav-bells','nav-messenger','nav-profile'].forEach(id =>
     document.getElementById(id)?.classList.toggle('active', id === aid)
   );
   _navMovePill(aid);

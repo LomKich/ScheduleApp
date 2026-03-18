@@ -310,7 +310,7 @@
             android:name=".CircleRecordActivity"
             android:exported="false"
             android:screenOrientation="portrait"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:theme="@style/Theme.CircleRecord"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!-- Автозапуск BgService после перезагрузки устройства -->
