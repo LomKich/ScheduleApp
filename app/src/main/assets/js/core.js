@@ -4801,40 +4801,26 @@ async function otaStartDownload() {
   dlBtn.textContent = '⏳ Скачиваю...';
   cancelBtn.disabled = true;
   wrap.classList.remove('hidden');
-
-  let fakeProgress = 0;
-  const fakeTimer = setInterval(() => {
-    if (fakeProgress < 88) {
-      fakeProgress += (88 - fakeProgress) * 0.05 + 0.5;
-      bar.style.width = Math.min(fakeProgress, 88) + '%';
-      label.textContent = Math.round(Math.min(fakeProgress, 88)) + '% — Скачиваю...';
-    }
-  }, 150);
+  bar.style.width = '0%';
+  label.textContent = 'Подготовка...';
 
   try {
     if (window.Android && window.Android.downloadAndInstallApk) {
-      clearInterval(fakeTimer);
-      bar.style.width = '100%';
-      label.textContent = '100% — Запускаю установщик...';
-      // Передаём оригинальный URL — Java сама попробует зеркала
+      // Реальный прогресс приходит из Java через _jsProgress()
       window.Android.downloadAndInstallApk(_otaApkUrl);
-      setTimeout(() => otaClose(), 1200);
+      // Не закрываем overlay — Java сама закроет когда установщик запустится
     } else {
-      // Браузерный режим — пробуем зеркала для открытия
-      clearInterval(fakeTimer);
+      // Фоллбэк — открываем браузер
       bar.style.width = '100%';
       label.textContent = 'Открываю загрузку...';
-      const mirrorUrls = buildApkMirrorUrls(_otaApkUrl);
-      const urlToOpen = mirrorUrls[1] || mirrorUrls[0]; // ghproxy по умолчанию
       if (window.Android && window.Android.openUrl) {
-        window.Android.openUrl(urlToOpen);
+        window.Android.openUrl(_otaApkUrl);
       } else {
-        window.open(urlToOpen, '_blank');
+        window.open(_otaApkUrl, '_blank');
       }
-      setTimeout(() => otaClose(), 800);
+      setTimeout(() => otaClose(), 1000);
     }
   } catch(e) {
-    clearInterval(fakeTimer);
     dlBtn.disabled = false;
     dlBtn.textContent = '⬇ Попробовать снова';
     cancelBtn.disabled = false;
