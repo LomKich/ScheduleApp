@@ -655,17 +655,35 @@ public class MainActivity extends Activity {
             boolean granted = grantResults.length > 0
                 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             log.i(TAG, "Audio permission result: " + (granted ? "granted" : "denied"));
-            if (_pendingPermissionRequest != null) {
-                if (granted) {
-                    _pendingPermissionRequest.grant(
-                        new String[]{ android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+            if (granted) {
+                // PermissionRequest протухает пока пользователь отвечал на диалог.
+                // Пробуем grant() если объект ещё жив, иначе говорим JS повторить запрос.
+                if (_pendingPermissionRequest != null) {
+                    try {
+                        _pendingPermissionRequest.grant(
+                            new String[]{ android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+                        log.i(TAG, "PermissionRequest.grant() OK");
+                    } catch (Exception e) {
+                        log.w(TAG, "PermissionRequest expired, asking JS to retry getUserMedia");
+                        // Просим JS повторно вызвать mcVoiceTouchStart — WebView
+                        // снова дёрнет onPermissionRequest, но теперь разрешение уже есть
+                        webView.post(() -> webView.evaluateJavascript(
+                            "if(typeof mcVoiceRetryAfterPermission==='function')" +
+                            "mcVoiceRetryAfterPermission();", null));
+                    }
                 } else {
-                    _pendingPermissionRequest.deny();
+                    // Объект уже null — просим JS повторить
+                    log.i(TAG, "pendingPermissionRequest is null, asking JS to retry");
                     webView.post(() -> webView.evaluateJavascript(
-                        "if(typeof toast==='function')toast('🎤 Нет доступа к микрофону')", null));
+                        "if(typeof mcVoiceRetryAfterPermission==='function')" +
+                        "mcVoiceRetryAfterPermission();", null));
                 }
-                _pendingPermissionRequest = null;
+            } else {
+                if (_pendingPermissionRequest != null) _pendingPermissionRequest.deny();
+                webView.post(() -> webView.evaluateJavascript(
+                    "if(typeof toast==='function')toast('🎤 Нет доступа к микрофону')", null));
             }
+            _pendingPermissionRequest = null;
         }
     }
     @Override
