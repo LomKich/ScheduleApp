@@ -90,13 +90,17 @@ public class CircleRecordActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
+        // Прозрачное окно — кружок поверх всего без чёрного фона
         getWindow().setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        getWindow().setStatusBarColor(Color.BLACK);
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+        getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
         getWindow().getDecorView().setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+            View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
 
         setContentView(buildUi());
         setupCameraManager();
@@ -131,100 +135,109 @@ public class CircleRecordActivity extends Activity {
     private View buildUi() {
         int screenW = getResources().getDisplayMetrics().widthPixels;
         int screenH = getResources().getDisplayMetrics().heightPixels;
-        int circleSize = Math.min(screenW, screenH) - dp(40);
+        // Кружок 240dp — как в Telegram
+        int circleSize = dp(240);
 
-        // Root: black fullscreen
+        // Root: полностью прозрачный, поверх всего
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.BLACK);
+        root.setBackgroundColor(Color.TRANSPARENT);
 
-        // ── Camera TextureView (full screen, clipped by overlay) ────────────
+        // ── Полупрозрачный dim-слой (не закрывает весь экран, только фон за кружком) ──
+        View dimView = new View(this);
+        dimView.setBackgroundColor(0x55000000);
+        root.addView(dimView, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT));
+
+        // ── Camera TextureView — обрезается в круг через overlayView ─────────
         textureView = new TextureView(this);
         textureView.setSurfaceTextureListener(surfaceListener);
-        root.addView(textureView, new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT));
+        // Кружок располагаем в нижней части экрана (выше кнопки отмены)
+        FrameLayout.LayoutParams tvLp = new FrameLayout.LayoutParams(circleSize, circleSize);
+        tvLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        tvLp.bottomMargin = dp(140);
+        root.addView(textureView, tvLp);
 
-        // ── Circular mask overlay ────────────────────────────────────────────
+        // ── Circular mask overlay — поверх textureView ─────────────────────
         overlayView = new CircleOverlayView(this);
-        root.addView(overlayView, new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT));
+        overlayView.setCircleSize(circleSize);
+        FrameLayout.LayoutParams ovLp = new FrameLayout.LayoutParams(circleSize, circleSize);
+        ovLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        ovLp.bottomMargin = dp(140);
+        root.addView(overlayView, ovLp);
 
-        // ── Progress ring (drawn on top, centred) ────────────────────────────
+        // ── Progress ring вокруг кружка ──────────────────────────────────────
         progressRing = new ProgressRingView(this);
-        FrameLayout.LayoutParams ringLp = new FrameLayout.LayoutParams(
-            circleSize + dp(8), circleSize + dp(8));
-        ringLp.gravity = Gravity.CENTER;
-        ringLp.topMargin = -dp(60);
+        int ringSize = circleSize + dp(8);
+        FrameLayout.LayoutParams ringLp = new FrameLayout.LayoutParams(ringSize, ringSize);
+        ringLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        ringLp.bottomMargin = dp(140) - dp(4);
         root.addView(progressRing, ringLp);
 
-        // ── Timer text ───────────────────────────────────────────────────────
+        // ── Timer text — над кружком ─────────────────────────────────────────
         timerText = new TextView(this);
         timerText.setTextColor(Color.WHITE);
-        timerText.setTextSize(18);
-        timerText.setPadding(0, dp(12), 0, dp(6));
+        timerText.setTextSize(15);
         timerText.setGravity(Gravity.CENTER);
         timerText.setText("0:00");
         timerText.setVisibility(View.INVISIBLE);
         FrameLayout.LayoutParams timerLp = new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT);
-        timerLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        timerLp.topMargin = dp(24);
+        timerLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        timerLp.bottomMargin = dp(140) + circleSize + dp(10);
         root.addView(timerText, timerLp);
 
-        // ── Cancel button (top-left X) ───────────────────────────────────────
-        cancelBtn = makeRoundBtn("✕", dp(44));
-        FrameLayout.LayoutParams cancelLp = new FrameLayout.LayoutParams(dp(44), dp(44));
-        cancelLp.gravity = Gravity.TOP | Gravity.START;
-        cancelLp.setMargins(dp(16), dp(48), 0, 0);
+        // ── Кнопка отмены — крестик снизу слева ────────────────────────────
+        cancelBtn = makeRoundBtn("✕", dp(48));
+        FrameLayout.LayoutParams cancelLp = new FrameLayout.LayoutParams(dp(48), dp(48));
+        cancelLp.gravity = Gravity.BOTTOM | Gravity.START;
+        cancelLp.setMargins(dp(32), 0, 0, dp(52));
         root.addView(cancelBtn, cancelLp);
         cancelBtn.setOnClickListener(v -> cancel());
 
-        // ── Switch camera (top-right) ─────────────────────────────────────────
-        switchBtn = makeRoundBtn("⟳", dp(44));
-        FrameLayout.LayoutParams switchLp = new FrameLayout.LayoutParams(dp(44), dp(44));
-        switchLp.gravity = Gravity.TOP | Gravity.END;
-        switchLp.setMargins(0, dp(48), dp(16), 0);
+        // ── Кнопка переключения камеры — снизу справа ───────────────────────
+        switchBtn = makeRoundBtn("⟳", dp(48));
+        FrameLayout.LayoutParams switchLp = new FrameLayout.LayoutParams(dp(48), dp(48));
+        switchLp.gravity = Gravity.BOTTOM | Gravity.END;
+        switchLp.setMargins(0, 0, dp(32), dp(52));
         root.addView(switchBtn, switchLp);
         switchBtn.setOnClickListener(v -> switchCamera());
 
-        // ── Hint text ────────────────────────────────────────────────────────
+        // ── Hint text — под кружком ──────────────────────────────────────────
         hintText = new TextView(this);
-        hintText.setTextColor(0xAAFFFFFF);
+        hintText.setTextColor(0xCCFFFFFF);
         hintText.setTextSize(13);
         hintText.setGravity(Gravity.CENTER);
-        hintText.setText("Нажмите, чтобы начать запись");
+        hintText.setText("Удерживайте для записи");
         FrameLayout.LayoutParams hintLp = new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT);
         hintLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        hintLp.bottomMargin = dp(120);
+        hintLp.bottomMargin = dp(110);
         root.addView(hintText, hintLp);
 
-        // ── Record button (bottom-centre) ─────────────────────────────────────
+        // ── Большая кнопка записи — снизу по центру ─────────────────────────
         FrameLayout recordBtnFrame = new FrameLayout(this);
         recordBtnFrame.setClickable(true);
         recordBtnFrame.setFocusable(true);
 
-        // Outer ring
         View recordBtnOuter = new View(this);
         recordBtnOuter.setBackground(makeCircleDrawable(0x33FFFFFF));
-        FrameLayout.LayoutParams outerLp = new FrameLayout.LayoutParams(dp(80), dp(80));
+        FrameLayout.LayoutParams outerLp = new FrameLayout.LayoutParams(dp(76), dp(76));
         outerLp.gravity = Gravity.CENTER;
         recordBtnFrame.addView(recordBtnOuter, outerLp);
 
-        // Inner red circle (becomes square when recording)
         recordBtnInner = new View(this);
         recordBtnInner.setBackground(makeCircleDrawable(0xFFFF3B30));
-        FrameLayout.LayoutParams innerLp = new FrameLayout.LayoutParams(dp(60), dp(60));
+        FrameLayout.LayoutParams innerLp = new FrameLayout.LayoutParams(dp(58), dp(58));
         innerLp.gravity = Gravity.CENTER;
         recordBtnFrame.addView(recordBtnInner, innerLp);
 
         recordBtn = recordBtnFrame;
-        FrameLayout.LayoutParams btnLp = new FrameLayout.LayoutParams(dp(80), dp(80));
+        FrameLayout.LayoutParams btnLp = new FrameLayout.LayoutParams(dp(76), dp(76));
         btnLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        btnLp.bottomMargin = dp(48);
+        btnLp.bottomMargin = dp(18);
         root.addView(recordBtn, btnLp);
 
         recordBtn.setOnClickListener(v -> {
@@ -277,18 +290,27 @@ public class CircleRecordActivity extends Activity {
         try {
             CameraCharacteristics ch = cameraManager.getCameraCharacteristics(cameraId);
             StreamConfigurationMap map = ch.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-            if (map == null) return new Size(720, 720);
+            if (map == null) return new Size(480, 480);
             Size[] sizes = map.getOutputSizes(MediaRecorder.class);
-            // Выбираем ближайший к 720x720 (квадрат для кружка)
-            Size best = new Size(640, 480);
-            int bestDiff = Integer.MAX_VALUE;
+            // Ищем размер близкий к квадрату (мин. сторона >= 480, макс. <= 1280)
+            Size best = null;
+            int bestScore = Integer.MAX_VALUE;
             for (Size s : sizes) {
-                int diff = Math.abs(s.getWidth() - 720) + Math.abs(s.getHeight() - 720);
-                if (diff < bestDiff && s.getWidth() <= 1280) {
-                    bestDiff = diff; best = s;
-                }
+                int w = s.getWidth(), h = s.getHeight();
+                if (Math.min(w, h) < 480 || Math.max(w, h) > 1280) continue;
+                // Предпочитаем квадратные, потом близкие к квадрату
+                int diff = Math.abs(w - h);
+                int side = Math.min(w, h);
+                int score = diff * 10 - side; // меньше разница — лучше, больше сторона — лучше
+                if (score < bestScore) { bestScore = score; best = s; }
             }
-            return best;
+            if (best != null) return best;
+            // Fallback — любой ≤ 1280 с обеими сторонами ≥ 480
+            for (Size s : sizes) {
+                if (Math.min(s.getWidth(), s.getHeight()) >= 480 && Math.max(s.getWidth(), s.getHeight()) <= 1280)
+                    return s;
+            }
+            return new Size(640, 480);
         } catch (CameraAccessException e) {
             return new Size(640, 480);
         }
@@ -437,21 +459,21 @@ public class CircleRecordActivity extends Activity {
 
     private void setupMediaRecorder() throws Exception {
         mediaRecorder = new MediaRecorder();
-        if (isFrontCamera) {
-            mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-        } else {
-            mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-        }
+        // ВАЖНО: audioSource должен быть установлен ДО videoSource
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
         mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
         mediaRecorder.setOutputFile(videoFile.getAbsolutePath());
 
+        // Используем реальный размер, поддерживаемый камерой
         int w = videoSize.getWidth(), h = videoSize.getHeight();
-        // Квадратное видео для кружка
+        // Квадратное видео для кружка — берём меньшую сторону
         int side = Math.min(w, h);
+        // Ограничиваем до 720 для совместимости
+        if (side > 720) side = 720;
+        mediaRecorder.setVideoSize(side, side);
         mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
         mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-        mediaRecorder.setVideoSize(side, side);
         mediaRecorder.setVideoFrameRate(30);
         mediaRecorder.setVideoEncodingBitRate(2_000_000);
         mediaRecorder.setAudioSamplingRate(44100);
@@ -579,8 +601,8 @@ public class CircleRecordActivity extends Activity {
         if (videoSize == null) return;
         Matrix matrix = new Matrix();
         int rotation  = getWindowManager().getDefaultDisplay().getRotation();
-        RectF viewRect     = new RectF(0, 0, viewWidth, viewHeight);
-        RectF bufferRect   = new RectF(0, 0, videoSize.getHeight(), videoSize.getWidth());
+        RectF viewRect   = new RectF(0, 0, viewWidth, viewHeight);
+        RectF bufferRect = new RectF(0, 0, videoSize.getHeight(), videoSize.getWidth());
         float cx = viewRect.centerX(), cy = viewRect.centerY();
         if (rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270) {
             bufferRect.offset(cx - bufferRect.centerX(), cy - bufferRect.centerY());
@@ -590,8 +612,15 @@ public class CircleRecordActivity extends Activity {
                 (float) viewWidth  / videoSize.getWidth());
             matrix.postScale(scale, scale, cx, cy);
             matrix.postRotate(90 * (rotation - 2), cx, cy);
-        } else if (rotation == Surface.ROTATION_180) {
-            matrix.postRotate(180, cx, cy);
+        } else {
+            // Portrait — масштабируем чтобы заполнить квадрат
+            float scaleX = (float) viewWidth  / videoSize.getWidth();
+            float scaleY = (float) viewHeight / videoSize.getHeight();
+            float scale  = Math.max(scaleX, scaleY);
+            matrix.setScale(scale, scale, cx, cy);
+            if (rotation == Surface.ROTATION_180) {
+                matrix.postRotate(180, cx, cy);
+            }
         }
         if (isFrontCamera) {
             matrix.postScale(-1, 1, cx, cy); // mirror front camera
@@ -601,24 +630,30 @@ public class CircleRecordActivity extends Activity {
 
     // ── Custom Views ──────────────────────────────────────────────────────────
 
-    /** Накладывает чёрную маску с круговым вырезом поверх камеры. */
+    /** Накладывает маску-кольцо: показывает только круговое видео, скрывает углы. */
     private class CircleOverlayView extends View {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private int circleSize = 0;
 
         CircleOverlayView(android.content.Context ctx) {
             super(ctx);
             setLayerType(LAYER_TYPE_HARDWARE, null);
         }
 
+        void setCircleSize(int size) { circleSize = size; }
+
         @Override
         protected void onDraw(Canvas canvas) {
             int w = getWidth(), h = getHeight();
-            // Draw black background
+            // Прозрачный фон
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+            // Рисуем белый круг-маску (только внутри кружка видно видео)
+            // Сначала заливаем всё непрозрачным чёрным
             canvas.drawColor(Color.BLACK);
-            // Cut circular hole
+            // Затем вырезаем круг
             paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.CLEAR));
-            int r = Math.min(w, h) / 2 - dp(20);
-            canvas.drawCircle(w / 2f, h / 2f - dp(30), r, paint);
+            canvas.drawCircle(w / 2f, h / 2f, Math.min(w, h) / 2f - dp(1), paint);
+            paint.setXfermode(null);
         }
     }
 
