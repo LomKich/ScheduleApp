@@ -312,6 +312,27 @@ public class MainActivity extends Activity {
                 if (!url.startsWith("file://") && !url.contains("fonts.googleapis")) {
                     log.i(TAG, "fetch → " + url);
                 }
+                // Перехватываем JS-скрипты которые CDN отдаёт с неправильным MIME-типом
+                // (text/plain вместо application/javascript) при file:// origin
+                if (url.contains("megajs") || url.contains("twemoji")) {
+                    try {
+                        java.net.URL jurl = new java.net.URL(url);
+                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) jurl.openConnection();
+                        conn.setRequestMethod("GET");
+                        conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+                        conn.setConnectTimeout(10000);
+                        conn.setReadTimeout(15000);
+                        conn.connect();
+                        if (conn.getResponseCode() == 200) {
+                            java.io.InputStream is = conn.getInputStream();
+                            return new WebResourceResponse(
+                                "application/javascript", "UTF-8", is
+                            );
+                        }
+                    } catch (Exception e) {
+                        log.w(TAG, "intercept fetch failed for " + url + ": " + e.getMessage());
+                    }
+                }
                 return super.shouldInterceptRequest(view, req);
             }
         });

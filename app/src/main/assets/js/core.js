@@ -2603,7 +2603,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.4.12';
+const APP_VERSION='4.4.13';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();

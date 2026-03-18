@@ -2527,13 +2527,9 @@ window.showScreen = function(id, dir) {
       // На Android WebView blur() иногда не закрывает клавиатуру без явного переноса фокуса
       try { document.activeElement?.blur(); } catch(_) {}
     }
-    // Сбрасываем клавиатурный сдвиг
-    const chatScreen = document.getElementById('s-messenger-chat');
-    if (chatScreen) { chatScreen.style.transition = ''; chatScreen.style.transform = ''; }
-    const chatHdr = chatScreen?.querySelector('.hdr');
-    if (chatHdr) { chatHdr.style.position = ''; chatHdr.style.top = ''; chatHdr.style.left = ''; chatHdr.style.right = ''; chatHdr.style.zIndex = ''; chatHdr.style.background = ''; }
-    const msgs = document.getElementById('mc-messages');
-    if (msgs) { msgs.style.paddingTop = ''; msgs.style.paddingBottom = ''; }
+    // Сбрасываем клавиатурный сдвиг хедера
+    const chatHdr = document.querySelector('#s-messenger-chat .hdr');
+    if (chatHdr) chatHdr.style.transform = '';
   }
   if (id === 's-profile')     profileRenderScreen();
   if (id === 's-online')      profileRenderOnline();
@@ -4708,86 +4704,27 @@ function mcSendImage(dataUrl) {
   });
 }
 
-// ── Клавиатура: двигаем экран вверх, хедер фиксируем на экране ────
+// ── Хедер чата: компенсируем системный сдвиг окна при клавиатуре ──
+// Android сам поднимает WebView вверх — offsetTop показывает на сколько.
+// Мы двигаем хедер вниз на то же значение чтобы он остался на экране.
 (function() {
-  const CHAT_ID = 's-messenger-chat';
-  let _kbH = 0;
-  let _hdrFixed = false;
-  let _hdrHeight = 0;
-
-  function _getKbH() {
-    if (!window.visualViewport) return 0;
-    const vv = window.visualViewport;
-    return Math.max(0, Math.round(window.innerHeight - (vv.height + vv.offsetTop)));
+  function _syncHdr() {
+    const hdr = document.querySelector('#s-messenger-chat .hdr');
+    if (!hdr) return;
+    const offset = window.visualViewport ? Math.round(window.visualViewport.offsetTop) : 0;
+    hdr.style.transform = offset > 0 ? `translateY(${offset}px)` : '';
   }
-
-  function _apply() {
-    const kbH = _getKbH();
-    if (kbH === _kbH) return;
-    _kbH = kbH;
-
-    const screen = document.getElementById(CHAT_ID);
-    if (!screen) return;
-    const hdr  = screen.querySelector('.hdr');
-    const msgs = document.getElementById('mc-messages');
-
-    if (kbH > 0) {
-      // 1. Двигаем весь экран вверх
-      screen.style.transition = 'transform .22s cubic-bezier(0.4,0,0.2,1)';
-      screen.style.transform  = `translateY(-${kbH}px)`;
-
-      // 2. Хедер — переключаем в fixed чтобы остался на экране
-      if (hdr && !_hdrFixed) {
-        _hdrHeight = hdr.offsetHeight || 60;
-        hdr.style.position   = 'fixed';
-        hdr.style.top        = '0';
-        hdr.style.left       = '0';
-        hdr.style.right      = '0';
-        hdr.style.zIndex     = '9999';
-        hdr.style.background = 'var(--surface)';
-        // Компенсируем место под фиксированный хедер в списке сообщений
-        if (msgs) msgs.style.paddingTop = _hdrHeight + 'px';
-        _hdrFixed = true;
-      }
-
-      // 3. Скролл вниз
-      if (msgs) setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 60);
-
-    } else {
-      // Возвращаем экран на место
-      screen.style.transition = 'transform .22s cubic-bezier(0.4,0,0.2,1)';
-      screen.style.transform  = '';
-
-      // Возвращаем хедер в поток
-      if (hdr && _hdrFixed) {
-        hdr.style.position   = '';
-        hdr.style.top        = '';
-        hdr.style.left       = '';
-        hdr.style.right      = '';
-        hdr.style.zIndex     = '';
-        hdr.style.background = '';
-        if (msgs) msgs.style.paddingTop = '';
-        _hdrFixed = false;
-      }
-
-      setTimeout(() => { if (screen) screen.style.transition = ''; }, 240);
-    }
-  }
-
-  document.addEventListener('focusin', (e) => {
-    if (!e.target || e.target.id !== 'mc-input') return;
-    setTimeout(_apply, 80);
-    setTimeout(_apply, 350);
-  }, { passive: true });
-
-  document.addEventListener('focusout', (e) => {
-    if (!e.target || e.target.id !== 'mc-input') return;
-    setTimeout(_apply, 80);
-  }, { passive: true });
 
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', _apply, { passive: true });
+    window.visualViewport.addEventListener('scroll', _syncHdr, { passive: true });
+    window.visualViewport.addEventListener('resize', _syncHdr, { passive: true });
   }
+  // Сброс при уходе из чата
+  document.addEventListener('focusout', (e) => {
+    if (e.target?.id === 'mc-input') {
+      setTimeout(_syncHdr, 50);
+    }
+  }, { passive: true });
 })();
 
 // ── Доп функции ───────────────────────────────────────────────────
