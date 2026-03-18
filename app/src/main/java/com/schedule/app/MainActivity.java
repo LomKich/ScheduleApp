@@ -74,6 +74,9 @@ public class MainActivity extends Activity {
     private boolean                isNativeBgPick = false;
     private android.webkit.PermissionRequest _pendingPermissionRequest = null;
 
+    // ── Фоновый сервис ─────────────────────────────────────────────
+    private boolean bgServiceRunning = false;
+
     // ── Нативная запись голосовых (обход ограничений WebView getUserMedia) ──
     private MediaRecorder  _voiceRecorder   = null;
     private java.io.File   _voiceFile       = null;
@@ -632,11 +635,12 @@ public class MainActivity extends Activity {
         super.onPause();
         appInForeground = false;
         log.i(TAG, "onPause — переключаю поллер в фоновый режим (" + POLL_INTERVAL_BG + "мс)");
-        // Переключаемся на медленный интервал в фоне — JS заморожен, но Java нет
         if (pollHandler != null && pollRunnable != null) {
             pollHandler.removeCallbacks(pollRunnable);
             pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_BG);
         }
+        // Запускаем фоновый сервис — будет слать уведомления пока приложение в фоне
+        startBgService();
     }
 
     @Override
@@ -644,11 +648,70 @@ public class MainActivity extends Activity {
         super.onResume();
         appInForeground = true;
         log.i(TAG, "onResume — переключаю поллер в активный режим (" + POLL_INTERVAL_FG + "мс)");
-        // Ускоряем интервал — приложение на экране
         if (pollHandler != null && pollRunnable != null) {
             pollHandler.removeCallbacks(pollRunnable);
-            pollHandler.post(pollRunnable); // немедленный тик + восстановление
+            pollHandler.post(pollRunnable);
         }
+        // Останавливаем фоновый сервис — приложение снова на экране
+        stopBgService();
+        // Обновляем last_ts чтобы не показывать уведомления о сообщениях которые мы уже видим
+        BackgroundPollService.updateLastTs(this);
+    }
+
+    private void startBgService() {
+        if (bgServiceRunning) return;
+        try {
+            Intent svc = new Intent(this, BackgroundPollService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(svc);
+            } else {
+                startService(svc);
+            }
+            bgServiceRunning = true;
+            log.i(TAG, "BackgroundPollService started");
+
+            // Регистрируем callback для async upload
+            BackgroundPollService.setUploadCallback(new BackgroundPollService.UploadCallback() {
+                @Override
+                public void onProgress(String jobId, int pct, String label) {
+                    runOnUiThread(() -> webView.evaluateJavascript(
+                        "if(typeof onNativeUploadProgress==='function')" +
+                        "onNativeUploadProgress('" + escapeJs(jobId) + "'," + pct + ",'" + escapeJs(label) + "')", null));
+                }
+                @Override
+                public void onDone(String jobId, String url) {
+                    runOnUiThread(() -> webView.evaluateJavascript(
+                        "if(typeof onNativeUploadDone==='function')" +
+                        "onNativeUploadDone('" + escapeJs(jobId) + "','" + escapeJs(url) + "')", null));
+                }
+                @Override
+                public void onError(String jobId, String error) {
+                    runOnUiThread(() -> webView.evaluateJavascript(
+                        "if(typeof onNativeUploadError==='function')" +
+                        "onNativeUploadError('" + escapeJs(jobId) + "','" + escapeJs(error) + "')", null));
+                }
+            });
+        } catch (Exception e) {
+            log.e(TAG, "startBgService error: " + e.getMessage());
+        }
+    }
+
+    private void stopBgService() {
+        if (!bgServiceRunning) return;
+        try {
+            stopService(new Intent(this, BackgroundPollService.class));
+            bgServiceRunning = false;
+            BackgroundPollService.setUploadCallback(null);
+            log.i(TAG, "BackgroundPollService stopped");
+        } catch (Exception e) {
+            log.e(TAG, "stopBgService error: " + e.getMessage());
+        }
+    }
+
+    /** Экранирует строку для вставки в JS-строку */
+    private static String escapeJs(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
     }
 
     @Override
@@ -723,9 +786,155 @@ public class MainActivity extends Activity {
 
     public class AndroidBridge {
 
-        // ─── Push-уведомления ─────────────────────────────────────────────────────
+        /**
+         * Сохраняет конфиг для фонового сервиса (вызывается после входа в аккаунт).
+         * После этого сервис будет получать уведомления даже при закрытом приложении.
+         */
+        @JavascriptInterface
+        public void savePushConfig(String username, String sbUrl, String sbKey) {
+            log.i(TAG, "savePushConfig username=" + username);
+            BackgroundPollService.savePushConfig(MainActivity.this, username, sbUrl, sbKey);
+        }
 
-        /** Возвращает "granted" | "denied" | "default" */
+        /**
+         * Обновляет ts последнего просмотренного сообщения.
+         * Вызывается когда пользователь открывает чат — предотвращает дублирование уведомлений.
+         */
+        @JavascriptInterface
+        public void updateLastMsgTs(long ts) {
+            BackgroundPollService.updateLastTs(MainActivity.this);
+        }
+
+        /**
+         * ASYNC загрузка файла на catbox.moe — не блокирует JS, возвращает сразу.
+         * Прогресс и результат передаются через window.onNativeUploadProgress/Done/Error.
+         *
+         * @param base64   файл в Base64 (без data:... префикса)
+         * @param fileName имя файла с расширением
+         * @param mimeType MIME-тип
+         * @param jobId    уникальный ID задачи (генерируется в JS)
+         */
+        @JavascriptInterface
+        public void nativeUploadFileAsync(String base64, String fileName, String mimeType, String jobId) {
+            log.i(TAG, "nativeUploadFileAsync jobId=" + jobId + " file=" + fileName
+                    + " b64len=" + (base64 != null ? base64.length() : 0));
+
+            // Убеждаемся что сервис запущен (даже если приложение на экране — нужен executor)
+            if (!bgServiceRunning) startBgService();
+
+            // Небольшая задержка чтобы сервис успел стартовать
+            pollHandler.postDelayed(() -> {
+                // Ищем запущенный сервис через статический callback
+                // Если callback не зарегистрирован — запускаем upload напрямую в thread
+                if (BackgroundPollService.uploadCallback != null) {
+                    // Сервис запущен — делегируем ему
+                    // Нам нужен экземпляр сервиса: используем прямой вызов через отдельный поток
+                    new Thread(() -> {
+                        try {
+                            // Временно создаём экземпляр только для загрузки
+                            // (сервис управляет своим потоком)
+                            byte[] fileBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+                            uploadFileInBackground(fileBytes, fileName, mimeType, jobId);
+                        } catch (Exception e) {
+                            log.e(TAG, "async upload decode error: " + e.getMessage());
+                            runOnUiThread(() -> webView.evaluateJavascript(
+                                "if(typeof onNativeUploadError==='function')" +
+                                "onNativeUploadError('" + escapeJs(jobId) + "','" + escapeJs(e.getMessage()) + "')", null));
+                        }
+                    }, "async-upload-" + jobId).start();
+                } else {
+                    // Callback не готов — пробуем ещё раз через 500мс
+                    pollHandler.postDelayed(() ->
+                        nativeUploadFileAsync(base64, fileName, mimeType, jobId), 500);
+                }
+            }, 200);
+        }
+
+        private void uploadFileInBackground(byte[] fileBytes, String fileName, String mimeType, String jobId) {
+            long fileSize = fileBytes.length;
+            final long startTs = System.currentTimeMillis();
+            final float ESTIMATED_KBPS = 38f;
+            final float estimatedSec = Math.max(5f, fileSize / 1024f / ESTIMATED_KBPS);
+            final boolean[] done = {false};
+
+            android.os.Handler h = new android.os.Handler(Looper.getMainLooper());
+            Runnable ticker = new Runnable() {
+                @Override public void run() {
+                    if (done[0]) return;
+                    float elapsed = (System.currentTimeMillis() - startTs) / 1000f;
+                    int pct = Math.min(92, (int)(elapsed / estimatedSec * 100 * 1.15f));
+                    float remain = Math.max(0, estimatedSec - elapsed);
+                    String label = remain < 4 ? "Почти готово…"
+                        : remain < 60 ? "~" + (int)remain + " сек"
+                        : "~" + (int)(remain/60) + ":" + String.format("%02d", (int)(remain%60));
+                    if (BackgroundPollService.uploadCallback != null)
+                        BackgroundPollService.uploadCallback.onProgress(jobId, pct, label);
+                    if (!done[0]) h.postDelayed(this, 600);
+                }
+            };
+            h.post(ticker);
+
+            String resultUrl = null;
+            Exception lastErr = null;
+            for (int attempt = 1; attempt <= 3; attempt++) {
+                if (attempt > 1) {
+                    try { Thread.sleep(attempt * 2000L); } catch (InterruptedException ignored) {}
+                    if (BackgroundPollService.uploadCallback != null)
+                        BackgroundPollService.uploadCallback.onProgress(jobId, 0, "⟳ Попытка " + attempt + "/3…");
+                }
+                try {
+                    resultUrl = uploadToCatboxBytes(fileBytes, fileName, mimeType);
+                    break;
+                } catch (Exception e) {
+                    lastErr = e;
+                    boolean retry = e.getMessage() != null && (
+                        e.getMessage().contains("abort") || e.getMessage().contains("timeout") ||
+                        e.getMessage().contains("reset") || e.getMessage().contains("connect"));
+                    if (!retry || attempt == 3) break;
+                }
+            }
+
+            done[0] = true;
+            h.removeCallbacksAndMessages(null);
+
+            if (resultUrl != null) {
+                log.i(TAG, "async upload OK: " + resultUrl);
+                if (BackgroundPollService.uploadCallback != null)
+                    BackgroundPollService.uploadCallback.onDone(jobId, resultUrl);
+            } else {
+                String err = lastErr != null ? lastErr.getMessage() : "Upload failed";
+                log.e(TAG, "async upload FAILED: " + err);
+                if (BackgroundPollService.uploadCallback != null)
+                    BackgroundPollService.uploadCallback.onError(jobId, err);
+            }
+        }
+
+        private String uploadToCatboxBytes(byte[] fileBytes, String fileName, String mimeType) throws Exception {
+            String boundary = "----CatboxBound" + Long.toHexString(System.currentTimeMillis());
+            java.net.URL url = new java.net.URL("https://catbox.moe/user/api.php");
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(30_000);
+            conn.setReadTimeout(180_000);
+            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp");
+            java.io.OutputStream os = conn.getOutputStream();
+            os.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"reqtype\"\r\n\r\nfileupload\r\n").getBytes(StandardCharsets.UTF_8));
+            os.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"fileToUpload\"; filename=\"" + fileName + "\"\r\nContent-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            os.write(fileBytes);
+            os.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+            os.flush(); os.close();
+            int status = conn.getResponseCode();
+            InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192]; int n;
+            while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
+            is.close(); conn.disconnect();
+            String body = baos.toString("UTF-8").trim();
+            if (status == 200 && body.startsWith("https://")) return body;
+            throw new Exception("catbox HTTP " + status + ": " + body.substring(0, Math.min(body.length(), 100)));
+        }
         @JavascriptInterface
         public String getNotificationPermission() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
