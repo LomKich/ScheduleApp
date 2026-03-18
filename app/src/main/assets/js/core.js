@@ -2603,7 +2603,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.4.14';
+const APP_VERSION='4.2.7';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -2701,6 +2701,64 @@ function initSchedTapTrigger(){
     if(_schedTapCount>=4){_schedTapCount=0;clearTimeout(_schedTapTimer);SFX.play('themeSelect');cmdOpen();}
   });
 }
+
+// ══ SWIPE-COMBO НА ГЛАВНОЙ → CMD (↑ → → ↓) ══
+(function(){
+  const SEQ = ['up','right','right','down'];
+  let _combo = [];
+  let _swipeStartX = 0, _swipeStartY = 0;
+  let _comboTimer = null;
+  const RESET_MS = 1800;   // сброс если пауза > 1.8s
+  const MIN_DIST = 40;     // мин. длина свайпа в px
+
+  function _resetCombo(){ _combo = []; }
+
+  function _onDir(dir){
+    // работаем только когда главный экран активен
+    const home = document.getElementById('s-home');
+    if(!home || !home.classList.contains('active')) return;
+
+    clearTimeout(_comboTimer);
+    _comboTimer = setTimeout(_resetCombo, RESET_MS);
+
+    _combo.push(dir);
+    // проверяем совпадение с хвостом SEQ
+    if(_combo.length > SEQ.length) _combo.shift();
+    if(_combo.join(',') === SEQ.join(',') ){
+      _combo = [];
+      clearTimeout(_comboTimer);
+      SFX.play('themeSelect');
+      cmdOpen();
+    }
+  }
+
+  function _attachHome(){
+    const home = document.getElementById('s-home');
+    if(!home) return;
+    home.addEventListener('touchstart', e=>{
+      const t = e.changedTouches[0];
+      _swipeStartX = t.clientX;
+      _swipeStartY = t.clientY;
+    }, {passive:true});
+    home.addEventListener('touchend', e=>{
+      const t = e.changedTouches[0];
+      const dx = t.clientX - _swipeStartX;
+      const dy = t.clientY - _swipeStartY;
+      if(Math.abs(dx) < MIN_DIST && Math.abs(dy) < MIN_DIST) return;
+      if(Math.abs(dx) > Math.abs(dy)){
+        _onDir(dx > 0 ? 'right' : 'left');
+      } else {
+        _onDir(dy > 0 ? 'down' : 'up');
+      }
+    }, {passive:true});
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _attachHome);
+  } else {
+    _attachHome();
+  }
+})();
 
 // ══ SECRET STORAGE ══
 const SECRET_KEY='sched_secret';
