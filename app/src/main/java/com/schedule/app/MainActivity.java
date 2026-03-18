@@ -79,6 +79,7 @@ public class MainActivity extends Activity {
     private java.io.File   _voiceFile       = null;
     private long           _voiceStartMs    = 0;
     private android.os.Handler _voiceTimerHandler = null;
+    private boolean        _pendingVoiceRecordRetry = false;
 
     // Java-side poll timer — работает даже когда WebView заморожен в фоне
     private android.os.Handler     pollHandler;
@@ -1511,8 +1512,6 @@ public class MainActivity extends Activity {
             }
             if (_voiceFile != null) { _voiceFile.delete(); _voiceFile = null; }
         }
-
-        private boolean _pendingVoiceRecordRetry = false;
 
         private String getVersionName() {
             try {
