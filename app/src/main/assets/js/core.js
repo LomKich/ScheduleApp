@@ -1124,11 +1124,12 @@ function initIconPicker() { renderIconGrid(); }
 
 // ══ ТЕМЫ ══
 function applyTheme(key){
-  const t=THEMES[key]||THEMES['orange'];
+  const t = key === 'custom'
+    ? { vars: S.customTheme || THEMES['orange'].vars }
+    : (THEMES[key] || THEMES['orange']);
   Object.entries(t.vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
-  document.documentElement.setAttribute('data-theme',key);
+  document.documentElement.setAttribute('data-theme', key === 'custom' ? 'orange' : key);
   S.theme=key;saveLocal();renderThemeGrid();renderIconGrid();updateThemeCurrentRow();
-  // Re-apply glass mode with new theme colors
   applyGlassMode(false);
 }
 
@@ -1622,8 +1623,116 @@ function renderThemeGrid(){
         <span class="theme-check">✓</span>`;
       c.onclick=()=>{SFX.play('themeSelect');applyTheme(key);}; g.appendChild(c);
     });
+    // Карточка «Своя тема» — только VIP
+    const isVip = typeof vipCheck === 'function' ? vipCheck() : false;
+    const custom = document.createElement('div');
+    custom.className = 'theme-card' + (S.theme === 'custom' ? ' selected' : '');
+    custom.style.cssText = 'position:relative;overflow:hidden';
+    if (isVip) {
+      const sw = S.customTheme
+        ? [S.customTheme['--bg']||'#0d0d0d', S.customTheme['--accent']||'#e87722', S.customTheme['--surface2']||'#1f1f1f']
+        : ['#0d0d0d','#e87722','#1f1f1f'];
+      custom.innerHTML = `
+        <div class="theme-swatch">${sw.map(cl=>`<div class="swatch" style="background:${cl}"></div>`).join('')}</div>
+        <div style="flex:1;min-width:0">
+          <div class="theme-name" style="font-size:13px;font-weight:700">🎨 Своя тема</div>
+          <div style="font-size:10px;color:var(--muted)">Нажми для настройки</div>
+        </div>
+        <span class="theme-check">✓</span>`;
+      custom.onclick = () => openCustomThemeEditor();
+    } else {
+      custom.innerHTML = `
+        <div class="theme-swatch">
+          <div class="swatch" style="background:#0d0d0d"></div>
+          <div class="swatch" style="background:#888"></div>
+          <div class="swatch" style="background:#1f1f1f"></div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="theme-name" style="font-size:13px;font-weight:700;color:var(--muted)">🎨 Своя тема</div>
+        </div>
+        <span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px;flex-shrink:0">VIP</span>`;
+      custom.onclick = () => toast('👑 Своя тема — только для VIP');
+    }
+    g.appendChild(custom);
   });
 }
+// ── Редактор своей темы (VIP) ─────────────────────────────────────
+const CUSTOM_THEME_VARS = [
+  { key: '--bg',       label: 'Фон приложения',    default: '#0d0d0d' },
+  { key: '--surface',  label: 'Поверхность 1',     default: '#161616' },
+  { key: '--surface2', label: 'Поверхность 2',     default: '#1f1f1f' },
+  { key: '--surface3', label: 'Поверхность 3',     default: '#2a2a2a' },
+  { key: '--accent',   label: 'Акцент (главный)',   default: '#e87722' },
+  { key: '--accent2',  label: 'Акцент (нажатие)',   default: '#c45f0a' },
+  { key: '--text',     label: 'Цвет текста',        default: '#f0ede8' },
+  { key: '--muted',    label: 'Вторичный текст',    default: '#6b6762' },
+  { key: '--btn-text', label: 'Текст на кнопках',   default: '#ffffff' },
+];
+
+function openCustomThemeEditor() {
+  if (typeof vipCheck === 'function' && !vipCheck()) { toast('👑 Только для VIP'); return; }
+  const existing = document.getElementById('custom-theme-overlay');
+  if (existing) { existing.remove(); return; }
+  const current = S.customTheme || {};
+  const ov = document.createElement('div');
+  ov.id = 'custom-theme-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9400;background:rgba(0,0,0,.6);display:flex;align-items:flex-end';
+  const rows = CUSTOM_THEME_VARS.map(v => {
+    const val = current[v.key] || v.default;
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+      <input type="color" value="${val}" data-var="${v.key}"
+        style="width:36px;height:36px;border-radius:10px;border:2px solid var(--surface3);padding:2px;background:none;cursor:pointer;flex-shrink:0"
+        oninput="customThemePreview(this)">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${v.label}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace" id="ctv_${v.key.replace(/--/g,'')}">${val}</div>
+      </div>
+    </div>`;
+  }).join('');
+  ov.innerHTML = `
+    <div onclick="event.stopPropagation()" style="background:var(--surface);border-radius:24px 24px 0 0;width:100%;max-height:88vh;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;padding:20px 20px 12px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.06)">
+        <div style="font-size:16px;font-weight:800;flex:1">🎨 Своя тема <span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px;vertical-align:middle">VIP</span></div>
+        <button onclick="document.getElementById('custom-theme-overlay').remove()" style="background:var(--surface2);border:none;color:var(--muted);width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;flex-shrink:0">✕</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:0 20px">
+        ${rows}
+        <div style="display:flex;gap:10px;padding:16px 0 calc(var(--safe-bot,0px) + 16px)">
+          <button onclick="customThemeReset()" style="flex:1;padding:13px;border-radius:14px;border:1.5px solid var(--surface3);background:none;color:var(--muted);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">↺ Сброс</button>
+          <button onclick="customThemeSave()" style="flex:2;padding:13px;border-radius:14px;border:none;background:var(--accent);color:var(--btn-text,#fff);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">✓ Применить</button>
+        </div>
+      </div>
+    </div>`;
+  ov.addEventListener('click', () => ov.remove());
+  document.body.appendChild(ov);
+}
+function customThemePreview(inp) {
+  const k = inp.getAttribute('data-var');
+  document.documentElement.style.setProperty(k, inp.value);
+  const lbl = document.getElementById('ctv_' + k.replace(/--/g,''));
+  if (lbl) lbl.textContent = inp.value;
+}
+function customThemeSave() {
+  const vars = {};
+  document.querySelectorAll('#custom-theme-overlay [data-var]')
+    .forEach(inp => { vars[inp.getAttribute('data-var')] = inp.value; });
+  S.customTheme = vars;
+  S.theme = 'custom';
+  saveLocal();
+  applyTheme('custom');
+  document.getElementById('custom-theme-overlay')?.remove();
+  SFX.play && SFX.play('themeSelect');
+  toast('🎨 Тема сохранена!');
+}
+function customThemeReset() {
+  S.customTheme = null;
+  S.theme = 'orange';
+  saveLocal();
+  applyTheme('orange');
+  document.getElementById('custom-theme-overlay')?.remove();
+  toast('↺ Тема сброшена');
+}
+
 function updateThemeCurrentRow(){
   const t=THEMES[S.theme];
   const nameEl=document.getElementById('theme-current-name');

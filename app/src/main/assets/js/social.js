@@ -1151,6 +1151,12 @@ function applyCrop() {
 // ═════════════════════════════════════════════════════════════════
 
 function profilePickPhoto() {
+  // Кнопка «Выбрать фото» на главном экране профиля — только VIP
+  const onEditScreen = document.getElementById('s-profile-edit')?.classList.contains('active');
+  if (!onEditScreen && !vipCheck()) {
+    toast('👑 Фото профиля — только для VIP');
+    return;
+  }
   _profileWaitingForPhoto = true;
   if (window.Android && typeof Android.pickImageForBackground === 'function') {
     Android.pickImageForBackground();
