@@ -57,6 +57,7 @@ public class MainActivity extends Activity {
     private static final int    VPN_REQUEST_CODE  = 1001;
     private static final int    IMAGE_PICK_CODE   = 1002;
     private static final int    NOTIF_PERM_CODE   = 1003;
+    private static final int    AUDIO_PERM_CODE   = 1004;
     private static final String NOTIF_CHANNEL_ID  = "sapp_messages";
     private static final String NOTIF_CHANNEL_NAME = "Сообщения";
     private static final int    NOTIF_ID          = 42;
@@ -70,6 +71,7 @@ public class MainActivity extends Activity {
     private SupabaseHelper         helper;
     private ValueCallback<Uri[]>   fileChooserCallback = null;
     private boolean                isNativeBgPick = false;
+    private android.webkit.PermissionRequest _pendingPermissionRequest = null;
 
     // Java-side poll timer — работает даже когда WebView заморожен в фоне
     private android.os.Handler     pollHandler;
@@ -219,6 +221,38 @@ public class MainActivity extends Activity {
             public boolean onConsoleMessage(ConsoleMessage cm) {
                 log.js(cm.messageLevel().name(), cm.message(), cm.sourceId(), cm.lineNumber());
                 return true;
+            }
+
+            // ─── Разрешения для WebView (микрофон, камера и т.д.) ───
+            @Override
+            public void onPermissionRequest(android.webkit.PermissionRequest request) {
+                String[] requestedResources = request.getResources();
+                java.util.List<String> toGrant = new java.util.ArrayList<>();
+                for (String res : requestedResources) {
+                    if (res.equals(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                        // Нужно runtime-разрешение RECORD_AUDIO
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                MainActivity.this, android.Manifest.permission.RECORD_AUDIO)
+                                == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            toGrant.add(res);
+                        } else {
+                            // Запрашиваем у пользователя и сохраняем request для повтора
+                            _pendingPermissionRequest = request;
+                            androidx.core.app.ActivityCompat.requestPermissions(
+                                MainActivity.this,
+                                new String[]{ android.Manifest.permission.RECORD_AUDIO },
+                                AUDIO_PERM_CODE);
+                            return;
+                        }
+                    } else if (res.equals(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+                        toGrant.add(res); // камера — разрешаем без лишних проверок
+                    }
+                }
+                if (!toGrant.isEmpty()) {
+                    request.grant(toGrant.toArray(new String[0]));
+                } else {
+                    request.deny();
+                }
             }
 
             // ─── Нативный файловый пикер для <input type="file"> ───
@@ -617,6 +651,21 @@ public class MainActivity extends Activity {
             webView.post(() -> webView.evaluateJavascript(
                 "if(typeof onNativeNotifPermissionResult==='function')" +
                 "onNativeNotifPermissionResult('" + result + "')", null));
+        } else if (requestCode == AUDIO_PERM_CODE) {
+            boolean granted = grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            log.i(TAG, "Audio permission result: " + (granted ? "granted" : "denied"));
+            if (_pendingPermissionRequest != null) {
+                if (granted) {
+                    _pendingPermissionRequest.grant(
+                        new String[]{ android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+                } else {
+                    _pendingPermissionRequest.deny();
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof toast==='function')toast('🎤 Нет доступа к микрофону')", null));
+                }
+                _pendingPermissionRequest = null;
+            }
         }
     }
     @Override
