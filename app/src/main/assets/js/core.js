@@ -705,6 +705,7 @@ function loadLocal(){
     S.customProxy=d.customProxy||'';
     S.proxyProvider=d.proxyProvider||'corsproxy';
     S.appIcon=d.appIcon||'orange';
+    S.customTheme=d.customTheme||null;
     const inp=document.getElementById('url-input');
     if(inp)inp.value=S.url;
     const pi=document.getElementById('proxy-input');
@@ -720,6 +721,7 @@ function saveLocal(){
     dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy,proxyProvider:S.proxyProvider,
     appIcon:S.appIcon,liquidGlass:S.liquidGlass,liquidGlassOpt:S.liquidGlassOpt,
     customBgBlurEnabled:S.customBgBlurEnabled,
+    customTheme:S.customTheme||null,
     hasBg: !!S.customBg
   }));
   // Фон хранится отдельно (может быть >1МБ base64)
