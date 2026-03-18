@@ -857,7 +857,7 @@ public class MainActivity extends Activity {
             final float estimatedSec = Math.max(5f, fileSize / 1024f / ESTIMATED_KBPS);
             final boolean[] done = {false};
 
-            android.os.Handler h = new android.os.Handler(Looper.getMainLooper());
+            android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
             Runnable ticker = new Runnable() {
                 @Override public void run() {
                     if (done[0]) return;

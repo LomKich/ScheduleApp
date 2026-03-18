@@ -81,7 +81,7 @@ public class BackgroundPollService extends Service {
         void onDone(String jobId, String url);
         void onError(String jobId, String error);
     }
-    private static volatile UploadCallback uploadCallback = null;
+    static volatile UploadCallback uploadCallback = null;
     public static void setUploadCallback(UploadCallback cb) { uploadCallback = cb; }
 
     // ══════════════════════════════════════════════════════════════════
