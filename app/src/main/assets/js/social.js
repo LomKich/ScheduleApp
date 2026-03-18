@@ -4454,7 +4454,7 @@ function mcPickMedia() {
   document.body.appendChild(sheet);
 }
 
-// ─── MEGA.nz upload via official megajs library ───────────────────
+// ─── MEGA.nz upload via megajs 0.x (UMD browser build) ───────────
 // Credentials вшиты — отдельный аккаунт только для загрузок приложения
 const _MEGA_EMAIL = 'qwertyzxcvbn090909@gmail.com';
 const _MEGA_PASS  = 'hEiy1a8HAE@UjGD';
@@ -4462,28 +4462,37 @@ const _MEGA_PASS  = 'hEiy1a8HAE@UjGD';
 let _megaStorageInst = null;
 let _megaInitPromise = null;
 
-// Ждём загрузки megajs (загружается как ESM-модуль в <script type="module">)
+// Получаем/инициализируем mega.Storage (megajs 0.x UMD, глобал window.mega)
 async function _getMegaStorage() {
   if (_megaStorageInst) return _megaStorageInst;
   if (_megaInitPromise) return _megaInitPromise;
 
   _megaInitPromise = (async () => {
-    // Ждём пока ES-модуль загрузится и выставит window.MegaStorage
+    // Ждём загрузки скрипта (onload выставляет window._megaReady и window.mega)
     let tries = 0;
-    while (!window.MegaStorage && tries++ < 80) {
-      await new Promise(r => setTimeout(r, 200));
+    while (typeof window.mega === 'undefined' && tries++ < 100) {
+      await new Promise(r => setTimeout(r, 150));
     }
-    if (!window.MegaStorage) throw new Error('megajs не загрузился (нет соединения?)');
+    if (typeof window.mega === 'undefined') {
+      throw new Error('megajs не загрузился — нет соединения или CDN заблокирован');
+    }
 
-    const storage = new window.MegaStorage({
-      email: _MEGA_EMAIL,
-      password: _MEGA_PASS,
-      autologin: true,
-      keepalive: false,
+    return new Promise((resolve, reject) => {
+      const storage = new window.mega.Storage({
+        email:     _MEGA_EMAIL,
+        password:  _MEGA_PASS,
+        autologin: true,
+        keepalive: false,
+      });
+      storage.on('ready', () => {
+        _megaStorageInst = storage;
+        resolve(storage);
+      });
+      storage.on('error', (err) => {
+        _megaInitPromise = null; // позволяет повторную попытку
+        reject(new Error('MEGA login error: ' + (err.message || err)));
+      });
     });
-    await storage.ready;
-    _megaStorageInst = storage;
-    return storage;
   })();
 
   return _megaInitPromise;
@@ -4492,16 +4501,21 @@ async function _getMegaStorage() {
 // Основная функция загрузки файла на MEGA
 async function megaUploadFile(blob, fileName) {
   const storage = await _getMegaStorage();
-
   const buf = await blob.arrayBuffer();
-  const uploadStream = storage.root.upload(
-    { name: fileName, size: buf.byteLength },
-    new Uint8Array(buf)
-  );
 
-  const file = await uploadStream.complete;
-  const link = await file.link();
-  return { link, fileName };
+  return new Promise((resolve, reject) => {
+    const upload = storage.upload(
+      { name: fileName, size: buf.byteLength },
+      Buffer.from ? Buffer.from(buf) : new Uint8Array(buf)
+    );
+    upload.on('error', reject);
+    upload.on('complete', (file) => {
+      file.link((err, url) => {
+        if (err) { reject(err); return; }
+        resolve({ link: url, fileName });
+      });
+    });
+  });
 }
 
 // ── Отправка изображения ──────────────────────────────────────────
@@ -5156,7 +5170,8 @@ function toggleNotchMode() {
 }
 function _applyNotchMode(mode) {
   if (mode==='none') {
-    document.documentElement.style.setProperty('--safe-top','0px');
+    // Не обнуляем полностью — 12px минимальный отступ чтобы контент не заезжал под камеру
+    document.documentElement.style.setProperty('--safe-top','12px');
   } else {
     const nat = document.documentElement.style.getPropertyValue('--safe-top-native');
     if (nat && nat!=='0px') document.documentElement.style.setProperty('--safe-top', nat);
@@ -5171,12 +5186,23 @@ function _renderNotchToggle(mode) {
 }
 (function initNotchMode() {
   setTimeout(() => {
-    const cur = getComputedStyle(document.documentElement).getPropertyValue('--safe-top').trim();
-    if (cur && cur!=='0px') document.documentElement.style.setProperty('--safe-top-native', cur);
+    // Нативное значение берём только из --safe-top-native (выставляется Android-инжектором)
+    // НЕ из --safe-top, потому что он мог быть уже перезаписан предыдущим _applyNotchMode
+    const nat = document.documentElement.style.getPropertyValue('--safe-top-native').trim();
+    // Если нативное ещё не выставлено (первый запуск) — берём текущее --safe-top
+    // только если режим был 'auto' (иначе там уже наше 12px, а не реальный inset)
     const mode = notchModeLoad();
-    if (mode==='none') _applyNotchMode('none');
+    if (!nat || nat === '0px') {
+      if (mode === 'auto') {
+        const cur = getComputedStyle(document.documentElement).getPropertyValue('--safe-top').trim();
+        if (cur && cur !== '0px' && cur !== '12px') {
+          document.documentElement.style.setProperty('--safe-top-native', cur);
+        }
+      }
+    }
+    _applyNotchMode(mode);
     _renderNotchToggle(mode);
-  }, 500);
+  }, 600);
 })();
 
 // ── Stub для _mcUpdateMuteIcon (кнопка удалена из хедера) ─────────────
