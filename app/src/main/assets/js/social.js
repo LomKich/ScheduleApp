@@ -629,17 +629,17 @@ function profileRenderScreen() {
     <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
       <button onclick="profilePickPhoto()"
         style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">📷</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M9 3L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.65 0-3 1.35-3 3s1.35 3 3 3 3-1.35 3-3-1.35-3-3-3z"/></svg></span>
         <div style="font-size:14px;font-weight:700;color:var(--text)">Выбрать фото</div>
       </button>
       <button onclick="profileToggleEdit()"
         style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">✏️</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></span>
         <div style="font-size:14px;font-weight:700;color:var(--text)">Изменить профиль</div>
       </button>
       <button onclick="navTo('s-settings','nav-settings')"
         style="width:100%;padding:14px 16px;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">⚙️</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></span>
         <div style="font-size:14px;font-weight:700;color:var(--text)">Настройки</div>
       </button>
     </div>
@@ -647,7 +647,7 @@ function profileRenderScreen() {
     <!-- Карточка: Таблица лидеров + Друзья + Группы -->
     <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
       <div onclick="showScreen('s-leaderboard')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">🏆</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg></span>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:700">Таблица лидеров</div>
           <div style="font-size:12px;color:var(--muted)">Рекорды в играх</div>
@@ -655,14 +655,14 @@ function profileRenderScreen() {
         <span style="color:var(--muted);font-size:18px">›</span>
       </div>
       <div onclick="profileRenderOnline();showScreen('s-online')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">👥</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:700">Друзья</div>
           <div style="font-size:12px;color:var(--muted)">${friendCount} ${friendWord}</div>
         </div>
       </div>
       <div onclick="showGroupsList()" style="padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">💬</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12zM7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg></span>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:700">Группы</div>
           <div style="font-size:12px;color:var(--muted)">${groupsLoad().length} ${groupsLoad().length === 1 ? 'группа' : groupsLoad().length < 5 ? 'группы' : 'групп'}</div>
@@ -674,7 +674,7 @@ function profileRenderScreen() {
     <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 -->
     <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
       <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
-        <span style="font-size:22px;width:28px;text-align:center">\u{1F4E1}</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M1 9l2 2c2.88-2.88 6.79-4.08 10.53-3.62l1.19-1.19C9.89 5.6 4.91 7.12 1 9zm8 8l3 3 3-3c-1.65-1.64-3.96-2.4-6-2.4S10.65 15.36 9 17zm-4-4l2 2c1.88-1.87 4.45-2.83 7-2.83s5.12.96 7 2.83l2-2C21 10.46 16.81 9 12 9c-4.81 0-9 1.46-11 4z"/></svg></span>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:700">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435</div>
           <div style="font-size:12px;color:var(--muted)" id="profile-p2p-status">${_profilePeerReady ? '\u{1F7E2} \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E' : '\u{1F534} \u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E'}</div>
@@ -686,7 +686,7 @@ function profileRenderScreen() {
     <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F -->
     <div id="push-notif-row" style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
       <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
-        <span style="font-size:22px;width:28px;text-align:center">\u{1F514}</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg></span>
         <div style="flex:1">
           <div style="font-size:14px;font-weight:700">\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F</div>
           <div style="font-size:12px;color:var(--muted)" id="push-notif-status">${pushGetStatusText()}</div>
@@ -1434,6 +1434,133 @@ async function _sbFetch(method, path, body, extraHeaders) {
   return { ok: r.ok, status: r.status, json: () => r.json(), text: () => r.text() };
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// 📭 OFFLINE QUEUE — Telegram-style отложенная отправка
+// Сообщение сохраняется локально с pending:true, отправляется при появлении сети
+// ══════════════════════════════════════════════════════════════════════════
+
+const OUTBOX_KEY = 'sapp_outbox_v2';
+
+function outboxLoad()    { try { return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]'); } catch(e) { return []; } }
+function outboxSave(q)   { localStorage.setItem(OUTBOX_KEY, JSON.stringify(q)); }
+
+// Добавляет запись в очередь. item = { id, chatKey, fromUser, toUser, data, ts, type }
+function outboxPush(item) {
+  const q = outboxLoad();
+  // Дедупликация по ts (на случай двойного вызова)
+  if (!q.find(x => x.id === item.id)) { q.push(item); outboxSave(q); }
+}
+
+// Удаляет из очереди по id
+function outboxRemove(id) {
+  outboxSave(outboxLoad().filter(x => x.id !== id));
+}
+
+// ── Проверка сети ─────────────────────────────────────────────────────────
+let _netOnline = navigator.onLine !== false; // оптимистично true если API нет
+
+async function _checkOnline() {
+  if (!navigator.onLine) return false;
+  try {
+    // Лёгкий HEAD-запрос к Supabase
+    const r = await fetch(`${sbUrl()}/rest/v1/`, {
+      method: 'HEAD',
+      headers: { apikey: sbKey() },
+      signal: AbortSignal.timeout(3500)
+    });
+    return r.ok || r.status < 500;
+  } catch(e) { return false; }
+}
+
+// ── Сброс очереди (вызывается при восстановлении сети) ───────────────────
+let _outboxFlushing = false;
+
+async function outboxFlush() {
+  if (_outboxFlushing) return;
+  const q = outboxLoad();
+  if (!q.length) return;
+
+  const online = await _checkOnline();
+  if (!online) return;
+
+  _outboxFlushing = true;
+  try {
+    for (const item of [...q]) {
+      try {
+        let ok = false;
+        if (item.type === 'message') {
+          const res = await sbInsert('messages', item.data);
+          ok = !!res;
+        } else if (item.type === 'media') {
+          // Медиа уже загружено на catbox (URL есть), просто шлём запись
+          const res = await sbInsert('messages', item.data);
+          ok = !!res;
+        }
+        if (ok) {
+          outboxRemove(item.id);
+          // Помечаем локальное сообщение как доставленное
+          const msgs = msgLoad();
+          const chat = msgs[item.localChat];
+          if (chat) {
+            const m = chat.find(x => x.ts === item.ts);
+            if (m) { m.delivered = true; m.pending = false; msgSave(msgs); }
+          }
+        }
+      } catch(e) { /* оставляем в очереди, попробуем позже */ }
+    }
+    // Если очередь опустела — обновляем UI
+    if (!outboxLoad().length) {
+      messengerRenderMessages && messengerRenderMessages();
+    }
+  } finally {
+    _outboxFlushing = false;
+  }
+}
+
+// ── Слушатели сети ────────────────────────────────────────────────────────
+window.addEventListener('online',  () => { _netOnline = true;  setTimeout(outboxFlush, 600); });
+window.addEventListener('offline', () => { _netOnline = false; });
+
+// Также пытаемся сбрасывать очередь каждые 12 секунд пока есть pending
+setInterval(() => {
+  if (outboxLoad().length > 0) outboxFlush();
+}, 12000);
+
+// ── Кнопка показа статуса очереди (появляется когда есть pending) ────────
+function _outboxUpdateStatusBar() {
+  const q = outboxLoad();
+  let bar = document.getElementById('mc-offline-bar');
+  if (!q.length) { bar?.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'mc-offline-bar';
+    bar.style.cssText = [
+      'position:fixed;top:calc(var(--safe-top,0px) + 56px);left:0;right:0;',
+      'z-index:9100;background:rgba(239,172,52,.92);',
+      'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);',
+      'padding:7px 16px;display:flex;align-items:center;gap:8px;',
+      'font-size:12px;font-weight:600;color:#000;',
+      'animation:tg-upload-in .22s ease both;',
+      'cursor:pointer;'
+    ].join('');
+    bar.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0">
+        <path d="M1 9l2 2c2.88-2.88 6.79-4.08 10.53-3.62l1.19-1.19C9.89 5.6 4.91 7.12 1 9zm18.28-.29C17.38 6.27 14.79 5 12 5c-1.28 0-2.5.26-3.62.69L10.1 7.4C10.72 7.15 11.34 7 12 7c2.17 0 4.17.86 5.65 2.35l1.63-1.64zM12 11c-.96 0-1.84.38-2.5.99l2.5 2.5 2.5-2.5C13.84 11.38 12.96 11 12 11zm0 11l-6-6h4V4h4v12h4l-6 6z"/>
+      </svg>
+      <span id="mc-offline-text">Нет сети · ${q.length} ${q.length===1?'сообщение':q.length<5?'сообщения':'сообщений'} в очереди</span>
+      <span style="margin-left:auto;opacity:.7;font-size:11px">Нажми для повтора</span>
+    `;
+    bar.addEventListener('click', () => outboxFlush().then(_outboxUpdateStatusBar));
+    // Вставляем под шапкой чата
+    const chatScreen = document.getElementById('s-messenger-chat');
+    if (chatScreen) chatScreen.appendChild(bar);
+    else document.body.appendChild(bar);
+  } else {
+    const txt = document.getElementById('mc-offline-text');
+    if (txt) txt.textContent = `Нет сети · ${q.length} ${q.length===1?'сообщение':q.length<5?'сообщения':'сообщений'} в очереди`;
+  }
+}
+
 // Заглушки для совместимости с кодом который вызывает эти функции
 function p2pActiveStrategy() { return { id:'direct', label:'Прямое', emoji:'🔗' }; }
 function p2pIsDisabled()     { return false; }
@@ -1675,6 +1802,10 @@ async function profileConnect(p) {
     }
     // Синхронизируем VIP/badge/frame с сервера (server source of truth)
     vipSyncFromServer(p.username).catch(()=>{});
+    // Сбрасываем очередь отложенных сообщений (появился интернет)
+    if (outboxLoad().length > 0) {
+      outboxFlush().then(_outboxUpdateStatusBar).catch(()=>{});
+    }
     // Синхронизируем друзей и группы с сервера
     syncFriendsFromServer(p.username).catch(()=>{});
     syncGroupsFromServer(p.username).catch(()=>{});
@@ -1799,6 +1930,11 @@ window._javaTick = async function() {
         sbHandleIncomingMessages(pr.username, _msgCurrentChat, data);
       }
     } catch(e) {}
+  }
+
+  // Каждые 5 тиков: пробуем сбросить очередь если есть pending
+  if (_javaTickCount % 5 === 0 && outboxLoad().length > 0) {
+    outboxFlush().then(_outboxUpdateStatusBar).catch(()=>{});
   }
 
   // Каждые 10 тиков: presence
@@ -2361,6 +2497,54 @@ function _iosNotifDismiss(el) {
   el.classList.add('ios-hide');
   setTimeout(function() { el.remove(); setTimeout(_iosNotifNext, 250); }, 350);
 }
+// ── Splash публичной группы ─────────────────────────────────────────────────
+function _showPublicGroupSplash(onAgree) {
+  if (document.getElementById('pub-group-splash')) { onAgree(); return; }
+  const ov = document.createElement('div');
+  ov.id = 'pub-group-splash';
+  ov.style.cssText = [
+    'position:fixed;inset:0;z-index:9800;background:var(--bg);',
+    'display:flex;flex-direction:column;align-items:center;',
+    'justify-content:center;padding:32px 24px;overflow:hidden;',
+    'animation:pgsIn .32s cubic-bezier(.34,1.1,.64,1) both'
+  ].join('');
+
+  const particles = Array.from({length:10},(_,i)=>{
+    const sz=4+Math.random()*6, l=5+Math.random()*90,
+          d=2.8+Math.random()*2.4, dl=Math.random()*1.8;
+    return `<div style="position:absolute;border-radius:50%;width:${sz}px;height:${sz}px;left:${l}%;bottom:-12px;background:var(--accent);opacity:0;animation:pgsParticle ${d}s ${dl}s ease-in-out infinite"></div>`;
+  }).join('');
+
+  ov.innerHTML = `
+    <style>
+      @keyframes pgsIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+      @keyframes pgsParticle{0%{opacity:0;transform:translateY(0) scale(1)}20%{opacity:.22}80%{opacity:.07}100%{opacity:0;transform:translateY(-130px) scale(.35)}}
+      @keyframes pgsIconIn{0%{opacity:0;transform:scale(.4) rotate(-15deg)}60%{transform:scale(1.1) rotate(4deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+      @keyframes pgsIconFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+      @keyframes pgsLineIn{from{opacity:0;transform:scaleX(0)}to{opacity:1;transform:scaleX(1)}}
+      @keyframes pgsTextIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes pgsBtnIn{from{opacity:0;transform:translateY(22px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}
+      #pub-group-splash .pgs-icon{animation:pgsIconIn .55s cubic-bezier(.34,1.4,.64,1) both,pgsIconFloat 3s 1s ease-in-out infinite}
+    </style>
+    <div style="position:absolute;inset:0;pointer-events:none">${particles}</div>
+    <div class="pgs-icon" style="width:88px;height:88px;border-radius:28px;background:linear-gradient(135deg,var(--accent),var(--accent2,#c45f0a));display:flex;align-items:center;justify-content:center;font-size:42px;flex-shrink:0;margin-bottom:28px;box-shadow:0 8px 28px color-mix(in srgb,var(--accent) 40%,transparent)">💡</div>
+    <div style="font-size:24px;font-weight:800;letter-spacing:-.02em;text-align:center;color:var(--text);margin-bottom:6px;opacity:0;animation:pgsTextIn .4s .3s cubic-bezier(.34,1.2,.64,1) forwards">Баги и идеи</div>
+    <div style="width:44px;height:2.5px;border-radius:2px;background:color-mix(in srgb,var(--accent) 55%,transparent);margin:10px 0 16px;transform-origin:center;opacity:0;animation:pgsLineIn .4s .45s ease forwards"></div>
+    <div style="font-size:14px;line-height:1.65;color:var(--muted);text-align:center;max-width:300px;margin-bottom:10px;opacity:0;animation:pgsTextIn .4s .58s ease forwards">Общий чат для сообщений об ошибках и предложений по улучшению приложения.</div>
+    <div style="font-size:13px;line-height:1.55;text-align:center;max-width:300px;margin-bottom:32px;opacity:0;animation:pgsTextIn .4s .7s ease forwards"><span style="color:var(--accent);font-weight:700">⚠️ Лимит:</span> <span style="color:var(--muted)">одно сообщение в час с одного аккаунта.</span></div>
+    <button id="pgs-agree-btn" style="padding:14px 48px;border-radius:24px;background:var(--accent);border:none;color:var(--btn-text,#fff);font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.02em;box-shadow:0 4px 18px color-mix(in srgb,var(--accent) 38%,transparent);opacity:0;animation:pgsBtnIn .45s .88s cubic-bezier(.34,1.3,.64,1) forwards;-webkit-tap-highlight-color:transparent;transition:transform .12s,opacity .12s">Согласен</button>
+  `;
+  document.body.appendChild(ov);
+  const btn = ov.querySelector('#pgs-agree-btn');
+  btn.addEventListener('click', () => {
+    ov.style.transition='opacity .26s ease,transform .26s cubic-bezier(.4,0,.8,.6)';
+    ov.style.opacity='0'; ov.style.transform='scale(.94)';
+    setTimeout(()=>{ ov.remove(); onAgree(); }, 280);
+  });
+  btn.addEventListener('touchstart',()=>{btn.style.transform='scale(.94)';btn.style.opacity='.82';},{passive:true});
+  btn.addEventListener('touchend',  ()=>{btn.style.transform='';btn.style.opacity='';},{passive:true});
+}
+
 // messengerSend и остальные функции мессенджера — в блоке ниже
 
 // ── Broadcast (профиль, лидерборд) ───────────────────────────────
@@ -2677,11 +2861,46 @@ window.updateNavActive = function(aid) {
 // ══════════════════════════════════════════════════════════════════════
 // 👥 ГРУППЫ
 // ══════════════════════════════════════════════════════════════════════
-const GROUPS_KEY = 'sapp_groups_v1';
+const GROUPS_KEY      = 'sapp_groups_v1';
+const PUBLIC_GROUP_ID          = 'public_bugs_ideas_v1';
+const PUBLIC_GROUP_COOLDOWN_KEY = 'sapp_pg_cd_v1';
+const PUBLIC_GROUP_COOLDOWN_MS  = 60 * 60 * 1000;
 function groupsLoad() {
-  try { return JSON.parse(localStorage.getItem(GROUPS_KEY) || '[]'); } catch(e) { return []; }
+  try {
+    const arr = JSON.parse(localStorage.getItem(GROUPS_KEY) || '[]');
+    if (!arr.find(g => g.id === PUBLIC_GROUP_ID)) arr.unshift(_publicGroupDef());
+    return arr;
+  } catch(e) { return [_publicGroupDef()]; }
 }
 function groupsSave(g) { localStorage.setItem(GROUPS_KEY, JSON.stringify(g)); }
+
+function _publicGroupDef() {
+  return {
+    id: PUBLIC_GROUP_ID, name: '💡 Баги и идеи', avatar: '💡',
+    members: ['__all__'], createdBy: '__system__', ts: 0, isPublic: true,
+    description: 'Чат для сообщений об ошибках и идей. Лимит — 1 сообщение в час.'
+  };
+}
+function _publicGroupCooldown(username) {
+  if (!username) return { ok: false, remainMs: PUBLIC_GROUP_COOLDOWN_MS };
+  try {
+    const map  = JSON.parse(localStorage.getItem(PUBLIC_GROUP_COOLDOWN_KEY) || '{}');
+    const elapsed = Date.now() - (map[username] || 0);
+    if (elapsed >= PUBLIC_GROUP_COOLDOWN_MS) return { ok: true, remainMs: 0 };
+    return { ok: false, remainMs: PUBLIC_GROUP_COOLDOWN_MS - elapsed };
+  } catch(e) { return { ok: true, remainMs: 0 }; }
+}
+function _publicGroupCooldownSet(username) {
+  try {
+    const map = JSON.parse(localStorage.getItem(PUBLIC_GROUP_COOLDOWN_KEY) || '{}');
+    map[username] = Date.now();
+    localStorage.setItem(PUBLIC_GROUP_COOLDOWN_KEY, JSON.stringify(map));
+  } catch(e) {}
+}
+function _fmtRemain(ms) {
+  const m = Math.floor(ms / 60000), s = String(Math.round((ms % 60000) / 1000)).padStart(2,'0');
+  return m > 0 ? m + ' мин ' + s + ' сек' : Math.round(ms/1000) + ' сек';
+}
 
 async function groupCreate(name, members) {
   const groups = groupsLoad();
@@ -3573,17 +3792,31 @@ function messengerOpen() { showScreen('s-messenger'); }
 
 // ── Список чатов ─────────────────────────────────────────────────
 // ── Мультиселект чатов ────────────────────────────────────────────
+const PINNED_CHATS_KEY = 'sapp_pinned_chats_v1';
+function pinnedChatsLoad() { try { return JSON.parse(localStorage.getItem(PINNED_CHATS_KEY)||'[]'); } catch(e) { return []; } }
+function pinnedChatsSave(d) { localStorage.setItem(PINNED_CHATS_KEY, JSON.stringify(d)); }
+
+function togglePinChat(username) {
+  const pins = pinnedChatsLoad();
+  const idx  = pins.indexOf(username);
+  if (idx === -1) { pins.unshift(username); toast('📌 Чат закреплён'); }
+  else            { pins.splice(idx,1);     toast('Чат откреплён'); }
+  pinnedChatsSave(pins);
+  messengerRenderList();
+}
+
 let _msgSelectMode = false;
 const _msgSelected = new Set();
 
 function msgSelectEnter(username) {
   _msgSelectMode = true;
   _msgSelected.clear();
-  _msgSelected.add(username);
+  // Не добавляем автоматически — первый элемент должен tap-ом выбираться
   document.getElementById('msg-hdr-normal').style.display = 'none';
   document.getElementById('msg-hdr-select').style.display = '';
   messengerRenderList();
   _msgUpdateSelectCount();
+  try { window.Android?.vibrate?.(35); } catch(_) {}
   SFX.play('btnClick');
 }
 
@@ -3612,25 +3845,43 @@ function _msgUpdateSelectCount() {
 
 function msgDeleteSelected() {
   if (_msgSelected.size === 0) return;
-  if (!confirm('Удалить ' + _msgSelected.size + ' чат(ов)?')) return;
-  const msgs   = msgLoad();
-  const chats  = chatsLoad();
+  const n  = _msgSelected.size;
+  const sh = document.createElement('div');
+  sh.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
+  sh.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot,0px));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Удалить ${n} ${n===1?'чат':n<5?'чата':'чатов'}?</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">История переписки будет удалена только у тебя.</div>
+      <button onclick="_doDeleteSelectedChats();this.closest('[style*=fixed]').remove()"
+        style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">🗑 Удалить</button>
+      <button onclick="this.closest('[style*=fixed]').remove()"
+        style="width:100%;padding:14px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">Отмена</button>
+    </div>`;
+  sh.addEventListener('click', () => sh.remove());
+  document.body.appendChild(sh);
+}
+
+function _doDeleteSelectedChats() {
+  const msgs = msgLoad(), chats = chatsLoad();
   _msgSelected.forEach(u => {
     delete msgs[u];
-    const idx = chats.indexOf(u);
-    if (idx !== -1) chats.splice(idx, 1);
-    // Остановить polling
+    const i = chats.indexOf(u);
+    if (i !== -1) chats.splice(i, 1);
     const p = profileLoad();
-    if (p) {
-      const key = sbChatKey(p.username, u);
-      clearInterval(_fbMsgStreams[key]);
-      delete _fbMsgStreams[key];
-    }
+    if (p) { const k = sbChatKey(p.username, u); clearInterval(_fbMsgStreams[k]); delete _fbMsgStreams[k]; }
   });
-  msgSave(msgs);
-  chatsSave(chats);
+  msgSave(msgs); chatsSave(chats); msgSelectCancel(); messengerUpdateBadge();
+}
+
+function msgPinSelected() {
+  if (_msgSelected.size === 0) return;
+  _msgSelected.forEach(u => {
+    const pins = pinnedChatsLoad();
+    if (!pins.includes(u)) { pins.unshift(u); pinnedChatsSave(pins); }
+  });
+  toast('📌 Закреплено ' + _msgSelected.size + ' чат(ов)');
   msgSelectCancel();
-  messengerUpdateBadge();
 }
 
 // ── Удаление одного чата изнутри ─────────────────────────────────
@@ -3717,7 +3968,11 @@ function messengerRenderList(filter) {
     return;
   }
 
+  const _pins  = pinnedChatsLoad();
   const sorted = [...chats].sort((a, b) => {
+    const pa = _pins.includes(a) ? 1 : 0;
+    const pb = _pins.includes(b) ? 1 : 0;
+    if (pa !== pb) return pb - pa;
     const la  = msgs[a]?.slice(-1)[0]?.ts || 0;
     const lb2 = msgs[b]?.slice(-1)[0]?.ts || 0;
     return lb2 - la;
@@ -3762,16 +4017,19 @@ function messengerRenderList(filter) {
       ? `<img src="${avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
       : `<span style="font-size:28px">${avatar}</span>`;
 
+    const _pinned = _pins.includes(username);
     return `<div
         data-chat-user="${escHtml(username)}"
         onclick="${rowClick}"
         oncontextmenu="event.preventDefault();msgSelectEnter('${username}')"
         ontouchstart="msgRowTouchStart(this,'${escHtml(username)}')"
+        ontouchmove="msgRowTouchMove()"
         ontouchend="msgRowTouchEnd()"
-        ontouchmove="msgRowTouchEnd()"
         class="chat-row${isSel ? ' chat-selected' : ''}"
-        style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)">
-      ${_msgSelectMode ? `<div class="chat-select-circle">${isSel ? '✓' : ''}</div>` : ''}
+        style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);${_pinned&&!_msgSelectMode?'background:rgba(255,255,255,.025)':''}">
+      ${_msgSelectMode
+        ? `<div class="chat-select-circle${isSel ? ' chat-circle-checked' : ''}"></div>`
+        : (_pinned ? '<span style="font-size:13px;opacity:.5;flex-shrink:0;transform:rotate(45deg);display:inline-block">📌</span>' : '')}
       <div style="position:relative;flex-shrink:0">
         <div style="width:52px;height:52px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;overflow:hidden">${avatarHtml}</div>
         ${isOnline ? '<div style="position:absolute;bottom:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#4caf7d;border:2.5px solid var(--bg)"></div>' : ''}
@@ -3779,7 +4037,10 @@ function messengerRenderList(filter) {
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
           <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(name)}</div>
-          <div style="font-size:11px;color:${unread>0?'var(--accent)':'var(--muted)'};flex-shrink:0">${timeStr}</div>
+          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+            ${_pinned && !_msgSelectMode ? '<span style="font-size:10px;opacity:.4;transform:rotate(45deg);display:inline-block">📌</span>' : ''}
+            <span style="font-size:11px;color:${unread>0?'var(--accent)':'var(--muted)'}">${timeStr}</span>
+          </div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div style="font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%;display:flex;align-items:center;gap:3px">
@@ -3831,23 +4092,55 @@ function messengerRenderList(filter) {
 }
 
 
-// Long-press для мобильного (зажатие → мультиселект)
+// Long-press для мобильного — с защитой от свайпа
 let _msgLongPressTimer = null;
+let _msgTouchStartX = 0, _msgTouchStartY = 0;
+
 function msgRowTouchStart(el, username) {
-  el.style.background = 'var(--surface2)';
+  const ev = window.event;
+  const t  = ev?.touches?.[0];
+  _msgTouchStartX = t?.clientX || 0;
+  _msgTouchStartY = t?.clientY || 0;
+  // В режиме выделения — tap сразу (без long-press)
+  if (_msgSelectMode) {
+    msgToggleSelect(username, { stopPropagation: () => {} });
+    return;
+  }
+  el.style.background = 'rgba(255,255,255,.04)';
   _msgLongPressTimer = setTimeout(() => {
     el.style.background = '';
-    if (!_msgSelectMode) msgSelectEnter(username);
-    else msgToggleSelect(username, { stopPropagation: () => {} });
-  }, 500);
+    msgSelectEnter(username);
+  }, 480);
 }
+
+function msgRowTouchMove() {
+  const ev = window.event;
+  const t  = ev?.touches?.[0];
+  if (!t) return;
+  const dx = Math.abs(t.clientX - _msgTouchStartX);
+  const dy = Math.abs(t.clientY - _msgTouchStartY);
+  if (dx > 9 || dy > 9) {
+    clearTimeout(_msgLongPressTimer);
+    document.querySelectorAll('.chat-row').forEach(r => { r.style.background = ''; });
+  }
+}
+
 function msgRowTouchEnd() {
   clearTimeout(_msgLongPressTimer);
+  document.querySelectorAll('.chat-row').forEach(r => { r.style.background = ''; });
 }
 function messengerFilterChats(q) { messengerRenderList(q); }
 
 // ── Открытие чата ─────────────────────────────────────────────────
 function messengerOpenChat(username) {
+  if (username === PUBLIC_GROUP_ID) {
+    _showPublicGroupSplash(() => _doOpenChat(username));
+    return;
+  }
+  _doOpenChat(username);
+}
+
+function _doOpenChat(username) {
   _msgCurrentChat = username;
   // Сообщения помечаются прочитанными только при скролле до конца (см. messengerMarkRead)
   const msgs = msgLoad();
@@ -3908,7 +4201,7 @@ function messengerOpenChat(username) {
     const key = sbChatKey(p2.username, _msgCurrentChat);
     if (!_fbMsgStreams[key]) sbForceRecheckChat(p2.username, _msgCurrentChat);
   }, 2000);
-}
+} // end _doOpenChat
 
 // ── Рендер сообщений ──────────────────────────────────────────────
 function messengerRenderMessages(animateLast) {
@@ -3945,9 +4238,32 @@ function messengerRenderMessages(animateLast) {
       ? `<div style="width:28px;height:28px;border-radius:50%;background:${peer?.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;align-self:flex-end">${peer?.avatar||'😊'}</div>`
       : `<div style="width:28px;flex-shrink:0"></div>`;
 
-    const status = isMe
-      ? `<span style="font-size:9px;opacity:.7;margin-left:3px">${msg.delivered ? '✓✓' : '✓'}</span>`
-      : '';
+    // Telegram-style статус: ⏰ pending → ✓ sent → ✓✓ delivered
+    const status = isMe ? (() => {
+      if (msg.pending) {
+        // Часы — сообщение в очереди (нет сети)
+        return `<span style="display:inline-flex;align-items:center;margin-left:3px;opacity:.65">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
+          </svg>
+        </span>`;
+      }
+      if (msg.delivered) {
+        // Двойная галочка — доставлено
+        return `<span style="display:inline-flex;align-items:center;margin-left:3px;opacity:.75">
+          <svg width="14" height="9" viewBox="0 0 14 9" fill="currentColor">
+            <path d="M1 4.5L4 7.5L9 1"/>
+            <path d="M5 4.5L8 7.5L13 1"/>
+          </svg>
+        </span>`;
+      }
+      // Одинарная галочка — отправлено на сервер
+      return `<span style="display:inline-flex;align-items:center;margin-left:3px;opacity:.65">
+        <svg width="10" height="8" viewBox="0 0 10 8" fill="currentColor">
+          <path d="M1 4L3.5 6.5L9 1"/>
+        </svg>
+      </span>`;
+    })() : '';
 
     const bubbleRadius = isMe
       ? (showTail ? '18px 18px 4px 18px' : '18px 18px 18px 18px')
@@ -4154,9 +4470,25 @@ function messengerSend() {
   if (!inp || !_msgCurrentChat) return;
   const text = inp.value.trim();
   if (!text) return;
+  // Cooldown для публичной группы
+  if (_msgCurrentChat === PUBLIC_GROUP_ID) {
+    const p0 = profileLoad();
+    if (p0) {
+      const { ok, remainMs } = _publicGroupCooldown(p0.username);
+      if (!ok) {
+        toast('⏳ Следующее сообщение через ' + _fmtRemain(remainMs));
+        const wrap = inp.closest('div[style]') || inp.parentElement;
+        if (wrap) {
+          wrap.style.transition = 'box-shadow .15s';
+          wrap.style.boxShadow  = '0 0 0 2px var(--danger,#e05555)';
+          setTimeout(() => { wrap.style.boxShadow = ''; }, 1300);
+        }
+        return;
+      }
+    }
+  }
   inp.value = '';
   inp.style.height = '';
-  // Возвращаем фокус чтобы клавиатура не закрывалась
   setTimeout(() => inp.focus(), 10);
   const p = profileLoad();
   if (!p) return;
@@ -4175,6 +4507,14 @@ function messengerSend() {
 
   // Звук отправки
   SFX.play('msgSend');
+  // Telegram-style bounce на кнопке отправки
+  const _sendBtn = document.getElementById('mc-action-btn');
+  if (_sendBtn) {
+    _sendBtn.classList.remove('mc-send-bounce');
+    void _sendBtn.offsetWidth; // reflow
+    _sendBtn.classList.add('mc-send-bounce');
+    setTimeout(() => _sendBtn.classList.remove('mc-send-bounce'), 300);
+  }
 
   // Лимит 200 сообщений — удаляем старые и с сервера
   mcEnforceMessageLimit(_msgCurrentChat);
@@ -4183,18 +4523,42 @@ function messengerSend() {
   sbPollChat(p.username, _msgCurrentChat);
 
   const chatKey = sbChatKey(p.username, _msgCurrentChat);
-  sbInsert('messages', {
-    chat_key: chatKey, from_user: p.username,
-    to_user: _msgCurrentChat, text, ts,
-    extra: replyTo ? JSON.stringify({ replyTo }) : null
-  }).then(res => {
+  const outboxItem = {
+    id:        'txt_' + ts,
+    type:      'message',
+    localChat: _msgCurrentChat,
+    ts,
+    data: { chat_key: chatKey, from_user: p.username, to_user: _msgCurrentChat, text, ts,
+            extra: replyTo ? JSON.stringify({ replyTo }) : null }
+  };
+
+  // Пробуем отправить сразу; если упадёт — кладём в очередь
+  sbInsert('messages', outboxItem.data).then(res => {
     if (res) {
-      msg.delivered = true;
+      msg.delivered = true; msg.pending = false;
       msgSave(msgs);
-      // Обновляем только иконку доставки без полного перерендера
       messengerRenderMessages();
+      _outboxUpdateStatusBar();
+    } else {
+      // Сервер вернул ошибку — в очередь
+      msg.pending = true;
+      msgSave(msgs);
+      outboxPush(outboxItem);
+      messengerRenderMessages();
+      _outboxUpdateStatusBar();
     }
+  }).catch(() => {
+    // Сети нет — в очередь, сообщение уже видно локально
+    msg.pending = true;
+    msgSave(msgs);
+    outboxPush(outboxItem);
+    messengerRenderMessages();
+    _outboxUpdateStatusBar();
   });
+
+  if (_msgCurrentChat === PUBLIC_GROUP_ID) {
+    _publicGroupCooldownSet(p.username);
+  }
 }
 
 
@@ -4321,12 +4685,8 @@ function mcBubbleTouchStart(e, row, idx) {
   _mcDragging = false;
   _mcDragTriggered = false;
 
-  // В режиме выделения — tap сразу переключает состояние
-  if (_mcMultiSelect) {
-    _mcDragTriggered = true;
-    _mcToggleSelectBubble(row, idx);
-    return;
-  }
+  // В режиме выделения — toggle будет в touchEnd (там проверим что не был свайп)
+  if (_mcMultiSelect) return;
 
   _mcLongPressTimer = setTimeout(() => {
     _mcLongPressTimer = null;
@@ -4365,11 +4725,22 @@ function mcBubbleTouchMove(e, row, idx) {
 
 function mcBubbleTouchEnd(e, row, idx) {
   clearTimeout(_mcLongPressTimer);
+  const wasDragging = _mcDragging;
   _mcDragging = false;
   _mcReturnBubble(row);
-  // Если тап на плеере/кнопке — блокируем последующий mcBubbleClick
   if (e.target.closest('[data-no-menu]') || e.target.closest('button,a,svg,video')) {
     _mcDragTriggered = true;
+    return;
+  }
+  // В режиме выделения: toggle только если не было свайпа
+  if (_mcMultiSelect && !wasDragging) {
+    const t = e.changedTouches?.[0];
+    const dx = t ? Math.abs(t.clientX - _mcDragStartX) : 0;
+    const dy = t ? Math.abs(t.clientY - _mcDragStartY) : 0;
+    if (dx < 10 && dy < 10) {
+      _mcDragTriggered = true;
+      _mcToggleSelectBubble(row, idx);
+    }
   }
 }
 
@@ -4434,12 +4805,7 @@ function mcBubbleClick(e, idx) {
   if (_mcDragging) return;
   if (e.target.closest('[data-no-menu]')) return;
   if (e.target.closest('button,a,video,canvas,svg')) return;
-  // В режиме выделения — toggle
-  if (_mcMultiSelect) {
-    const row = e.currentTarget;
-    _mcToggleSelectBubble(row, idx);
-    return;
-  }
+  if (_mcMultiSelect) return; // уже обработано в touchEnd
   mcShowMsgMenu(idx);
 }
 
@@ -5248,13 +5614,15 @@ window.onNativeVoiceTick = function(sec) {
   if (sec >= MC_VOICE_MAX) _mcVoiceSend();
 };
 window.onNativeVoiceDone = function(url, duration, mimeType) {
-  toast('✅ Голосовое отправлено');
+  // Toast уже показан в _mcVoiceSend через _mcShowUploadToast
+  _mcHideUploadToast(true);
   _mcSendMediaMsg({ url, fileName: 'voice_' + Date.now() + '.m4a',
     fileType: 'voice', duration: duration });
 };
 window.onNativeVoiceError = function(msg) {
   _mcVoiceNative = false;
   _mcVoiceHideUI();
+  _mcHideUploadToast(false);
   toast('❌ ' + (msg || 'Ошибка записи'));
 };
 window.onNativeVoiceCancelled = function() {
@@ -5265,21 +5633,98 @@ window.onNativeVoiceCancelled = function() {
 
 // ── Загрузка файла на catbox.moe через Java-бридж ─────────────────
 // base64 — без data:… префикса. Возвращает Promise<string> с URL или бросает ошибку.
+// ── Telegram-style upload progress toast ────────────────────────────────────
+const _uploadIcons = {
+  voice: '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>',
+  video: '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>',
+  file:  '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
+  image: '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>',
+};
+
+let _uploadToastTimer = null;
+
+function _mcShowUploadToast(fileType, label) {
+  // Убираем предыдущий
+  const prev = document.getElementById('mc-upload-toast');
+  if (prev) prev.remove();
+  clearTimeout(_uploadToastTimer);
+
+  const ico = _uploadIcons[fileType] || _uploadIcons.file;
+  const el = document.createElement('div');
+  el.id = 'mc-upload-toast';
+  el.className = 'uploading';
+  el.innerHTML = `
+    <div class="tg-ut-icon">
+      <div class="tg-ut-ring"></div>
+      ${ico}
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="tg-ut-label">${escHtml(label || 'Загрузка...')}</div>
+      <div class="tg-ut-sub" id="tg-ut-sub">Загружаю...</div>
+    </div>
+    <div class="mc-upload-spinner"></div>
+  `;
+  document.body.appendChild(el);
+  return el;
+}
+
+function _mcUpdateUploadToastProgress(pct) {
+  const ring = document.querySelector('#mc-upload-toast .tg-ut-ring');
+  if (ring) ring.style.background = `conic-gradient(rgba(255,255,255,.85) ${pct}%, transparent ${pct}%)`;
+  const sub = document.getElementById('tg-ut-sub');
+  if (sub) sub.textContent = pct > 0 && pct < 100 ? Math.round(pct) + '%' : 'Загружаю...';
+}
+
+function _mcHideUploadToast(success) {
+  const el = document.getElementById('mc-upload-toast');
+  if (!el) return;
+  // Показываем результат на секунду, потом исчезаем
+  el.classList.remove('uploading');
+  const sub = document.getElementById('tg-ut-sub');
+  if (sub) sub.textContent = success ? '✓ Отправлено' : '✕ Ошибка';
+  const ring = document.querySelector('#mc-upload-toast .tg-ut-ring');
+  if (ring) ring.style.background = success
+    ? 'conic-gradient(rgba(255,255,255,.9) 100%, transparent 100%)'
+    : 'conic-gradient(rgba(255,100,100,.9) 100%, transparent 100%)';
+  const spinner = el.querySelector('.mc-upload-spinner');
+  if (spinner) spinner.style.display = 'none';
+  clearTimeout(_uploadToastTimer);
+  _uploadToastTimer = setTimeout(() => {
+    if (!el.parentNode) return;
+    el.classList.add('hiding');
+    setTimeout(() => el.remove(), 200);
+  }, 900);
+}
+
 async function _catboxUpload(base64, fileName, mimeType, onProgress) {
   if (!window.Android?.nativeUploadFile) throw new Error('nativeUploadFile недоступен');
   onProgress && onProgress(0);
-  // Вызов синхронный (Java), но занимает время — запускаем в макротаске чтобы UI не завис
-  const result = await new Promise((resolve, reject) => {
-    setTimeout(() => {
-      try {
-        const r = JSON.parse(window.Android.nativeUploadFile(base64, fileName, mimeType));
-        if (r.ok) resolve(r.url);
-        else reject(new Error(r.error || 'Upload failed'));
-      } catch(e) { reject(e); }
-    }, 0);
-  });
-  onProgress && onProgress(100);
-  return result;
+  _mcUpdateUploadToastProgress(0);
+  // Имитируем прогресс загрузки (реального прогресса нет — Java синхронный)
+  let _fakeP = 0;
+  const _fakeTimer = setInterval(() => {
+    _fakeP = Math.min(90, _fakeP + (Math.random() * 12 + 4));
+    _mcUpdateUploadToastProgress(_fakeP);
+    onProgress && onProgress(_fakeP);
+  }, 180);
+  try {
+    const result = await new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const r = JSON.parse(window.Android.nativeUploadFile(base64, fileName, mimeType));
+          if (r.ok) resolve(r.url);
+          else reject(new Error(r.error || 'Upload failed'));
+        } catch(e) { reject(e); }
+      }, 0);
+    });
+    clearInterval(_fakeTimer);
+    _mcUpdateUploadToastProgress(100);
+    onProgress && onProgress(100);
+    return result;
+  } catch(e) {
+    clearInterval(_fakeTimer);
+    throw e;
+  }
 }
 
 // ── Отправка файла/видео/голоса как сообщения ──────────────────────
@@ -5317,10 +5762,13 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
   if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
   messengerRenderMessages(true);
   SFX.play && SFX.play('msgSend');
+  // Send button bounce
+  const _sb3 = document.getElementById('mc-action-btn');
+  if (_sb3) { _sb3.classList.remove('mc-send-bounce'); void _sb3.offsetWidth; _sb3.classList.add('mc-send-bounce'); setTimeout(()=>_sb3.classList.remove('mc-send-bounce'),300); }
   setTimeout(() => { const b = document.getElementById('mc-messages'); if(b) b.scrollTop = b.scrollHeight; }, 80);
   // В Supabase — только текст + URL (не base64!)
   const labelMap = { video: '🎬', file: '📎', voice: '🎤' };
-  sbInsert('messages', {
+  const _mediaOutboxData2 = {
     chat_key: sbChatKey(p.username, _msgCurrentChat),
     from_user: p.username, to_user: _msgCurrentChat,
     text: (labelMap[fileType] || '📎') + ' ' + (fileName || fileType), ts,
@@ -5328,8 +5776,24 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
       ...(fileSize  ? { fileSize  } : {}),
       ...(duration  ? { duration  } : {}),
       ...(thumbData ? { thumbData } : {}) })
-  }).then(res => {
-    if (res) { msg.delivered = true; msgSave(msgs); messengerRenderMessages(); }
+  };
+  const _mediaOutboxItem2 = {
+    id: 'media_' + ts, type: 'media', localChat: _msgCurrentChat, ts,
+    data: _mediaOutboxData2
+  };
+  sbInsert('messages', _mediaOutboxData2).then(res => {
+    if (res) {
+      msg.delivered = true; msg.pending = false;
+      msgSave(msgs); messengerRenderMessages(); _outboxUpdateStatusBar();
+    } else {
+      msg.pending = true; msgSave(msgs);
+      outboxPush(_mediaOutboxItem2);
+      messengerRenderMessages(); _outboxUpdateStatusBar();
+    }
+  }).catch(() => {
+    msg.pending = true; msgSave(msgs);
+    outboxPush(_mediaOutboxItem2);
+    messengerRenderMessages(); _outboxUpdateStatusBar();
   });
 }
 
@@ -5370,7 +5834,7 @@ function mcPickVideo() {
     const file = e.target.files[0]; inp.remove();
     if (!file) return;
     if (file.size > 200 * 1024 * 1024) { toast('❌ Видео слишком большое (макс. 200 МБ)'); return; }
-    toast('⬆️ Загружаю видео…');
+    _mcShowUploadToast('video', file.name || 'Видео');
     try {
       const [b64, thumbData] = await Promise.all([
         new Promise((res, rej) => {
@@ -5385,8 +5849,8 @@ function mcPickVideo() {
       const url = await _catboxUpload(b64, file.name || ('video_' + Date.now() + '.' + ext), file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: file.name || 'Видео', fileType: 'video',
         fileSize: file.size, thumbData });
-      toast('✅ Видео отправлено');
-    } catch(err) { toast('❌ ' + (err.message || 'Ошибка загрузки видео')); }
+      _mcHideUploadToast(true);
+    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка загрузки видео')); }
   };
   inp.click();
 }
@@ -5400,7 +5864,8 @@ function mcPickFile() {
     const file = e.target.files[0]; inp.remove();
     if (!file) return;
     if (file.size > 200 * 1024 * 1024) { toast('❌ Файл слишком большой (макс. 200 МБ)'); return; }
-    toast('⬆️ Загружаю файл…');
+    const _isAud2 = ['mp3','ogg','wav','flac','aac','m4a','opus','wma'].includes((file.name.split('.').pop()||'').toLowerCase());
+    _mcShowUploadToast(_isAud2 ? 'voice' : 'file', file.name || 'Файл');
     try {
       const b64 = await new Promise((res, rej) => {
         const r = new FileReader();
@@ -5411,8 +5876,8 @@ function mcPickFile() {
       const url = await _catboxUpload(b64, file.name || ('file_' + Date.now()), file.type || 'application/octet-stream');
       _mcSendMediaMsg({ url, fileName: file.name || 'Файл', fileType: 'file',
         fileSize: file.size });
-      toast('✅ Файл отправлен');
-    } catch(err) { toast('❌ ' + (err.message || 'Ошибка загрузки файла')); }
+      _mcHideUploadToast(true);
+    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка загрузки файла')); }
   };
   inp.click();
 }
@@ -5533,6 +5998,7 @@ function _mcVoiceSend() {
   if (_mcVoiceNative) {
     _mcVoiceNative = false;
     _mcVoiceHideUI();
+    _mcShowUploadToast('voice', 'Голосовое сообщение');
     if (window.Android) window.Android.stopVoiceRecording();
     return;
   }
@@ -5691,7 +6157,7 @@ async function _mcVoiceFinalize() {
   const dur  = _mcVoiceSeconds;
   _mcVoiceChunks = [];
   if (blob.size < 500) { toast('🎤 Слишком короткое'); return; }
-  toast('⬆️ Отправляю голосовое…');
+  _mcShowUploadToast('voice', 'Голосовое сообщение');
   try {
     const b64 = await new Promise((res, rej) => {
       const r = new FileReader();
@@ -5702,7 +6168,8 @@ async function _mcVoiceFinalize() {
     const fileName = 'voice_' + Date.now() + '.' + ext;
     const url = await _catboxUpload(b64, fileName, mimeType);
     _mcSendMediaMsg({ url, fileName, fileType: 'voice', fileSize: blob.size, duration: dur });
-  } catch(err) { toast('❌ ' + (err.message || 'Ошибка отправки')); }
+    _mcHideUploadToast(true);
+  } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка отправки')); }
 }
 
 // ── Воспроизведение голосового прямо в пузыре ─────────────────────
@@ -5811,20 +6278,33 @@ function mcSendImage(dataUrl) {
   if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
   messengerRenderMessages(true);
   SFX.play('msgSend');
-  // Принудительно скроллим вниз после рендера
-  setTimeout(() => {
-    const body = document.getElementById('mc-messages');
-    if (body) body.scrollTop = body.scrollHeight;
-  }, 80);
+  // Send button bounce
+  const _sb2 = document.getElementById('mc-action-btn');
+  if (_sb2) { _sb2.classList.remove('mc-send-bounce'); void _sb2.offsetWidth; _sb2.classList.add('mc-send-bounce'); setTimeout(()=>_sb2.classList.remove('mc-send-bounce'),300); }
+  setTimeout(() => { const body = document.getElementById('mc-messages'); if (body) body.scrollTop = body.scrollHeight; }, 80);
   sbPollChat(p.username, _msgCurrentChat);
-  // Отправляем изображение через extra поле (base64)
+  _mcShowUploadToast('image', 'Фото');
   const chatKey = sbChatKey(p.username, _msgCurrentChat);
-  sbInsert('messages', {
+  const _imgData = {
     chat_key: chatKey, from_user: p.username,
     to_user: _msgCurrentChat, text: '📷 Фото', ts,
     extra: JSON.stringify({ image: dataUrl, ...(replyTo ? { replyTo } : {}) })
-  }).then(res => {
-    if (res) { msg.delivered = true; msgSave(msgs); messengerRenderMessages(); }
+  };
+  const _imgItem = { id: 'img_' + ts, type: 'message', localChat: _msgCurrentChat, ts, data: _imgData };
+  sbInsert('messages', _imgData).then(res => {
+    if (res) {
+      msg.delivered = true; msg.pending = false;
+      msgSave(msgs); messengerRenderMessages();
+      _mcHideUploadToast(true); _outboxUpdateStatusBar();
+    } else {
+      msg.pending = true; msgSave(msgs);
+      outboxPush(_imgItem);
+      messengerRenderMessages(); _mcHideUploadToast(false); _outboxUpdateStatusBar();
+    }
+  }).catch(() => {
+    msg.pending = true; msgSave(msgs);
+    outboxPush(_imgItem);
+    messengerRenderMessages(); _mcHideUploadToast(false); _outboxUpdateStatusBar();
   });
 }
 
@@ -5981,27 +6461,27 @@ function peerProfileOpen(username) {
     <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
       <button onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')"
         style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;color:var(--text);font-family:inherit;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">💬</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg></span>
         <div style="font-size:14px;font-weight:700">Написать</div>
       </button>
       <button onclick="peerMuteShow('${username}')"
         style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;color:var(--text);font-family:inherit;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">${isMuted(username)?'🔕':'🔔'}</span>
+        ${isMuted(username)?'<span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 18.69L7.84 6.14 5.27 3.49 4 4.76l2.8 2.8v.01c-.52.99-.8 2.16-.8 3.42v5l-2 2v1h13.73l2 2L21 19.72l-1-1.03zM12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-7.32V11c0-3.08-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68c-.15.03-.29.08-.42.12l5.92 5.92V14.68z"/></svg></span>':'<span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg></span>'}
         <div style="font-size:14px;font-weight:700">${isMuted(username)?'Включить уведомления':'Отключить уведомления'}</div>
       </button>
       <button onclick="${isFriend ? `profileRemoveFriend('${username}')` : `profileAddFriend('${username}')`}"
         style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;color:${isFriend?'var(--danger,#e05555)':'var(--text)'};font-family:inherit;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">${isFriend?'❌':'👥'}</span>
+        ${isFriend?'<span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 8c0-2.21-1.79-4-4-4S6 5.79 6 8s1.79 4 4 4 4-1.79 4-4zm3 2v2h6v-2h-6zM2 18v2h16v-2c0-2.66-5.33-4-8-4s-8 1.34-8 4z"/></svg></span>':'<span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></span>'}
         <div style="font-size:14px;font-weight:700">${isFriend?'Удалить из друзей':'Добавить в друзья'}</div>
       </button>
       <button onclick="peerSendGift('${username}')"
         style="width:100%;padding:14px 16px;background:none;border:none;${blocked?'border-bottom:1px solid var(--surface3);':''}cursor:pointer;display:flex;align-items:center;gap:12px;color:var(--text);font-family:inherit;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">🎁</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-2.18c.07-.23.18-.47.18-.73C18 3.91 16.9 3 15.67 3c-.87 0-1.52.4-1.98 1.05L12 6.6l-1.69-2.55C9.85 3.4 9.2 3 8.33 3 7.1 3 6 3.91 6 5.27c0 .26.11.5.18.73H4c-1.1 0-2 .9-2 2v2c0 .55.45 1 1 1h18c.55 0 1-.45 1-1V8c0-1.1-.9-2-2-2zm-12.83 0c-.37 0-.67-.3-.67-.67 0-.37.3-.67.67-.67h.13l1.28 1.34H7.17zm5.35 0l1.28-1.34h.13c.37 0 .67.3.67.67 0 .37-.3.67-.67.67h-1.41zM4 11v8c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-8H4zm6 7H7v-5h3v5zm7 0h-3v-5h3v5z"/></svg></span>
         <div style="font-size:14px;font-weight:700">Отправить подарок</div>
       </button>
       ${blocked ? `<button onclick="peerBlockToggle('${username}')"
         style="width:100%;padding:14px 16px;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;color:var(--danger,#e05555);font-family:inherit;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">🔓</span>
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1C9.24 1 7 3.24 7 6v2H3c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2h-1V6c0-2.76-2.24-5-5-5zm0 2c1.65 0 3 1.35 3 3v2H9V6c0-1.65 1.35-3 3-3zm0 9c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z"/></svg></span>
         <div style="font-size:14px;font-weight:700">Разблокировать</div>
       </button>` : ''}
     </div>
@@ -6857,17 +7337,32 @@ function renderGroupsList() {
     </div>`;
     return;
   }
+  const _pgp = profileLoad();
   list.innerHTML = groups.map(g => {
-    const msgs = msgLoad()[g.id] || [];
-    const last = msgs[msgs.length - 1];
-    const lastText = last ? (last.text || last.sticker || '📷') : 'Нет сообщений';
+    const gMsgs  = msgLoad()[g.id] || [];
+    const last   = gMsgs[gMsgs.length - 1];
+    const lastText = last ? _mcPreviewText(last) || last.text || last.sticker || '📷' : (g.description || 'Нет сообщений');
     const lastTime = last ? msgFormatTime(last.ts) : '';
+    const isPublic = g.id === PUBLIC_GROUP_ID;
+    let cdBadge = '';
+    if (isPublic && _pgp) {
+      const { ok, remainMs } = _publicGroupCooldown(_pgp.username);
+      if (!ok) {
+        const rm = Math.floor(remainMs/60000);
+        const rs = String(Math.round((remainMs%60000)/1000)).padStart(2,'0');
+        cdBadge = `<div style="background:rgba(239,68,68,.18);color:#ef4444;border-radius:7px;font-size:10px;font-weight:700;padding:2px 7px;flex-shrink:0;white-space:nowrap">⏳ ${rm}:${rs}</div>`;
+      }
+    }
+    const avatarBg = isPublic ? 'linear-gradient(135deg,var(--accent),var(--accent2,#c45f0a))' : 'var(--surface2)';
+    const avatarR  = isPublic ? '18px' : '50%';
+    const rowBg    = isPublic ? 'rgba(255,255,255,.018)' : '';
     return `<div onclick="messengerOpenChat('${escHtml(g.id)}')"
-      style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)">
-      <div style="width:52px;height:52px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;border:1.5px solid var(--surface3)">${g.avatar||'👥'}</div>
+      style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);background:${rowBg}">
+      <div style="width:52px;height:52px;border-radius:${avatarR};background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">${g.avatar||'👥'}</div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(g.name)}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">${escHtml(g.name)}</div>
+          ${cdBadge}
           <div style="font-size:11px;color:var(--muted);flex-shrink:0">${lastTime}</div>
         </div>
         <div style="font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(lastText)}</div>
