@@ -1918,7 +1918,7 @@ function _navMovePill(activeId) {
   if (!nav) return;
   const idx = _NAV_PILL_IDS.indexOf(activeId);
   if (idx < 0) return;
-  // Устанавливаем CSS-переменную — pill сам сдвигается через calc()
+  // Устанавливаем CSS-переменную — pill сдвигается через transform translateX
   nav.style.setProperty('--nav-active', String(idx));
 }
 
@@ -2581,7 +2581,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.4';
+const APP_VERSION='4.4.1';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -5309,12 +5309,11 @@ function hwAddNewForSubject(subject) {
 }
 
 // Инициализация экрана ДЗ
-const _origShowScreen = window.showScreen;
 // Перехватываем навигацию на s-homework
 (function() {
-  const origPatch = showScreen;
+  const _hwScreenOrig = window.showScreen;
   window.showScreen = function(id, dir) {
-    origPatch(id, dir);
+    _hwScreenOrig(id, dir);
     if (id === 's-homework') { setTimeout(() => hwRender(), 60); }
   };
 })();
