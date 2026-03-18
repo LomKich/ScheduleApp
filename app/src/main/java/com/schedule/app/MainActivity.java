@@ -74,9 +74,6 @@ public class MainActivity extends Activity {
     private boolean                isNativeBgPick = false;
     private android.webkit.PermissionRequest _pendingPermissionRequest = null;
 
-    // ── Фоновый сервис ─────────────────────────────────────────────
-    private boolean bgServiceRunning = false;
-
     // ── Нативная запись голосовых (обход ограничений WebView getUserMedia) ──
     private MediaRecorder  _voiceRecorder   = null;
     private java.io.File   _voiceFile       = null;
@@ -90,9 +87,15 @@ public class MainActivity extends Activity {
     // Java-side poll timer — работает даже когда WebView заморожен в фоне
     private android.os.Handler     pollHandler;
     private Runnable               pollRunnable;
-    private static final int       POLL_INTERVAL_FG = 2000;  // мс в фоне (foreground)
-    private static final int       POLL_INTERVAL_BG = 4000;  // мс в фоне (background)
+    private static final int       POLL_INTERVAL_FG = 2000;  // мс foreground
+    private static final int       POLL_INTERVAL_BG = 5000;  // мс background
     private boolean                appInForeground  = false;
+
+    // ── Фоновые уведомления: Java-side Supabase poller ───────────────
+    // Когда WebView заморожен, JS не работает. Java сама опрашивает Supabase.
+    private static final String PREF_SB_USER    = "sb_username";
+    private static final String PREF_SB_LAST_TS = "sb_last_notif_ts";
+    private int                 _notifIdCounter = 1000;
 
     private final ServiceConnection vpnConnection = new ServiceConnection() {
         @Override
@@ -385,8 +388,9 @@ public class MainActivity extends Activity {
         });
     }
 
-    /** Запускает Java-таймер который пингует JS каждые 2-4 сек.
-     *  Работает даже когда WebView заморожен Android'ом в фоне. */
+    /** Запускает Java-таймер который пингует JS каждые 2-5 сек.
+     *  В фоне — напрямую опрашивает Supabase и показывает уведомления,
+     *  не полагаясь на JS (WebView заморожен Android'ом). */
     private void startJavaPollTimer() {
         if (pollHandler != null) {
             pollHandler.removeCallbacks(pollRunnable);
@@ -396,12 +400,17 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 if (webView == null) return;
-                // Вызываем JS-функцию которая делает один цикл поллинга
-                webView.evaluateJavascript(
-                    "if(typeof window._javaTick==='function'){window._javaTick();}",
-                    null
-                );
-                // Перепланируем с нужным интервалом
+                if (appInForeground) {
+                    // На переднем плане — пускаем обычный JS-тик
+                    webView.evaluateJavascript(
+                        "if(typeof window._javaTick==='function'){window._javaTick();}",
+                        null
+                    );
+                } else {
+                    // В фоне — WebView заморожен, JS не работает.
+                    // Опрашиваем Supabase напрямую из Java.
+                    new Thread(MainActivity.this::_bgPollSupabase).start();
+                }
                 int interval = appInForeground ? POLL_INTERVAL_FG : POLL_INTERVAL_BG;
                 pollHandler.postDelayed(this, interval);
             }
@@ -410,6 +419,154 @@ public class MainActivity extends Activity {
         pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_FG);
         log.i(TAG, "Java poll timer запущен (fg=" + POLL_INTERVAL_FG + "мс bg=" + POLL_INTERVAL_BG + "мс)");
     }
+
+    /**
+     * Фоновый поллинг Supabase напрямую из Java (без JS).
+     * Вызывается только когда приложение в фоне (WebView заморожен).
+     * Читает новые сообщения и показывает системные уведомления.
+     */
+    private void _bgPollSupabase() {
+        try {
+            String username = prefs.getString(PREF_SB_USER, "");
+            if (username == null || username.isEmpty()) return;
+
+            long lastTs = prefs.getLong(PREF_SB_LAST_TS, System.currentTimeMillis() - 30000);
+
+            // Запрашиваем новые сообщения TO меня после lastTs
+            String urlStr = SupabaseClient.URL
+                + "/rest/v1/messages?select=from_user,text,ts,extra"
+                + "&to_user=eq." + java.net.URLEncoder.encode(username, "UTF-8")
+                + "&ts=gt." + lastTs
+                + "&order=ts.asc&limit=20";
+
+            java.net.URL url = new java.net.URL(urlStr);
+            java.net.HttpURLConnection conn =
+                (java.net.HttpURLConnection) url.openConnection(java.net.Proxy.NO_PROXY);
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setRequestProperty("apikey", SupabaseClient.ANON_KEY);
+            conn.setRequestProperty("Authorization", "Bearer " + SupabaseClient.ANON_KEY);
+            conn.setRequestProperty("Accept", "application/json");
+
+            int status = conn.getResponseCode();
+            if (status != 200) { conn.disconnect(); return; }
+
+            java.io.InputStream is = conn.getInputStream();
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[4096]; int n;
+            while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
+            is.close(); conn.disconnect();
+
+            String body = baos.toString("UTF-8").trim();
+            if (body.isEmpty() || body.equals("[]")) return;
+
+            org.json.JSONArray arr = new org.json.JSONArray(body);
+            if (arr.length() == 0) return;
+
+            long maxTs = lastTs;
+            // Группируем по отправителю — одно уведомление на человека
+            java.util.LinkedHashMap<String, java.util.List<String>> byUser =
+                new java.util.LinkedHashMap<>();
+            for (int i = 0; i < arr.length(); i++) {
+                org.json.JSONObject msg = arr.getJSONObject(i);
+                String from = msg.optString("from_user", "?");
+                long   ts   = msg.optLong("ts", 0);
+                String text = msg.optString("text", "");
+                // Медиа-сообщение — читаем тип из extra
+                if (text.isEmpty() || text.startsWith("{")) {
+                    String extra = msg.optString("extra", "");
+                    if (!extra.isEmpty()) {
+                        try {
+                            org.json.JSONObject ex = new org.json.JSONObject(extra);
+                            String ft = ex.optString("fileType", "");
+                            if ("voice".equals(ft))  text = "🎤 Голосовое";
+                            else if ("video".equals(ft)) text = "🎬 Видео";
+                            else text = "📎 " + ex.optString("fileName", "Файл");
+                        } catch (Exception ignored) {}
+                    }
+                    if (text.isEmpty()) text = "📎 Файл";
+                }
+                if (ts > maxTs) maxTs = ts;
+                byUser.computeIfAbsent(from, k -> new java.util.ArrayList<>()).add(text);
+            }
+
+            // Сохраняем новый lastTs
+            prefs.edit().putLong(PREF_SB_LAST_TS, maxTs + 1).apply();
+
+            // Показываем уведомление (одно суммарное либо раздельные)
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+            }
+
+            Intent tapIntent = new Intent(this, MainActivity.class);
+            tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            int piFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                : PendingIntent.FLAG_UPDATE_CURRENT;
+            PendingIntent pi = PendingIntent.getActivity(this, 0, tapIntent, piFlags);
+
+            for (java.util.Map.Entry<String, java.util.List<String>> entry : byUser.entrySet()) {
+                String from = entry.getKey();
+                java.util.List<String> texts = entry.getValue();
+                String preview = texts.size() == 1
+                    ? texts.get(0)
+                    : texts.size() + " новых сообщения";
+                // Обрезаем длинные тексты
+                if (preview.length() > 100) preview = preview.substring(0, 97) + "…";
+
+                NotificationCompat.Builder nb = new NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_dialog_email)
+                    .setContentTitle("@" + from)
+                    .setContentText(preview)
+                    .setStyle(new NotificationCompat.BigTextStyle().bigText(preview))
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true)
+                    .setContentIntent(pi)
+                    .setVibrate(new long[]{0, 200, 80, 200})
+                    .setDefaults(NotificationCompat.DEFAULT_SOUND);
+                nm.notify(_notifIdCounter++, nb.build());
+                log.i(TAG, "_bgPollSupabase: показано уведомление от @" + from + " (" + texts.size() + " сообщ.)");
+            }
+        } catch (Exception e) {
+            // Тихо — не спамим логи при каждом фоновом тике
+            log.w(TAG, "_bgPollSupabase error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * JS вызывает этот метод при логине/смене аккаунта,
+     * чтобы Java знала чей username отслеживать для фоновых уведомлений.
+     */
+        @JavascriptInterface
+        public void setCurrentUser(String username) {
+            log.i(TAG, "setCurrentUser: " + username);
+            prefs.edit()
+                .putString(PREF_SB_USER, username != null ? username : "")
+                // Начинаем отслеживать с текущего момента (не уведомляем о старых)
+                .putLong(PREF_SB_LAST_TS, System.currentTimeMillis())
+                .apply();
+        }
+
+        /**
+         * Сброс счётчика уведомлений (вызывается когда пользователь открыл чат).
+         */
+        @JavascriptInterface
+        public void dismissNotifications() {
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancelAll();
+            // Обновляем lastTs чтобы не показывать прочитанное снова
+            prefs.edit().putLong(PREF_SB_LAST_TS, System.currentTimeMillis()).apply();
+        }
+
+        /** Возвращает сохранённый username для фонового поллинга */
+        @JavascriptInterface
+        public String getCurrentUser() {
+            return prefs.getString(PREF_SB_USER, "");
+        }
 
     private void injectStatusBarHeight() {
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(
@@ -635,12 +792,11 @@ public class MainActivity extends Activity {
         super.onPause();
         appInForeground = false;
         log.i(TAG, "onPause — переключаю поллер в фоновый режим (" + POLL_INTERVAL_BG + "мс)");
+        // Переключаемся на медленный интервал в фоне — JS заморожен, но Java нет
         if (pollHandler != null && pollRunnable != null) {
             pollHandler.removeCallbacks(pollRunnable);
             pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_BG);
         }
-        // Запускаем фоновый сервис — будет слать уведомления пока приложение в фоне
-        startBgService();
     }
 
     @Override
@@ -648,70 +804,11 @@ public class MainActivity extends Activity {
         super.onResume();
         appInForeground = true;
         log.i(TAG, "onResume — переключаю поллер в активный режим (" + POLL_INTERVAL_FG + "мс)");
+        // Ускоряем интервал — приложение на экране
         if (pollHandler != null && pollRunnable != null) {
             pollHandler.removeCallbacks(pollRunnable);
-            pollHandler.post(pollRunnable);
+            pollHandler.post(pollRunnable); // немедленный тик + восстановление
         }
-        // Останавливаем фоновый сервис — приложение снова на экране
-        stopBgService();
-        // Обновляем last_ts чтобы не показывать уведомления о сообщениях которые мы уже видим
-        BackgroundPollService.updateLastTs(this);
-    }
-
-    private void startBgService() {
-        if (bgServiceRunning) return;
-        try {
-            Intent svc = new Intent(this, BackgroundPollService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(svc);
-            } else {
-                startService(svc);
-            }
-            bgServiceRunning = true;
-            log.i(TAG, "BackgroundPollService started");
-
-            // Регистрируем callback для async upload
-            BackgroundPollService.setUploadCallback(new BackgroundPollService.UploadCallback() {
-                @Override
-                public void onProgress(String jobId, int pct, String label) {
-                    runOnUiThread(() -> webView.evaluateJavascript(
-                        "if(typeof onNativeUploadProgress==='function')" +
-                        "onNativeUploadProgress('" + escapeJs(jobId) + "'," + pct + ",'" + escapeJs(label) + "')", null));
-                }
-                @Override
-                public void onDone(String jobId, String url) {
-                    runOnUiThread(() -> webView.evaluateJavascript(
-                        "if(typeof onNativeUploadDone==='function')" +
-                        "onNativeUploadDone('" + escapeJs(jobId) + "','" + escapeJs(url) + "')", null));
-                }
-                @Override
-                public void onError(String jobId, String error) {
-                    runOnUiThread(() -> webView.evaluateJavascript(
-                        "if(typeof onNativeUploadError==='function')" +
-                        "onNativeUploadError('" + escapeJs(jobId) + "','" + escapeJs(error) + "')", null));
-                }
-            });
-        } catch (Exception e) {
-            log.e(TAG, "startBgService error: " + e.getMessage());
-        }
-    }
-
-    private void stopBgService() {
-        if (!bgServiceRunning) return;
-        try {
-            stopService(new Intent(this, BackgroundPollService.class));
-            bgServiceRunning = false;
-            BackgroundPollService.setUploadCallback(null);
-            log.i(TAG, "BackgroundPollService stopped");
-        } catch (Exception e) {
-            log.e(TAG, "stopBgService error: " + e.getMessage());
-        }
-    }
-
-    /** Экранирует строку для вставки в JS-строку */
-    private static String escapeJs(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
     }
 
     @Override
@@ -786,155 +883,9 @@ public class MainActivity extends Activity {
 
     public class AndroidBridge {
 
-        /**
-         * Сохраняет конфиг для фонового сервиса (вызывается после входа в аккаунт).
-         * После этого сервис будет получать уведомления даже при закрытом приложении.
-         */
-        @JavascriptInterface
-        public void savePushConfig(String username, String sbUrl, String sbKey) {
-            log.i(TAG, "savePushConfig username=" + username);
-            BackgroundPollService.savePushConfig(MainActivity.this, username, sbUrl, sbKey);
-        }
+        // ─── Push-уведомления ─────────────────────────────────────────────────────
 
-        /**
-         * Обновляет ts последнего просмотренного сообщения.
-         * Вызывается когда пользователь открывает чат — предотвращает дублирование уведомлений.
-         */
-        @JavascriptInterface
-        public void updateLastMsgTs(long ts) {
-            BackgroundPollService.updateLastTs(MainActivity.this);
-        }
-
-        /**
-         * ASYNC загрузка файла на catbox.moe — не блокирует JS, возвращает сразу.
-         * Прогресс и результат передаются через window.onNativeUploadProgress/Done/Error.
-         *
-         * @param base64   файл в Base64 (без data:... префикса)
-         * @param fileName имя файла с расширением
-         * @param mimeType MIME-тип
-         * @param jobId    уникальный ID задачи (генерируется в JS)
-         */
-        @JavascriptInterface
-        public void nativeUploadFileAsync(String base64, String fileName, String mimeType, String jobId) {
-            log.i(TAG, "nativeUploadFileAsync jobId=" + jobId + " file=" + fileName
-                    + " b64len=" + (base64 != null ? base64.length() : 0));
-
-            // Убеждаемся что сервис запущен (даже если приложение на экране — нужен executor)
-            if (!bgServiceRunning) startBgService();
-
-            // Небольшая задержка чтобы сервис успел стартовать
-            pollHandler.postDelayed(() -> {
-                // Ищем запущенный сервис через статический callback
-                // Если callback не зарегистрирован — запускаем upload напрямую в thread
-                if (BackgroundPollService.uploadCallback != null) {
-                    // Сервис запущен — делегируем ему
-                    // Нам нужен экземпляр сервиса: используем прямой вызов через отдельный поток
-                    new Thread(() -> {
-                        try {
-                            // Временно создаём экземпляр только для загрузки
-                            // (сервис управляет своим потоком)
-                            byte[] fileBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
-                            uploadFileInBackground(fileBytes, fileName, mimeType, jobId);
-                        } catch (Exception e) {
-                            log.e(TAG, "async upload decode error: " + e.getMessage());
-                            runOnUiThread(() -> webView.evaluateJavascript(
-                                "if(typeof onNativeUploadError==='function')" +
-                                "onNativeUploadError('" + escapeJs(jobId) + "','" + escapeJs(e.getMessage()) + "')", null));
-                        }
-                    }, "async-upload-" + jobId).start();
-                } else {
-                    // Callback не готов — пробуем ещё раз через 500мс
-                    pollHandler.postDelayed(() ->
-                        nativeUploadFileAsync(base64, fileName, mimeType, jobId), 500);
-                }
-            }, 200);
-        }
-
-        private void uploadFileInBackground(byte[] fileBytes, String fileName, String mimeType, String jobId) {
-            long fileSize = fileBytes.length;
-            final long startTs = System.currentTimeMillis();
-            final float ESTIMATED_KBPS = 38f;
-            final float estimatedSec = Math.max(5f, fileSize / 1024f / ESTIMATED_KBPS);
-            final boolean[] done = {false};
-
-            android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
-            Runnable ticker = new Runnable() {
-                @Override public void run() {
-                    if (done[0]) return;
-                    float elapsed = (System.currentTimeMillis() - startTs) / 1000f;
-                    int pct = Math.min(92, (int)(elapsed / estimatedSec * 100 * 1.15f));
-                    float remain = Math.max(0, estimatedSec - elapsed);
-                    String label = remain < 4 ? "Почти готово…"
-                        : remain < 60 ? "~" + (int)remain + " сек"
-                        : "~" + (int)(remain/60) + ":" + String.format("%02d", (int)(remain%60));
-                    if (BackgroundPollService.uploadCallback != null)
-                        BackgroundPollService.uploadCallback.onProgress(jobId, pct, label);
-                    if (!done[0]) h.postDelayed(this, 600);
-                }
-            };
-            h.post(ticker);
-
-            String resultUrl = null;
-            Exception lastErr = null;
-            for (int attempt = 1; attempt <= 3; attempt++) {
-                if (attempt > 1) {
-                    try { Thread.sleep(attempt * 2000L); } catch (InterruptedException ignored) {}
-                    if (BackgroundPollService.uploadCallback != null)
-                        BackgroundPollService.uploadCallback.onProgress(jobId, 0, "⟳ Попытка " + attempt + "/3…");
-                }
-                try {
-                    resultUrl = uploadToCatboxBytes(fileBytes, fileName, mimeType);
-                    break;
-                } catch (Exception e) {
-                    lastErr = e;
-                    boolean retry = e.getMessage() != null && (
-                        e.getMessage().contains("abort") || e.getMessage().contains("timeout") ||
-                        e.getMessage().contains("reset") || e.getMessage().contains("connect"));
-                    if (!retry || attempt == 3) break;
-                }
-            }
-
-            done[0] = true;
-            h.removeCallbacksAndMessages(null);
-
-            if (resultUrl != null) {
-                log.i(TAG, "async upload OK: " + resultUrl);
-                if (BackgroundPollService.uploadCallback != null)
-                    BackgroundPollService.uploadCallback.onDone(jobId, resultUrl);
-            } else {
-                String err = lastErr != null ? lastErr.getMessage() : "Upload failed";
-                log.e(TAG, "async upload FAILED: " + err);
-                if (BackgroundPollService.uploadCallback != null)
-                    BackgroundPollService.uploadCallback.onError(jobId, err);
-            }
-        }
-
-        private String uploadToCatboxBytes(byte[] fileBytes, String fileName, String mimeType) throws Exception {
-            String boundary = "----CatboxBound" + Long.toHexString(System.currentTimeMillis());
-            java.net.URL url = new java.net.URL("https://catbox.moe/user/api.php");
-            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(30_000);
-            conn.setReadTimeout(180_000);
-            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp");
-            java.io.OutputStream os = conn.getOutputStream();
-            os.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"reqtype\"\r\n\r\nfileupload\r\n").getBytes(StandardCharsets.UTF_8));
-            os.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"fileToUpload\"; filename=\"" + fileName + "\"\r\nContent-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-            os.write(fileBytes);
-            os.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
-            os.flush(); os.close();
-            int status = conn.getResponseCode();
-            InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192]; int n;
-            while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
-            is.close(); conn.disconnect();
-            String body = baos.toString("UTF-8").trim();
-            if (status == 200 && body.startsWith("https://")) return body;
-            throw new Exception("catbox HTTP " + status + ": " + body.substring(0, Math.min(body.length(), 100)));
-        }
+        /** Возвращает "granted" | "denied" | "default" */
         @JavascriptInterface
         public String getNotificationPermission() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -1498,12 +1449,12 @@ public class MainActivity extends Activity {
         }
 
         /**
-         * Загружает файл на catbox.moe (анонимно, до 200 МБ, хранится бессрочно).
-         * В Supabase уходит только короткий URL — base64 НЕ сохраняется в БД.
+         * Загружает файл на catbox.moe синхронно (блокирует JS-поток).
+         * Используй nativeUploadFileAsync для фоновой загрузки.
          *
          * @param base64   содержимое файла в Base64 (без data:... префикса)
-         * @param fileName имя файла с расширением ("voice.webm", "video.mp4", …)
-         * @param mimeType MIME-тип ("audio/webm", "video/mp4", …)
+         * @param fileName имя файла с расширением
+         * @param mimeType MIME-тип
          * @return JSON {ok:true, url:"https://files.catbox.moe/…"} или {ok:false, error:"…"}
          */
         @JavascriptInterface
@@ -1512,34 +1463,123 @@ public class MainActivity extends Activity {
                     + " b64len=" + (base64 != null ? base64.length() : 0));
             try {
                 byte[] fileBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
-                String boundary = "----CatboxBoundary" + Long.toHexString(System.currentTimeMillis());
+                return _catboxUploadBytes(fileBytes, fileName, mimeType, null);
+            } catch (Exception e) {
+                log.e(TAG, "nativeUploadFile error: " + e.getMessage());
+                try {
+                    org.json.JSONObject err = new org.json.JSONObject();
+                    err.put("ok", false);
+                    err.put("error", e.getMessage());
+                    return err.toString();
+                } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
+            }
+        }
+
+        /**
+         * Асинхронная загрузка файла на catbox.moe — не блокирует UI.
+         * Прогресс и результат приходят через JS-колбэки:
+         *   onUploadProgress(callbackId, pct)   — 0..100
+         *   onUploadDone(callbackId, url)        — успех
+         *   onUploadError(callbackId, errMsg)    — ошибка
+         *
+         * @param base64     файл в Base64
+         * @param fileName   имя файла
+         * @param mimeType   MIME-тип
+         * @param callbackId произвольный ID для колбэков
+         */
+        @JavascriptInterface
+        public void nativeUploadFileAsync(String base64, String fileName,
+                                          String mimeType, String callbackId) {
+            log.i(TAG, "nativeUploadFileAsync: " + fileName + " id=" + callbackId
+                    + " b64len=" + (base64 != null ? base64.length() : 0));
+            final String id = callbackId != null ? callbackId : "upload_" + System.currentTimeMillis();
+            new Thread(() -> {
+                try {
+                    byte[] fileBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+                    String result = _catboxUploadBytes(fileBytes, fileName, mimeType, (pct) -> {
+                        final int p = pct;
+                        webView.post(() -> webView.evaluateJavascript(
+                            "if(typeof onUploadProgress==='function')onUploadProgress('"
+                            + id + "'," + p + ")", null));
+                    });
+                    org.json.JSONObject res = new org.json.JSONObject(result);
+                    if (res.optBoolean("ok")) {
+                        final String fileUrl = res.getString("url");
+                        webView.post(() -> webView.evaluateJavascript(
+                            "if(typeof onUploadDone==='function')onUploadDone('"
+                            + id + "','" + fileUrl + "')", null));
+                    } else {
+                        final String err = res.optString("error", "Upload failed");
+                        webView.post(() -> webView.evaluateJavascript(
+                            "if(typeof onUploadError==='function')onUploadError('"
+                            + id + "','" + err.replace("'", "\\'") + "')", null));
+                    }
+                } catch (Exception e) {
+                    log.e(TAG, "nativeUploadFileAsync error: " + e.getMessage());
+                    final String err = e.getMessage() != null ? e.getMessage() : "Unknown error";
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof onUploadError==='function')onUploadError('"
+                        + id + "','" + err.replace("'", "\\'") + "')", null));
+                }
+            }).start();
+        }
+
+        /** Интерфейс для прогресс-колбэка при загрузке */
+        interface UploadProgressCallback { void onProgress(int pct); }
+
+        /**
+         * Внутренняя загрузка на catbox.moe.
+         * progressCb может быть null — тогда прогресс не отслеживается.
+         */
+        private String _catboxUploadBytes(byte[] fileBytes, String fileName,
+                                           String mimeType, UploadProgressCallback progressCb) {
+            String boundary = "----CatboxBoundary" + Long.toHexString(System.currentTimeMillis());
+            try {
+                // Собираем multipart-части заранее чтобы знать Content-Length
+                byte[] partReqBytes = ("--" + boundary + "\r\n"
+                    + "Content-Disposition: form-data; name=\"reqtype\"\r\n\r\n"
+                    + "fileupload\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                byte[] partFileHeaderBytes = ("--" + boundary + "\r\n"
+                    + "Content-Disposition: form-data; name=\"fileToUpload\"; filename=\""
+                    + fileName + "\"\r\n"
+                    + "Content-Type: " + mimeType + "\r\n\r\n")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                byte[] partEndBytes = ("\r\n--" + boundary + "--\r\n")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+                long totalLen = partReqBytes.length + partFileHeaderBytes.length
+                    + fileBytes.length + partEndBytes.length;
 
                 java.net.URL url = new java.net.URL("https://catbox.moe/user/api.php");
                 java.net.HttpURLConnection conn =
                     (java.net.HttpURLConnection) url.openConnection(buildProxy());
                 conn.setRequestMethod("POST");
                 conn.setDoOutput(true);
+                conn.setFixedLengthStreamingMode(totalLen);
                 conn.setConnectTimeout(30000);
-                conn.setReadTimeout(120000);
+                conn.setReadTimeout(180000);
                 conn.setRequestProperty("Content-Type",
                     "multipart/form-data; boundary=" + boundary);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+                conn.setRequestProperty("User-Agent",
+                    "Mozilla/5.0 ScheduleApp/" + getVersionName());
 
                 java.io.OutputStream os = conn.getOutputStream();
-                // reqtype=fileupload
-                String partReq = "--" + boundary + "\r\n"
-                    + "Content-Disposition: form-data; name=\"reqtype\"\r\n\r\n"
-                    + "fileupload\r\n";
-                os.write(partReq.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                // file part
-                String partFile = "--" + boundary + "\r\n"
-                    + "Content-Disposition: form-data; name=\"fileToUpload\"; filename=\""
-                    + fileName + "\"\r\n"
-                    + "Content-Type: " + mimeType + "\r\n\r\n";
-                os.write(partFile.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                os.write(fileBytes);
-                String partEnd = "\r\n--" + boundary + "--\r\n";
-                os.write(partEnd.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                os.write(partReqBytes);
+                os.write(partFileHeaderBytes);
+
+                // Пишем файл чанками с отслеживанием прогресса
+                int chunkSize = 65536; // 64KB
+                long written = partReqBytes.length + partFileHeaderBytes.length;
+                for (int off = 0; off < fileBytes.length; off += chunkSize) {
+                    int len = Math.min(chunkSize, fileBytes.length - off);
+                    os.write(fileBytes, off, len);
+                    written += len;
+                    if (progressCb != null && totalLen > 0) {
+                        int pct = (int)(written * 95 / totalLen); // 0-95%, 100% — после ответа
+                        progressCb.onProgress(pct);
+                    }
+                }
+                os.write(partEndBytes);
                 os.flush();
                 os.close();
 
@@ -1552,25 +1592,32 @@ public class MainActivity extends Activity {
                 is.close();
                 conn.disconnect();
                 String body = baos.toString("UTF-8").trim();
+                log.i(TAG, "_catboxUploadBytes: status=" + status + " body=" + body.substring(0, Math.min(body.length(), 120)));
 
                 org.json.JSONObject res = new org.json.JSONObject();
-                if (status == 200 && body.startsWith("https://")) {
+                // catbox возвращает 200 + URL файла (может быть http:// или https://)
+                if ((status == 200 || status == 201)
+                        && (body.startsWith("https://") || body.startsWith("http://"))) {
+                    // Принудительно делаем https
+                    String fileUrl = body.startsWith("http://")
+                        ? "https://" + body.substring(7) : body;
                     res.put("ok", true);
-                    res.put("url", body);
-                    log.i(TAG, "nativeUploadFile OK: " + body);
+                    res.put("url", fileUrl);
+                    if (progressCb != null) progressCb.onProgress(100);
+                    log.i(TAG, "_catboxUploadBytes OK: " + fileUrl);
                 } else {
                     res.put("ok", false);
                     res.put("error", "HTTP " + status + ": "
-                        + body.substring(0, Math.min(body.length(), 200)));
-                    log.w(TAG, "nativeUploadFile failed: " + status + " " + body);
+                        + body.substring(0, Math.min(body.length(), 300)));
+                    log.w(TAG, "_catboxUploadBytes failed: " + status + " body=" + body);
                 }
                 return res.toString();
             } catch (Exception e) {
-                log.e(TAG, "nativeUploadFile error: " + e.getMessage());
+                log.e(TAG, "_catboxUploadBytes error: " + e.getMessage());
                 try {
                     org.json.JSONObject err = new org.json.JSONObject();
                     err.put("ok", false);
-                    err.put("error", e.getMessage());
+                    err.put("error", e.getMessage() != null ? e.getMessage() : "Unknown error");
                     return err.toString();
                 } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
             }

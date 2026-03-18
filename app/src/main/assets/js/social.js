@@ -57,6 +57,56 @@ function accountsSave(a)  { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)
 function friendsLoad()    { try { return JSON.parse(localStorage.getItem(FRIENDS_KEY)) || []; } catch(e){ return []; } }
 function friendsSave(f)   { localStorage.setItem(FRIENDS_KEY, JSON.stringify(f)); }
 
+// ── Локальные никнеймы (переименование пользователей, как в Telegram) ──
+const LOCAL_NICKS_KEY = 'sapp_local_nicks_v1';
+function localNickLoad()         { try { return JSON.parse(localStorage.getItem(LOCAL_NICKS_KEY)) || {}; } catch(e) { return {}; } }
+function localNickGet(username)  { return localNickLoad()[username] || ''; }
+function localNickSet(username, nick) {
+  const nicks = localNickLoad();
+  if (nick && nick.trim()) nicks[username] = nick.trim();
+  else delete nicks[username];
+  localStorage.setItem(LOCAL_NICKS_KEY, JSON.stringify(nicks));
+}
+
+/** Диалог переименования пользователя (локально, как в Telegram) */
+function localNickEdit(username, currentName) {
+  const current = localNickGet(username) || '';
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;animation:mcFadeIn .15s ease';
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px;padding:24px 20px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,.7)" onclick="event.stopPropagation()">
+      <div style="font-size:17px;font-weight:700;margin-bottom:4px">Изменить имя</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Только у тебя — @${escHtml(username)}</div>
+      <input id="_nick-inp" value="${escHtml(current)}" placeholder="${escHtml(currentName)}"
+        style="width:100%;padding:12px 14px;background:var(--surface2);border:1.5px solid rgba(255,255,255,.1);border-radius:12px;color:var(--text);font-family:inherit;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:6px"
+        maxlength="32" autofocus>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Оставь пустым, чтобы сбросить</div>
+      <div style="display:flex;gap:10px">
+        <button onclick="this.closest('[style*=fixed]').remove()"
+          style="flex:1;padding:12px;background:var(--surface2);border:none;border-radius:12px;color:var(--text);font-family:inherit;font-size:15px;cursor:pointer">Отмена</button>
+        <button onclick="_localNickSave('${escHtml(username)}')"
+          style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:12px;color:#000;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer">Сохранить</button>
+      </div>
+    </div>`;
+  sheet.addEventListener('click', () => sheet.remove());
+  document.body.appendChild(sheet);
+  setTimeout(() => document.getElementById('_nick-inp')?.focus(), 100);
+}
+
+function _localNickSave(username) {
+  const inp = document.getElementById('_nick-inp');
+  if (!inp) return;
+  localNickSet(username, inp.value);
+  document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+  // Обновить шапку чата если сейчас открыт
+  if (_msgCurrentChat === username) {
+    const nameEl = document.getElementById('mc-hdr-name');
+    if (nameEl) nameEl.textContent = localNickGet(username) || inp.placeholder;
+  }
+  messengerRenderList();
+  toast('✏️ Имя изменено');
+}
+
 function profileHashPwd(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
@@ -87,6 +137,8 @@ function profileBootstrap() {
     }, 1200);
   } else {
     profileConnect(p);
+    // Сообщаем Java username для фоновых уведомлений
+    try { window.Android?.setCurrentUser?.(p.username); } catch(_) {}
   }
 }
 
@@ -400,6 +452,8 @@ function profileCreate() {
   profileRenderScreen();
   showScreen('s-profile');
   toast('🎉 Добро пожаловать, ' + name + '!');
+  // Сообщаем Java какой username отслеживать для фоновых уведомлений
+  try { window.Android?.setCurrentUser?.(username); } catch(_) {}
 }
 
 function loginShowRegister() {
@@ -535,6 +589,7 @@ function loginRestoreFromCloud(row) {
   profileRenderScreen();
   showScreen('s-profile');
   toast('☁️ Добро пожаловать, ' + profile.name + '!');
+  try { window.Android?.setCurrentUser?.(row.username); } catch(_) {}
 }
 
 function loginRestoreAccount(username, acc) {
@@ -547,6 +602,7 @@ function loginRestoreAccount(username, acc) {
     profileRenderScreen();
     showScreen('s-profile');
     toast('👋 Добро пожаловать, ' + existing.name + '!');
+    try { window.Android?.setCurrentUser?.(username); } catch(_) {}
     return;
   }
   // Re-create minimal profile from accounts store
@@ -566,6 +622,7 @@ function loginRestoreAccount(username, acc) {
   profileRenderScreen();
   showScreen('s-profile');
   toast('👋 Добро пожаловать, ' + profile.name + '!');
+  try { window.Android?.setCurrentUser?.(username); } catch(_) {}
 }
 
 // ══ ЭКРАН ПРОФИЛЯ ════════════════════════════════════════════════
@@ -1798,10 +1855,7 @@ async function profileConnect(p) {
 
     _startWatchdog(p);
     if (window.Android && typeof window.Android.savePushConfig === 'function') {
-      try {
-        window.Android.savePushConfig(p.username, sbUrl(), sbKey());
-      } catch(_){}
-    }
+      try { window.Android.savePushConfig(p.username, sbUrl(), sbKey()); } catch(_){}
     }
     // Синхронизируем VIP/badge/frame с сервера (server source of truth)
     vipSyncFromServer(p.username).catch(()=>{});
@@ -3079,75 +3133,6 @@ function showCreateGroupDialogFromMessenger() {
 const BLOCKED_KEY  = 'sapp_blocked_v1';
 const NO_COPY_KEY  = 'sapp_nocopy_v1';
 
-// ── Локальные имена (как в Telegram) ──────────────────────────────
-// Позволяет переименовать любого пользователя локально, не затрагивая сервер
-const LOCAL_NAMES_KEY = 'sapp_local_names_v1';
-function localNamesLoad() { try { return JSON.parse(localStorage.getItem(LOCAL_NAMES_KEY) || '{}'); } catch(e) { return {}; } }
-function localNamesSave(d) { localStorage.setItem(LOCAL_NAMES_KEY, JSON.stringify(d)); }
-
-function getDisplayName(username, fallbackName) {
-  const local = localNamesLoad();
-  return local[username] || fallbackName || username;
-}
-
-function setLocalName(username, newName) {
-  const local = localNamesLoad();
-  if (!newName || !newName.trim()) {
-    delete local[username];
-  } else {
-    local[username] = newName.trim();
-  }
-  localNamesSave(local);
-  // Live-update chat header if this chat is open
-  if (_msgCurrentChat === username) {
-    const hdrName = document.getElementById('mc-hdr-name');
-    if (hdrName) {
-      const peer = _profileOnlinePeers.find(u=>u.username===username)||_allKnownUsers.find(u=>u.username===username);
-      hdrName.textContent = getDisplayName(username, peer?.name || username);
-    }
-  }
-  // Refresh chat list
-  messengerRenderList();
-}
-
-function showRenameDialog(username, currentDisplayName) {
-  const sheet = document.createElement('div');
-  sheet.id = 'rename-sheet';
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9900;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.6)';
-  const localNames = localNamesLoad();
-  const currentLocal = localNames[username] || '';
-  sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot,0px));animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
-      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="font-size:17px;font-weight:700;margin-bottom:4px">✏️ Переименовать</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Только для тебя · @${escHtml(username)}</div>
-      <input id="rename-input" class="inp" placeholder="${escHtml(currentDisplayName)}"
-        value="${escHtml(currentLocal)}"
-        style="margin-bottom:8px"
-        oninput="document.getElementById('rename-clear-btn').style.display=this.value?'':'none'">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:16px" id="rename-hint">
-        Оставь пустым чтобы сбросить имя
-      </div>
-      <div style="display:flex;gap:8px">
-        <button id="rename-clear-btn" class="btn btn-surface" style="width:auto;padding:10px 16px;font-size:13px;flex-shrink:0;display:${currentLocal ? '' : 'none'}"
-          onclick="document.getElementById('rename-input').value=''">Сбросить</button>
-        <button class="btn btn-surface" style="flex:1" onclick="document.getElementById('rename-sheet').remove()">Отмена</button>
-        <button class="btn btn-accent" style="flex:1" onclick="
-          var val = document.getElementById('rename-input').value.trim();
-          setLocalName('${escHtml(username)}', val);
-          document.getElementById('rename-sheet').remove();
-          toast(val ? '✅ Имя изменено' : '✅ Имя сброшено');
-          peerProfileOpen('${escHtml(username)}');
-        ">Сохранить</button>
-      </div>
-    </div>`;
-  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
-  document.body.appendChild(sheet);
-  setTimeout(() => document.getElementById('rename-input')?.focus(), 200);
-}
-
-
-
 function blockedLoad()       { try { return JSON.parse(localStorage.getItem(BLOCKED_KEY)  || '[]'); } catch(e) { return []; } }
 function blockedSave(b)      { localStorage.setItem(BLOCKED_KEY, JSON.stringify(b)); }
 function noCopyLoad()        { try { return JSON.parse(localStorage.getItem(NO_COPY_KEY)  || '[]'); } catch(e) { return []; } }
@@ -3408,7 +3393,6 @@ function peerShowMenu(username) {
   sheet.style.cssText = 'position:fixed;inset:0;z-index:9800;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.55)';
 
   const items = [
-    { icon:'✏️', label: 'Переименовать',              action: `showRenameDialog('${username}','${escHtml(peer?.name||username)}')` },
     { icon: muted ? '🔔' : '🔕',
       label: muted ? `Включить уведомления` : `Отключить уведомления`,
       action: `peerMuteShow('${username}')` },
@@ -3903,8 +3887,6 @@ function msgSelectCancel() {
 
 function msgToggleSelect(username, e) {
   e.stopPropagation();
-  // If touch already handled selection, skip the click event
-  if (_msgSelectTouchJustHandled) { _msgSelectTouchJustHandled = false; return; }
   if (_msgSelected.has(username)) _msgSelected.delete(username);
   else _msgSelected.add(username);
   _msgUpdateSelectCount();
@@ -4060,7 +4042,7 @@ function messengerRenderList(filter) {
     const peer     = _profileOnlinePeers.find(u => u.username === username)
                    || _allKnownUsers.find(u => u.username === username);
     const isOnline = !!_profileOnlinePeers.find(u => u.username === username);
-    const name     = getDisplayName(username, peer?.name || username);
+    const name     = peer?.name || username;
     const avatar   = peer?.avatar || '😊';
     const color    = peer?.color || 'var(--surface3)';
     // ── Telegram-style preview ───────────────────────────────────────────────
@@ -4093,13 +4075,16 @@ function messengerRenderList(filter) {
       : `<span style="font-size:28px">${avatar}</span>`;
 
     const _pinned = _pins.includes(username);
+    // Локальный никнейм (если задан)
+    const _localNick = localNickGet(username);
+    const displayName = _localNick || name;
     return `<div
         data-chat-user="${escHtml(username)}"
         onclick="${rowClick}"
         oncontextmenu="event.preventDefault();msgSelectEnter('${username}')"
-        ontouchstart="msgRowTouchStart(this,'${escHtml(username)}')"
-        ontouchmove="msgRowTouchMove()"
-        ontouchend="msgRowTouchEnd('${escHtml(username)}')"
+        ontouchstart="${_msgSelectMode ? '' : `msgRowTouchStart(this,'${escHtml(username)}')`}"
+        ontouchmove="${_msgSelectMode ? '' : 'msgRowTouchMove()'}"
+        ontouchend="${_msgSelectMode ? '' : 'msgRowTouchEnd()'}"
         class="chat-row${isSel ? ' chat-selected' : ''}"
         style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);${_pinned&&!_msgSelectMode?'background:rgba(255,255,255,.025)':''}">
       ${_msgSelectMode
@@ -4111,7 +4096,7 @@ function messengerRenderList(filter) {
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(name)}</div>
+          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(displayName)}${_localNick ? `<span style="font-size:10px;color:var(--muted);margin-left:4px">@${escHtml(username)}</span>` : ''}</div>
           <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
             ${_pinned && !_msgSelectMode ? '<span style="font-size:10px;opacity:.4;transform:rotate(45deg);display:inline-block">📌</span>' : ''}
             <span style="font-size:11px;color:${unread>0?'var(--accent)':'var(--muted)'}">${timeStr}</span>
@@ -4170,22 +4155,20 @@ function messengerRenderList(filter) {
 // Long-press для мобильного — с защитой от свайпа
 let _msgLongPressTimer = null;
 let _msgTouchStartX = 0, _msgTouchStartY = 0;
+let _msgTouchMoved = false;
 
 function msgRowTouchStart(el, username) {
   const ev = window.event;
   const t  = ev?.touches?.[0];
   _msgTouchStartX = t?.clientX || 0;
   _msgTouchStartY = t?.clientY || 0;
-  // В режиме выделения — tap обрабатывается в touchEnd, не здесь
-  // (иначе onclick тоже вызовет msgToggleSelect — двойное переключение)
-  if (_msgSelectMode) {
-    el.style.background = 'rgba(255,255,255,.06)';
-    return;
-  }
+  _msgTouchMoved  = false;
+  // В режиме выделения — НЕ обрабатываем здесь, обработчик onclick сам вызовет msgToggleSelect
+  if (_msgSelectMode) return;
   el.style.background = 'rgba(255,255,255,.04)';
   _msgLongPressTimer = setTimeout(() => {
     el.style.background = '';
-    msgSelectEnter(username);
+    if (!_msgTouchMoved) msgSelectEnter(username);
   }, 480);
 }
 
@@ -4196,28 +4179,15 @@ function msgRowTouchMove() {
   const dx = Math.abs(t.clientX - _msgTouchStartX);
   const dy = Math.abs(t.clientY - _msgTouchStartY);
   if (dx > 9 || dy > 9) {
+    _msgTouchMoved = true;
     clearTimeout(_msgLongPressTimer);
     document.querySelectorAll('.chat-row').forEach(r => { r.style.background = ''; });
   }
 }
 
-let _msgSelectTouchJustHandled = false;
-
-function msgRowTouchEnd(username) {
+function msgRowTouchEnd() {
   clearTimeout(_msgLongPressTimer);
   document.querySelectorAll('.chat-row').forEach(r => { r.style.background = ''; });
-  if (_msgSelectMode && username) {
-    const ev = window.event;
-    const t  = ev?.changedTouches?.[0];
-    const dx = t ? Math.abs(t.clientX - _msgTouchStartX) : 0;
-    const dy = t ? Math.abs(t.clientY - _msgTouchStartY) : 0;
-    if (dx < 12 && dy < 12) {
-      // Handle selection here on touchEnd; block the subsequent click
-      _msgSelectTouchJustHandled = true;
-      msgToggleSelect(username, { stopPropagation: () => {} });
-      setTimeout(() => { _msgSelectTouchJustHandled = false; }, 500);
-    }
-  }
 }
 function messengerFilterChats(q) { messengerRenderList(q); }
 
@@ -4232,6 +4202,8 @@ function messengerOpenChat(username) {
 
 function _doOpenChat(username) {
   _msgCurrentChat = username;
+  // Сбрасываем уведомления от этого пользователя
+  try { window.Android?.dismissNotifications?.(); } catch(_) {}
   // Сообщения помечаются прочитанными только при скролле до конца (см. messengerMarkRead)
   const msgs = msgLoad();
   const p = profileLoad();
@@ -4253,7 +4225,7 @@ function _doOpenChat(username) {
   const hdrName = document.getElementById('mc-hdr-name');
   const hdrSub  = document.getElementById('mc-hdr-sub');
   const hdrAvatar = document.getElementById('mc-hdr-avatar');
-  if (hdrName) hdrName.textContent = getDisplayName(username, peer?.name || username);
+  if (hdrName) hdrName.textContent = localNickGet(username) || peer?.name || username;
   if (hdrSub)  hdrSub.textContent  = peer
     ? (_profileOnlinePeers.find(u => u.username === username) ? '🟢 В сети' : '⚫ Не в сети')
     : ('@' + username);
@@ -4377,10 +4349,11 @@ function messengerRenderMessages(animateLast) {
     const isImage   = msg.image;
     const isVoice   = msg.fileType === 'voice';
     const isVideo   = msg.fileLink && msg.fileType === 'video';
+    const isCircle  = msg.fileLink && msg.fileType === 'circle';
     const isFile    = msg.fileLink && msg.fileType === 'file' && !_isAudioFile(msg.fileName);
     const isAudio   = msg.fileLink && msg.fileType === 'file' && _isAudioFile(msg.fileName);
-    const bubbleBg  = (isSticker || isImage || isVideo) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
-    const bubblePad = (isSticker || isImage || isVideo) ? '0' : '8px 12px 6px';    const _fmtSize  = s => !s ? '' : s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
+    const bubbleBg  = (isSticker || isImage || isVideo || isCircle) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
+    const bubblePad = (isSticker || isImage || isVideo || isCircle) ? '0' : '8px 12px 6px';    const _fmtSize  = s => !s ? '' : s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
     const _fmtDur   = s => { const m=Math.floor((s||0)/60), sec=String((s||0)%60).padStart(2,'0'); return m+':'+sec; };
     const safeUrl   = escHtml(msg.fileLink || '');
     const safeName  = escHtml(msg.fileName || '');
@@ -4450,6 +4423,25 @@ function messengerRenderMessages(animateLast) {
              </div>
            </div>`;
           })()
+
+      // ── КРУЖОК (видеосообщение) — круглое превью + play ─────────────────
+      : isCircle
+        ? `<div style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
+               onclick="mcVideoOpen('${safeUrl}','Видеосообщение')">
+             ${msg.thumbData
+               ? `<img src="${escHtml(msg.thumbData)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
+               : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center"><svg width="44" height="44" viewBox="0 0 24 24" fill="rgba(255,255,255,.35)"><path d="M8 5v14l11-7z"/></svg></div>`
+             }
+             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+               <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.48);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
+                 <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+               </div>
+             </div>
+             <div style="position:absolute;bottom:10px;right:10px;display:flex;align-items:center;gap:3px;pointer-events:none">
+               <span style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.7)">${msgFormatTime(msg.ts)}</span>
+               <span style="font-size:11px;color:rgba(255,255,255,.9)">${status}</span>
+             </div>
+           </div>`
 
       // ── ВИДЕО — превью + круглая play + duration badge ────────────────────
       : isVideo
@@ -5628,104 +5620,71 @@ function mcAutoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
-// ── Медиа-меню — выбор: фото, видео, файл ─────────────────────────
-// ── Telegram-style media attach menu ──────────────────────────────
+// ── Telegram-style медиа-меню (сетка иконок) ──────────────────────
 function mcPickMedia() {
   const existing = document.getElementById('mc-media-sheet');
-  if (existing) { _closeSheet(existing); return; }
+  if (existing) { existing.remove(); return; }
 
   const sheet = document.createElement('div');
   sheet.id = 'mc-media-sheet';
-  sheet.style.cssText = [
-    'position:fixed;inset:0;z-index:9100;',
-    'display:flex;flex-direction:column;justify-content:flex-end;',
-    'background:rgba(0,0,0,.48);',
-    'animation:mcFadeIn .15s ease'
-  ].join('');
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9100;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.45);animation:mcFadeIn .15s ease';
 
-  // 4 items: Gallery, Video, File, Music — each with colored circle + label
   const items = [
-    {
-      label: 'Галерея',
-      color: '#4caf7d',
-      svg: `<svg viewBox="0 0 24 24" fill="white" width="26" height="26"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
-      action: `mcPickImage()`
-    },
-    {
-      label: 'Видео',
-      color: '#e87722',
-      svg: `<svg viewBox="0 0 24 24" fill="white" width="26" height="26"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`,
-      action: `mcPickVideo()`
-    },
-    {
-      label: 'Файл',
-      color: '#60cdff',
-      svg: `<svg viewBox="0 0 24 24" fill="white" width="26" height="26"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>`,
-      action: `mcPickFile()`
-    },
-    {
-      label: 'Музыка',
-      color: '#a78bfa',
-      svg: `<svg viewBox="0 0 24 24" fill="white" width="26" height="26"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>`,
-      action: `mcPickAudio()`
-    },
+    { icon: '🖼', label: 'Фото',       action: "mcPickImage();document.getElementById('mc-media-sheet')?.remove()" },
+    { icon: '🎬', label: 'Видео',      action: "mcPickVideo();document.getElementById('mc-media-sheet')?.remove()" },
+    { icon: '📄', label: 'Файл',       action: "mcPickFile();document.getElementById('mc-media-sheet')?.remove()" },
+    { icon: '🎵', label: 'Аудио',      action: "mcPickAudio();document.getElementById('mc-media-sheet')?.remove()" },
   ];
 
-  const iconsHtml = items.map((it, i) => `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent"
-      onclick="${it.action};document.getElementById('mc-media-sheet')?.remove()">
-      <div style="
-        width:58px;height:58px;border-radius:50%;
-        background:${it.color};
-        display:flex;align-items:center;justify-content:center;
-        box-shadow:0 4px 12px ${it.color}55;
-        transition:transform .12s cubic-bezier(.34,1.3,.64,1);
-        -webkit-tap-highlight-color:transparent;
-      "
-      ontouchstart="this.style.transform='scale(.88)'"
-      ontouchend="this.style.transform=''"
-      onmousedown="this.style.transform='scale(.88)'"
-      onmouseup="this.style.transform=''">
-        ${it.svg}
-      </div>
-      <span style="font-size:12px;font-weight:600;color:var(--text)">${it.label}</span>
-    </div>
-  `).join('');
+  const grid = items.map(it => `
+    <button onclick="${it.action}"
+      style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 8px 10px;
+        background:var(--surface2);border:none;border-radius:16px;cursor:pointer;
+        transition:background .12s,transform .1s;-webkit-tap-highlight-color:transparent"
+      ontouchstart="this.style.transform='scale(.92)'"
+      ontouchend="this.style.transform=''">
+      <div style="width:52px;height:52px;border-radius:14px;background:var(--surface3);
+        display:flex;align-items:center;justify-content:center;font-size:26px">${it.icon}</div>
+      <span style="font-size:12px;color:var(--muted);font-weight:500">${it.label}</span>
+    </button>`).join('');
 
   sheet.innerHTML = `
-    <div id="mc-media-inner"
-      style="background:var(--surface);border-radius:20px 20px 0 0;
-        padding:12px 24px calc(20px + var(--safe-bot,0px));
-        animation:mcSlideUp .28s cubic-bezier(.34,1.1,.64,1)"
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;
+      padding:12px 16px calc(20px + var(--safe-bot));animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)"
       onclick="event.stopPropagation()">
-      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 20px"></div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px 4px;justify-items:center">
-        ${iconsHtml}
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        ${grid}
       </div>
     </div>`;
 
-  sheet.addEventListener('click', e => {
-    if (e.target === sheet) _closeSheet(sheet);
-  });
+  sheet.addEventListener('click', () => sheet.remove());
   document.body.appendChild(sheet);
 }
 
-// ── Отправка аудиофайла (музыка, подкасты и т.п.) ─────────────────
+// ── Отправка аудиофайла ────────────────────────────────────────────
 function mcPickAudio() {
   const inp = document.createElement('input');
   inp.type = 'file';
-  inp.accept = 'audio/*,.mp3,.ogg,.wav,.flac,.aac,.m4a,.opus,.wma,.ape';
+  inp.accept = 'audio/*';
   inp.style.display = 'none';
   document.body.appendChild(inp);
   inp.onchange = async (e) => {
     const file = e.target.files[0]; inp.remove();
     if (!file) return;
     if (file.size > 200 * 1024 * 1024) { toast('❌ Файл слишком большой (макс. 200 МБ)'); return; }
-    _mcStartUpload({
-      file,
-      fileType: 'file',
-      targetChat: _msgCurrentChat,
-    });
+    _mcShowUploadToast('voice', file.name || 'Аудио');
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      const url = await _catboxUpload(b64, file.name || ('audio_' + Date.now()), file.type || 'audio/mpeg');
+      _mcSendMediaMsg({ url, fileName: file.name || 'Аудио', fileType: 'voice', fileSize: file.size });
+      _mcHideUploadToast(true);
+    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка загрузки')); }
   };
   inp.click();
 }
@@ -5768,7 +5727,7 @@ function mcPickImage() {
 // Вызывается Java когда PermissionRequest протух за время диалога разрешений.
 window.mcVoiceRetryAfterPermission = function() {
   toast('🎤 Разрешение получено, начинаю запись...');
-  setTimeout(() => _mcVoiceStartRecord({ preventDefault: () => {} }), 300);
+  setTimeout(() => mcVoiceTouchStart({ preventDefault: () => {} }), 300);
 };
 
 // ── Колбэки нативного рекордера (вызываются из Java) ─────────────
@@ -5796,279 +5755,9 @@ window.onNativeVoiceCancelled = function() {
   toast('🗑 Запись отменена');
 };
 
-// ══════════════════════════════════════════════════════════════════════
-// 📤 UPLOAD SYSTEM — полноценная панель как в Telegram
-// Показывает: имя, размер, прогресс-бар, скорость, время, кнопку отмены
-// Работает в фоне (можно выйти из чата пока идёт загрузка)
-// ══════════════════════════════════════════════════════════════════════
-
-let _uploadState = null; // { cancelled, chatKey, targetChat, fileName, fileSize, startTs, pct }
-
-// ── Единая точка входа для всех типов файлов (кроме фото/голос) ────
-async function _mcStartUpload({ file, fileType, targetChat }) {
-  if (!file || !targetChat) return;
-
-  const fileName = file.name || ('file_' + Date.now());
-  const isAudio  = ['mp3','ogg','wav','flac','aac','m4a','opus','wma','ape'].includes((fileName.split('.').pop()||'').toLowerCase());
-  const isVideo  = fileType === 'video' || file.type?.startsWith('video/');
-  const resolvedType = isVideo ? 'video' : (isAudio ? 'file' : fileType || 'file');
-
-  // Читаем файл
-  _mcShowUploadPanel({ fileType: resolvedType, fileName, fileSize: file.size, targetChat });
-
-  let b64, thumbData;
-  try {
-    [b64, thumbData] = await Promise.all([
-      new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result.split(',')[1]);
-        r.onerror = rej;
-        r.readAsDataURL(file);
-      }),
-      isVideo ? _mcVideoThumb(file) : Promise.resolve(null)
-    ]);
-  } catch(e) {
-    _mcHideUploadPanel(false, 'Ошибка чтения файла');
-    return;
-  }
-
-  const ext  = (fileName.split('.').pop() || 'dat').toLowerCase();
-  const mime = file.type || 'application/octet-stream';
-
-  try {
-    const url = await _catboxUploadWithRetry(b64, fileName, mime, file.size);
-    if (_uploadState?.cancelled) return;
-    _mcSendMediaMsg({
-      url, fileName, fileType: resolvedType,
-      fileSize: file.size,
-      duration: null, thumbData,
-      _targetChat: targetChat,
-    });
-    _mcHideUploadPanel(true);
-  } catch(err) {
-    if (_uploadState?.cancelled) return;
-    _mcHideUploadPanel(false, err.message || 'Ошибка загрузки');
-  }
-}
-
-// ── Панель загрузки (прикреплена к чату, но persists при навигации) ─
-function _mcShowUploadPanel({ fileType, fileName, fileSize, targetChat }) {
-  _uploadState = {
-    cancelled: false,
-    targetChat,
-    fileName,
-    fileSize,
-    startTs: Date.now(),
-    pct: 0,
-  };
-
-  const prev = document.getElementById('mc-upload-panel');
-  if (prev) prev.remove();
-
-  const fmtSize = s => !s ? '' : s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
-  const typeLabel = { video:'Видео', file:'Файл', voice:'Голосовое', image:'Фото' };
-  const typeColor = { video:'#e87722', file:'#60cdff', voice:'#4caf7d', image:'#a78bfa' };
-  const ico = _uploadIcons[fileType] || _uploadIcons.file;
-  const color = typeColor[fileType] || 'var(--accent)';
-
-  const el = document.createElement('div');
-  el.id = 'mc-upload-panel';
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:11px">
-      <!-- Иконка типа -->
-      <div style="width:44px;height:44px;border-radius:13px;background:${color};display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative">
-        ${ico.replace('width="16" height="16"','width="22" height="22"')}
-        <div id="mc-upl-ring" style="position:absolute;inset:0;border-radius:13px;background:conic-gradient(rgba(255,255,255,.0) 0%,transparent 0%);transition:background .2s"></div>
-      </div>
-      <!-- Инфо -->
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="mc-upl-name">${escHtml(fileName.length > 32 ? fileName.slice(0,29)+'…' : fileName)}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:1px;display:flex;gap:8px;align-items:center">
-          <span>${fmtSize(fileSize)}</span>
-          <span id="mc-upl-sub" style="color:${color}">Подготовка…</span>
-        </div>
-        <!-- Progress bar -->
-        <div style="margin-top:6px;height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden">
-          <div id="mc-upl-bar" style="height:100%;width:0%;background:${color};border-radius:2px;transition:width .25s linear"></div>
-        </div>
-      </div>
-      <!-- Кнопка скрыть/отменить -->
-      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
-        <button id="mc-upl-cancel" onclick="_mcCancelUpload()"
-          style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.1);border:none;color:var(--text);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;line-height:1"
-          title="Отменить">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
-        <button onclick="_mcMinimiseUpload()"
-          style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.08);border:none;color:var(--muted);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent"
-          title="Свернуть">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13H5v-2h14v2z"/></svg>
-        </button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(el);
-
-  // Анимируем прогресс по времени (калибровка: ~35 КБ/с для catbox.moe)
-  const ESTIMATED_KBPS = 38;
-  const estimatedSec   = fileSize ? Math.max(5, fileSize / 1024 / ESTIMATED_KBPS) : 30;
-  _uploadState._progressTimer = setInterval(() => {
-    if (!_uploadState || _uploadState.cancelled) return;
-    const elapsed = (Date.now() - _uploadState.startTs) / 1000;
-    // Логарифмический рост: быстро в начале, замедляется к концу
-    const rawPct = Math.min(92, (elapsed / estimatedSec) * 100 * 1.15);
-    const pct    = Math.round(rawPct * 10) / 10;
-    _uploadState.pct = pct;
-
-    const bar  = document.getElementById('mc-upl-bar');
-    const sub  = document.getElementById('mc-upl-sub');
-    const ring = document.getElementById('mc-upl-ring');
-    if (bar)  bar.style.width  = pct + '%';
-    if (ring) ring.style.background = `conic-gradient(rgba(255,255,255,.35) ${pct}%, transparent ${pct}%)`;
-
-    const remain = Math.max(0, estimatedSec - elapsed);
-    const m = Math.floor(remain / 60), s = String(Math.round(remain % 60)).padStart(2, '0');
-    const etaStr = remain < 5 ? 'Почти готово…' : (m > 0 ? `~${m}:${s}` : `~${s} сек`);
-    const elStr  = elapsed < 3 ? 'Загружаю…' : `${Math.floor(elapsed)}с · ещё ${etaStr}`;
-    if (sub) sub.textContent = `${Math.round(pct)}% · ${elStr}`;
-
-    // Ретрай-сообщение
-    if (_uploadState._retryMsg) {
-      if (sub) sub.textContent = _uploadState._retryMsg;
-    }
-  }, 500);
-}
-
-function _mcUpdateUploadRetryMsg(msg) {
-  if (_uploadState) _uploadState._retryMsg = msg;
-  const sub = document.getElementById('mc-upl-sub');
-  if (sub && msg) sub.textContent = msg;
-}
-
-function _mcCancelUpload() {
-  if (_uploadState) _uploadState.cancelled = true;
-  clearInterval(_uploadState?._progressTimer);
-  _uploadState = null;
-  const el = document.getElementById('mc-upload-panel');
-  if (el) {
-    el.style.animation = 'tg-upload-out .18s ease forwards';
-    setTimeout(() => el.remove(), 200);
-  }
-  // Также удаляем мини-чип если был
-  document.getElementById('mc-upload-chip')?.remove();
-}
-
-function _mcMinimiseUpload() {
-  const panel = document.getElementById('mc-upload-panel');
-  if (!panel) return;
-  panel.style.animation = 'tg-upload-out .18s ease forwards';
-  setTimeout(() => {
-    panel.style.display = 'none'; // скрываем но не удаляем
-    panel.style.animation = '';
-
-    // Показываем маленький чип в правом верхнем углу
-    let chip = document.getElementById('mc-upload-chip');
-    if (!chip) {
-      chip = document.createElement('div');
-      chip.id = 'mc-upload-chip';
-      chip.style.cssText = [
-        'position:fixed;top:calc(var(--safe-top,0px)+62px);right:12px;',
-        'z-index:9200;background:var(--accent);border-radius:20px;',
-        'padding:7px 12px;display:flex;align-items:center;gap:8px;',
-        'box-shadow:0 3px 14px rgba(0,0,0,.45);cursor:pointer;',
-        'font-size:12px;font-weight:700;color:#fff;',
-        'animation:tg-upload-in .2s ease both;',
-        '-webkit-tap-highlight-color:transparent;',
-      ].join('');
-      chip.innerHTML = `
-        <div style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.7);animation:tg-icon-pulse 1.2s ease-in-out infinite"></div>
-        <span id="mc-chip-pct">0%</span>
-        <span style="opacity:.7">·</span>
-        <span id="mc-chip-name" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(_uploadState?.fileName?.slice(0,20)||'файл')}</span>
-      `;
-      chip.addEventListener('click', () => {
-        chip.remove();
-        const p = document.getElementById('mc-upload-panel');
-        if (p) { p.style.display = ''; p.style.animation = 'tg-upload-in .2s ease both'; }
-      });
-      document.body.appendChild(chip);
-    }
-  }, 180);
-}
-
-function _mcHideUploadPanel(success, errMsg) {
-  clearInterval(_uploadState?._progressTimer);
-  _uploadState = null;
-
-  document.getElementById('mc-upload-chip')?.remove();
-
-  const el = document.getElementById('mc-upload-panel');
-  if (!el) return;
-
-  if (success) {
-    // Быстро показываем 100% и исчезаем
-    const bar  = document.getElementById('mc-upl-bar');
-    const sub  = document.getElementById('mc-upl-sub');
-    const ring = document.getElementById('mc-upl-ring');
-    if (bar)  bar.style.width = '100%';
-    if (ring) ring.style.background = 'conic-gradient(rgba(255,255,255,.5) 100%,transparent 100%)';
-    if (sub)  { sub.textContent = '✓ Отправлено'; sub.style.color = '#4caf7d'; }
-    // Убираем кнопки
-    document.getElementById('mc-upl-cancel')?.parentElement?.remove?.();
-    setTimeout(() => {
-      if (!el.parentNode) return;
-      el.style.animation = 'tg-upload-out .2s ease forwards';
-      setTimeout(() => el.remove(), 200);
-    }, 1200);
-  } else {
-    const sub = document.getElementById('mc-upl-sub');
-    if (sub) { sub.textContent = '✕ ' + (errMsg || 'Ошибка'); sub.style.color = '#ef4444'; }
-    const bar = document.getElementById('mc-upl-bar');
-    if (bar) bar.style.background = '#ef4444';
-    setTimeout(() => {
-      if (!el.parentNode) return;
-      el.style.animation = 'tg-upload-out .2s ease forwards';
-      setTimeout(() => el.remove(), 200);
-    }, 2500);
-  }
-}
-
-// Обновляем чип с процентом
-const _chipUpdateInterval = setInterval(() => {
-  const chip = document.getElementById('mc-upload-chip');
-  if (!chip || !_uploadState) return;
-  const pctEl  = document.getElementById('mc-chip-pct');
-  const nameEl = document.getElementById('mc-chip-name');
-  if (pctEl)  pctEl.textContent  = Math.round(_uploadState.pct || 0) + '%';
-  if (nameEl) nameEl.textContent = (_uploadState.fileName || '').slice(0, 20);
-}, 800);
-
-// ── Загрузка с повторными попытками ──────────────────────────────
-const MAX_UPLOAD_RETRIES = 3;
-
-async function _catboxUploadWithRetry(base64, fileName, mimeType, fileSize) {
-  let lastErr;
-  for (let attempt = 1; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
-    if (_uploadState?.cancelled) throw new Error('Отменено');
-    if (attempt > 1) {
-      const delay = attempt * 2000;
-      _mcUpdateUploadRetryMsg(`⟳ Попытка ${attempt}/${MAX_UPLOAD_RETRIES}… (${delay/1000}с)`);
-      await new Promise(r => setTimeout(r, delay));
-      if (_uploadState?.cancelled) throw new Error('Отменено');
-    }
-    try {
-      const url = await _catboxUpload(base64, fileName, mimeType, fileSize);
-      return url;
-    } catch(e) {
-      lastErr = e;
-      const isRetryable = e.message?.includes('abort') || e.message?.includes('timeout') || e.message?.includes('connection') || e.message?.includes('network');
-      if (!isRetryable || attempt === MAX_UPLOAD_RETRIES) throw e;
-    }
-  }
-  throw lastErr || new Error('Ошибка загрузки');
-}
-
-// ── Базовая функция загрузки (единственный вызов nativeUploadFile) ─
+// ── Загрузка файла на catbox.moe через Java-бридж ─────────────────
+// base64 — без data:… префикса. Возвращает Promise<string> с URL или бросает ошибку.
+// ── Telegram-style upload progress toast ────────────────────────────────────
 const _uploadIcons = {
   voice: '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>',
   video: '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>',
@@ -6076,92 +5765,131 @@ const _uploadIcons = {
   image: '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>',
 };
 
-let _uploadToastTimer = null; // legacy compat
+let _uploadToastTimer = null;
 
-// legacy shim — voice/image still use these
 function _mcShowUploadToast(fileType, label) {
-  _mcShowUploadPanel({ fileType, fileName: label || 'Загрузка…', fileSize: 0, targetChat: _msgCurrentChat });
+  // Убираем предыдущий
+  const prev = document.getElementById('mc-upload-toast');
+  if (prev) prev.remove();
+  clearTimeout(_uploadToastTimer);
+
+  const ico = _uploadIcons[fileType] || _uploadIcons.file;
+  const el = document.createElement('div');
+  el.id = 'mc-upload-toast';
+  el.className = 'uploading';
+  el.innerHTML = `
+    <div class="tg-ut-icon">
+      <div class="tg-ut-ring"></div>
+      ${ico}
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="tg-ut-label">${escHtml(label || 'Загрузка...')}</div>
+      <div class="tg-ut-sub" id="tg-ut-sub">Загружаю...</div>
+    </div>
+    <div class="mc-upload-spinner"></div>
+  `;
+  document.body.appendChild(el);
+  return el;
 }
+
 function _mcUpdateUploadToastProgress(pct) {
-  const bar  = document.getElementById('mc-upl-bar');
-  const sub  = document.getElementById('mc-upl-sub');
-  const ring = document.getElementById('mc-upl-ring');
-  if (bar)  bar.style.width = pct + '%';
-  if (ring) ring.style.background = `conic-gradient(rgba(255,255,255,.35) ${pct}%,transparent ${pct}%)`;
-  if (sub && pct > 0 && pct < 100) sub.textContent = Math.round(pct) + '%';
+  const ring = document.querySelector('#mc-upload-toast .tg-ut-ring');
+  if (ring) ring.style.background = `conic-gradient(rgba(255,255,255,.85) ${pct}%, transparent ${pct}%)`;
+  const sub = document.getElementById('tg-ut-sub');
+  if (sub) sub.textContent = pct > 0 && pct < 100 ? Math.round(pct) + '%' : 'Загружаю...';
 }
-function _mcHideUploadToast(success) { _mcHideUploadPanel(success); }
 
-// ── Pending upload jobs: jobId → {resolve, reject} ───────────────
-const _uploadJobs = {};
+function _mcHideUploadToast(success) {
+  const el = document.getElementById('mc-upload-toast');
+  if (!el) return;
+  // Показываем результат на секунду, потом исчезаем
+  el.classList.remove('uploading');
+  const sub = document.getElementById('tg-ut-sub');
+  if (sub) sub.textContent = success ? '✓ Отправлено' : '✕ Ошибка';
+  const ring = document.querySelector('#mc-upload-toast .tg-ut-ring');
+  if (ring) ring.style.background = success
+    ? 'conic-gradient(rgba(255,255,255,.9) 100%, transparent 100%)'
+    : 'conic-gradient(rgba(255,100,100,.9) 100%, transparent 100%)';
+  const spinner = el.querySelector('.mc-upload-spinner');
+  if (spinner) spinner.style.display = 'none';
+  clearTimeout(_uploadToastTimer);
+  _uploadToastTimer = setTimeout(() => {
+    if (!el.parentNode) return;
+    el.classList.add('hiding');
+    setTimeout(() => el.remove(), 200);
+  }, 900);
+}
 
-// Колбэки от Java async upload
-window.onNativeUploadProgress = function(jobId, pct, label) {
-  const bar  = document.getElementById('mc-upl-bar');
-  const sub  = document.getElementById('mc-upl-sub');
-  const ring = document.getElementById('mc-upl-ring');
-  if (bar)  bar.style.width = pct + '%';
-  if (ring) ring.style.background = `conic-gradient(rgba(255,255,255,.35) ${pct}%,transparent ${pct}%)`;
-  if (sub && label) sub.textContent = pct + '% · ' + label;
-  // Обновляем чип
-  const chipPct = document.getElementById('mc-chip-pct');
-  if (chipPct) chipPct.textContent = pct + '%';
-};
-window.onNativeUploadDone = function(jobId, url) {
-  const job = _uploadJobs[jobId];
-  delete _uploadJobs[jobId];
-  if (job) job.resolve(url);
-};
-window.onNativeUploadError = function(jobId, error) {
-  const job = _uploadJobs[jobId];
-  delete _uploadJobs[jobId];
-  if (job) job.reject(new Error(error || 'Upload failed'));
-};
+async function _catboxUpload(base64, fileName, mimeType, onProgress) {
+  if (!window.Android?.nativeUploadFile) throw new Error('nativeUploadFile недоступен');
 
-async function _catboxUpload(base64, fileName, mimeType, fileSize, onProgress) {
-  // Используем nativeUploadFileAsync если доступен (не блокирует JS поток)
-  if (window.Android?.nativeUploadFileAsync) {
-    const jobId = 'job_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  // Если есть асинхронная версия — используем её (не блокирует UI)
+  if (typeof window.Android.nativeUploadFileAsync === 'function') {
     return new Promise((resolve, reject) => {
-      _uploadJobs[jobId] = { resolve, reject };
-      // Таймаут 5 минут — на случай зависания
-      const timeout = setTimeout(() => {
-        if (_uploadJobs[jobId]) {
-          delete _uploadJobs[jobId];
-          reject(new Error('Upload timeout'));
-        }
-      }, 5 * 60 * 1000);
-      // Сохраняем original resolve чтобы очистить timeout
-      const origResolve = resolve;
-      _uploadJobs[jobId].resolve = (url) => {
-        clearTimeout(timeout);
-        origResolve(url);
+      const callbackId = 'up_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+
+      // Регистрируем глобальные колбэки
+      window.onUploadProgress = (id, pct) => {
+        if (id !== callbackId) return;
+        _mcUpdateUploadToastProgress(pct);
+        onProgress && onProgress(pct);
       };
-      _uploadJobs[jobId].reject = (err) => {
-        clearTimeout(timeout);
-        reject(err);
+      window.onUploadDone = (id, url) => {
+        if (id !== callbackId) return;
+        _mcUpdateUploadToastProgress(100);
+        onProgress && onProgress(100);
+        resolve(url);
       };
-      window.Android.nativeUploadFileAsync(base64, fileName, mimeType, jobId);
+      window.onUploadError = (id, err) => {
+        if (id !== callbackId) return;
+        reject(new Error(err || 'Upload failed'));
+      };
+
+      _mcUpdateUploadToastProgress(0);
+      try {
+        window.Android.nativeUploadFileAsync(base64, fileName, mimeType, callbackId);
+      } catch (e) {
+        reject(e);
+      }
+
+      // Таймаут 3 минуты
+      setTimeout(() => reject(new Error('Таймаут загрузки (3 мин)')), 180000);
     });
   }
-  // Fallback: синхронный (блокирующий) upload — для старых версий
-  if (!window.Android?.nativeUploadFile) throw new Error('nativeUploadFile недоступен');
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      try {
-        const r = JSON.parse(window.Android.nativeUploadFile(base64, fileName, mimeType));
-        if (r.ok) resolve(r.url);
-        else reject(new Error(r.error || 'Upload failed'));
-      } catch(e) { reject(e); }
-    }, 0);
-  });
+
+  // Фоллбэк: синхронная версия с имитацией прогресса
+  onProgress && onProgress(0);
+  _mcUpdateUploadToastProgress(0);
+  let _fakeP = 0;
+  const _fakeTimer = setInterval(() => {
+    _fakeP = Math.min(88, _fakeP + (Math.random() * 10 + 3));
+    _mcUpdateUploadToastProgress(_fakeP);
+    onProgress && onProgress(_fakeP);
+  }, 250);
+  try {
+    const result = await new Promise((resolve, reject) => {
+      setTimeout(() => {
+        try {
+          const r = JSON.parse(window.Android.nativeUploadFile(base64, fileName, mimeType));
+          if (r.ok) resolve(r.url);
+          else reject(new Error(r.error || 'Upload failed'));
+        } catch(e) { reject(e); }
+      }, 0);
+    });
+    clearInterval(_fakeTimer);
+    _mcUpdateUploadToastProgress(100);
+    onProgress && onProgress(100);
+    return result;
+  } catch(e) {
+    clearInterval(_fakeTimer);
+    throw e;
+  }
 }
 
 // ── Отправка файла/видео/голоса как сообщения ──────────────────────
-function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbData, _targetChat }) {
+function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbData }) {
   const p = profileLoad();
-  const chatTarget = _targetChat || _msgCurrentChat;
-  if (!p || !chatTarget) return;
+  if (!p || !_msgCurrentChat) return;
   const ts = Date.now();
   const replyTo = _mcReplyTo ? { from: _mcReplyTo.from, text: _mcReplyTo.text } : null;
   mcCancelReply();
@@ -6176,7 +5904,7 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
       })()
     : (_mediaLabelMap[fileType] || '📎 ' + (fileName || fileType));
   const msg = {
-    from: p.username, to: chatTarget,
+    from: p.username, to: _msgCurrentChat,
     text: _mediaLabel,
     ts, delivered: false, read: false,
     fileLink: url, fileName, fileType,
@@ -6186,26 +5914,22 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
     ...(replyTo   ? { replyTo   } : {}),
   };
   const msgs = msgLoad();
-  if (!msgs[chatTarget]) msgs[chatTarget] = [];
-  msgs[chatTarget].push(msg);
+  if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
+  msgs[_msgCurrentChat].push(msg);
   msgSave(msgs);
   const chats = chatsLoad();
-  if (!chats.includes(chatTarget)) { chats.unshift(chatTarget); chatsSave(chats); }
-  // Рендерим только если этот чат сейчас открыт
-  if (_msgCurrentChat === chatTarget) {
-    messengerRenderMessages(true);
-    const _sb3 = document.getElementById('mc-action-btn');
-    if (_sb3) { _sb3.classList.remove('mc-send-bounce'); void _sb3.offsetWidth; _sb3.classList.add('mc-send-bounce'); setTimeout(()=>_sb3.classList.remove('mc-send-bounce'),300); }
-    setTimeout(() => { const b = document.getElementById('mc-messages'); if(b) b.scrollTop = b.scrollHeight; }, 80);
-  } else {
-    messengerUpdateBadge();
-  }
+  if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
+  messengerRenderMessages(true);
   SFX.play && SFX.play('msgSend');
+  // Send button bounce
+  const _sb3 = document.getElementById('mc-action-btn');
+  if (_sb3) { _sb3.classList.remove('mc-send-bounce'); void _sb3.offsetWidth; _sb3.classList.add('mc-send-bounce'); setTimeout(()=>_sb3.classList.remove('mc-send-bounce'),300); }
+  setTimeout(() => { const b = document.getElementById('mc-messages'); if(b) b.scrollTop = b.scrollHeight; }, 80);
   // В Supabase — только текст + URL (не base64!)
   const labelMap = { video: '🎬', file: '📎', voice: '🎤' };
   const _mediaOutboxData2 = {
-    chat_key: sbChatKey(p.username, chatTarget),
-    from_user: p.username, to_user: chatTarget,
+    chat_key: sbChatKey(p.username, _msgCurrentChat),
+    from_user: p.username, to_user: _msgCurrentChat,
     text: (labelMap[fileType] || '📎') + ' ' + (fileName || fileType), ts,
     extra: JSON.stringify({ fileLink: url, fileName, fileType,
       ...(fileSize  ? { fileSize  } : {}),
@@ -6213,26 +5937,22 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
       ...(thumbData ? { thumbData } : {}) })
   };
   const _mediaOutboxItem2 = {
-    id: 'media_' + ts, type: 'media', localChat: chatTarget, ts,
+    id: 'media_' + ts, type: 'media', localChat: _msgCurrentChat, ts,
     data: _mediaOutboxData2
   };
   sbInsert('messages', _mediaOutboxData2).then(res => {
     if (res) {
       msg.delivered = true; msg.pending = false;
-      msgSave(msgs);
-      if (_msgCurrentChat === chatTarget) messengerRenderMessages();
-      _outboxUpdateStatusBar();
+      msgSave(msgs); messengerRenderMessages(); _outboxUpdateStatusBar();
     } else {
       msg.pending = true; msgSave(msgs);
       outboxPush(_mediaOutboxItem2);
-      if (_msgCurrentChat === chatTarget) messengerRenderMessages();
-      _outboxUpdateStatusBar();
+      messengerRenderMessages(); _outboxUpdateStatusBar();
     }
   }).catch(() => {
     msg.pending = true; msgSave(msgs);
     outboxPush(_mediaOutboxItem2);
-    if (_msgCurrentChat === chatTarget) messengerRenderMessages();
-    _outboxUpdateStatusBar();
+    messengerRenderMessages(); _outboxUpdateStatusBar();
   });
 }
 
@@ -6273,7 +5993,23 @@ function mcPickVideo() {
     const file = e.target.files[0]; inp.remove();
     if (!file) return;
     if (file.size > 200 * 1024 * 1024) { toast('❌ Видео слишком большое (макс. 200 МБ)'); return; }
-    _mcStartUpload({ file, fileType: 'video', targetChat: _msgCurrentChat });
+    _mcShowUploadToast('video', file.name || 'Видео');
+    try {
+      const [b64, thumbData] = await Promise.all([
+        new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        }),
+        _mcVideoThumb(file)
+      ]);
+      const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
+      const url = await _catboxUpload(b64, file.name || ('video_' + Date.now() + '.' + ext), file.type || 'video/mp4');
+      _mcSendMediaMsg({ url, fileName: file.name || 'Видео', fileType: 'video',
+        fileSize: file.size, thumbData });
+      _mcHideUploadToast(true);
+    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка загрузки видео')); }
   };
   inp.click();
 }
@@ -6287,13 +6023,111 @@ function mcPickFile() {
     const file = e.target.files[0]; inp.remove();
     if (!file) return;
     if (file.size > 200 * 1024 * 1024) { toast('❌ Файл слишком большой (макс. 200 МБ)'); return; }
-    _mcStartUpload({ file, fileType: 'file', targetChat: _msgCurrentChat });
+    const _isAud2 = ['mp3','ogg','wav','flac','aac','m4a','opus','wma'].includes((file.name.split('.').pop()||'').toLowerCase());
+    _mcShowUploadToast(_isAud2 ? 'voice' : 'file', file.name || 'Файл');
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      const url = await _catboxUpload(b64, file.name || ('file_' + Date.now()), file.type || 'application/octet-stream');
+      _mcSendMediaMsg({ url, fileName: file.name || 'Файл', fileType: 'file',
+        fileSize: file.size });
+      _mcHideUploadToast(true);
+    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка загрузки файла')); }
   };
   inp.click();
 }
 
-// ── Голосовые сообщения ─────────────────────────────────────────────
-// ══════════════════════════════════════════════════════════════════
+// ── Запись кружка (видеосообщение, как в Telegram) ────────────────
+// Telegram-принцип: кружок — это короткое видео из галереи/камеры,
+// отображается круглым в чате. В file:// WebView камера через getUserMedia
+// недоступна, поэтому используем системный видео-пикер.
+function mcStartCircleRecord() {
+  // Показываем UI выбора — из галереи или из файлов
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9200;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px calc(20px + var(--safe-bot));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:14px;text-align:center">⭕ Видеосообщение</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <button onclick="this.closest('[style*=fixed]').remove();_mcPickCircleFile()"
+          style="padding:16px 10px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px">
+          <span style="font-size:28px">🎞</span>
+          <span>Из галереи</span>
+        </button>
+        <button onclick="this.closest('[style*=fixed]').remove();_mcPickCircleCamera()"
+          style="padding:16px 10px;background:var(--accent);border:none;border-radius:14px;color:#000;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px">
+          <span style="font-size:28px">📷</span>
+          <span>Камера</span>
+        </button>
+      </div>
+    </div>`;
+  sheet.addEventListener('click', () => sheet.remove());
+  document.body.appendChild(sheet);
+}
+
+function _mcPickCircleFile() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'video/*'; inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.onchange = async (e) => {
+    const file = e.target.files[0]; inp.remove();
+    if (!file) return;
+    if (file.size > 100 * 1024 * 1024) { toast('❌ Видео слишком большое (макс. 100 МБ)'); return; }
+    _mcShowUploadToast('video', '⭕ Видеосообщение');
+    try {
+      const [b64, thumbData] = await Promise.all([
+        new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        }),
+        _mcVideoThumb(file)
+      ]);
+      const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
+      const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.' + ext, file.type || 'video/mp4');
+      // Отправляем как circle — специальный fileType
+      _mcSendMediaMsg({ url, fileName: file.name, fileType: 'circle',
+        fileSize: file.size, thumbData });
+      _mcHideUploadToast(true);
+    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка')); }
+  };
+  inp.click();
+}
+
+function _mcPickCircleCamera() {
+  // capture=user для фронтальной камеры (как Telegram)
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'video/*'; inp.capture = 'user';
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.onchange = async (e) => {
+    const file = e.target.files[0]; inp.remove();
+    if (!file) return;
+    _mcShowUploadToast('video', '⭕ Видеосообщение');
+    try {
+      const [b64, thumbData] = await Promise.all([
+        new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        }),
+        _mcVideoThumb(file)
+      ]);
+      const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.mp4', file.type || 'video/mp4');
+      _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle',
+        fileSize: file.size, thumbData });
+      _mcHideUploadToast(true);
+    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка')); }
+  };
+  inp.click();
+}
 // 🎤 ГОЛОСОВЫЕ СООБЩЕНИЯ — Telegram-стиль
 // Зажать 🎤 → запись. Вверх → заблокировать (не надо держать).
 // Влево → отмена. Отпустить → отправить.
@@ -6313,83 +6147,11 @@ let _mcVoiceNative    = false; // true = идёт нативная запись 
 let _mcVoiceStartX    = 0;     // начальная X-координата касания для swipe-cancel
 let _mcVoiceStartY    = 0;
 
-// ── Tap-vs-hold detection for voice/circle buttons ────────────────
-// Short tap (<300ms, no move): switch mode (voice ↔ circle)
-// Hold (≥300ms): start recording
-let _mcPressBtnTimer   = null;
-let _mcPressStarted    = false;
-let _mcPressIsVoice    = true;  // true = voice btn pressed, false = circle btn
-let _mcPressStartX     = 0;
-let _mcPressStartY     = 0;
-
-function mcVoiceOrCirclePressStart(e) {
-  e.preventDefault();
-  if (_mcVoiceRecorder || _mcVoiceNative || _mcCircleNative) return;
-  _mcPressIsVoice = true;
-  _mcPressStarted = true;
-  const t = e.touches?.[0] || e;
-  _mcPressStartX = t.clientX || 0;
-  _mcPressStartY = t.clientY || 0;
-  clearTimeout(_mcPressBtnTimer);
-  _mcPressBtnTimer = setTimeout(() => {
-    // Hold → start voice recording
-    _mcPressBtnTimer = null;
-    mcVoiceTouchStart(e);
-  }, 280);
-}
-
-function mcVoiceOrCirclePressEnd(e) {
-  if (!_mcPressStarted) return;
-  _mcPressStarted = false;
-  if (_mcPressBtnTimer !== null) {
-    // Released before hold threshold → it's a tap → toggle mode
-    clearTimeout(_mcPressBtnTimer);
-    _mcPressBtnTimer = null;
-    // Only toggle if not already recording
-    if (!_mcVoiceRecorder && !_mcVoiceNative) {
-      mcToggleVoiceCircle();
-    }
-  } else {
-    // Was recording (hold) → stop
-    mcVoiceTouchEnd(e);
-  }
-}
-
-function mcCircleOrVoicePressStart(e) {
-  e.preventDefault();
-  if (_mcVoiceRecorder || _mcVoiceNative || _mcCircleNative) return;
-  _mcPressIsVoice = false;
-  _mcPressStarted = true;
-  const t = e.touches?.[0] || e;
-  _mcPressStartX = t.clientX || 0;
-  _mcPressStartY = t.clientY || 0;
-  clearTimeout(_mcPressBtnTimer);
-  _mcPressBtnTimer = setTimeout(() => {
-    // Hold → start circle recording
-    _mcPressBtnTimer = null;
-    mcCircleTouchStart(e);
-  }, 280);
-}
-
-function mcCircleOrVoicePressEnd(e) {
-  if (!_mcPressStarted) return;
-  _mcPressStarted = false;
-  if (_mcPressBtnTimer !== null) {
-    clearTimeout(_mcPressBtnTimer);
-    _mcPressBtnTimer = null;
-    if (!_mcCircleNative && !_mcVoiceNative) {
-      mcToggleVoiceCircle();
-    }
-  } else {
-    mcCircleTouchEnd(e);
-  }
-}
-
-// Если таймер ещё ждёт — значит был быстрый тап, ещё не запись
-let _mcVoiceHoldTimer = null;
-const MC_VOICE_HOLD_MS = 200; // порог: меньше = тап (переключение), больше = запись
+// Время нажатия — для различия короткого тапа от зажатия
+let _mcVoiceTouchTs = 0;
 
 function mcVoiceTouchStart(e) {
+  _mcVoiceTouchTs = Date.now();
   e.preventDefault();
   if (_mcVoiceRecorder || _mcVoiceNative) return;
   _mcVoiceCancelled = false;
@@ -6398,15 +6160,12 @@ function mcVoiceTouchStart(e) {
   _mcVoiceStartX = _vt.clientX || _vt.pageX || 0;
   _mcVoiceStartY = _vt.clientY || _vt.pageY || 0;
 
-  // Откладываем старт записи — если отпустят раньше MC_VOICE_HOLD_MS, будет тап (переключение)
-  clearTimeout(_mcVoiceHoldTimer);
-  _mcVoiceHoldTimer = setTimeout(() => {
-    _mcVoiceHoldTimer = null;
-    _mcVoiceStartRecord(e);
-  }, MC_VOICE_HOLD_MS);
-}
+  // Режим кружка — показываем UI выбора камеры (заглушка, т.к. getUserMedia ограничен в file://)
+  if (_mcVoiceMode === 'circle') {
+    mcStartCircleRecord();
+    return;
+  }
 
-function _mcVoiceStartRecord(e) {
   // Используем нативный рекордер (Java MediaRecorder) как основной —
   // getUserMedia в file:// WebView часто недоступен из-за ограничений контекста
   if (window.Android && typeof window.Android.startVoiceRecording === 'function') {
@@ -6479,21 +6238,20 @@ function mcVoiceTouchMove(e) {
 
 // ── Отпустить: отправить (Telegram hold-to-record) ──────────────────────
 function mcVoiceTouchEnd(e) {
-  // Если это был быстрый тап (не запись) — обработан в touchStart, ничего не делаем
-  if (_mcVoiceHoldTimer) {
-    clearTimeout(_mcVoiceHoldTimer);
-    _mcVoiceHoldTimer = null;
-    // Короткий тап — переключаем ГС ↔ кружок
-    mcToggleVoiceCircle();
-    return;
-  }
   // Возвращаем UI на место если был сдвинут
   const ui = document.getElementById('mc-voice-ui');
   if (ui) { ui.style.transform = ''; ui.style.opacity = ''; }
   const hint = document.getElementById('mc-voice-hint');
   if (hint) { hint.style.opacity = '1'; hint.textContent = 'Свайп для отмены'; }
-  // Отправляем — работает и для нативного и для браузерного
-  if (!_mcVoiceRecorder && !_mcVoiceNative) return;
+
+  // Короткий тап (< 300мс) без активной записи → переключаем mic↔circle
+  const tapDur = Date.now() - _mcVoiceTouchTs;
+  if (!_mcVoiceRecorder && !_mcVoiceNative) {
+    if (tapDur < 300) {
+      mcToggleVoiceMode();
+    }
+    return;
+  }
   _mcVoiceSend();
 }
 
@@ -6658,7 +6416,6 @@ async function _mcVoiceFinalize() {
   const ext  = mimeType.includes('ogg') ? 'ogg' : 'webm';
   const blob = new Blob(_mcVoiceChunks, { type: mimeType });
   const dur  = _mcVoiceSeconds;
-  const chatTarget = _msgCurrentChat; // capture before any navigation
   _mcVoiceChunks = [];
   if (blob.size < 500) { toast('🎤 Слишком короткое'); return; }
   _mcShowUploadToast('voice', 'Голосовое сообщение');
@@ -6670,8 +6427,8 @@ async function _mcVoiceFinalize() {
       r.readAsDataURL(blob);
     });
     const fileName = 'voice_' + Date.now() + '.' + ext;
-    const url = await _catboxUploadWithRetry(b64, fileName, mimeType, blob.size);
-    _mcSendMediaMsg({ url, fileName, fileType: 'voice', fileSize: blob.size, duration: dur, _targetChat: chatTarget });
+    const url = await _catboxUpload(b64, fileName, mimeType);
+    _mcSendMediaMsg({ url, fileName, fileType: 'voice', fileSize: blob.size, duration: dur });
     _mcHideUploadToast(true);
   } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка отправки')); }
 }
@@ -6843,6 +6600,10 @@ function messengerShowMore() {
   const existing = document.getElementById('msg-action-sheet');
   if (existing) { _closeSheet(existing); return; }
 
+  const peer = _profileOnlinePeers.find(u => u.username === username)
+             || _allKnownUsers.find(u => u.username === username);
+  const peerName = localNickGet(username) || peer?.name || username;
+
   const sheet = document.createElement('div');
   sheet.id = 'msg-action-sheet';
   sheet.style.cssText = 'position:fixed;inset:0;z-index:8888;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:mcFadeIn .15s ease';
@@ -6852,6 +6613,11 @@ function messengerShowMore() {
       <button onclick="peerProfileOpen('${username}');_closeSheet(document.getElementById('msg-action-sheet'))"
         style="width:100%;padding:16px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
         <span style="font-size:22px">👤</span> Профиль пользователя
+      </button>
+      <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
+      <button onclick="_closeSheet(document.getElementById('msg-action-sheet'));localNickEdit('${username}','${escHtml(peer?.name||username)}')"
+        style="width:100%;padding:16px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <span style="font-size:22px">✏️</span> Изменить имя${localNickGet(username) ? ' <span style="font-size:11px;color:var(--accent);margin-left:4px">изменено</span>' : ''}
       </button>
       <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
       <button onclick="peerMuteShow('${username}');_closeSheet(document.getElementById('msg-action-sheet'))"
@@ -6951,7 +6717,7 @@ function peerProfileOpen(username) {
     <!-- Имя, статус, bio — центрировано как в своём профиле -->
     <div style="text-align:center;padding:0 16px 16px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(getDisplayName(username, peer.name||username))}</span>
+        <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(peer.name||username)}</span>
         ${peer.vip ? '<span style="background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">👑 VIP</span>' : ''}
       </div>
       <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(username)}</div>
@@ -7520,93 +7286,18 @@ function mcVideoOpen(url, name) {
 
 window.mcVideoOpen = mcVideoOpen;
 
-// ── Переключение кнопки действия: 🎤 ↔ ➤ ─────────────────────────
-// ── Состояние кружка (video circle) ───────────────────────────────
-let _mcCircleNative    = false;
-let _mcCircleStartX    = 0;
-let _mcCircleStartY    = 0;
-
-function mcCircleTouchStart(e) {
-  e.preventDefault();
-  if (_mcVoiceRecorder || _mcVoiceNative || _mcCircleNative) return;
-  const t = e.touches?.[0] || e;
-  _mcCircleStartX = t.clientX || 0;
-  _mcCircleStartY = t.clientY || 0;
-  _mcVoiceCancelled = false;
-  _mcVoiceSeconds   = 0;
-  if (window.Android && typeof window.Android.startCircleRecording === 'function') {
-    _mcCircleNative = true;
-    window.Android.startCircleRecording();
-    _mcVoiceShowUI();
-    return;
-  }
-  // fallback: treat same as voice
-  mcVoiceTouchStart(e);
-}
-
-function mcCircleTouchMove(e) {
-  if (!_mcCircleNative) { mcVoiceTouchMove(e); return; }
-  const touch = e.touches?.[0] || e;
-  const dx = (touch.clientX || 0) - _mcCircleStartX;
-  if (dx < -80) { _mcCircleCancel(); return; }
-  const ui = document.getElementById('mc-voice-ui');
-  if (ui && dx < 0) { ui.style.transform = `translateX(${Math.max(dx * 0.38, -65)}px)`; }
-}
-
-function mcCircleTouchEnd(e) {
-  if (!_mcCircleNative) { mcVoiceTouchEnd(e); return; }
-  const ui = document.getElementById('mc-voice-ui');
-  if (ui) { ui.style.transform = ''; }
-  _mcCircleNative = false;
-  _mcVoiceHideUI();
-  if (window.Android && typeof window.Android.stopCircleRecording === 'function') {
-    window.Android.stopCircleRecording();
-  }
-}
-
-function _mcCircleCancel() {
-  _mcCircleNative = false;
-  _mcVoiceHideUI();
-  if (window.Android && typeof window.Android.cancelCircleRecording === 'function') {
-    window.Android.cancelCircleRecording();
-  }
-  toast('\ud83d\uddd1 Кружок отменён');
-}
-
-// Колбэки нативного кружка
-window.onNativeCircleDone = function(url, duration) {
-  _mcSendMediaMsg({ url, fileName: 'circle_' + Date.now() + '.mp4', fileType: 'video', duration });
-  _mcHideUploadToast(true);
-};
-window.onNativeCircleError = function(msg) {
-  _mcCircleNative = false;
-  _mcVoiceHideUI();
-  toast('\u274c ' + (msg || 'Ошибка кружка'));
-};
-
-// Telegram-style: одиночный тап по гс-кнопке = переключить на кружок и обратно
+// ── Переключение кнопки действия: 🎤 ↔ ➤ / кружок ────────────────
+// ── Состояние кнопки: 'voice' | 'send' | 'circle' ────────────────
+// Тап по mic → circle, тап по circle → mic (как в Telegram)
 let _mcActionState = 'voice';
-
-function mcToggleVoiceCircle() {
-  if (_mcActionState !== 'voice' && _mcActionState !== 'circle') return;
-  const btn = document.getElementById('mc-action-btn');
-  if (!btn) return;
-  const newState = _mcActionState === 'voice' ? 'circle' : 'voice';
-  _mcActionState = newState;
-  btn.classList.remove('state-voice','state-send','state-circle');
-  btn.style.transform = 'scale(.85)';
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    btn.style.transform = '';
-    btn.classList.add('state-' + newState);
-  }));
-}
+let _mcVoiceMode   = 'voice'; // 'voice' | 'circle' — текущий суб-режим когда нет текста
 
 function mcUpdateActionBtn() {
   const inp = document.getElementById('mc-input');
   const btn = document.getElementById('mc-action-btn');
   if (!btn) return;
   const hasText = inp && inp.value.trim().length > 0;
-  const newState = hasText ? 'send' : (_mcActionState === 'circle' ? 'circle' : 'voice');
+  const newState = hasText ? 'send' : _mcVoiceMode;
   if (newState === _mcActionState) return;
   _mcActionState = newState;
   btn.classList.remove('state-voice','state-send','state-circle');
@@ -7614,16 +7305,48 @@ function mcUpdateActionBtn() {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     btn.style.transform = '';
     btn.classList.add('state-' + newState);
+    _mcRenderActionIcon(newState);
   }));
 }
+
+/** Рендерит иконку внутри mc-action-voice в зависимости от режима */
+function _mcRenderActionIcon(state) {
+  const voiceEl = document.getElementById('mc-action-voice');
+  if (!voiceEl) return;
+  if (state === 'circle') {
+    voiceEl.querySelector('svg')?.remove();
+    if (!voiceEl.querySelector('#mc-circle-ico')) {
+      voiceEl.innerHTML = `<svg id="mc-circle-ico" width="22" height="22" viewBox="0 0 24 24" fill="white">
+        <circle cx="12" cy="12" r="9" stroke="white" stroke-width="2" fill="none"/>
+        <circle cx="12" cy="9" r="3" fill="white"/>
+        <path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="white"/>
+      </svg>`;
+    }
+  } else {
+    voiceEl.innerHTML = `<svg id="mc-mic-svg" width="22" height="22" viewBox="0 0 24 24" fill="white">
+      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/>
+    </svg>`;
+  }
+}
+
+/** Тап по кнопке без текста — переключаем mic ↔ circle */
+function mcToggleVoiceMode() {
+  const inp = document.getElementById('mc-input');
+  const hasText = inp && inp.value.trim().length > 0;
+  if (hasText) { messengerSend(); return; }
+  _mcVoiceMode = _mcVoiceMode === 'voice' ? 'circle' : 'voice';
+  _mcActionState = ''; // сбрасываем чтобы mcUpdateActionBtn применил новое состояние
+  mcUpdateActionBtn();
+  toast(_mcVoiceMode === 'circle' ? '⭕ Режим кружка' : '🎤 Режим голосового', 1200);
+}
+
 function _mcInitActionBtn() {
   const btn = document.getElementById('mc-action-btn');
   if (!btn) return;
-  // Preserve circle state if user toggled it
-  const state = (_mcActionState === 'circle') ? 'circle' : 'voice';
   btn.classList.remove('state-voice','state-send','state-circle');
-  btn.classList.add('state-' + state);
-  _mcActionState = state;
+  btn.classList.add('state-voice');
+  _mcActionState = 'voice';
+  _mcRenderActionIcon('voice');
 }
 // Инициализируем при открытии чата
 const _origMesOpenChat = window.messengerOpenChat;
@@ -7748,30 +7471,32 @@ if (typeof cmdExec !== 'undefined') {
 // ══════════════════════════════════════════════════════════════════════
 // ✏️ FAB кнопка в мессенджере
 // ══════════════════════════════════════════════════════════════════════
-const _FAB_PENCIL_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
-const _FAB_CLOSE_SVG  = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`;
-
 let _fabOpen = false;
 function msgFabToggle() {
   const menu = document.getElementById('msg-fab-menu');
-  const icon = document.getElementById('msg-fab-icon');
   const btn  = document.getElementById('msg-fab-btn');
   if (!menu) return;
   _fabOpen = !_fabOpen;
   if (_fabOpen) {
     menu.style.display = 'flex';
-    if (btn)  btn.style.transform  = 'rotate(45deg)';
-    if (icon) icon.innerHTML = _FAB_CLOSE_SVG;
+    if (btn) {
+      btn.style.transform = 'rotate(45deg)';
+      // Не используем textContent — twemoji уже заменил emoji на <img>
+      btn.innerHTML = '<span style="font-size:22px;line-height:1;font-family:\'Noto Color Emoji\',sans-serif">✕</span>';
+    }
   } else { msgFabClose(); }
 }
 function msgFabClose() {
   const menu = document.getElementById('msg-fab-menu');
-  const icon = document.getElementById('msg-fab-icon');
   const btn  = document.getElementById('msg-fab-btn');
   _fabOpen = false;
   if (menu) menu.style.display = 'none';
-  if (btn)  btn.style.transform = '';
-  if (icon) icon.innerHTML = _FAB_PENCIL_SVG;
+  if (btn) {
+    btn.style.transform = '';
+    // Восстанавливаем emoji через innerHTML — twemoji конвертирует при следующем parse
+    btn.innerHTML = '<span style="font-size:22px;line-height:1">✏️</span>';
+    if (typeof twemoji !== 'undefined') twemoji.parse(btn, { folder:'svg', ext:'.svg', base:'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/' });
+  }
 }
 document.addEventListener('click', (e) => {
   if (!_fabOpen) return;

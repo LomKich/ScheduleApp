@@ -8,11 +8,8 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.BIND_VPN_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Для OTA: запуск системного установщика APK -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -296,23 +293,6 @@
                 <action android:name="android.net.VpnService" />
             </intent-filter>
         </service>
-
-        <!-- Фоновый сервис: polling сообщений + загрузка файлов -->
-        <service
-            android:name=".BackgroundPollService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <!-- Перезапуск сервиса после перезагрузки устройства -->
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true"
-            android:enabled="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
 
         <!-- FileProvider для установки APK-обновлений без MANAGE_EXTERNAL_STORAGE -->
         <provider
