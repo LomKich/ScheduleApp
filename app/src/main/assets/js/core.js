@@ -2950,6 +2950,27 @@ function cmdExec(raw){
         S.liquidGlass=false;S.liquidGlassOpt=false;applyGlassMode(true);cmdPrint('ok','Liquid Glass выключен.');
       }
     } break;
+    case 'vpn': {
+      if (!window.Android?.toggleVpn || !window.Android?.getVpnState) {
+        cmdPrint('err', 'VPN недоступен — только в приложении.'); break;
+      }
+      const vpnState = JSON.parse(window.Android.getVpnState() || '{}');
+      const isOn = !!vpnState.active;
+      if (arg === 'on') {
+        if (isOn) { cmdPrint('warn', '⚡ VPN уже включён.'); break; }
+        window.Android.toggleVpn();
+        cmdPrint('ok', '✅ VPN включается...');
+      } else if (arg === 'off') {
+        if (!isOn) { cmdPrint('warn', '⚡ VPN уже выключен.'); break; }
+        window.Android.toggleVpn();
+        cmdPrint('ok', '🔌 VPN отключается...');
+      } else {
+        cmdPrint('info', 'VPN: ' + (isOn ? '🟢 включён' : '🔴 выключен'));
+        if (vpnState.text) cmdPrint('out', '  ' + vpnState.text);
+        cmdPrint('out', '  vpn on  — включить');
+        cmdPrint('out', '  vpn off — выключить');
+      }
+    } break;
     case 'shake':
       cmdPrint('warn','💥 ВАУ!');
       document.body.classList.remove('shaking');
