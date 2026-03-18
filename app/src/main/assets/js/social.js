@@ -4668,7 +4668,13 @@ window.onNativeVoiceDone = function(url, duration, mimeType) {
 };
 window.onNativeVoiceError = function(msg) {
   _mcVoiceNative = false;
+  _mcVoiceHideUI();
   toast('❌ ' + (msg || 'Ошибка записи'));
+};
+window.onNativeVoiceCancelled = function() {
+  _mcVoiceNative = false;
+  _mcVoiceHideUI();
+  toast('🗑 Запись отменена');
 };
 
 // ── Загрузка файла на catbox.moe через Java-бридж ─────────────────
@@ -4825,7 +4831,6 @@ let _mcVoiceRecorder  = null;
 let _mcVoiceChunks    = [];
 let _mcVoiceTimer     = null;
 let _mcVoiceSeconds   = 0;
-let _mcVoiceLocked    = false;   // режим замка — можно отпустить кнопку
 let _mcVoiceCancelled = false;
 let _mcVoiceStream    = null;
 let _mcVoiceAnalyser  = null;
@@ -4833,13 +4838,18 @@ let _mcVoiceAnimFrame = null;
 const MC_VOICE_MAX    = 60;
 
 // ── Старт: вызывается при touchstart/mousedown на кнопке ──────────
-let _mcVoiceNative = false; // true = идёт нативная запись через Java
+let _mcVoiceNative    = false; // true = идёт нативная запись через Java
+let _mcVoiceStartX    = 0;     // начальная X-координата касания для swipe-cancel
+let _mcVoiceStartY    = 0;
 
 function mcVoiceTouchStart(e) {
   e.preventDefault();
   if (_mcVoiceRecorder || _mcVoiceNative) return;
   _mcVoiceCancelled = false;
-  _mcVoiceLocked    = false;
+  // Запоминаем начальную точку для определения свайпа
+  const _vt = e.touches?.[0] || e;
+  _mcVoiceStartX = _vt.clientX || _vt.pageX || 0;
+  _mcVoiceStartY = _vt.clientY || _vt.pageY || 0;
 
   // Используем нативный рекордер (Java MediaRecorder) как основной —
   // getUserMedia в file:// WebView часто недоступен из-за ограничений контекста
@@ -4885,47 +4895,35 @@ function mcVoiceTouchStart(e) {
   }).catch(() => toast('🎤 Нет доступа к микрофону'));
 }
 
-// ── Движение: swipe up = lock, swipe left = cancel ────────────────
+// ── Движение: swipe left = отмена (Telegram hold-to-record стиль) ─────────
 function mcVoiceTouchMove(e) {
-  if (!_mcVoiceRecorder || _mcVoiceLocked) return;
+  // Работает и для нативного (Java) и для браузерного рекордера
+  if (!_mcVoiceRecorder && !_mcVoiceNative) return;
   const touch = e.touches?.[0] || e;
-  const btn   = document.getElementById('mc-voice-btn');
-  if (!btn) return;
-  const rect  = btn.getBoundingClientRect();
-  const btnCX = rect.left + rect.width / 2;
-  const btnCY = rect.top  + rect.height / 2;
-  const dx    = (touch.clientX || touch.pageX) - btnCX;
-  const dy    = (touch.clientY || touch.pageY) - btnCY;
-  // Замок: вверх > 80px
-  if (dy < -80) { _mcVoiceLock(); return; }
-  // Отмена: влево > 80px
+  const dx = (touch.clientX || touch.pageX) - _mcVoiceStartX;
+  // Отмена: свайп влево > 80px
   if (dx < -80) { _mcVoiceCancel(); return; }
-  // Подсказка направления
+  // Визуальная подсказка — сдвигаем UI вслед за пальцем
   const hint = document.getElementById('mc-voice-hint');
   if (hint) {
-    if (dy < -20)      hint.textContent = '🔒 Замок';
-    else if (dx < -20) hint.textContent = '✖ Отмена';
-    else               hint.textContent = '← Отмена   🔒 Замок';
+    const progress = Math.min(1, Math.abs(Math.min(0, dx)) / 80);
+    hint.style.opacity = String(0.4 + progress * 0.6);
+    hint.textContent   = dx < -20 ? '✖ Отпустить → отмена' : '← Свайп для отмены';
   }
-}
-
-// ── Отпустить: отправить (или ничего если заблокировано) ──────────
-function mcVoiceTouchEnd(e) {
-  if (!_mcVoiceRecorder) return;
-  if (_mcVoiceLocked)    return; // в режиме замка кнопка "Отправить" отдельная
-  _mcVoiceSend();
-}
-
-function _mcVoiceLock() {
-  if (_mcVoiceLocked) return;
-  _mcVoiceLocked = true;
-  SFX.play && SFX.play('themeSelect');
   const ui = document.getElementById('mc-voice-ui');
+  if (ui && dx < 0) ui.style.transform = 'translateX(' + Math.max(dx * 0.4, -60) + 'px)';
+}
+
+// ── Отпустить: отправить (Telegram hold-to-record) ──────────────────────
+function mcVoiceTouchEnd(e) {
+  // Возвращаем UI на место если был сдвинут
+  const ui = document.getElementById('mc-voice-ui');
+  if (ui) ui.style.transform = '';
   const hint = document.getElementById('mc-voice-hint');
-  if (hint) hint.textContent = '🔒 Запись заблокирована';
-  // Показываем кнопки Отмена и Отправить
-  const bar = document.getElementById('mc-voice-lock-bar');
-  if (bar) bar.style.display = 'flex';
+  if (hint) { hint.style.opacity = '1'; hint.textContent = '← Свайп для отмены'; }
+  // Отправляем — работает и для нативного и для браузерного
+  if (!_mcVoiceRecorder && !_mcVoiceNative) return;
+  _mcVoiceSend();
 }
 
 function _mcVoiceSend() {
@@ -4979,11 +4977,7 @@ function _mcVoiceShowUI() {
       <canvas id="mc-voice-wave" width="200" height="36" style="flex:1;max-width:220px;height:36px"></canvas>
       <div id="mc-voice-timer" style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--text);min-width:42px;text-align:right">0:00</div>
     </div>
-    <div id="mc-voice-hint" style="font-size:12px;color:var(--muted);padding:0 16px 8px;text-align:center">← Отмена &nbsp;&nbsp; 🔒 Замок</div>
-    <div id="mc-voice-lock-bar" style="display:none;width:100%;padding:4px 16px 2px;gap:10px;justify-content:space-between">
-      <button onclick="_mcVoiceCancel()" style="flex:1;padding:10px;border-radius:12px;border:none;background:var(--surface2);color:var(--danger,#c94f4f);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">🗑 Удалить</button>
-      <button onclick="_mcVoiceSend()" style="flex:1;padding:10px;border-radius:12px;border:none;background:var(--accent);color:var(--btn-text,#fff);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">➤ Отправить</button>
-    </div>
+    <div id="mc-voice-hint" style="font-size:12px;color:var(--muted);padding:0 16px 8px;text-align:center;transition:opacity .15s">← Свайп для отмены</div>
   `;
   document.body.appendChild(ui);
   // Кнопку подсвечиваем
