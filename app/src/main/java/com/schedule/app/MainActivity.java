@@ -80,6 +80,9 @@ public class MainActivity extends Activity {
     private long           _voiceStartMs    = 0;
     private android.os.Handler _voiceTimerHandler = null;
     private boolean        _pendingVoiceRecordRetry = false;
+    // Telegram-style: блокировка для атомарного чтения/записи состояния записи
+    private final Object   _voiceLock       = new Object();
+    private volatile boolean _voiceCancelled = false;
 
     // Java-side poll timer — работает даже когда WebView заморожен в фоне
     private android.os.Handler     pollHandler;
@@ -1387,41 +1390,58 @@ public class MainActivity extends Activity {
                 return;
             }
             log.i(TAG, "startVoiceRecording: permission OK, initializing MediaRecorder");
-            stopVoiceRecording(); // на всякий случай останавливаем предыдущую
+            // Telegram-style: сначала чисто останавливаем предыдущую (без upload)
+            synchronized (_voiceLock) {
+                _voiceCancelled = false;
+                _cleanupVoiceLocked();
+            }
             try {
-                _voiceFile = java.io.File.createTempFile("voice_", ".m4a", getCacheDir());
-                log.i(TAG, "startVoiceRecording: temp file=" + _voiceFile.getAbsolutePath());
-                _voiceRecorder = new MediaRecorder();
-                _voiceRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-                _voiceRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-                _voiceRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-                _voiceRecorder.setAudioSamplingRate(44100);
-                _voiceRecorder.setAudioEncodingBitRate(128000);
-                _voiceRecorder.setOutputFile(_voiceFile.getAbsolutePath());
-                _voiceRecorder.setOnErrorListener((mr, what, extra) ->
+                java.io.File voiceFile = java.io.File.createTempFile("voice_", ".m4a", getCacheDir());
+                log.i(TAG, "startVoiceRecording: temp file=" + voiceFile.getAbsolutePath());
+                MediaRecorder recorder = new MediaRecorder();
+                recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+                recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+                recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+                recorder.setAudioSamplingRate(44100);
+                recorder.setAudioEncodingBitRate(128000);
+                recorder.setOutputFile(voiceFile.getAbsolutePath());
+                recorder.setOnErrorListener((mr, what, extra) ->
                     log.e(TAG, "MediaRecorder error: what=" + what + " extra=" + extra));
-                _voiceRecorder.prepare();
+                recorder.prepare();
                 log.i(TAG, "startVoiceRecording: prepare() OK");
-                _voiceRecorder.start();
+                // Фиксируем состояние атомарно до start()
+                synchronized (_voiceLock) {
+                    _voiceRecorder = recorder;
+                    _voiceFile     = voiceFile;
+                }
+                recorder.start();
                 _voiceStartMs = System.currentTimeMillis();
                 log.i(TAG, "startVoiceRecording: recording started, maxDur=60s");
                 // Тикаем каждую секунду → JS обновляет таймер
-                _voiceTimerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+                synchronized (_voiceLock) { _voiceTimerHandler = handler; }
                 Runnable tick = new Runnable() {
                     @Override public void run() {
-                        if (_voiceRecorder == null) return;
+                        // Telegram-style: проверяем состояние под блокировкой
+                        synchronized (_voiceLock) {
+                            if (_voiceRecorder == null || _voiceCancelled) return;
+                        }
                         int sec = (int)((System.currentTimeMillis() - _voiceStartMs) / 1000);
                         log.i(TAG, "Voice tick: " + sec + "s");
                         webView.evaluateJavascript(
                             "if(typeof onNativeVoiceTick==='function')onNativeVoiceTick(" + sec + ")", null);
-                        if (sec < 60) _voiceTimerHandler.postDelayed(this, 1000);
-                        else { log.i(TAG, "Voice max duration reached, auto-stop"); stopVoiceRecording(); }
+                        if (sec < 60) {
+                            handler.postDelayed(this, 1000);
+                        } else {
+                            log.i(TAG, "Voice max duration reached, auto-stop");
+                            stopVoiceRecording();
+                        }
                     }
                 };
-                _voiceTimerHandler.postDelayed(tick, 1000);
+                handler.postDelayed(tick, 1000);
             } catch (Exception e) {
                 log.e(TAG, "startVoiceRecording error: " + e.getMessage());
-                _cleanupVoice();
+                synchronized (_voiceLock) { _cleanupVoiceLocked(); }
                 webView.post(() -> webView.evaluateJavascript(
                     "if(typeof onNativeVoiceError==='function')onNativeVoiceError('Не удалось запустить запись: " + e.getMessage() + "')", null));
             }
@@ -1429,23 +1449,33 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void stopVoiceRecording() {
-            if (_voiceRecorder == null) {
-                log.w(TAG, "stopVoiceRecording: recorder is null, ignoring");
-                return;
+            // Telegram-style: атомарно извлекаем состояние — только один поток пройдёт
+            final MediaRecorder recorder;
+            final java.io.File file;
+            final int duration;
+            synchronized (_voiceLock) {
+                if (_voiceRecorder == null || _voiceCancelled) {
+                    log.w(TAG, "stopVoiceRecording: already stopped/cancelled, ignoring");
+                    return;
+                }
+                log.i(TAG, "stopVoiceRecording called");
+                if (_voiceTimerHandler != null) {
+                    _voiceTimerHandler.removeCallbacksAndMessages(null);
+                    _voiceTimerHandler = null;
+                }
+                duration  = (int)((System.currentTimeMillis() - _voiceStartMs) / 1000);
+                recorder  = _voiceRecorder;
+                file      = _voiceFile;
+                _voiceRecorder = null;  // ← обнуляем под lock — второй вызов выйдет выше
+                _voiceFile     = null;
             }
-            log.i(TAG, "stopVoiceRecording called");
-            if (_voiceTimerHandler != null) { _voiceTimerHandler.removeCallbacksAndMessages(null); _voiceTimerHandler = null; }
-            final int duration = (int)((System.currentTimeMillis() - _voiceStartMs) / 1000);
-            final java.io.File file = _voiceFile;
             try {
-                _voiceRecorder.stop();
-                _voiceRecorder.release();
+                recorder.stop();
+                recorder.release();
                 log.i(TAG, "stopVoiceRecording: recorder stopped OK, duration=" + duration + "s");
             } catch (Exception e) {
                 log.w(TAG, "stopVoiceRecording stop error: " + e.getMessage());
             }
-            _voiceRecorder = null;
-            _voiceFile     = null;
             if (file == null || !file.exists()) {
                 log.w(TAG, "stopVoiceRecording: file is null or missing");
                 webView.post(() -> webView.evaluateJavascript(
@@ -1469,19 +1499,28 @@ public class MainActivity extends Activity {
                     int read = fis.read(bytes); fis.close();
                     log.i(TAG, "stopVoiceRecording: read " + read + " bytes from file");
                     file.delete();
+                    // Telegram-style: проверяем отмену перед отправкой
+                    if (_voiceCancelled) {
+                        log.i(TAG, "stopVoiceRecording: cancelled before upload, aborting");
+                        return;
+                    }
                     String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
                     String fileName = "voice_" + System.currentTimeMillis() + ".m4a";
                     log.i(TAG, "stopVoiceRecording: calling nativeUploadFile fileName=" + fileName);
                     String result = nativeUploadFile(b64, fileName, "audio/mp4");
                     log.i(TAG, "stopVoiceRecording: upload result=" + result.substring(0, Math.min(result.length(), 100)));
+                    // Проверяем ещё раз после долгого upload
+                    if (_voiceCancelled) {
+                        log.i(TAG, "stopVoiceRecording: cancelled after upload, not delivering");
+                        return;
+                    }
                     org.json.JSONObject res = new org.json.JSONObject(result);
                     if (res.optBoolean("ok")) {
                         final String url = res.getString("url");
-                        final int dur = duration;
-                        log.i(TAG, "stopVoiceRecording: upload OK url=" + url + " dur=" + dur);
+                        log.i(TAG, "stopVoiceRecording: upload OK url=" + url + " dur=" + duration);
                         webView.post(() -> webView.evaluateJavascript(
                             "if(typeof onNativeVoiceDone==='function')onNativeVoiceDone('"
-                            + url + "'," + dur + ",'audio/mp4')", null));
+                            + url + "'," + duration + ",'audio/mp4')", null));
                     } else {
                         final String err = res.optString("error", "Upload failed");
                         log.e(TAG, "stopVoiceRecording: upload failed: " + err);
@@ -1490,8 +1529,10 @@ public class MainActivity extends Activity {
                     }
                 } catch (Exception e) {
                     log.e(TAG, "stopVoiceRecording upload error: " + e.getMessage());
-                    webView.post(() -> webView.evaluateJavascript(
-                        "if(typeof onNativeVoiceError==='function')onNativeVoiceError('" + e.getMessage() + "')", null));
+                    if (!_voiceCancelled) {
+                        webView.post(() -> webView.evaluateJavascript(
+                            "if(typeof onNativeVoiceError==='function')onNativeVoiceError('" + e.getMessage() + "')", null));
+                    }
                 }
             }).start();
         }
@@ -1499,12 +1540,23 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void cancelVoiceRecording() {
             log.i(TAG, "cancelVoiceRecording called");
-            if (_voiceTimerHandler != null) { _voiceTimerHandler.removeCallbacksAndMessages(null); _voiceTimerHandler = null; }
-            _cleanupVoice();
+            synchronized (_voiceLock) {
+                // Telegram-style: ставим флаг ДО cleanup — upload-поток увидит его
+                _voiceCancelled = true;
+                if (_voiceTimerHandler != null) {
+                    _voiceTimerHandler.removeCallbacksAndMessages(null);
+                    _voiceTimerHandler = null;
+                }
+                _cleanupVoiceLocked();
+            }
             log.i(TAG, "cancelVoiceRecording: done");
+            // Уведомляем JS об отмене (UI сбрасывается)
+            webView.post(() -> webView.evaluateJavascript(
+                "if(typeof onNativeVoiceCancelled==='function')onNativeVoiceCancelled()", null));
         }
 
-        private void _cleanupVoice() {
+        // Вызывается только внутри synchronized(_voiceLock)
+        private void _cleanupVoiceLocked() {
             if (_voiceRecorder != null) {
                 try { _voiceRecorder.stop(); } catch (Exception ignored) {}
                 try { _voiceRecorder.release(); } catch (Exception ignored) {}
