@@ -1761,7 +1761,6 @@ public class MainActivity extends Activity {
                 } catch (Exception ex) { return "{\"ok\":false,\"error\":\"pixeldrain error\"}"; }
             }
         }
-        }
 
         // ══════════════════════════════════════════════════════════════════
         // 🎤 НАТИВНАЯ ЗАПИСЬ ГОЛОСА (обход getUserMedia в file:// WebView)
