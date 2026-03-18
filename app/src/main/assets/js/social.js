@@ -3750,7 +3750,7 @@ function messengerRenderMessages(animateLast) {
           </div>`
 
       : isVoice
-        ? `<div style="display:flex;align-items:center;gap:10px;min-width:200px;max-width:260px">
+        ? `<div data-no-menu style="display:flex;align-items:center;gap:10px;min-width:200px;max-width:260px">
             <button onclick="mcVoicePlay('${safeUrl}','${voiceId}')"
               style="width:38px;height:38px;border-radius:50%;background:${isMe?'rgba(255,255,255,.25)':'var(--accent)'};border:none;color:${isMe?'#fff':'var(--btn-text,#fff)'};font-size:16px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center"
               id="vbtn_${voiceId}">▶</button>
@@ -3780,7 +3780,7 @@ function messengerRenderMessages(animateLast) {
           </div>`
 
       : isAudio
-        ? `<div style="display:flex;align-items:center;gap:10px;min-width:200px;max-width:260px">
+        ? `<div data-no-menu style="display:flex;align-items:center;gap:10px;min-width:200px;max-width:260px">
             <button onclick="mcVoicePlay('${safeUrl}','aud_${idx}')"
               style="width:38px;height:38px;border-radius:50%;background:${isMe?'rgba(255,255,255,.25)':'var(--accent)'};border:none;color:${isMe?'#fff':'var(--btn-text,#fff)'};font-size:16px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center"
               id="vbtn_aud_${idx}">▶</button>
@@ -4015,6 +4015,8 @@ let _mcDragTriggered  = false; // свайп уже открыл меню — б
 
 // ── Touch (мобайл + Android WebView) ──────────────────────────────
 function mcBubbleTouchStart(e, row, idx) {
+  // Не открываем меню если касание на интерактивном элементе плеера
+  if (e.target.closest('[data-no-menu]')) return;
   const t = e.touches[0];
   _mcDragStartX = t.clientX;
   _mcDragStartY = t.clientY;
@@ -4641,10 +4643,26 @@ function mcPickImage() {
 }
 
 // Вызывается Java когда PermissionRequest протух за время диалога разрешений.
-// Разрешение уже выдано, просто запускаем запись заново.
 window.mcVoiceRetryAfterPermission = function() {
   toast('🎤 Разрешение получено, начинаю запись...');
   setTimeout(() => mcVoiceTouchStart({ preventDefault: () => {} }), 300);
+};
+
+// ── Колбэки нативного рекордера (вызываются из Java) ─────────────
+window.onNativeVoiceTick = function(sec) {
+  // Обновляем таймер в UI
+  _mcVoiceSeconds = sec;
+  _mcVoiceUpdateTimer();
+  if (sec >= MC_VOICE_MAX) _mcVoiceSend();
+};
+window.onNativeVoiceDone = function(url, duration, mimeType) {
+  toast('✅ Голосовое отправлено');
+  _mcSendMediaMsg({ url, fileName: 'voice_' + Date.now() + '.m4a',
+    fileType: 'voice', duration: duration });
+};
+window.onNativeVoiceError = function(msg) {
+  _mcVoiceNative = false;
+  toast('❌ ' + (msg || 'Ошибка записи'));
 };
 
 // ── Загрузка файла на catbox.moe через Java-бридж ─────────────────
@@ -4809,11 +4827,26 @@ let _mcVoiceAnimFrame = null;
 const MC_VOICE_MAX    = 60;
 
 // ── Старт: вызывается при touchstart/mousedown на кнопке ──────────
+let _mcVoiceNative = false; // true = идёт нативная запись через Java
+
 function mcVoiceTouchStart(e) {
   e.preventDefault();
-  if (_mcVoiceRecorder) return;
+  if (_mcVoiceRecorder || _mcVoiceNative) return;
   _mcVoiceCancelled = false;
   _mcVoiceLocked    = false;
+
+  // Используем нативный рекордер (Java MediaRecorder) как основной —
+  // getUserMedia в file:// WebView часто недоступен из-за ограничений контекста
+  if (window.Android && typeof window.Android.startVoiceRecording === 'function') {
+    _mcVoiceNative  = true;
+    _mcVoiceSeconds = 0;
+    window.Android.startVoiceRecording();
+    _mcVoiceShowUI();
+    return;
+  }
+
+  // Фоллбэк: браузерный getUserMedia
+  _mcVoiceNative = false;
   if (!navigator.mediaDevices?.getUserMedia) { toast('🎤 Микрофон недоступен'); return; }
   navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
     _mcVoiceStream = stream;
@@ -4835,7 +4868,6 @@ function mcVoiceTouchStart(e) {
       _mcVoiceUpdateTimer();
       if (_mcVoiceSeconds >= MC_VOICE_MAX) _mcVoiceSend();
     }, 1000);
-    // Анализатор для waveform
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       _mcVoiceAnalyser = ctx.createAnalyser();
@@ -4891,6 +4923,12 @@ function _mcVoiceLock() {
 }
 
 function _mcVoiceSend() {
+  if (_mcVoiceNative) {
+    _mcVoiceNative = false;
+    _mcVoiceHideUI();
+    if (window.Android) window.Android.stopVoiceRecording();
+    return;
+  }
   if (!_mcVoiceRecorder) return;
   clearInterval(_mcVoiceTimer); _mcVoiceTimer = null;
   _mcVoiceRecorder.stop();
@@ -4899,6 +4937,13 @@ function _mcVoiceSend() {
 }
 
 function _mcVoiceCancel() {
+  if (_mcVoiceNative) {
+    _mcVoiceNative = false;
+    _mcVoiceHideUI();
+    if (window.Android) window.Android.cancelVoiceRecording();
+    toast('🗑 Запись отменена');
+    return;
+  }
   if (!_mcVoiceRecorder) return;
   _mcVoiceCancelled = true;
   clearInterval(_mcVoiceTimer); _mcVoiceTimer = null;
