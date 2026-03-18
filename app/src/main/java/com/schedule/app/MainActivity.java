@@ -773,13 +773,13 @@ public class MainActivity extends Activity {
                             String fileName = "circle_" + System.currentTimeMillis() + ".mp4";
                             String result = null;
                             try {
-                                result = _pixeldrainUploadBytes(bytes, fileName, "video/mp4", null);
+                                result = _mainPixeldrainUpload(bytes, fileName, "video/mp4");
                             } catch (Exception pdEx) {
                                 log.w(TAG, "pixeldrain circle fallback: " + pdEx.getMessage());
                             }
                             if (result == null || !result.contains("\"ok\":true")) {
                                 try {
-                                    result = _catboxUploadBytes(bytes, fileName, "video/mp4", null);
+                                    result = _mainCatboxUpload(bytes, fileName, "video/mp4");
                                 } catch (Exception cbEx) {
                                     log.w(TAG, "catbox circle error: " + cbEx.getMessage());
                                 }
@@ -816,6 +816,18 @@ public class MainActivity extends Activity {
                     "if(typeof onNativeCircleCancelled==='function')onNativeCircleCancelled()", null));
             }
         }
+    }
+
+    // ── Вспомогательные методы для загрузки файлов из MainActivity ───────────
+    // _catboxUploadBytes и _pixeldrainUploadBytes объявлены в AndroidBridge,
+    // поэтому создаём делегаты на уровне MainActivity для использования в onActivityResult.
+
+    private String _mainCatboxUpload(byte[] bytes, String fileName, String mime) {
+        return new AndroidBridge()._catboxUploadBytesPublic(bytes, fileName, mime);
+    }
+
+    private String _mainPixeldrainUpload(byte[] bytes, String fileName, String mime) {
+        return new AndroidBridge()._pixeldrainUploadBytesPublic(bytes, fileName, mime);
     }
 
     private void startVpnService() {
@@ -1681,6 +1693,14 @@ public class MainActivity extends Activity {
          * Внутренняя загрузка на catbox.moe.
          * progressCb может быть null — тогда прогресс не отслеживается.
          */
+        // Публичные обёртки — для вызова из MainActivity.onActivityResult
+        String _catboxUploadBytesPublic(byte[] b, String fn, String mt) {
+            return _catboxUploadBytes(b, fn, mt, null);
+        }
+        String _pixeldrainUploadBytesPublic(byte[] b, String fn, String mt) {
+            return _pixeldrainUploadBytes(b, fn, mt, null);
+        }
+
         private String _catboxUploadBytes(byte[] fileBytes, String fileName,
                                            String mimeType, UploadProgressCallback progressCb) {
             String boundary = "----CatboxBoundary" + Long.toHexString(System.currentTimeMillis());
