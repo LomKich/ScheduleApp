@@ -2130,13 +2130,13 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         const emojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,2}$/u;
         if (emojiOnly.test(inText.trim())) { inSticker = inText.trim(); inText = ''; }
       }
-      // Parse replyTo and image from extra field
+      // Parse replyTo, image and media from extra field
       let inReplyTo = null;
       let inImage   = null;
       let extraParsed = null;
       try { if (msg.extra) extraParsed = JSON.parse(msg.extra); } catch(_){}
-      if (extraParsed?.replyTo) inReplyTo = extraParsed.replyTo;
-      if (extraParsed?.image)   inImage   = extraParsed.image;
+      if (extraParsed?.replyTo)  inReplyTo = extraParsed.replyTo;
+      if (extraParsed?.image)    inImage   = extraParsed.image;
 
       // Обрабатываем reaction_update — служебное сообщение синхронизации реакций
       if (extraParsed?.type === 'reaction' && extraParsed?.msgTs && extraParsed?.reactions !== undefined) {
@@ -2167,7 +2167,14 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       msgs[otherUsername].push({
         from: msg.from_user, to: myUsername,
         text: inImage ? '' : inText, sticker: inSticker, image: inImage || undefined, ts: msg.ts,
-        replyTo: inReplyTo, delivered: true, read: alreadyRead
+        replyTo: inReplyTo, delivered: true, read: alreadyRead,
+        // медиа из extra
+        ...(extraParsed?.fileLink  ? { fileLink:  extraParsed.fileLink  } : {}),
+        ...(extraParsed?.fileType  ? { fileType:  extraParsed.fileType  } : {}),
+        ...(extraParsed?.fileName  ? { fileName:  extraParsed.fileName  } : {}),
+        ...(extraParsed?.fileSize  ? { fileSize:  extraParsed.fileSize  } : {}),
+        ...(extraParsed?.duration  ? { duration:  extraParsed.duration  } : {}),
+        ...(extraParsed?.thumbData ? { thumbData: extraParsed.thumbData } : {}),
       });
       hasNew = true;
       // Логируем получение нового сообщения
@@ -2567,6 +2574,9 @@ window.showScreen = function(id, dir) {
     // Меню пересылки
     const fwdSheet = document.getElementById('mc-forward-sheet');
     if (fwdSheet) fwdSheet.remove();
+    // Видеоплеер
+    const videoOv = document.getElementById('mc-video-overlay');
+    if (videoOv) videoOv.remove();
     // Стикер-панель
     const stickerPanel = document.getElementById('mc-sticker-panel');
     if (stickerPanel) stickerPanel.style.display = 'none';
@@ -3723,48 +3733,64 @@ function messengerRenderMessages(animateLast) {
     const isVoice   = msg.fileType === 'voice';
     const isVideo   = msg.fileLink && msg.fileType === 'video';
     const isFile    = msg.fileLink && msg.fileType === 'file';
-    const bubbleBg  = (isSticker || isImage) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
-    const bubblePad = (isSticker || isImage) ? '0' : '8px 12px 6px';
-    const _fmtSize  = s => s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
-    const _fmtDur   = s => { const m=Math.floor(s/60),sec=String(s%60).padStart(2,'0'); return m+':'+sec; };
+    const bubbleBg  = (isSticker || isImage || isVideo) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
+    const bubblePad = (isSticker || isImage || isVideo) ? '0' : '8px 12px 6px';
+    const _fmtSize  = s => !s ? '' : s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
+    const _fmtDur   = s => { const m=Math.floor((s||0)/60), sec=String((s||0)%60).padStart(2,'0'); return m+':'+sec; };
+    const safeUrl   = escHtml(msg.fileLink || '');
+    const safeName  = escHtml(msg.fileName || '');
+    const voiceId   = 'voice_' + idx;
     const msgContent = isSticker
       ? `<div class="mc-sticker-wrap" style="font-size:56px;line-height:1.1;text-align:center">${escHtml(msg.sticker)}</div>`
+
       : isImage
         ? `<div style="position:relative;border-radius:14px;overflow:hidden;max-width:240px;cursor:pointer" onclick="photoZoomOpen('${msg.image.replace(/'/g,"\\'")}')">
             <img src="${msg.image}" style="display:block;width:100%;max-width:240px;border-radius:14px" loading="lazy">
             <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6);display:flex;align-items:center;gap:2px">${msgFormatTime(msg.ts)}${status}</div>
           </div>`
-        : isVoice
-          ? `<div style="display:flex;align-items:center;gap:10px;min-width:180px">
-              <a href="${escHtml(msg.fileLink)}" target="_blank" style="text-decoration:none;flex-shrink:0">
-                <div style="width:36px;height:36px;border-radius:50%;background:${isMe?'rgba(255,255,255,.25)':'var(--accent)'};display:flex;align-items:center;justify-content:center;font-size:18px">▶</div>
-              </a>
-              <div style="flex:1">
-                <div style="height:3px;background:${isMe?'rgba(255,255,255,.35)':'rgba(255,255,255,.15)'};border-radius:2px;margin-bottom:4px"></div>
-                <div style="font-size:11px;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">🎤 ${msg.duration ? _fmtDur(msg.duration) : '—'}</div>
+
+      : isVoice
+        ? `<div style="display:flex;align-items:center;gap:10px;min-width:200px;max-width:260px">
+            <button onclick="mcVoicePlay('${safeUrl}','${voiceId}')"
+              style="width:38px;height:38px;border-radius:50%;background:${isMe?'rgba(255,255,255,.25)':'var(--accent)'};border:none;color:${isMe?'#fff':'var(--btn-text,#fff)'};font-size:16px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center"
+              id="vbtn_${voiceId}">▶</button>
+            <div style="flex:1;min-width:0">
+              <div style="position:relative;height:4px;background:${isMe?'rgba(255,255,255,.25)':'rgba(255,255,255,.15)'};border-radius:2px;margin-bottom:5px;cursor:pointer"
+                onclick="mcVoiceSeek(event,'${safeUrl}','${voiceId}')">
+                <div id="vprog_${voiceId}" style="height:100%;width:0%;background:${isMe?'rgba(255,255,255,.8)':'var(--accent)'};border-radius:2px;pointer-events:none"></div>
               </div>
-            </div>`
-          : isVideo
-            ? `<div style="display:flex;align-items:center;gap:10px">
-                <a href="${escHtml(msg.fileLink)}" target="_blank" style="text-decoration:none;flex-shrink:0">
-                  <div style="width:44px;height:44px;border-radius:10px;background:${isMe?'rgba(255,255,255,.2)':'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:24px">🎬</div>
-                </a>
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${escHtml(msg.fileName||'Видео')}</div>
-                  <div style="font-size:11px;color:${isMe?'rgba(255,255,255,.6)':'var(--muted)'}">${msg.fileSize ? _fmtSize(msg.fileSize) : 'видео'}</div>
-                </div>
-              </div>`
-            : isFile
-              ? `<div style="display:flex;align-items:center;gap:10px">
-                  <a href="${escHtml(msg.fileLink)}" target="_blank" style="text-decoration:none;flex-shrink:0">
-                    <div style="width:44px;height:44px;border-radius:10px;background:${isMe?'rgba(255,255,255,.2)':'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px">${_gdFileEmoji(msg.fileName)}</div>
-                  </a>
-                  <div style="flex:1;min-width:0">
-                    <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${escHtml(msg.fileName||'Файл')}</div>
-                    <div style="font-size:11px;color:${isMe?'rgba(255,255,255,.6)':'var(--muted)'}">${msg.fileSize ? _fmtSize(msg.fileSize) : 'файл'}</div>
-                  </div>
-                </div>`
-              : (replyQuote + escHtml(msg.text));
+              <div style="display:flex;justify-content:space-between">
+                <span style="font-size:11px;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">🎤</span>
+                <span id="vtime_${voiceId}" style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">${_fmtDur(msg.duration)}</span>
+              </div>
+            </div>
+          </div>`
+
+      : isVideo
+        ? `<div style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;cursor:pointer;background:#000" onclick="mcVideoOpen('${safeUrl}','${safeName}')">
+            ${msg.thumbData
+              ? `<img src="${escHtml(msg.thumbData)}" style="display:block;width:100%;max-width:260px;border-radius:14px;min-height:80px" loading="lazy">`
+              : `<div style="width:260px;height:146px;background:var(--surface3);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:40px">🎬</div>`
+            }
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+              <div style="width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;pointer-events:none">▶</div>
+            </div>
+            <div style="position:absolute;bottom:6px;left:8px;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div>
+            <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6)">${msgFormatTime(msg.ts)}${status}</div>
+          </div>`
+
+      : isFile
+        ? `<div style="display:flex;align-items:center;gap:12px;padding:4px 0;min-width:200px;max-width:260px">
+            <div style="width:44px;height:44px;border-radius:12px;background:${isMe?'rgba(255,255,255,.2)':'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0">${_gdFileEmoji(msg.fileName)}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${safeName||'Файл'}</div>
+              <div style="font-size:11px;color:${isMe?'rgba(255,255,255,.6)':'var(--muted)'};margin-top:2px">${_fmtSize(msg.fileSize)||'файл'}</div>
+            </div>
+            <a href="${safeUrl}" target="_blank" download="${safeName}"
+              style="width:36px;height:36px;border-radius:50%;background:${isMe?'rgba(255,255,255,.2)':'var(--accent)'};display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0;font-size:16px;color:${isMe?'#fff':'var(--btn-text,#fff)'}">⬇</a>
+          </div>`
+
+      : (replyQuote + escHtml(msg.text));
 
     // Reactions display
     const reactionsHtml = msg.reactions && Object.keys(msg.reactions).length
@@ -4620,7 +4646,7 @@ async function _catboxUpload(base64, fileName, mimeType, onProgress) {
 }
 
 // ── Отправка файла/видео/голоса как сообщения ──────────────────────
-function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration }) {
+function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbData }) {
   const p = profileLoad();
   if (!p || !_msgCurrentChat) return;
   const ts = Date.now();
@@ -4631,9 +4657,10 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration }) {
     text: fileName || fileType,
     ts, delivered: false, read: false,
     fileLink: url, fileName, fileType,
-    ...(fileSize ? { fileSize } : {}),
-    ...(duration ? { duration } : {}),
-    ...(replyTo  ? { replyTo  } : {}),
+    ...(fileSize  ? { fileSize  } : {}),
+    ...(duration  ? { duration  } : {}),
+    ...(thumbData ? { thumbData } : {}),
+    ...(replyTo   ? { replyTo   } : {}),
   };
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
@@ -4651,10 +4678,39 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration }) {
     from_user: p.username, to_user: _msgCurrentChat,
     text: (labelMap[fileType] || '📎') + ' ' + (fileName || fileType), ts,
     extra: JSON.stringify({ fileLink: url, fileName, fileType,
-      ...(fileSize ? { fileSize } : {}),
-      ...(duration ? { duration } : {}) })
+      ...(fileSize  ? { fileSize  } : {}),
+      ...(duration  ? { duration  } : {}),
+      ...(thumbData ? { thumbData } : {}) })
   }).then(res => {
     if (res) { msg.delivered = true; msgSave(msgs); messengerRenderMessages(); }
+  });
+}
+
+// ── Генерация превью видео (первый кадр) ──────────────────────────
+function _mcVideoThumb(file) {
+  return new Promise(resolve => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted   = true;
+    video.playsInline = true;
+    const url = URL.createObjectURL(file);
+    video.src = url;
+    video.currentTime = 0.5;
+    video.onloadeddata = () => {
+      try {
+        const cv = document.createElement('canvas');
+        const MAX = 320;
+        let w = video.videoWidth  || 320;
+        let h = video.videoHeight || 180;
+        if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(video, 0, 0, w, h);
+        resolve(cv.toDataURL('image/jpeg', 0.7));
+      } catch(_) { resolve(null); }
+      URL.revokeObjectURL(url);
+    };
+    video.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    setTimeout(() => { URL.revokeObjectURL(url); resolve(null); }, 5000);
   });
 }
 
@@ -4669,16 +4725,19 @@ function mcPickVideo() {
     if (file.size > 200 * 1024 * 1024) { toast('❌ Видео слишком большое (макс. 200 МБ)'); return; }
     toast('⬆️ Загружаю видео…');
     try {
-      const b64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result.split(',')[1]);
-        r.onerror = rej;
-        r.readAsDataURL(file);
-      });
+      const [b64, thumbData] = await Promise.all([
+        new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        }),
+        _mcVideoThumb(file)
+      ]);
       const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
       const url = await _catboxUpload(b64, file.name || ('video_' + Date.now() + '.' + ext), file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: file.name || 'Видео', fileType: 'video',
-        fileSize: file.size });
+        fileSize: file.size, thumbData });
       toast('✅ Видео отправлено');
     } catch(err) { toast('❌ ' + (err.message || 'Ошибка загрузки видео')); }
   };
@@ -4855,16 +4914,21 @@ function _mcVoiceShowUI() {
     </div>
   `;
   document.body.appendChild(ui);
-  // Кнопку 🎤 подсвечиваем
-  const btn = document.getElementById('mc-voice-btn');
-  if (btn) { btn.style.background = 'var(--accent)'; btn.style.color = 'var(--btn-text,#fff)'; }
+  // Кнопку подсвечиваем
+  const btn = document.getElementById('mc-action-btn');
+  if (btn) btn.style.background = 'var(--danger,#c94f4f)';
+  const voice = document.getElementById('mc-action-voice');
+  if (voice) voice.style.fontSize = '16px';
 }
 
 function _mcVoiceHideUI() {
   cancelAnimationFrame(_mcVoiceAnimFrame);
   document.getElementById('mc-voice-ui')?.remove();
-  const btn = document.getElementById('mc-voice-btn');
-  if (btn) { btn.style.background = ''; btn.style.color = ''; }
+  const btn = document.getElementById('mc-action-btn');
+  if (btn) btn.style.background = '';
+  const voice = document.getElementById('mc-action-voice');
+  if (voice) voice.style.fontSize = '';
+  mcUpdateActionBtn();
 }
 
 function _mcVoiceUpdateTimer() {
@@ -4925,6 +4989,71 @@ async function _mcVoiceFinalize() {
     const url = await _catboxUpload(b64, fileName, mimeType);
     _mcSendMediaMsg({ url, fileName, fileType: 'voice', fileSize: blob.size, duration: dur });
   } catch(err) { toast('❌ ' + (err.message || 'Ошибка отправки')); }
+}
+
+// ── Воспроизведение голосового прямо в пузыре ─────────────────────
+const _mcAudios = {};
+function mcVoicePlay(url, id) {
+  const btn  = document.getElementById('vbtn_' + id);
+  const prog = document.getElementById('vprog_' + id);
+  const time = document.getElementById('vtime_' + id);
+  // Если уже играет — пауза
+  if (_mcAudios[id]) {
+    const a = _mcAudios[id];
+    if (!a.paused) { a.pause(); if (btn) btn.textContent = '▶'; return; }
+    a.play(); if (btn) btn.textContent = '⏸'; return;
+  }
+  // Останавливаем остальные
+  Object.values(_mcAudios).forEach(a => { a.pause(); });
+  document.querySelectorAll('[id^="vbtn_"]').forEach(b => { b.textContent = '▶'; });
+
+  const audio = new Audio(url);
+  _mcAudios[id] = audio;
+  audio.ontimeupdate = () => {
+    if (!audio.duration) return;
+    const pct = (audio.currentTime / audio.duration) * 100;
+    if (prog) prog.style.width = pct + '%';
+    const left = Math.ceil(audio.duration - audio.currentTime);
+    const m = Math.floor(left/60), s = String(left%60).padStart(2,'0');
+    if (time) time.textContent = m + ':' + s;
+  };
+  audio.onended = () => {
+    if (btn)  btn.textContent = '▶';
+    if (prog) prog.style.width = '0%';
+    delete _mcAudios[id];
+  };
+  audio.play().then(() => { if (btn) btn.textContent = '⏸'; })
+    .catch(() => { toast('❌ Не удалось воспроизвести'); delete _mcAudios[id]; });
+}
+function mcVoiceSeek(e, url, id) {
+  const a = _mcAudios[id];
+  if (!a || !a.duration) return;
+  const bar  = e.currentTarget;
+  const rect = bar.getBoundingClientRect();
+  const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  a.currentTime = pct * a.duration;
+}
+
+// ── Фуллскрин видеоплеер ──────────────────────────────────────────
+function mcVideoOpen(url, name) {
+  let ov = document.getElementById('mc-video-overlay');
+  if (ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = 'mc-video-overlay';
+  ov.style.cssText = `position:fixed;inset:0;z-index:9300;background:#000;display:flex;flex-direction:column;animation:mcFadeIn .15s ease`;
+  ov.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:calc(var(--safe-top)+10px) 14px 10px;flex-shrink:0">
+      <button onclick="document.getElementById('mc-video-overlay')?.remove()"
+        style="background:rgba(255,255,255,.1);border:none;color:#fff;font-size:22px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+      <div style="flex:1;font-size:14px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(name||'Видео')}</div>
+      <a href="${escHtml(url)}" download="${escHtml(name||'video')}" target="_blank"
+        style="background:rgba(255,255,255,.1);border:none;color:#fff;font-size:18px;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-decoration:none">⬇</a>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <video src="${escHtml(url)}" controls autoplay playsinline
+        style="max-width:100%;max-height:100%;outline:none"></video>
+    </div>`;
+  document.body.appendChild(ov);
 }
 
 function _gdFileEmoji(name) {
@@ -5172,81 +5301,243 @@ function peerProfileOpen(username) {
   showScreen('s-peer-profile');
 }
 
-// ── Photo zoom (pinch + double-tap) ───────────────────────────────
-(function(){
-  function photoZoomOpen(src) {
-    const ov = document.getElementById('photo-zoom-overlay');
+
+// ══════════════════════════════════════════════════════════════════
+// 📷 МЕДИАПРОСМОТРЩИК — Telegram-стиль
+// Фото: pinch-zoom, двойной тап, свайп вниз = закрыть
+// Видео: нативный плеер, свайп вниз = закрыть
+// ══════════════════════════════════════════════════════════════════
+(function() {
+
+  // ── Состояние ─────────────────────────────────────────────────
+  const _pz = {
+    scale:1, px:0, py:0,
+    startDist:0, startScale:1,
+    startX:0, startY:0,
+    panStartX:0, panStartY:0,
+    lastTap:0, tapX:0, tapY:0,
+    swipeStartY:0, swipeDy:0, swipeActive:false,
+    reset() { this.scale=1; this.px=0; this.py=0; this.swipeDy=0; this.swipeActive=false; this._apply(); },
+    _apply() {
+      const img = document.getElementById('photo-zoom-img');
+      const ov  = document.getElementById('photo-zoom-overlay');
+      if (!img) return;
+      img.style.transform = `translate(${this.px}px,${this.py}px) scale(${this.scale})`;
+      if (ov) ov.style.opacity = this.swipeActive ? Math.max(0.3, 1 - Math.abs(this.swipeDy)/300) : '';
+    }
+  };
+
+  function _dist(t) {
+    return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  }
+
+  function photoZoomOpen(src, title) {
+    const ov  = document.getElementById('photo-zoom-overlay');
     const img = document.getElementById('photo-zoom-img');
     if (!ov || !img) return;
     img.src = src;
+    // Хедер
+    const t = document.getElementById('pz-title');
+    if (t) t.textContent = title || 'Фото';
+    const dl = document.getElementById('pz-download');
+    if (dl) { dl.href = src; dl.download = title || 'photo.jpg'; }
+    ov.style.opacity = '';
     ov.classList.add('show');
     _pz.reset();
   }
   window.photoZoomOpen = photoZoomOpen;
 
-  const _pz = {
-    scale:1, px:0, py:0,
-    startDist:0, startScale:1, startX:0, startY:0,
-    lastTap:0,
-    reset() { this.scale=1; this.px=0; this.py=0; this.applyTransform(); },
-    applyTransform() {
-      const img = document.getElementById('photo-zoom-img');
-      if (img) img.style.transform = `translate(${this.px}px,${this.py}px) scale(${this.scale})`;
-    }
-  };
-
-  function dist(t) {
-    const dx = t[0].clientX - t[1].clientX;
-    const dy = t[0].clientY - t[1].clientY;
-    return Math.hypot(dx, dy);
+  function photoZoomClose() {
+    const ov = document.getElementById('photo-zoom-overlay');
+    if (!ov) return;
+    ov.style.transition = 'opacity .2s';
+    ov.style.opacity = '0';
+    setTimeout(() => { ov.classList.remove('show'); ov.style.transition = ''; ov.style.opacity = ''; _pz.reset(); }, 200);
   }
+  window.photoZoomClose = photoZoomClose;
 
-  const ov = document.getElementById('photo-zoom-overlay');
-  if (!ov) return;
+  // ── Touch события ─────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    const ov = document.getElementById('photo-zoom-overlay');
+    if (!ov) return;
 
-  // Close on bg tap (but not on img)
-  ov.addEventListener('click', e => {
-    if (e.target === ov) { ov.classList.remove('show'); _pz.reset(); }
+    ov.addEventListener('touchstart', e => {
+      if (!ov.classList.contains('show')) return;
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        _pz.startDist  = _dist(e.touches);
+        _pz.startScale = _pz.scale;
+        _pz.swipeActive = false;
+      } else if (e.touches.length === 1) {
+        const t   = e.touches[0];
+        const now = Date.now();
+        _pz.swipeStartY = t.clientY;
+        _pz.swipeDy     = 0;
+        _pz.panStartX   = t.clientX - _pz.px;
+        _pz.panStartY   = t.clientY - _pz.py;
+        // Двойной тап — zoom in/out
+        if (now - _pz.lastTap < 280) {
+          e.preventDefault();
+          if (_pz.scale > 1.2) {
+            _pz.scale = 1; _pz.px = 0; _pz.py = 0;
+          } else {
+            _pz.scale = 2.5;
+            // Зум к точке касания
+            const area = document.getElementById('pz-area');
+            if (area) {
+              const r = area.getBoundingClientRect();
+              _pz.px = (r.width/2  - t.clientX) * (_pz.scale - 1);
+              _pz.py = (r.height/2 - t.clientY) * (_pz.scale - 1);
+            }
+          }
+          _pz._apply();
+        }
+        _pz.lastTap = now;
+      }
+    }, { passive: false });
+
+    ov.addEventListener('touchmove', e => {
+      if (!ov.classList.contains('show')) return;
+      e.preventDefault();
+      if (e.touches.length === 2) {
+        // Pinch zoom
+        const d = _dist(e.touches);
+        _pz.scale = Math.min(6, Math.max(0.8, _pz.startScale * d / _pz.startDist));
+        _pz._apply();
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        if (_pz.scale > 1.05) {
+          // Pan
+          _pz.px = t.clientX - _pz.panStartX;
+          _pz.py = t.clientY - _pz.panStartY;
+          _pz._apply();
+        } else {
+          // Свайп вниз = закрыть
+          _pz.swipeDy = t.clientY - _pz.swipeStartY;
+          _pz.swipeActive = _pz.swipeDy > 10;
+          if (_pz.swipeActive) {
+            _pz.py = _pz.swipeDy;
+            _pz._apply();
+          }
+        }
+      }
+    }, { passive: false });
+
+    ov.addEventListener('touchend', e => {
+      if (!ov.classList.contains('show')) return;
+      if (_pz.swipeActive && _pz.swipeDy > 100) {
+        photoZoomClose(); return;
+      }
+      _pz.swipeActive = false; _pz.swipeDy = 0;
+      if (_pz.scale < 1.05) { _pz.scale=1; _pz.px=0; _pz.py=0; }
+      _pz._apply();
+    }, { passive: true });
   });
 
-  ov.addEventListener('touchstart', e => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      _pz.startDist = dist(e.touches);
-      _pz.startScale = _pz.scale;
-    } else if (e.touches.length === 1) {
-      const now = Date.now();
-      if (now - _pz.lastTap < 300) {
-        // Double tap — toggle zoom
-        _pz.scale = _pz.scale > 1.2 ? 1 : 2.5;
-        _pz.px = 0; _pz.py = 0;
-        _pz.applyTransform();
-      }
-      _pz.lastTap = now;
-      _pz.startX = e.touches[0].clientX - _pz.px;
-      _pz.startY = e.touches[0].clientY - _pz.py;
-    }
-  }, { passive: false });
-
-  ov.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if (e.touches.length === 2) {
-      const d = dist(e.touches);
-      _pz.scale = Math.min(5, Math.max(0.5, _pz.startScale * (d / _pz.startDist)));
-      _pz.applyTransform();
-    } else if (e.touches.length === 1 && _pz.scale > 1) {
-      _pz.px = e.touches[0].clientX - _pz.startX;
-      _pz.py = e.touches[0].clientY - _pz.startY;
-      _pz.applyTransform();
-    }
-  }, { passive: false });
-
-  ov.addEventListener('touchend', e => {
-    if (_pz.scale < 1.05) { _pz.scale = 1; _pz.px = 0; _pz.py = 0; _pz.applyTransform(); }
-  }, { passive: true });
 })();
 
+// ── Фуллскрин видеоплеер с Telegram-стилем ────────────────────────
+function mcVideoOpen(url, name) {
+  let ov = document.getElementById('mc-video-overlay');
+  if (ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = 'mc-video-overlay';
+  ov.style.cssText = `
+    position:fixed;inset:0;z-index:9999;background:#000;
+    display:flex;flex-direction:column;
+    animation:mcFadeIn .18s ease;
+    touch-action:none;
+  `;
 
+  const safeUrl  = escHtml(url);
+  const safeName = escHtml(name || 'Видео');
+
+  ov.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;
+      padding:calc(var(--safe-top,0px) + 10px) 14px 12px;
+      background:linear-gradient(to bottom,rgba(0,0,0,.8),transparent);
+      position:absolute;top:0;left:0;right:0;z-index:2;pointer-events:none">
+      <button id="mv-close"
+        style="pointer-events:all;background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>
+      <div style="flex:1;font-size:14px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:all">${safeName}</div>
+      <a href="${safeUrl}" download="${safeName}" target="_blank"
+        style="pointer-events:all;background:rgba(255,255,255,.15);color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0">⬇</a>
+    </div>
+    <div id="mv-area" style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <video id="mv-video" src="${safeUrl}" controls autoplay playsinline
+        style="max-width:100%;max-height:100%;outline:none;background:#000;touch-action:auto"></video>
+    </div>
+  `;
+
+  document.body.appendChild(ov);
+
+  // Закрытие по кнопке
+  ov.querySelector('#mv-close').addEventListener('click', () => {
+    ov.querySelector('#mv-video')?.pause();
+    ov.remove();
+  });
+
+  // Свайп вниз = закрыть (когда видео не перетаскивается)
+  let _swY = 0, _swDy = 0;
+  const area = ov.querySelector('#mv-area');
+  area.addEventListener('touchstart', e => {
+    _swY = e.touches[0].clientY; _swDy = 0;
+  }, { passive: true });
+  area.addEventListener('touchmove', e => {
+    _swDy = e.touches[0].clientY - _swY;
+    if (_swDy > 20) {
+      ov.style.transform = `translateY(${_swDy}px)`;
+      ov.style.opacity = String(Math.max(0.3, 1 - _swDy / 300));
+    }
+  }, { passive: true });
+  area.addEventListener('touchend', () => {
+    if (_swDy > 120) {
+      ov.querySelector('#mv-video')?.pause();
+      ov.style.transition = 'transform .2s,opacity .2s';
+      ov.style.transform = 'translateY(100%)';
+      ov.style.opacity = '0';
+      setTimeout(() => ov.remove(), 200);
+    } else {
+      ov.style.transform = '';
+      ov.style.opacity = '';
+    }
+  }, { passive: true });
+}
+window.mcVideoOpen = mcVideoOpen;
+
+// ── Переключение кнопки действия: 🎤 ↔ ➤ ─────────────────────────
+function mcUpdateActionBtn() {
+  const inp   = document.getElementById('mc-input');
+  const send  = document.getElementById('mc-action-send');
+  const voice = document.getElementById('mc-action-voice');
+  if (!send || !voice) return;
+  const hasText = inp && inp.value.trim().length > 0;
+  if (hasText) {
+    send.style.display  = 'flex';
+    voice.style.display = 'none';
+    send.style.transform  = 'scale(1) rotate(0deg)';
+    send.style.opacity    = '1';
+  } else {
+    send.style.display  = 'none';
+    voice.style.display = 'flex';
+    voice.style.transform = 'scale(1)';
+    voice.style.opacity   = '1';
+  }
+}
+// Инициализируем при открытии чата
+const _origMesOpenChat = window.messengerOpenChat;
+window.messengerOpenChat = function(...args) {
+  if (_origMesOpenChat) _origMesOpenChat(...args);
+  setTimeout(mcUpdateActionBtn, 50);
+};
+// Сбрасываем после отправки
+const _origMessengerSend = window.messengerSend;
+if (typeof _origMessengerSend === 'function') {
+  window.messengerSend = function() {
+    _origMessengerSend();
+    setTimeout(mcUpdateActionBtn, 10);
+  };
+}
 
 function messengerUpdateBadge() {
   const p = profileLoad();
