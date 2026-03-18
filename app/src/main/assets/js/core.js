@@ -3711,7 +3711,6 @@ function setMode(mode){
   if(pill){
     pill.classList.toggle('student', mode==='student');
     pill.classList.toggle('teacher', mode==='teacher');
-    // Вычисляем ширины кнопок для плавного сдвига
     const btnS=document.getElementById('mode-btn-student');
     const btnT=document.getElementById('mode-btn-teacher');
     if(btnS&&btnT){
@@ -3724,10 +3723,15 @@ function setMode(mode){
   document.getElementById('mode-btn-teacher')?.classList.toggle('active', mode==='teacher');
   // Заголовок hero
   const ht=document.getElementById('hero-title-text');
-  if(ht) ht.innerHTML = mode==='teacher' ? 'педагогам<br>расписание' : 'колледж<br>расписание';
+  if(ht) ht.innerHTML = mode==='teacher' ? 'Расписание<br>Педагогам' : 'Расписание<br>Студентам';
+  // Метки секций
+  const fsLabel=document.getElementById('file-section-label');
+  if(fsLabel) fsLabel.textContent = mode==='teacher' ? 'Педагогам' : 'Студентам';
+  const lgLabel=document.getElementById('last-group-label');
+  if(lgLabel) lgLabel.textContent = mode==='teacher' ? 'Продолжить' : 'Продолжить';
   // Кнопка выбора
   const gb=document.getElementById('go-to-groups-btn');
-  if(gb) gb.textContent = mode==='teacher' ? 'Выбрать учителя →' : 'Выбрать группу →';
+  if(gb) gb.textContent = mode==='teacher' ? 'К педагогам →' : 'К группам →';
   // Быстрый запуск
   updateLastGroupBtn();
 }

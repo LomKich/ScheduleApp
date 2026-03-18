@@ -1793,6 +1793,10 @@ window._javaTick = async function() {
     sbPresencePut(pr).catch(() => {});
     sbPollPresence().catch(() => {});
   }
+  // Каждые ~10 мин (300 тиков по 2с) удаляем старые медиа-сообщения (> 3 дней)
+  if (_javaTickCount % 300 === 5) {
+    _mcCleanupOldMedia().catch(() => {});
+  }
 };
 // Каждые 2 сек: inbox + открытый чат
 // Каждые 10 сек: presence heartbeat + список онлайн
@@ -1803,6 +1807,44 @@ function _startSuperPoller(p, sessionId) {
   // Java Handler не замораживается Android в отличие от JS setInterval
   clearInterval(_superPoller);
   _superPoller = null;
+}
+
+// ── Удаление медиа-сообщений старше 3 дней из Supabase ───────────
+// Фото хранятся как base64 в extra — тяжёлые, удаляем через 3 дня.
+// Видео/файлы/ГС — ссылки лёгкие, но тоже чистим для порядка.
+async function _mcCleanupOldMedia() {
+  if (!sbReady()) return;
+  const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+  const cutoffTs = Date.now() - THREE_DAYS_MS;
+  // Supabase хранит ts как bigint, фильтруем lt (less than)
+  // Удаляем только сообщения с медиа-контентом (extra содержит image/fileLink)
+  // Используем два запроса: один для фото (есть extra с "image":), один для файлов
+  try {
+    // Фото: extra содержит "image": — это base64, самое тяжёлое
+    await sbDelete('messages',
+      `ts=lt.${cutoffTs}&extra=like.*"image":*`
+    );
+    // Файлы/видео/голосовые: extra содержит "fileLink":
+    await sbDelete('messages',
+      `ts=lt.${cutoffTs}&extra=like.*"fileLink":*`
+    );
+    // Также чистим локальный кэш сообщений от старых медиа (освобождаем localStorage)
+    try {
+      const msgs = msgLoad();
+      let changed = false;
+      for (const chatKey of Object.keys(msgs)) {
+        const before = msgs[chatKey].length;
+        msgs[chatKey] = msgs[chatKey].filter(m => {
+          if (m.ts < cutoffTs && (m.image || m.fileLink)) return false;
+          return true;
+        });
+        if (msgs[chatKey].length !== before) changed = true;
+      }
+      if (changed) msgSave(msgs);
+    } catch(_) {}
+  } catch(e) {
+    // Молча — не критично
+  }
 }
 
 function profileDisconnect() {
@@ -3678,10 +3720,13 @@ function messengerRenderMessages(animateLast) {
     // Sticker rendering
     const isSticker = msg.sticker;
     const isImage   = msg.image;
-    const isFile    = msg.fileLink && msg.fileType === 'file';
+    const isVoice   = msg.fileType === 'voice';
     const isVideo   = msg.fileLink && msg.fileType === 'video';
+    const isFile    = msg.fileLink && msg.fileType === 'file';
     const bubbleBg  = (isSticker || isImage) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
     const bubblePad = (isSticker || isImage) ? '0' : '8px 12px 6px';
+    const _fmtSize  = s => s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
+    const _fmtDur   = s => { const m=Math.floor(s/60),sec=String(s%60).padStart(2,'0'); return m+':'+sec; };
     const msgContent = isSticker
       ? `<div class="mc-sticker-wrap" style="font-size:56px;line-height:1.1;text-align:center">${escHtml(msg.sticker)}</div>`
       : isImage
@@ -3689,15 +3734,37 @@ function messengerRenderMessages(animateLast) {
             <img src="${msg.image}" style="display:block;width:100%;max-width:240px;border-radius:14px" loading="lazy">
             <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6);display:flex;align-items:center;gap:2px">${msgFormatTime(msg.ts)}${status}</div>
           </div>`
-        : (isFile || isVideo)
-          ? `<div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:28px">${_gdFileEmoji(msg.fileName)}</span>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">${escHtml(msg.fileName||'Файл')}</div>
-                <a href="${escHtml(msg.fileLink)}" target="_blank" style="font-size:11px;color:${isMe?'rgba(255,255,255,.8)':'var(--accent)'};text-decoration:none">⬇ Скачать с MEGA</a>
+        : isVoice
+          ? `<div style="display:flex;align-items:center;gap:10px;min-width:180px">
+              <a href="${escHtml(msg.fileLink)}" target="_blank" style="text-decoration:none;flex-shrink:0">
+                <div style="width:36px;height:36px;border-radius:50%;background:${isMe?'rgba(255,255,255,.25)':'var(--accent)'};display:flex;align-items:center;justify-content:center;font-size:18px">▶</div>
+              </a>
+              <div style="flex:1">
+                <div style="height:3px;background:${isMe?'rgba(255,255,255,.35)':'rgba(255,255,255,.15)'};border-radius:2px;margin-bottom:4px"></div>
+                <div style="font-size:11px;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">🎤 ${msg.duration ? _fmtDur(msg.duration) : '—'}</div>
               </div>
             </div>`
-          : (replyQuote + escHtml(msg.text));
+          : isVideo
+            ? `<div style="display:flex;align-items:center;gap:10px">
+                <a href="${escHtml(msg.fileLink)}" target="_blank" style="text-decoration:none;flex-shrink:0">
+                  <div style="width:44px;height:44px;border-radius:10px;background:${isMe?'rgba(255,255,255,.2)':'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:24px">🎬</div>
+                </a>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${escHtml(msg.fileName||'Видео')}</div>
+                  <div style="font-size:11px;color:${isMe?'rgba(255,255,255,.6)':'var(--muted)'}">${msg.fileSize ? _fmtSize(msg.fileSize) : 'видео'}</div>
+                </div>
+              </div>`
+            : isFile
+              ? `<div style="display:flex;align-items:center;gap:10px">
+                  <a href="${escHtml(msg.fileLink)}" target="_blank" style="text-decoration:none;flex-shrink:0">
+                    <div style="width:44px;height:44px;border-radius:10px;background:${isMe?'rgba(255,255,255,.2)':'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px">${_gdFileEmoji(msg.fileName)}</div>
+                  </a>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${escHtml(msg.fileName||'Файл')}</div>
+                    <div style="font-size:11px;color:${isMe?'rgba(255,255,255,.6)':'var(--muted)'}">${msg.fileSize ? _fmtSize(msg.fileSize) : 'файл'}</div>
+                  </div>
+                </div>`
+              : (replyQuote + escHtml(msg.text));
 
     // Reactions display
     const reactionsHtml = msg.reactions && Object.keys(msg.reactions).length
@@ -4486,76 +4553,16 @@ function mcPickMedia() {
         <span style="font-size:22px">🎬</span> Видео
       </button>
       <button onclick="mcPickFile();document.getElementById('mc-media-sheet')?.remove()"
-        style="width:100%;padding:15px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        style="width:100%;padding:15px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,.06)">
         <span style="font-size:22px">📄</span> Файл (PDF, ZIP, DOC…)
+      </button>
+      <button onclick="document.getElementById('mc-media-sheet')?.remove();mcVoiceTouchStart({preventDefault:()=>{}})"
+        style="width:100%;padding:15px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <span style="font-size:22px">🎤</span> Голосовое сообщение
       </button>
     </div>`;
   sheet.addEventListener('click', () => sheet.remove());
   document.body.appendChild(sheet);
-}
-
-// ─── MEGA.nz upload via megajs 0.x (UMD browser build) ───────────
-// Credentials вшиты — отдельный аккаунт только для загрузок приложения
-const _MEGA_EMAIL = 'qwertyzxcvbn090909@gmail.com';
-const _MEGA_PASS  = 'hEiy1a8HAE@UjGD';
-
-let _megaStorageInst = null;
-let _megaInitPromise = null;
-
-// Получаем/инициализируем mega.Storage (megajs 0.x UMD, глобал window.mega)
-async function _getMegaStorage() {
-  if (_megaStorageInst) return _megaStorageInst;
-  if (_megaInitPromise) return _megaInitPromise;
-
-  _megaInitPromise = (async () => {
-    // Ждём загрузки скрипта (onload выставляет window._megaReady и window.mega)
-    let tries = 0;
-    while (typeof window.mega === 'undefined' && tries++ < 100) {
-      await new Promise(r => setTimeout(r, 150));
-    }
-    if (typeof window.mega === 'undefined') {
-      throw new Error('megajs не загрузился — нет соединения или CDN заблокирован');
-    }
-
-    return new Promise((resolve, reject) => {
-      const storage = new window.mega.Storage({
-        email:     _MEGA_EMAIL,
-        password:  _MEGA_PASS,
-        autologin: true,
-        keepalive: false,
-      });
-      storage.on('ready', () => {
-        _megaStorageInst = storage;
-        resolve(storage);
-      });
-      storage.on('error', (err) => {
-        _megaInitPromise = null; // позволяет повторную попытку
-        reject(new Error('MEGA login error: ' + (err.message || err)));
-      });
-    });
-  })();
-
-  return _megaInitPromise;
-}
-
-// Основная функция загрузки файла на MEGA
-async function megaUploadFile(blob, fileName) {
-  const storage = await _getMegaStorage();
-  const buf = await blob.arrayBuffer();
-
-  return new Promise((resolve, reject) => {
-    const upload = storage.upload(
-      { name: fileName, size: buf.byteLength },
-      Buffer.from ? Buffer.from(buf) : new Uint8Array(buf)
-    );
-    upload.on('error', reject);
-    upload.on('complete', (file) => {
-      file.link((err, url) => {
-        if (err) { reject(err); return; }
-        resolve({ link: url, fileName });
-      });
-    });
-  });
 }
 
 // ── Отправка изображения ──────────────────────────────────────────
@@ -4585,13 +4592,6 @@ function mcPickImage() {
         cv.getContext('2d').drawImage(img, 0, 0, w, h);
         const data = cv.toDataURL('image/jpeg', 0.82);
         mcSendImage(data);
-        // Фоновая загрузка на MEGA
-        cv.toBlob(blob => {
-          if (!blob) return;
-          megaUploadFile(blob, 'photo_' + Date.now() + '.jpg').then(res => {
-            if (res?.link) sLog('info', 'Photo uploaded to MEGA: ' + res.link);
-          }).catch(() => {});
-        }, 'image/jpeg', 0.82);
       };
       img.src = ev.target.result;
     };
@@ -4600,104 +4600,331 @@ function mcPickImage() {
   inp.click();
 }
 
-// ── Отправка видео ─────────────────────────────────────────────────
+// ── Загрузка файла на catbox.moe через Java-бридж ─────────────────
+// base64 — без data:… префикса. Возвращает Promise<string> с URL или бросает ошибку.
+async function _catboxUpload(base64, fileName, mimeType, onProgress) {
+  if (!window.Android?.nativeUploadFile) throw new Error('nativeUploadFile недоступен');
+  onProgress && onProgress(0);
+  // Вызов синхронный (Java), но занимает время — запускаем в макротаске чтобы UI не завис
+  const result = await new Promise((resolve, reject) => {
+    setTimeout(() => {
+      try {
+        const r = JSON.parse(window.Android.nativeUploadFile(base64, fileName, mimeType));
+        if (r.ok) resolve(r.url);
+        else reject(new Error(r.error || 'Upload failed'));
+      } catch(e) { reject(e); }
+    }, 0);
+  });
+  onProgress && onProgress(100);
+  return result;
+}
+
+// ── Отправка файла/видео/голоса как сообщения ──────────────────────
+function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration }) {
+  const p = profileLoad();
+  if (!p || !_msgCurrentChat) return;
+  const ts = Date.now();
+  const replyTo = _mcReplyTo ? { from: _mcReplyTo.from, text: _mcReplyTo.text } : null;
+  mcCancelReply();
+  const msg = {
+    from: p.username, to: _msgCurrentChat,
+    text: fileName || fileType,
+    ts, delivered: false, read: false,
+    fileLink: url, fileName, fileType,
+    ...(fileSize ? { fileSize } : {}),
+    ...(duration ? { duration } : {}),
+    ...(replyTo  ? { replyTo  } : {}),
+  };
+  const msgs = msgLoad();
+  if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
+  msgs[_msgCurrentChat].push(msg);
+  msgSave(msgs);
+  const chats = chatsLoad();
+  if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
+  messengerRenderMessages(true);
+  SFX.play && SFX.play('msgSend');
+  setTimeout(() => { const b = document.getElementById('mc-messages'); if(b) b.scrollTop = b.scrollHeight; }, 80);
+  // В Supabase — только текст + URL (не base64!)
+  const labelMap = { video: '🎬', file: '📎', voice: '🎤' };
+  sbInsert('messages', {
+    chat_key: sbChatKey(p.username, _msgCurrentChat),
+    from_user: p.username, to_user: _msgCurrentChat,
+    text: (labelMap[fileType] || '📎') + ' ' + (fileName || fileType), ts,
+    extra: JSON.stringify({ fileLink: url, fileName, fileType,
+      ...(fileSize ? { fileSize } : {}),
+      ...(duration ? { duration } : {}) })
+  }).then(res => {
+    if (res) { msg.delivered = true; msgSave(msgs); messengerRenderMessages(); }
+  });
+}
+
+// ── Отправка видео ──────────────────────────────────────────────────
 function mcPickVideo() {
   const inp = document.createElement('input');
-  inp.type = 'file';
-  inp.accept = 'video/*';
-  inp.style.display = 'none';
+  inp.type = 'file'; inp.accept = 'video/*'; inp.style.display = 'none';
   document.body.appendChild(inp);
   inp.onchange = async (e) => {
-    const file = e.target.files[0];
-    inp.remove();
+    const file = e.target.files[0]; inp.remove();
     if (!file) return;
-    const MAX_MB = 100;
-    if (file.size > MAX_MB * 1024 * 1024) { toast(`❌ Видео слишком большое (макс. ${MAX_MB} МБ)`); return; }
-    const p = profileLoad();
-    if (!p || !_msgCurrentChat) return;
-    toast('⬆️ Загружаем видео на MEGA…');
+    if (file.size > 200 * 1024 * 1024) { toast('❌ Видео слишком большое (макс. 200 МБ)'); return; }
+    toast('⬆️ Загружаю видео…');
     try {
-      const res = await megaUploadFile(file, file.name || ('video_' + Date.now() + '.mp4'));
-      const link = res.link;
-      if (!link) throw new Error('no link');
-      // Отправляем сообщение со ссылкой
-      const ts  = Date.now();
-      const msg = {
-        from: p.username, to: _msgCurrentChat,
-        text: `🎬 [${file.name||'Видео'}](${link})`,
-        ts, delivered: false, read: false,
-        fileLink: link, fileName: file.name, fileType: 'video'
-      };
-      const msgs = msgLoad();
-      if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
-      msgs[_msgCurrentChat].push(msg);
-      msgSave(msgs);
-      const chats = chatsLoad();
-      if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
-      messengerRenderMessages(true);
-      SFX.play && SFX.play('msgSend');
-      setTimeout(() => { const b = document.getElementById('mc-messages'); if (b) b.scrollTop = b.scrollHeight; }, 80);
-      sbInsert('messages', {
-        chat_key: sbChatKey(p.username, _msgCurrentChat), from_user: p.username,
-        to_user: _msgCurrentChat, text: `🎬 ${file.name||'Видео'}`, ts,
-        extra: JSON.stringify({ fileLink: link, fileName: file.name, fileType: 'video' })
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
       });
-      toast('✅ Видео загружено на MEGA!');
-    } catch(err) {
-      toast('❌ Ошибка загрузки видео на MEGA: ' + (err.message || err));
-    }
+      const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
+      const url = await _catboxUpload(b64, file.name || ('video_' + Date.now() + '.' + ext), file.type || 'video/mp4');
+      _mcSendMediaMsg({ url, fileName: file.name || 'Видео', fileType: 'video',
+        fileSize: file.size });
+      toast('✅ Видео отправлено');
+    } catch(err) { toast('❌ ' + (err.message || 'Ошибка загрузки видео')); }
   };
   inp.click();
 }
 
-// ── Отправка файла ─────────────────────────────────────────────────
+// ── Отправка файла ──────────────────────────────────────────────────
 function mcPickFile() {
   const inp = document.createElement('input');
-  inp.type = 'file';
-  inp.accept = '*/*';
-  inp.style.display = 'none';
+  inp.type = 'file'; inp.accept = '*/*'; inp.style.display = 'none';
   document.body.appendChild(inp);
   inp.onchange = async (e) => {
-    const file = e.target.files[0];
-    inp.remove();
+    const file = e.target.files[0]; inp.remove();
     if (!file) return;
-    const MAX_MB = 100;
-    if (file.size > MAX_MB * 1024 * 1024) { toast(`❌ Файл слишком большой (макс. ${MAX_MB} МБ)`); return; }
-    const p = profileLoad();
-    if (!p || !_msgCurrentChat) return;
-    toast('⬆️ Загружаем файл на MEGA…');
+    if (file.size > 200 * 1024 * 1024) { toast('❌ Файл слишком большой (макс. 200 МБ)'); return; }
+    toast('⬆️ Загружаю файл…');
     try {
-      const res = await megaUploadFile(file, file.name || ('file_' + Date.now()));
-      const link = res.link;
-      if (!link) throw new Error('no link');
-      const fileEmoji = _gdFileEmoji(file.name);
-      const ts  = Date.now();
-      const msg = {
-        from: p.username, to: _msgCurrentChat,
-        text: `${fileEmoji} [${file.name}](${link})`,
-        ts, delivered: false, read: false,
-        fileLink: link, fileName: file.name, fileType: 'file'
-      };
-      const msgs = msgLoad();
-      if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
-      msgs[_msgCurrentChat].push(msg);
-      msgSave(msgs);
-      const chats = chatsLoad();
-      if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
-      messengerRenderMessages(true);
-      SFX.play && SFX.play('msgSend');
-      setTimeout(() => { const b = document.getElementById('mc-messages'); if (b) b.scrollTop = b.scrollHeight; }, 80);
-      sbInsert('messages', {
-        chat_key: sbChatKey(p.username, _msgCurrentChat), from_user: p.username,
-        to_user: _msgCurrentChat, text: `${fileEmoji} ${file.name}`, ts,
-        extra: JSON.stringify({ fileLink: link, fileName: file.name, fileType: 'file' })
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
       });
-      toast('✅ Файл загружен на MEGA!');
-    } catch(err) {
-      toast('❌ Ошибка загрузки файла на MEGA: ' + (err.message || err));
-    }
+      const url = await _catboxUpload(b64, file.name || ('file_' + Date.now()), file.type || 'application/octet-stream');
+      _mcSendMediaMsg({ url, fileName: file.name || 'Файл', fileType: 'file',
+        fileSize: file.size });
+      toast('✅ Файл отправлен');
+    } catch(err) { toast('❌ ' + (err.message || 'Ошибка загрузки файла')); }
   };
   inp.click();
+}
+
+// ── Голосовые сообщения ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// 🎤 ГОЛОСОВЫЕ СООБЩЕНИЯ — Telegram-стиль
+// Зажать 🎤 → запись. Вверх → заблокировать (не надо держать).
+// Влево → отмена. Отпустить → отправить.
+// ══════════════════════════════════════════════════════════════════
+let _mcVoiceRecorder  = null;
+let _mcVoiceChunks    = [];
+let _mcVoiceTimer     = null;
+let _mcVoiceSeconds   = 0;
+let _mcVoiceLocked    = false;   // режим замка — можно отпустить кнопку
+let _mcVoiceCancelled = false;
+let _mcVoiceStream    = null;
+let _mcVoiceAnalyser  = null;
+let _mcVoiceAnimFrame = null;
+const MC_VOICE_MAX    = 60;
+
+// ── Старт: вызывается при touchstart/mousedown на кнопке ──────────
+function mcVoiceTouchStart(e) {
+  e.preventDefault();
+  if (_mcVoiceRecorder) return;
+  _mcVoiceCancelled = false;
+  _mcVoiceLocked    = false;
+  if (!navigator.mediaDevices?.getUserMedia) { toast('🎤 Микрофон недоступен'); return; }
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    _mcVoiceStream = stream;
+    _mcVoiceChunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+    _mcVoiceRecorder = new MediaRecorder(stream, { mimeType });
+    _mcVoiceRecorder.ondataavailable = ev => { if (ev.data?.size) _mcVoiceChunks.push(ev.data); };
+    _mcVoiceRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      _mcVoiceStream = null;
+      if (!_mcVoiceCancelled) _mcVoiceFinalize();
+    };
+    _mcVoiceRecorder.start(100);
+    _mcVoiceSeconds = 0;
+    _mcVoiceTimer = setInterval(() => {
+      _mcVoiceSeconds++;
+      _mcVoiceUpdateTimer();
+      if (_mcVoiceSeconds >= MC_VOICE_MAX) _mcVoiceSend();
+    }, 1000);
+    // Анализатор для waveform
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      _mcVoiceAnalyser = ctx.createAnalyser();
+      _mcVoiceAnalyser.fftSize = 64;
+      ctx.createMediaStreamSource(stream).connect(_mcVoiceAnalyser);
+    } catch(_) {}
+    _mcVoiceShowUI();
+    _mcVoiceDrawWave();
+  }).catch(() => toast('🎤 Нет доступа к микрофону'));
+}
+
+// ── Движение: swipe up = lock, swipe left = cancel ────────────────
+function mcVoiceTouchMove(e) {
+  if (!_mcVoiceRecorder || _mcVoiceLocked) return;
+  const touch = e.touches?.[0] || e;
+  const btn   = document.getElementById('mc-voice-btn');
+  if (!btn) return;
+  const rect  = btn.getBoundingClientRect();
+  const btnCX = rect.left + rect.width / 2;
+  const btnCY = rect.top  + rect.height / 2;
+  const dx    = (touch.clientX || touch.pageX) - btnCX;
+  const dy    = (touch.clientY || touch.pageY) - btnCY;
+  // Замок: вверх > 80px
+  if (dy < -80) { _mcVoiceLock(); return; }
+  // Отмена: влево > 80px
+  if (dx < -80) { _mcVoiceCancel(); return; }
+  // Подсказка направления
+  const hint = document.getElementById('mc-voice-hint');
+  if (hint) {
+    if (dy < -20)      hint.textContent = '🔒 Замок';
+    else if (dx < -20) hint.textContent = '✖ Отмена';
+    else               hint.textContent = '← Отмена   🔒 Замок';
+  }
+}
+
+// ── Отпустить: отправить (или ничего если заблокировано) ──────────
+function mcVoiceTouchEnd(e) {
+  if (!_mcVoiceRecorder) return;
+  if (_mcVoiceLocked)    return; // в режиме замка кнопка "Отправить" отдельная
+  _mcVoiceSend();
+}
+
+function _mcVoiceLock() {
+  if (_mcVoiceLocked) return;
+  _mcVoiceLocked = true;
+  SFX.play && SFX.play('themeSelect');
+  const ui = document.getElementById('mc-voice-ui');
+  const hint = document.getElementById('mc-voice-hint');
+  if (hint) hint.textContent = '🔒 Запись заблокирована';
+  // Показываем кнопки Отмена и Отправить
+  const bar = document.getElementById('mc-voice-lock-bar');
+  if (bar) bar.style.display = 'flex';
+}
+
+function _mcVoiceSend() {
+  if (!_mcVoiceRecorder) return;
+  clearInterval(_mcVoiceTimer); _mcVoiceTimer = null;
+  _mcVoiceRecorder.stop();
+  _mcVoiceRecorder = null;
+  _mcVoiceHideUI();
+}
+
+function _mcVoiceCancel() {
+  if (!_mcVoiceRecorder) return;
+  _mcVoiceCancelled = true;
+  clearInterval(_mcVoiceTimer); _mcVoiceTimer = null;
+  cancelAnimationFrame(_mcVoiceAnimFrame);
+  _mcVoiceRecorder.stop();
+  _mcVoiceRecorder = null;
+  _mcVoiceHideUI();
+  toast('🗑 Запись отменена');
+}
+
+// ── UI ────────────────────────────────────────────────────────────
+function _mcVoiceShowUI() {
+  let ui = document.getElementById('mc-voice-ui');
+  if (ui) ui.remove();
+  ui = document.createElement('div');
+  ui.id = 'mc-voice-ui';
+  ui.style.cssText = `
+    position:fixed;bottom:0;left:0;right:0;z-index:9200;
+    background:var(--surface);border-top:1px solid rgba(255,255,255,.08);
+    display:flex;flex-direction:column;align-items:center;gap:0;
+    padding-bottom:calc(var(--safe-bot) + 8px);
+    animation:mcSlideUp .2s cubic-bezier(.34,1.1,.64,1);
+  `;
+  ui.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;width:100%;padding:10px 16px 6px">
+      <div style="width:10px;height:10px;border-radius:50%;background:#ff4444;animation:blink 1s step-end infinite;flex-shrink:0"></div>
+      <canvas id="mc-voice-wave" width="200" height="36" style="flex:1;max-width:220px;height:36px"></canvas>
+      <div id="mc-voice-timer" style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--text);min-width:42px;text-align:right">0:00</div>
+    </div>
+    <div id="mc-voice-hint" style="font-size:12px;color:var(--muted);padding:0 16px 8px;text-align:center">← Отмена &nbsp;&nbsp; 🔒 Замок</div>
+    <div id="mc-voice-lock-bar" style="display:none;width:100%;padding:4px 16px 2px;gap:10px;justify-content:space-between">
+      <button onclick="_mcVoiceCancel()" style="flex:1;padding:10px;border-radius:12px;border:none;background:var(--surface2);color:var(--danger,#c94f4f);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">🗑 Удалить</button>
+      <button onclick="_mcVoiceSend()" style="flex:1;padding:10px;border-radius:12px;border:none;background:var(--accent);color:var(--btn-text,#fff);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">➤ Отправить</button>
+    </div>
+  `;
+  document.body.appendChild(ui);
+  // Кнопку 🎤 подсвечиваем
+  const btn = document.getElementById('mc-voice-btn');
+  if (btn) { btn.style.background = 'var(--accent)'; btn.style.color = 'var(--btn-text,#fff)'; }
+}
+
+function _mcVoiceHideUI() {
+  cancelAnimationFrame(_mcVoiceAnimFrame);
+  document.getElementById('mc-voice-ui')?.remove();
+  const btn = document.getElementById('mc-voice-btn');
+  if (btn) { btn.style.background = ''; btn.style.color = ''; }
+}
+
+function _mcVoiceUpdateTimer() {
+  const el = document.getElementById('mc-voice-timer');
+  if (!el) return;
+  const m = Math.floor(_mcVoiceSeconds / 60);
+  const s = String(_mcVoiceSeconds % 60).padStart(2, '0');
+  el.textContent = m + ':' + s;
+  if (_mcVoiceSeconds >= 50) el.style.color = '#ff4444';
+}
+
+function _mcVoiceDrawWave() {
+  const canvas = document.getElementById('mc-voice-wave');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const bars = 28;
+  // Получаем данные от анализатора
+  let levels = new Array(bars).fill(0.15);
+  if (_mcVoiceAnalyser) {
+    const buf = new Uint8Array(_mcVoiceAnalyser.frequencyBinCount);
+    _mcVoiceAnalyser.getByteFrequencyData(buf);
+    const step = Math.floor(buf.length / bars);
+    levels = Array.from({ length: bars }, (_, i) => (buf[i * step] || 0) / 255);
+  }
+  ctx.clearRect(0, 0, W, H);
+  const barW = (W - bars * 2) / bars;
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#e87722';
+  ctx.fillStyle = accent;
+  levels.forEach((lvl, i) => {
+    const h = Math.max(4, lvl * (H - 4));
+    const x = i * (barW + 2);
+    const y = (H - h) / 2;
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x, y, barW, h, 2) : ctx.rect(x, y, barW, h);
+    ctx.fill();
+  });
+  _mcVoiceAnimFrame = requestAnimationFrame(_mcVoiceDrawWave);
+}
+
+async function _mcVoiceFinalize() {
+  if (!_mcVoiceChunks.length) return;
+  const mimeType = _mcVoiceChunks[0]?.type || 'audio/webm';
+  const ext  = mimeType.includes('ogg') ? 'ogg' : 'webm';
+  const blob = new Blob(_mcVoiceChunks, { type: mimeType });
+  const dur  = _mcVoiceSeconds;
+  _mcVoiceChunks = [];
+  if (blob.size < 500) { toast('🎤 Слишком короткое'); return; }
+  toast('⬆️ Отправляю голосовое…');
+  try {
+    const b64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(blob);
+    });
+    const fileName = 'voice_' + Date.now() + '.' + ext;
+    const url = await _catboxUpload(b64, fileName, mimeType);
+    _mcSendMediaMsg({ url, fileName, fileType: 'voice', fileSize: blob.size, duration: dur });
+  } catch(err) { toast('❌ ' + (err.message || 'Ошибка отправки')); }
 }
 
 function _gdFileEmoji(name) {
