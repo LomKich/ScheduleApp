@@ -887,6 +887,9 @@ public class MainActivity extends Activity {
     }
 
     // ══════════════════════════════ JavaScript Bridge ══════════════════════════════
+    /** Интерфейс для прогресс-колбэка при загрузке */
+    interface UploadProgressCallback { void onProgress(int pct); }
+
     // Важно: static + public — иначе WebView не может найти методы через рефлексию
 
     public class AndroidBridge {
@@ -1597,9 +1600,6 @@ public class MainActivity extends Activity {
                 }
             }).start();
         }
-
-        /** Интерфейс для прогресс-колбэка при загрузке */
-        interface UploadProgressCallback { void onProgress(int pct); }
 
         /**
          * Внутренняя загрузка на catbox.moe.
