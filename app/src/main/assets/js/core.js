@@ -1674,43 +1674,92 @@ function openCustomThemeEditor() {
   const existing = document.getElementById('custom-theme-overlay');
   if (existing) { existing.remove(); return; }
   const current = S.customTheme || {};
+
   const ov = document.createElement('div');
   ov.id = 'custom-theme-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9400;background:rgba(0,0,0,.6);display:flex;align-items:flex-end';
-  const rows = CUSTOM_THEME_VARS.map(v => {
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9400;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)';
+
+  // Сетка кружков — 3 в ряд
+  const circles = CUSTOM_THEME_VARS.map(v => {
     const val = current[v.key] || v.default;
-    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)">
-      <input type="color" value="${val}" data-var="${v.key}"
-        style="width:36px;height:36px;border-radius:10px;border:2px solid var(--surface3);padding:2px;background:none;cursor:pointer;flex-shrink:0"
-        oninput="customThemePreview(this)">
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:700;color:var(--text)">${v.label}</div>
-        <div style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace" id="ctv_${v.key.replace(/--/g,'')}">${val}</div>
-      </div>
-    </div>`;
+    return `
+      <label style="display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+        <div style="position:relative;width:52px;height:52px">
+          <div id="ctc_${v.key.replace(/--/g,'')}"
+            style="width:52px;height:52px;border-radius:50%;background:${val};box-shadow:0 2px 10px rgba(0,0,0,.45);transition:transform .12s,box-shadow .12s"
+            ontouchstart="this.style.transform='scale(.9)';this.style.boxShadow='0 1px 6px rgba(0,0,0,.3)'"
+            ontouchend="this.style.transform='';this.style.boxShadow='0 2px 10px rgba(0,0,0,.45)'">
+          </div>
+          <input type="color" value="${val}" data-var="${v.key}"
+            style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0"
+            oninput="customThemePreview(this)">
+        </div>
+        <span style="font-size:10px;font-weight:600;color:var(--muted);text-align:center;line-height:1.2;max-width:64px">${v.label}</span>
+      </label>`;
   }).join('');
+
+  // Превью-полоска из 3 главных цветов
+  const previewBg  = current['--bg']      || '#0d0d0d';
+  const previewAcc = current['--accent']  || '#e87722';
+  const previewSrf = current['--surface2']|| '#1f1f1f';
+
   ov.innerHTML = `
-    <div onclick="event.stopPropagation()" style="background:var(--surface);border-radius:24px 24px 0 0;width:100%;max-height:88vh;display:flex;flex-direction:column">
-      <div style="display:flex;align-items:center;padding:20px 20px 12px;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.06)">
-        <div style="font-size:16px;font-weight:800;flex:1">🎨 Своя тема <span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px;vertical-align:middle">VIP</span></div>
-        <button onclick="document.getElementById('custom-theme-overlay').remove()" style="background:var(--surface2);border:none;color:var(--muted);width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;flex-shrink:0">✕</button>
+    <div onclick="event.stopPropagation()"
+      style="background:var(--surface);border-radius:28px 28px 0 0;width:100%;max-height:86vh;display:flex;flex-direction:column;padding-bottom:calc(var(--safe-bot,0px))">
+
+      <!-- Drag handle -->
+      <div style="display:flex;justify-content:center;padding:10px 0 0">
+        <div style="width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.18)"></div>
       </div>
-      <div style="flex:1;overflow-y:auto;padding:0 20px">
-        ${rows}
-        <div style="display:flex;gap:10px;padding:16px 0 calc(var(--safe-bot,0px) + 16px)">
-          <button onclick="customThemeReset()" style="flex:1;padding:13px;border-radius:14px;border:1.5px solid var(--surface3);background:none;color:var(--muted);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">↺ Сброс</button>
-          <button onclick="customThemeSave()" style="flex:2;padding:13px;border-radius:14px;border:none;background:var(--accent);color:var(--btn-text,#fff);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">✓ Применить</button>
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;padding:14px 20px 0">
+        <div style="flex:1">
+          <div style="font-size:16px;font-weight:800;letter-spacing:-.2px">Своя тема</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px">Нажми на кружок чтобы изменить цвет</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-right:2px">
+          <div id="ct-prev-bg"  style="width:20px;height:20px;border-radius:50%;background:${previewBg};border:1.5px solid rgba(255,255,255,.08)"></div>
+          <div id="ct-prev-acc" style="width:20px;height:20px;border-radius:50%;background:${previewAcc}"></div>
+          <div id="ct-prev-srf" style="width:20px;height:20px;border-radius:50%;background:${previewSrf};border:1.5px solid rgba(255,255,255,.08)"></div>
+        </div>
+        <button onclick="document.getElementById('custom-theme-overlay').remove()"
+          style="background:rgba(255,255,255,.08);border:none;color:var(--muted);width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;flex-shrink:0;margin-left:10px;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+
+      <!-- Circles grid -->
+      <div style="flex:1;overflow-y:auto;padding:20px 16px 4px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px 8px;justify-items:center">
+          ${circles}
         </div>
       </div>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:10px;padding:16px 20px 14px;flex-shrink:0">
+        <button onclick="customThemeReset()"
+          style="width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,.07);color:var(--muted);font-size:18px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center"
+          ontouchstart="this.style.opacity='.6'" ontouchend="this.style.opacity=''">↺</button>
+        <button onclick="customThemeSave()"
+          style="flex:1;height:44px;border-radius:22px;border:none;background:var(--accent);color:var(--btn-text,#fff);font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;letter-spacing:.2px"
+          ontouchstart="this.style.opacity='.8'" ontouchend="this.style.opacity=''">Применить</button>
+      </div>
     </div>`;
+
   ov.addEventListener('click', () => ov.remove());
   document.body.appendChild(ov);
 }
 function customThemePreview(inp) {
-  const k = inp.getAttribute('data-var');
-  document.documentElement.style.setProperty(k, inp.value);
-  const lbl = document.getElementById('ctv_' + k.replace(/--/g,''));
-  if (lbl) lbl.textContent = inp.value;
+  const k   = inp.getAttribute('data-var');
+  const val = inp.value;
+  // Применяем CSS переменную для live preview
+  document.documentElement.style.setProperty(k, val);
+  // Обновляем кружок цвета
+  const circle = document.getElementById('ctc_' + k.replace(/--/g,''));
+  if (circle) circle.style.background = val;
+  // Обновляем мини-превью в хедере
+  if (k === '--bg')       { const el = document.getElementById('ct-prev-bg');  if(el) el.style.background = val; }
+  if (k === '--accent')   { const el = document.getElementById('ct-prev-acc'); if(el) el.style.background = val; }
+  if (k === '--surface2') { const el = document.getElementById('ct-prev-srf'); if(el) el.style.background = val; }
 }
 function customThemeSave() {
   const vars = {};

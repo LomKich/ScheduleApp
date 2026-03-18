@@ -3746,75 +3746,129 @@ function messengerRenderMessages(animateLast) {
     const safeUrl   = escHtml(msg.fileLink || '');
     const safeName  = escHtml(msg.fileName || '');
     const voiceId   = 'voice_' + idx;
+    // ── Telegram-style waveform generator ─────────────────────────────────
+    // Генерирует псевдослучайные бары на основе seed — детерминировано
+    function _tgWave(seed, bars) {
+      let s = seed | 0;
+      const rnd = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 16) / 65535; };
+      return Array.from({length:bars}, (_, i) => {
+        const envelope = Math.sin(Math.PI * i / bars) * 0.72 + 0.28;
+        return Math.max(0.06, rnd() * envelope);
+      });
+    }
+
+    // ── SVG waveform (голосовые) ───────────────────────────────────────────
+    function _tgWaveSVG(id, seed, isMe) {
+      const bars   = 40, W = 160, H = 30, bw = 2, gap = 2;
+      const levels = _tgWave(seed, bars);
+      const clrOn  = isMe ? 'rgba(255,255,255,.95)' : 'var(--accent)';
+      const clrOff = isMe ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.22)';
+      const rects  = levels.map((lvl, i) => {
+        const h = Math.max(3, Math.round(lvl * H));
+        const x = i * (bw + gap);
+        const y = Math.round((H - h) / 2);
+        return '<rect class="wvb" data-i="'+i+'" x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" rx="1" fill="'+clrOff+'" data-on="'+clrOn+'" data-off="'+clrOff+'"/>';
+      }).join('');
+      return '<svg id="wv_'+id+'" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="flex:1;cursor:pointer;overflow:visible" onclick="mcVoiceSeek(event,\'\',\''+id+'\',this)" preserveAspectRatio="none">'+rects+'</svg>';
+    }
+
+    const tgPlayBg  = isMe ? 'rgba(255,255,255,.22)' : 'var(--accent)';
+    const tgPlayClr = isMe ? '#fff' : 'var(--btn-text,#fff)';
+    const tgMuted   = isMe ? 'rgba(255,255,255,.6)'  : 'var(--muted)';
+    const tgText    = isMe ? '#fff' : 'var(--text)';
+
     const msgContent = isSticker
       ? `<div class="mc-sticker-wrap" style="font-size:56px;line-height:1.1;text-align:center">${escHtml(msg.sticker)}</div>`
 
+      // ── ФОТО — скруглённые углы, gradient overlay, время поверх ──────────
       : isImage
-        ? `<div style="position:relative;border-radius:14px;overflow:hidden;max-width:240px;cursor:pointer" onclick="photoZoomOpen('${msg.image.replace(/'/g,"\\'")}')">
-            <img src="${msg.image}" style="display:block;width:100%;max-width:240px;border-radius:14px" loading="lazy">
-            <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6);display:flex;align-items:center;gap:2px">${msgFormatTime(msg.ts)}${status}</div>
-          </div>`
+        ? `<div style="position:relative;border-radius:14px;overflow:hidden;max-width:240px;min-width:100px;cursor:pointer"
+               onclick="photoZoomOpen('${msg.image.replace(/'/g,"\\'")}','Фото')">
+             <img src="${msg.image}" style="display:block;width:100%;max-width:240px;min-height:60px;border-radius:14px;object-fit:cover" loading="lazy">
+             <div style="position:absolute;bottom:0;left:0;right:0;height:32px;background:linear-gradient(transparent,rgba(0,0,0,.38));border-radius:0 0 14px 14px;pointer-events:none"></div>
+             <div style="position:absolute;bottom:5px;right:7px;display:flex;align-items:center;gap:3px;pointer-events:none">
+               <span style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 2px rgba(0,0,0,.55)">${msgFormatTime(msg.ts)}</span>
+               <span style="font-size:11px;color:rgba(255,255,255,.9)">${status}</span>
+             </div>
+           </div>`
 
+      // ── ГОЛОСОВОЕ — Telegram: 46px кнопка + waveform bars + countdown ─────
       : isVoice
-        ? `<div data-no-menu style="display:flex;align-items:center;gap:10px;min-width:200px;max-width:260px">
-            <button onclick="mcVoicePlay('${safeUrl}','${voiceId}')"
-              style="width:38px;height:38px;border-radius:50%;background:${isMe?'rgba(255,255,255,.25)':'var(--accent)'};border:none;color:${isMe?'#fff':'var(--btn-text,#fff)'};font-size:16px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center"
-              id="vbtn_${voiceId}">▶</button>
-            <div style="flex:1;min-width:0">
-              <div style="position:relative;height:4px;background:${isMe?'rgba(255,255,255,.25)':'rgba(255,255,255,.15)'};border-radius:2px;margin-bottom:5px;cursor:pointer"
-                onclick="mcVoiceSeek(event,'${safeUrl}','${voiceId}')">
-                <div id="vprog_${voiceId}" style="height:100%;width:0%;background:${isMe?'rgba(255,255,255,.8)':'var(--accent)'};border-radius:2px;pointer-events:none"></div>
-              </div>
-              <div style="display:flex;justify-content:space-between">
-                <span style="font-size:11px;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">🎤</span>
-                <span id="vtime_${voiceId}" style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">${_fmtDur(msg.duration)}</span>
-              </div>
-            </div>
-          </div>`
+        ? (() => {
+            const wv = _tgWaveSVG(voiceId, (msg.ts|0) ^ (idx*7919), isMe);
+            return `<div data-no-menu style="display:flex;align-items:center;gap:10px;padding:2px 0;min-width:220px;max-width:270px">
+             <button id="vbtn_${voiceId}" onclick="mcVoicePlay('${safeUrl}','${voiceId}')"
+               style="width:46px;height:46px;min-width:46px;border-radius:50%;background:${tgPlayBg};border:none;color:${tgPlayClr};cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent"
+               ontouchstart="this.style.opacity='.7'" ontouchend="this.style.opacity=''">
+               <svg id="vico_${voiceId}" width="18" height="18" viewBox="0 0 18 18" fill="${tgPlayClr}"><polygon points="5,2 16,9 5,16"/></svg>
+             </button>
+             <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+               <div style="display:flex;align-items:center">${wv}</div>
+               <div style="display:flex;align-items:center;justify-content:space-between">
+                 <span style="font-size:11px;color:${tgMuted};font-weight:500">Голосовое</span>
+                 <span id="vtime_${voiceId}" style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${tgMuted};font-weight:600">${_fmtDur(msg.duration)}</span>
+               </div>
+             </div>
+           </div>`;
+          })()
 
+      // ── ВИДЕО — превью + круглая play + duration badge ────────────────────
       : isVideo
-        ? `<div style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;cursor:pointer;background:#000" onclick="mcVideoOpen('${safeUrl}','${safeName}')">
-            ${msg.thumbData
-              ? `<img src="${escHtml(msg.thumbData)}" style="display:block;width:100%;max-width:260px;border-radius:14px;min-height:80px" loading="lazy">`
-              : `<div style="width:260px;height:146px;background:var(--surface3);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:40px">🎬</div>`
-            }
-            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-              <div style="width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;pointer-events:none">▶</div>
-            </div>
-            <div style="position:absolute;bottom:6px;left:8px;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</div>
-            <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6)">${msgFormatTime(msg.ts)}${status}</div>
-          </div>`
+        ? `<div style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;min-width:140px;cursor:pointer;background:#111"
+               onclick="mcVideoOpen('${safeUrl}','${safeName}')">
+             ${msg.thumbData
+               ? `<img src="${escHtml(msg.thumbData)}" style="display:block;width:100%;max-width:260px;min-height:80px;border-radius:14px;object-fit:cover" loading="lazy">`
+               : `<div style="width:260px;height:146px;background:#1a1a2e;border-radius:14px;display:flex;align-items:center;justify-content:center"><svg width="38" height="38" viewBox="0 0 24 24" fill="rgba(255,255,255,.3)"><path d="M8 5v14l11-7z"/></svg></div>`
+             }
+             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+               <div style="width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.52);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center">
+                 <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+               </div>
+             </div>
+             ${msg.duration ? `<div style="position:absolute;bottom:7px;left:8px;background:rgba(0,0,0,.62);border-radius:5px;padding:2px 6px;font-size:11px;color:#fff;font-weight:600;font-family:'JetBrains Mono',monospace;pointer-events:none">${_fmtDur(msg.duration)}</div>` : ''}
+             <div style="position:absolute;bottom:0;left:0;right:0;height:32px;background:linear-gradient(transparent,rgba(0,0,0,.42));border-radius:0 0 14px 14px;pointer-events:none"></div>
+             <div style="position:absolute;bottom:5px;right:7px;display:flex;align-items:center;gap:3px;pointer-events:none">
+               <span style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 2px rgba(0,0,0,.5)">${msgFormatTime(msg.ts)}</span>
+               <span style="font-size:11px;color:rgba(255,255,255,.9)">${status}</span>
+             </div>
+           </div>`
 
+      // ── АУДИО ФАЙЛ — иконка + название + прогресс-бар ─────────────────────
       : isAudio
-        ? `<div data-no-menu style="display:flex;align-items:center;gap:10px;min-width:200px;max-width:260px">
-            <button onclick="mcVoicePlay('${safeUrl}','aud_${idx}')"
-              style="width:38px;height:38px;border-radius:50%;background:${isMe?'rgba(255,255,255,.25)':'var(--accent)'};border:none;color:${isMe?'#fff':'var(--btn-text,#fff)'};font-size:16px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center"
-              id="vbtn_aud_${idx}">▶</button>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px">${safeName||'Аудио'}</div>
-              <div style="position:relative;height:4px;background:${isMe?'rgba(255,255,255,.25)':'rgba(255,255,255,.15)'};border-radius:2px;margin-bottom:4px;cursor:pointer"
-                onclick="mcVoiceSeek(event,'${safeUrl}','aud_${idx}')">
-                <div id="vprog_aud_${idx}" style="height:100%;width:0%;background:${isMe?'rgba(255,255,255,.8)':'var(--accent)'};border-radius:2px;pointer-events:none"></div>
-              </div>
-              <div style="display:flex;justify-content:space-between">
-                <span style="font-size:11px;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">🎵</span>
-                <span id="vtime_aud_${idx}" style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${isMe?'rgba(255,255,255,.7)':'var(--muted)'}">—:——</span>
-              </div>
-            </div>
-          </div>`
+        ? `<div data-no-menu style="display:flex;align-items:center;gap:11px;padding:2px 0;min-width:220px;max-width:270px">
+             <button id="vbtn_aud_${idx}" onclick="mcVoicePlay('${safeUrl}','aud_${idx}')"
+               style="width:46px;height:46px;min-width:46px;border-radius:50%;background:${tgPlayBg};border:none;color:${tgPlayClr};cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent"
+               ontouchstart="this.style.opacity='.7'" ontouchend="this.style.opacity=''">
+               <svg id="vico_aud_${idx}" width="18" height="18" viewBox="0 0 18 18" fill="${tgPlayClr}"><polygon points="5,2 16,9 5,16"/></svg>
+             </button>
+             <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">
+               <div style="font-size:13px;font-weight:600;color:${tgText};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${safeName||'Аудио'}</div>
+               <div style="position:relative;height:3px;background:${isMe?'rgba(255,255,255,.22)':'rgba(255,255,255,.16)'};border-radius:3px;cursor:pointer" onclick="mcVoiceSeek(event,'${safeUrl}','aud_${idx}')">
+                 <div id="vprog_aud_${idx}" style="height:100%;width:0%;background:${isMe?'rgba(255,255,255,.9)':'var(--accent)'};border-radius:3px;transition:width .1s linear;pointer-events:none"></div>
+               </div>
+               <div style="display:flex;align-items:center;justify-content:space-between">
+                 <span style="font-size:11px;color:${tgMuted}">${_fmtSize(msg.fileSize)||'аудио'}</span>
+                 <span id="vtime_aud_${idx}" style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${tgMuted};font-weight:600">—:——</span>
+               </div>
+             </div>
+           </div>`
 
+      // ── ФАЙЛ — иконка типа + имя + размер + SVG кнопка скачать ───────────
       : isFile
-        ? `<div style="display:flex;align-items:center;gap:12px;padding:4px 0;min-width:200px;max-width:260px">
-            <div style="width:44px;height:44px;border-radius:12px;background:${isMe?'rgba(255,255,255,.2)':'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0">${_gdFileEmoji(msg.fileName)}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${safeName||'Файл'}</div>
-              <div style="font-size:11px;color:${isMe?'rgba(255,255,255,.6)':'var(--muted)'};margin-top:2px">${_fmtSize(msg.fileSize)||'файл'}</div>
-            </div>
-            <a href="${safeUrl}" target="_blank" download="${safeName}"
-              style="width:36px;height:36px;border-radius:50%;background:${isMe?'rgba(255,255,255,.2)':'var(--accent)'};display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0;font-size:16px;color:${isMe?'#fff':'var(--btn-text,#fff)'}">⬇</a>
-          </div>`
+        ? `<div style="display:flex;align-items:center;gap:12px;padding:4px 0;min-width:200px;max-width:270px">
+             <div style="width:46px;height:46px;min-width:46px;border-radius:13px;background:${isMe?'rgba(255,255,255,.18)':'rgba(255,255,255,.08)'};display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">${_gdFileEmoji(msg.fileName)}</div>
+             <div style="flex:1;min-width:0">
+               <div style="font-size:13px;font-weight:600;color:${tgText};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${safeName||'Файл'}</div>
+               <div style="font-size:11px;color:${tgMuted};margin-top:2px">${_fmtSize(msg.fileSize)||'файл'}</div>
+             </div>
+             <a href="${safeUrl}" target="_blank" download="${safeName}"
+               style="width:38px;height:38px;min-width:38px;border-radius:50%;background:${tgPlayBg};display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0;-webkit-tap-highlight-color:transparent"
+               ontouchstart="this.style.opacity='.7'" ontouchend="this.style.opacity=''">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="${tgPlayClr}"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-14 9v2h14v-2H5z"/></svg>
+             </a>
+           </div>`
 
-      : (replyQuote + escHtml(msg.text));
+     : (replyQuote + escHtml(msg.text));
 
     // Reactions display
     const reactionsHtml = msg.reactions && Object.keys(msg.reactions).length
@@ -4065,6 +4119,10 @@ function mcBubbleTouchEnd(e, row, idx) {
   clearTimeout(_mcLongPressTimer);
   _mcDragging = false;
   _mcReturnBubble(row);
+  // Если тап на плеере/кнопке — блокируем последующий mcBubbleClick
+  if (e.target.closest('[data-no-menu]') || e.target.closest('button,a,svg,video')) {
+    _mcDragTriggered = true;
+  }
 }
 
 // ── Mouse (веб-браузер на ПК) ──────────────────────────────────────
@@ -4126,6 +4184,9 @@ function _mcReturnBubble(row) {
 function mcBubbleClick(e, idx) {
   if (_mcDragTriggered) { _mcDragTriggered = false; return; } // уже обработано свайпом
   if (_mcDragging) return;
+  // Не открываем меню если клик на плеере / кнопке / ссылке
+  if (e.target.closest('[data-no-menu]')) return;
+  if (e.target.closest('button,a,video,canvas,svg')) return;
   mcShowMsgMenu(idx);
 }
 
@@ -5059,68 +5120,78 @@ async function _mcVoiceFinalize() {
 
 // ── Воспроизведение голосового прямо в пузыре ─────────────────────
 const _mcAudios = {};
+
+// SVG иконки play/pause — Telegram-style
+function _tgSetPlayState(id, playing) {
+  const ico = document.getElementById('vico_' + id);
+  if (!ico) return;
+  const fill = ico.getAttribute('fill') || '#fff';
+  if (playing) {
+    ico.innerHTML = '<rect x="4" y="2" width="3.5" height="14" rx="1"/><rect x="10.5" y="2" width="3.5" height="14" rx="1"/>';
+  } else {
+    ico.innerHTML = '<polygon points="5,2 16,9 5,16"/>';
+  }
+}
+
+// Обновляет waveform bars по прогрессу (0..1)
+function _tgWaveUpdate(id, pct) {
+  const svg = document.getElementById('wv_' + id);
+  if (!svg) return;
+  const bars  = svg.querySelectorAll('.wvb');
+  const total = bars.length;
+  bars.forEach((b, i) => {
+    b.setAttribute('fill', i / total < pct ? b.dataset.on : b.dataset.off);
+  });
+}
+
 function mcVoicePlay(url, id) {
-  const btn  = document.getElementById('vbtn_' + id);
-  const prog = document.getElementById('vprog_' + id);
   const time = document.getElementById('vtime_' + id);
-  // Если уже играет — пауза
   if (_mcAudios[id]) {
     const a = _mcAudios[id];
-    if (!a.paused) { a.pause(); if (btn) btn.textContent = '▶'; return; }
-    a.play(); if (btn) btn.textContent = '⏸'; return;
+    if (!a.paused) { a.pause(); _tgSetPlayState(id, false); return; }
+    a.play(); _tgSetPlayState(id, true); return;
   }
-  // Останавливаем остальные
-  Object.values(_mcAudios).forEach(a => { a.pause(); });
-  document.querySelectorAll('[id^="vbtn_"]').forEach(b => { b.textContent = '▶'; });
-
+  // Останавливаем всё прочее
+  Object.entries(_mcAudios).forEach(([oid, a]) => {
+    a.pause(); _tgSetPlayState(oid, false); _tgWaveUpdate(oid, 0);
+  });
   const audio = new Audio(url);
   _mcAudios[id] = audio;
   audio.ontimeupdate = () => {
     if (!audio.duration) return;
-    const pct = (audio.currentTime / audio.duration) * 100;
-    if (prog) prog.style.width = pct + '%';
+    const pct = audio.currentTime / audio.duration;
+    _tgWaveUpdate(id, pct);
+    const prog = document.getElementById('vprog_' + id);
+    if (prog) prog.style.width = (pct * 100) + '%';
     const left = Math.ceil(audio.duration - audio.currentTime);
-    const m = Math.floor(left/60), s = String(left%60).padStart(2,'0');
+    const m = Math.floor(left / 60), s = String(left % 60).padStart(2, '0');
     if (time) time.textContent = m + ':' + s;
   };
   audio.onended = () => {
-    if (btn)  btn.textContent = '▶';
+    _tgSetPlayState(id, false);
+    _tgWaveUpdate(id, 0);
+    const prog = document.getElementById('vprog_' + id);
     if (prog) prog.style.width = '0%';
+    if (time && audio.duration) {
+      const tot = Math.round(audio.duration);
+      time.textContent = Math.floor(tot/60) + ':' + String(tot%60).padStart(2,'0');
+    }
     delete _mcAudios[id];
   };
-  audio.play().then(() => { if (btn) btn.textContent = '⏸'; })
+  audio.play()
+    .then(() => _tgSetPlayState(id, true))
     .catch(() => { toast('❌ Не удалось воспроизвести'); delete _mcAudios[id]; });
 }
-function mcVoiceSeek(e, url, id) {
+
+function mcVoiceSeek(e, url, id, svgEl) {
   const a = _mcAudios[id];
   if (!a || !a.duration) return;
-  const bar  = e.currentTarget;
-  const rect = bar.getBoundingClientRect();
+  const el   = svgEl || e.currentTarget;
+  const rect = el.getBoundingClientRect();
   const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   a.currentTime = pct * a.duration;
 }
 
-// ── Фуллскрин видеоплеер ──────────────────────────────────────────
-function mcVideoOpen(url, name) {
-  let ov = document.getElementById('mc-video-overlay');
-  if (ov) ov.remove();
-  ov = document.createElement('div');
-  ov.id = 'mc-video-overlay';
-  ov.style.cssText = `position:fixed;inset:0;z-index:9300;background:#000;display:flex;flex-direction:column;animation:mcFadeIn .15s ease`;
-  ov.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;padding:calc(var(--safe-top)+10px) 14px 10px;flex-shrink:0">
-      <button onclick="document.getElementById('mc-video-overlay')?.remove()"
-        style="background:rgba(255,255,255,.1);border:none;color:#fff;font-size:22px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
-      <div style="flex:1;font-size:14px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(name||'Видео')}</div>
-      <a href="${escHtml(url)}" download="${escHtml(name||'video')}" target="_blank"
-        style="background:rgba(255,255,255,.1);border:none;color:#fff;font-size:18px;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-decoration:none">⬇</a>
-    </div>
-    <div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden">
-      <video src="${escHtml(url)}" controls autoplay playsinline
-        style="max-width:100%;max-height:100%;outline:none"></video>
-    </div>`;
-  document.body.appendChild(ov);
-}
 
 function _isAudioFile(name) {
   if (!name) return false;
