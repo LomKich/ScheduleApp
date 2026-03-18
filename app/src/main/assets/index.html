@@ -1825,11 +1825,17 @@ body.on-home-screen #live-blur-canvas {
 
 /* ── Секретная CMD-консоль ── */
 .cmd-overlay{
-  position:fixed;inset:0;z-index:600;display:flex;flex-direction:column;
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  z-index:600;display:flex;flex-direction:column;
   background:#0c0c0c;font-family:'JetBrains Mono',monospace;
-  padding-top:var(--safe-top);padding-bottom:var(--safe-bot);
+  padding-top:var(--safe-top);
+  /* bottom padding управляется JS через visualViewport */
   transform:translateY(100%);
   transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  /* Не даём контенту вылезти за пределы оверлея */
+  overflow:hidden;
+  /* Высота и позиция корректируются JS при открытой клавиатуре */
+  will-change:transform;
 }
 .cmd-overlay.cmd-visible{
   transform:translateY(0);
@@ -2253,17 +2259,43 @@ body.kb-open .screen.active:not(#s-messenger-chat) {
 }
 /* ══════════════════════════════════════════════════════════════════
    NOTCH / CUTOUT / DYNAMIC ISLAND — поддержка вырезов камеры
+   notch-on  : фон и шапки уходят под камеру, текст безопасен
+   notch-off : без учёта выреза (всё от самого верха без отступа)
    ══════════════════════════════════════════════════════════════════ */
 
-/* ── Верхняя зона (статус-бар) — фон приложения чтобы не было просветов */
-body::before {
-  content:'';
-  position:fixed;
-  top:0;left:0;right:0;
-  height:var(--safe-top,0px);
-  background:var(--bg);
-  z-index:9999;
-  pointer-events:none;
+/* ── По умолчанию (до инициализации) — стандартный safe-area отступ */
+.screen {
+  padding-top: var(--safe-top);
+}
+
+/* ── notch-on: фон и шапки вылезают под камеру, контент внутри отступает */
+html.notch-on .screen {
+  padding-top: 0;
+}
+html.notch-on .hdr {
+  padding-top: calc(14px + var(--safe-top)) !important;
+}
+html.notch-on .home-hero {
+  padding-top: calc(44px + var(--safe-top));
+}
+/* body::before (заливка статус-бара) больше не нужна — шапки сами заполняют */
+html.notch-on body::before {
+  display: none;
+}
+/* Логин-экран — тоже растягиваем */
+html.notch-on #s-login {
+  padding-top: 0 !important;
+}
+
+/* ── notch-off: никакого учёта выреза */
+html.notch-off .screen {
+  padding-top: 0;
+}
+html.notch-off body::before {
+  display: none;
+}
+html.notch-off #s-login {
+  padding-top: 0 !important;
 }
 
 /* Нав-бар снизу учитывает жест-зону */
@@ -2271,47 +2303,30 @@ body::before {
   padding-bottom: max(var(--safe-bot), env(safe-area-inset-bottom, 0px)) !important;
 }
 
-/* Шапки экранов — только боковые safe-area, vertical уже учтён padding-top у .screen */
+/* Шапки экранов — только боковые safe-area */
 .hdr {
   padding-left:  max(18px, calc(18px + env(safe-area-inset-left,  0px))) !important;
   padding-right: max(18px, calc(18px + env(safe-area-inset-right, 0px))) !important;
 }
 
-/* Экраны: контент не залезает под вырез */
+/* Экраны: боковые safe-area */
 .screen {
   padding-left: max(var(--safe-left), env(safe-area-inset-left, 0px));
   padding-right: max(var(--safe-right), env(safe-area-inset-right, 0px));
 }
 
-/* Поле ввода в чате — отступ снизу */
+/* Поле ввода в чате */
 #mc-input-bar {
   padding-left: max(12px, calc(12px + env(safe-area-inset-left, 0px))) !important;
   padding-right: max(12px, calc(12px + env(safe-area-inset-right, 0px))) !important;
   padding-bottom: max(8px, calc(8px + env(safe-area-inset-bottom, 0px))) !important;
 }
 
-/* CMD консоль */
-.cmd-overlay {
-  padding-top: max(var(--safe-top), env(safe-area-inset-top, 0px));
-  padding-bottom: max(var(--safe-bot), env(safe-area-inset-bottom, 0px));
-}
+/* CMD консоль — позиция и высота управляются JS через visualViewport */
 
 /* Toast уведомления не перекрываются вырезом */
 #ios-notif-container {
   top: max(calc(var(--safe-top) + 10px), calc(env(safe-area-inset-top, 0px) + 10px)) !important;
-}
-
-/* Фиксированные элементы поверх контента */
-.fixed-safe {
-  top: max(var(--safe-top), env(safe-area-inset-top, 0px));
-  left: max(var(--safe-left), env(safe-area-inset-left, 0px));
-  right: max(var(--safe-right), env(safe-area-inset-right, 0px));
-}
-
-/* Экран логина */
-#s-login {
-  padding-top: max(var(--safe-top), env(safe-area-inset-top, 0px));
-  padding-bottom: max(var(--safe-bot), env(safe-area-inset-bottom, 0px));
 }
 
 /* Peer-профиль с прозрачной шапкой */
@@ -2604,7 +2619,8 @@ body::before {
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.4.15 — Android</div>
+        <div class="item-sub" id="app-version-str">— Android</div>
+        <script>(function(){var el=document.getElementById('app-version-str');if(!el)return;var v=(window.Android&&typeof window.Android.getAppVersion==='function')?window.Android.getAppVersion():null;el.textContent=(v||'?')+' — Android';})();</script>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
