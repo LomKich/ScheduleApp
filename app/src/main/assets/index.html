@@ -1877,6 +1877,103 @@ body.on-home-screen #live-blur-canvas {
 }
 .cmd-cursor-blink{display:inline-block;width:8px;height:14px;background:var(--accent);margin-left:1px;vertical-align:text-bottom;animation:blink 1s step-end infinite;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── Telegram-style кнопка отправки/микрофона ── */
+#mc-action-btn {
+  transition: background .22s cubic-bezier(.4,0,.2,1),
+              transform  .14s cubic-bezier(.34,1.4,.64,1);
+}
+#mc-action-btn:active { transform: scale(.88); }
+
+/* mic → send: mic уходит вниз+вправо, send приходит снизу-справа */
+#mc-action-send,
+#mc-action-voice {
+  transition:
+    transform .22s cubic-bezier(.34,1.3,.64,1),
+    opacity   .18s ease;
+}
+
+/* Состояние: только голос виден */
+#mc-action-btn.state-voice #mc-action-voice {
+  transform: scale(1) rotate(0deg);
+  opacity: 1;
+  pointer-events: all;
+}
+#mc-action-btn.state-voice #mc-action-send {
+  transform: scale(.4) rotate(-45deg) translate(6px, 6px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Состояние: только отправка видна */
+#mc-action-btn.state-send #mc-action-send {
+  transform: scale(1) rotate(0deg) translate(0,0);
+  opacity: 1;
+  pointer-events: all;
+}
+#mc-action-btn.state-send #mc-action-voice {
+  transform: scale(.4) rotate(20deg) translate(-6px, 6px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Пульсация кнопки при записи (красная) ── */
+@keyframes mc-rec-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.55); }
+  60%  { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+#mc-action-btn.recording {
+  background: #ef4444 !important;
+  animation: mc-rec-pulse 1.4s ease-out infinite;
+}
+#mc-action-btn.recording #mc-action-voice svg {
+  animation: mc-mic-rec 1s ease-in-out infinite alternate;
+}
+@keyframes mc-mic-rec {
+  from { transform: scale(1); }
+  to   { transform: scale(1.18); }
+}
+
+/* ── Telegram-style UI записи — панель снизу ── */
+#mc-voice-ui {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 9200;
+  background: var(--surface);
+  border-top: 1px solid rgba(255,255,255,.07);
+  padding-bottom: calc(var(--safe-bot,0px) + 6px);
+}
+@keyframes mc-voice-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes mc-voice-out {
+  from { transform: translateY(0);    opacity: 1; }
+  to   { transform: translateY(100%); opacity: 0; }
+}
+
+/* ── Красная точка записи — моргает плавно ── */
+@keyframes mc-rec-dot {
+  0%,100% { opacity: 1;   transform: scale(1); }
+  50%     { opacity: .35; transform: scale(.75); }
+}
+.mc-rec-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+  animation: mc-rec-dot 1.1s ease-in-out infinite;
+}
+
+/* ── Свайп-трек: стрелка и текст ── */
+@keyframes mc-hint-pulse {
+  0%,100% { opacity: .55; }
+  50%     { opacity: 1; }
+}
+.mc-swipe-hint-arrow {
+  animation: mc-hint-pulse 1.6s ease-in-out infinite;
+}
 /* ── Секретные эффекты ── */
 #matrix-canvas{position:fixed;inset:0;z-index:9998;pointer-events:none;opacity:0;transition:opacity .5s;}
 #matrix-canvas.active{opacity:.85;}
@@ -2995,24 +3092,34 @@ html.notch-off #s-login {
         oninput="mcAutoResize(this);mcUpdateActionBtn()"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();messengerSend()}"></textarea>
     </div>
-    <!-- Единая умная кнопка: 🎤 когда поле пустое, ➤ когда есть текст -->
+    <!-- Единая умная кнопка: 🎤 ↔ ➤ — Telegram-style анимация -->
     <div id="mc-action-btn"
-      style="width:42px;height:42px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-bottom:2px;position:relative;overflow:hidden;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none">
-      <!-- Иконка отправки -->
+      style="width:46px;height:46px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-bottom:0;position:relative;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;overflow:visible;-webkit-tap-highlight-color:transparent">
+
+      <!-- Отправить — SVG стрелка, выезжает снизу-вправо -->
       <div id="mc-action-send"
-        style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:20px;color:var(--btn-text,#fff);transition:transform .18s cubic-bezier(.34,1.3,.64,1),opacity .18s"
+        style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;will-change:transform,opacity"
         onmousedown="event.preventDefault();messengerSend()"
         ontouchstart="event.preventDefault()"
-        ontouchend="messengerSend()">➤</div>
-      <!-- Иконка микрофона -->
+        ontouchend="messengerSend()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <path d="M2 21L23 12 2 3v7l15 2-15 2v7z" fill="white"/>
+        </svg>
+      </div>
+
+      <!-- Микрофон — SVG, выезжает снизу -->
       <div id="mc-action-voice"
-        style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--btn-text,#fff);transition:transform .18s cubic-bezier(.34,1.3,.64,1),opacity .18s"
+        style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;will-change:transform,opacity"
         onmousedown="mcVoiceTouchStart(event)"
         onmouseup="mcVoiceTouchEnd(event)"
         onmouseleave="mcVoiceTouchEnd(event)"
         ontouchstart="mcVoiceTouchStart(event)"
         ontouchmove="mcVoiceTouchMove(event)"
-        ontouchend="mcVoiceTouchEnd(event)">🎤</div>
+        ontouchend="mcVoiceTouchEnd(event)">
+        <svg id="mc-mic-svg" width="22" height="22" viewBox="0 0 24 24" fill="white">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/>
+        </svg>
+      </div>
     </div>
   </div>
   <!-- Sticker panel (hidden) -->
