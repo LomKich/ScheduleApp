@@ -4626,6 +4626,13 @@ function mcPickImage() {
   inp.click();
 }
 
+// Вызывается Java когда PermissionRequest протух за время диалога разрешений.
+// Разрешение уже выдано, просто запускаем запись заново.
+window.mcVoiceRetryAfterPermission = function() {
+  toast('🎤 Разрешение получено, начинаю запись...');
+  setTimeout(() => mcVoiceTouchStart({ preventDefault: () => {} }), 300);
+};
+
 // ── Загрузка файла на catbox.moe через Java-бридж ─────────────────
 // base64 — без data:… префикса. Возвращает Promise<string> с URL или бросает ошибку.
 async function _catboxUpload(base64, fileName, mimeType, onProgress) {
