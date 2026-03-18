@@ -1898,6 +1898,12 @@ public class MainActivity extends Activity {
             return helper.accountChangePassword(username, newPwdHash);
         }
 
+        /** Возвращает версию приложения из BuildConfig (build.gradle → versionName) */
+        @JavascriptInterface
+        public String getAppVersion() {
+            return BuildConfig.VERSION_NAME;
+        }
+
         /** Переинжектирует высоту статус-бара (нужно для восстановления после notch-toggle) */
         @JavascriptInterface
         public void reinjectStatusBar() {
