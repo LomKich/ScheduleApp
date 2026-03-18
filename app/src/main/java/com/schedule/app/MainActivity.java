@@ -1695,6 +1695,7 @@ public class MainActivity extends Activity {
                     return err.toString();
                 } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
             }
+        }
 
         /**
          * Загрузка файла на pixeldrain.com — быстрый CDN, файлы постоянные, 10GB/мес бесплатно.
