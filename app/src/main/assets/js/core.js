@@ -2603,7 +2603,9 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.4.15';
+const APP_VERSION = (window.Android && typeof window.Android.getAppVersion === 'function')
+  ? window.Android.getAppVersion()
+  : '4.4.16';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -2800,10 +2802,26 @@ function saveHi(game, score) {
 function getHi(game){return loadHiScores()[game]||0;}
 
 // ══ CMD-КОНСОЛЬ ══
+let _cmdVVListener = null;
+function _cmdFitVV(ov) {
+  if (!ov) return;
+  if (window.visualViewport) {
+    ov.style.top    = window.visualViewport.offsetTop  + 'px';
+    ov.style.left   = window.visualViewport.offsetLeft + 'px';
+    ov.style.width  = window.visualViewport.width  + 'px';
+    ov.style.height = window.visualViewport.height + 'px';
+  }
+}
 function cmdOpen(){
   const ov=document.getElementById('cmd-overlay');
   if(!ov)return;
   ov.style.display='flex';
+  _cmdFitVV(ov);
+  if(window.visualViewport && !_cmdVVListener){
+    _cmdVVListener=()=>_cmdFitVV(ov);
+    window.visualViewport.addEventListener('resize', _cmdVVListener);
+    window.visualViewport.addEventListener('scroll', _cmdVVListener);
+  }
   // Trigger reflow then add class for smooth slide-up
   ov.offsetHeight;
   ov.classList.add('cmd-visible');
@@ -2818,7 +2836,16 @@ function cmdClose(){
   const ov=document.getElementById('cmd-overlay');
   if(!ov)return;
   ov.classList.remove('cmd-visible');
-  setTimeout(()=>{ ov.style.display='none'; }, 300);
+  if(window.visualViewport && _cmdVVListener){
+    window.visualViewport.removeEventListener('resize', _cmdVVListener);
+    window.visualViewport.removeEventListener('scroll', _cmdVVListener);
+    _cmdVVListener=null;
+  }
+  setTimeout(()=>{
+    ov.style.display='none';
+    // Сбрасываем инлайн-позицию чтобы следующий open начинал чисто
+    ov.style.top=''; ov.style.left=''; ov.style.width=''; ov.style.height='';
+  }, 300);
 }
 function cmdPrint(cls,text){
   const body=document.getElementById('cmd-body');

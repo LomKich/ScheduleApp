@@ -5123,52 +5123,47 @@ document.addEventListener('click', (e) => {
 
 // ══════════════════════════════════════════════════════════════════════
 // 📷 РЕЖИМ ВЫРЕЗА КАМЕРЫ
+// on  = фон уходит под камеру, контент безопасно отступает внутри шапки
+// off = без учёта выреза, всё от самого верха
 // ══════════════════════════════════════════════════════════════════════
-const NOTCH_KEY = 'sapp_notch_mode_v1';
-function notchModeLoad() { try { return localStorage.getItem(NOTCH_KEY)||'auto'; } catch(e) { return 'auto'; } }
+const NOTCH_KEY = 'sapp_notch_mode_v2';
+function notchModeLoad() { try { return localStorage.getItem(NOTCH_KEY) || 'on'; } catch(e) { return 'on'; } }
 function toggleNotchMode() {
   const cur = notchModeLoad();
-  const next = cur==='auto' ? 'none' : 'auto';
+  const next = cur === 'on' ? 'off' : 'on';
   try { localStorage.setItem(NOTCH_KEY, next); } catch(e) {}
   _applyNotchMode(next);
   _renderNotchToggle(next);
-  toast(next==='none' ? '📷 Вырез камеры: отключён' : '📷 Вырез камеры: включён');
+  toast(next === 'on' ? '📷 Вырез камеры: включён' : '📷 Вырез камеры: отключён');
 }
 function _applyNotchMode(mode) {
-  if (mode==='none') {
-    // Не обнуляем полностью — 12px минимальный отступ чтобы контент не заезжал под камеру
-    document.documentElement.style.setProperty('--safe-top','12px');
+  const cl = document.documentElement.classList;
+  if (mode === 'on') {
+    cl.add('notch-on');
+    cl.remove('notch-off');
   } else {
-    const nat = document.documentElement.style.getPropertyValue('--safe-top-native');
-    if (nat && nat!=='0px') document.documentElement.style.setProperty('--safe-top', nat);
-    else try { window.Android?.reinjectStatusBar?.(); } catch(_) {}
+    cl.add('notch-off');
+    cl.remove('notch-on');
   }
 }
 function _renderNotchToggle(mode) {
   const t = document.getElementById('notch-mode-toggle');
   const l = document.getElementById('notch-mode-label');
-  if (t) t.classList.toggle('on', mode==='auto');
-  if (l) l.textContent = mode==='auto' ? 'включён' : 'отключён';
+  if (t) t.classList.toggle('on', mode === 'on');
+  if (l) l.textContent = mode === 'on' ? 'включён' : 'отключён';
 }
+// Применяем немедленно и повторно на случай позднего инжекта Android
 (function initNotchMode() {
-  setTimeout(() => {
-    // Нативное значение берём только из --safe-top-native (выставляется Android-инжектором)
-    // НЕ из --safe-top, потому что он мог быть уже перезаписан предыдущим _applyNotchMode
-    const nat = document.documentElement.style.getPropertyValue('--safe-top-native').trim();
-    // Если нативное ещё не выставлено (первый запуск) — берём текущее --safe-top
-    // только если режим был 'auto' (иначе там уже наше 12px, а не реальный inset)
-    const mode = notchModeLoad();
-    if (!nat || nat === '0px') {
-      if (mode === 'auto') {
-        const cur = getComputedStyle(document.documentElement).getPropertyValue('--safe-top').trim();
-        if (cur && cur !== '0px' && cur !== '12px') {
-          document.documentElement.style.setProperty('--safe-top-native', cur);
-        }
-      }
-    }
-    _applyNotchMode(mode);
-    _renderNotchToggle(mode);
-  }, 600);
+  const mode = notchModeLoad();
+  _applyNotchMode(mode);
+  _renderNotchToggle(mode);
+  // Повторные вызовы: Android-инжектор может выставить safe-area позже
+  [200, 600, 1200, 2500].forEach(ms =>
+    setTimeout(() => {
+      _applyNotchMode(notchModeLoad());
+      _renderNotchToggle(notchModeLoad());
+    }, ms)
+  );
 })();
 
 // ── Stub для _mcUpdateMuteIcon (кнопка удалена из хедера) ─────────────
