@@ -536,16 +536,29 @@ body[data-theme="candy"] {--accent-text:#000}
 /* ── Photo zoom overlay ── */
 #photo-zoom-overlay {
   display:none;position:fixed;inset:0;z-index:9999;
-  background:rgba(0,0,0,.92);
-  justify-content:center;align-items:center;
+  background:rgba(0,0,0,.95);
+  flex-direction:column;
   touch-action:none;
+  transition:opacity .2s;
 }
 #photo-zoom-overlay.show { display:flex; }
 #photo-zoom-overlay img {
   max-width:100%;max-height:100%;object-fit:contain;
   transform-origin:center;
-  transition:transform .05s linear;
   user-select:none;pointer-events:none;
+  transition:transform .05s linear;
+}
+#pz-header {
+  position:absolute;top:0;left:0;right:0;z-index:2;
+  display:flex;align-items:center;gap:10px;
+  padding:calc(var(--safe-top) + 10px) 14px 12px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.7) 0%,transparent 100%);
+}
+#pz-footer {
+  position:absolute;bottom:0;left:0;right:0;z-index:2;
+  display:flex;align-items:center;justify-content:center;gap:20px;
+  padding:14px 20px calc(var(--safe-bot) + 14px);
+  background:linear-gradient(to top,rgba(0,0,0,.7) 0%,transparent 100%);
 }
 
 .bell-day{font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.15em;text-transform:uppercase;margin:18px 0 8px}
@@ -2879,7 +2892,18 @@ html.notch-off #s-login {
 
 <!-- PHOTO ZOOM OVERLAY -->
 <div id="photo-zoom-overlay">
-  <img id="photo-zoom-img" src="" alt="">
+  <!-- Хедер -->
+  <div id="pz-header">
+    <button onclick="photoZoomClose()"
+      style="background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>
+    <div id="pz-title" style="flex:1;font-size:14px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5)">Фото</div>
+    <a id="pz-download" href="" download="" target="_blank"
+      style="background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0">⬇</a>
+  </div>
+  <!-- Область просмотра -->
+  <div id="pz-area" style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
+    <img id="photo-zoom-img" src="" alt="">
+  </div>
 </div>
 
 <!-- Ghost inputs for Supabase config (управление через CMD: supabase set <url> <key>) -->
@@ -2968,21 +2992,28 @@ html.notch-off #s-login {
     <div style="flex:1;background:var(--surface2);border-radius:20px;display:flex;align-items:flex-end;padding:8px 14px;gap:8px;min-height:42px">
       <textarea id="mc-input" placeholder="Сообщение..." rows="1"
         style="flex:1;background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:15px;resize:none;max-height:120px;line-height:1.4;padding:0"
-        oninput="mcAutoResize(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();messengerSend()}"></textarea>
+        oninput="mcAutoResize(this);mcUpdateActionBtn()"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();messengerSend()}"></textarea>
     </div>
-    <button id="mc-voice-btn"
-      style="width:38px;height:38px;border-radius:50%;background:var(--surface2);border:none;color:var(--muted);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s,color .15s;margin-bottom:2px;user-select:none;-webkit-user-select:none;touch-action:none"
-      onmousedown="mcVoiceTouchStart(event)"
-      onmouseup="mcVoiceTouchEnd(event)"
-      onmouseleave="mcVoiceTouchEnd(event)"
-      ontouchstart="mcVoiceTouchStart(event)"
-      ontouchmove="mcVoiceTouchMove(event)"
-      ontouchend="mcVoiceTouchEnd(event)">🎤</button>
-    <button id="mc-send-btn"
-      style="width:42px;height:42px;border-radius:50%;background:var(--accent);border:none;color:var(--btn-text,#fff);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s;margin-bottom:2px"
-      onmousedown="event.preventDefault();messengerSend()"
-      ontouchstart="event.preventDefault();this.style.transform='scale(.9)'"
-      ontouchend="this.style.transform='';messengerSend()">➤</button>
+    <!-- Единая умная кнопка: 🎤 когда поле пустое, ➤ когда есть текст -->
+    <div id="mc-action-btn"
+      style="width:42px;height:42px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-bottom:2px;position:relative;overflow:hidden;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none">
+      <!-- Иконка отправки -->
+      <div id="mc-action-send"
+        style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:20px;color:var(--btn-text,#fff);transition:transform .18s cubic-bezier(.34,1.3,.64,1),opacity .18s"
+        onmousedown="event.preventDefault();messengerSend()"
+        ontouchstart="event.preventDefault()"
+        ontouchend="messengerSend()">➤</div>
+      <!-- Иконка микрофона -->
+      <div id="mc-action-voice"
+        style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--btn-text,#fff);transition:transform .18s cubic-bezier(.34,1.3,.64,1),opacity .18s"
+        onmousedown="mcVoiceTouchStart(event)"
+        onmouseup="mcVoiceTouchEnd(event)"
+        onmouseleave="mcVoiceTouchEnd(event)"
+        ontouchstart="mcVoiceTouchStart(event)"
+        ontouchmove="mcVoiceTouchMove(event)"
+        ontouchend="mcVoiceTouchEnd(event)">🎤</div>
+    </div>
   </div>
   <!-- Sticker panel (hidden) -->
   <div id="mc-sticker-panel" style="display:none;height:220px;background:var(--surface);border-top:1px solid rgba(255,255,255,.06);overflow-y:auto;padding:10px 12px;flex-shrink:0"></div>
