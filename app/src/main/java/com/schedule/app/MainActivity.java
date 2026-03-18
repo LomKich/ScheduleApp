@@ -59,6 +59,7 @@ public class MainActivity extends Activity {
     private static final int    IMAGE_PICK_CODE   = 1002;
     private static final int    NOTIF_PERM_CODE   = 1003;
     private static final int    AUDIO_PERM_CODE   = 1004;
+    private static final int    CAMERA_PERM_CODE  = 1005;
     private static final String NOTIF_CHANNEL_ID  = "sapp_messages";
     private static final String NOTIF_CHANNEL_NAME = "Сообщения";
     private static final int    NOTIF_ID          = 42;
@@ -864,6 +865,13 @@ public class MainActivity extends Activity {
             } else {
                 _pendingVoiceRecordRetry = false;
             }
+        } else if (requestCode == CAMERA_PERM_CODE) {
+            boolean granted = grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            log.i(TAG, "Camera permission result: " + (granted ? "granted" : "denied"));
+            webView.post(() -> webView.evaluateJavascript(
+                "if(typeof onCameraPermissionResult==='function')onCameraPermissionResult('" +
+                (granted ? "granted" : "denied") + "')", null));
         }
     }
     @Override
@@ -881,14 +889,60 @@ public class MainActivity extends Activity {
     // ══════════════════════════════ JavaScript Bridge ══════════════════════════════
     // Важно: static + public — иначе WebView не может найти методы через рефлексию
 
-    /** Интерфейс для прогресс-колбэка при загрузке файлов */
-    interface UploadProgressCallback { void onProgress(int pct); }
-
     public class AndroidBridge {
 
         // ─── Push-уведомления ─────────────────────────────────────────────────────
 
         /** Возвращает "granted" | "denied" | "default" */
+        /** Получить текущую яркость экрана (0-255, или -1 = авто) */
+        @JavascriptInterface
+        public int getScreenBrightness() {
+            try {
+                android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+                float br = lp.screenBrightness;
+                if (br < 0) return -1;
+                return Math.round(br * 255);
+            } catch (Exception e) {
+                log.w(TAG, "getScreenBrightness error: " + e.getMessage());
+                return -1;
+            }
+        }
+
+        /** Установить яркость экрана (0-255, или -1 = вернуть авто) */
+        @JavascriptInterface
+        public void setScreenBrightness(final int value) {
+            log.i(TAG, "setScreenBrightness: " + value);
+            runOnUiThread(() -> {
+                try {
+                    android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+                    lp.screenBrightness = value < 0 ? android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                                                     : Math.max(0, Math.min(255, value)) / 255f;
+                    getWindow().setAttributes(lp);
+                } catch (Exception e) {
+                    log.w(TAG, "setScreenBrightness error: " + e.getMessage());
+                }
+            });
+        }
+
+        /** Запрашивает разрешение на использование камеры */
+        @JavascriptInterface
+        public void requestCameraPermission() {
+            log.i(TAG, "requestCameraPermission called");
+            if (ContextCompat.checkSelfPermission(MainActivity.this,
+                    android.Manifest.permission.CAMERA)
+                    == PackageManager.PERMISSION_GRANTED) {
+                log.i(TAG, "Camera already granted");
+                webView.post(() -> webView.evaluateJavascript(
+                    "if(typeof onCameraPermissionResult==='function')onCameraPermissionResult('granted')", null));
+            } else {
+                log.i(TAG, "Requesting CAMERA permission");
+                ActivityCompat.requestPermissions(
+                    MainActivity.this,
+                    new String[]{ android.Manifest.permission.CAMERA },
+                    CAMERA_PERM_CODE);
+            }
+        }
+
         @JavascriptInterface
         public String getNotificationPermission() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -1499,33 +1553,53 @@ public class MainActivity extends Activity {
             new Thread(() -> {
                 try {
                     byte[] fileBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
-                    String result = _catboxUploadBytes(fileBytes, fileName, mimeType, (pct) -> {
+                    UploadProgressCallback progressCb = (pct) -> {
                         final int p = pct;
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadProgress==='function')onUploadProgress('"
+                            "if(typeof onUploadProgress='function')onUploadProgress('"
                             + id + "'," + p + ")", null));
-                    });
+                    };
+                    // Сначала пробуем pixeldrain (быстрее)
+                    String result = null;
+                    log.i(TAG, "trying pixeldrain...");
+                    try {
+                        result = _pixeldrainUploadBytes(fileBytes, fileName, mimeType, progressCb);
+                        if (!new org.json.JSONObject(result).optBoolean("ok")) {
+                            log.w(TAG, "pixeldrain failed, fallback catbox");
+                            result = null;
+                        }
+                    } catch (Exception pdEx) {
+                        log.w(TAG, "pixeldrain error: " + pdEx.getMessage() + " -> catbox");
+                        result = null;
+                    }
+                    if (result == null) {
+                        log.i(TAG, "using catbox fallback");
+                        result = _catboxUploadBytes(fileBytes, fileName, mimeType, progressCb);
+                    }
                     org.json.JSONObject res = new org.json.JSONObject(result);
                     if (res.optBoolean("ok")) {
                         final String fileUrl = res.getString("url");
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadDone==='function')onUploadDone('"
+                            "if(typeof onUploadDone='function')onUploadDone('"
                             + id + "','" + fileUrl + "')", null));
                     } else {
                         final String err = res.optString("error", "Upload failed");
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadError==='function')onUploadError('"
+                            "if(typeof onUploadError='function')onUploadError('"
                             + id + "','" + err.replace("'", "\\'") + "')", null));
                     }
                 } catch (Exception e) {
                     log.e(TAG, "nativeUploadFileAsync error: " + e.getMessage());
                     final String err = e.getMessage() != null ? e.getMessage() : "Unknown error";
                     webView.post(() -> webView.evaluateJavascript(
-                        "if(typeof onUploadError==='function')onUploadError('"
+                        "if(typeof onUploadError='function')onUploadError('"
                         + id + "','" + err.replace("'", "\\'") + "')", null));
                 }
             }).start();
         }
+
+        /** Интерфейс для прогресс-колбэка при загрузке */
+        interface UploadProgressCallback { void onProgress(int pct); }
 
         /**
          * Внутренняя загрузка на catbox.moe.
@@ -1621,6 +1695,72 @@ public class MainActivity extends Activity {
                     return err.toString();
                 } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
             }
+
+        /**
+         * Загрузка файла на pixeldrain.com — быстрый CDN, файлы постоянные, 10GB/мес бесплатно.
+         * API: PUT https://pixeldrain.com/api/file/{name} → {"id":"xxxx"}
+         * URL файла: https://pixeldrain.com/api/file/{id}
+         */
+        private String _pixeldrainUploadBytes(byte[] fileBytes, String fileName,
+                                              String mimeType, UploadProgressCallback progressCb) {
+            try {
+                String safeName = fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+                java.net.URL url = new java.net.URL("https://pixeldrain.com/api/file/" + safeName);
+                java.net.HttpURLConnection conn =
+                    (java.net.HttpURLConnection) url.openConnection(buildProxy());
+                conn.setRequestMethod("PUT");
+                conn.setDoOutput(true);
+                conn.setFixedLengthStreamingMode(fileBytes.length);
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(180000);
+                conn.setRequestProperty("Content-Type", mimeType);
+
+                java.io.OutputStream os = conn.getOutputStream();
+                int chunkSize = 65536;
+                for (int off = 0; off < fileBytes.length; off += chunkSize) {
+                    int len = Math.min(chunkSize, fileBytes.length - off);
+                    os.write(fileBytes, off, len);
+                    if (progressCb != null && fileBytes.length > 0) {
+                        int pct = (int)((long)(off + len) * 95 / fileBytes.length);
+                        progressCb.onProgress(pct);
+                    }
+                }
+                os.flush(); os.close();
+
+                int status = conn.getResponseCode();
+                java.io.InputStream is = status < 400 ? conn.getInputStream() : conn.getErrorStream();
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[4096]; int n;
+                while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
+                is.close(); conn.disconnect();
+                String body = baos.toString("UTF-8").trim();
+                log.i(TAG, "_pixeldrainUpload: status=" + status + " body=" + body.substring(0, Math.min(body.length(), 120)));
+
+                org.json.JSONObject res = new org.json.JSONObject();
+                if (status == 200 || status == 201) {
+                    org.json.JSONObject json = new org.json.JSONObject(body);
+                    String id = json.getString("id");
+                    String fileUrl = "https://pixeldrain.com/api/file/" + id;
+                    res.put("ok", true);
+                    res.put("url", fileUrl);
+                    if (progressCb != null) progressCb.onProgress(100);
+                    log.i(TAG, "_pixeldrainUpload OK: " + fileUrl);
+                } else {
+                    res.put("ok", false);
+                    res.put("error", "HTTP " + status + ": " + body.substring(0, Math.min(body.length(), 200)));
+                    log.w(TAG, "_pixeldrainUpload failed: " + status);
+                }
+                return res.toString();
+            } catch (Exception e) {
+                log.e(TAG, "_pixeldrainUpload error: " + e.getMessage());
+                try {
+                    org.json.JSONObject err = new org.json.JSONObject();
+                    err.put("ok", false);
+                    err.put("error", e.getMessage() != null ? e.getMessage() : "Unknown error");
+                    return err.toString();
+                } catch (Exception ex) { return "{\"ok\":false,\"error\":\"pixeldrain error\"}"; }
+            }
+        }
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -1746,8 +1886,8 @@ public class MainActivity extends Activity {
                     "if(typeof onNativeVoiceError==='function')onNativeVoiceError('Запись слишком короткая')", null));
                 return;
             }
-            // Загружаем на catbox в фоне
-            log.i(TAG, "stopVoiceRecording: uploading to catbox, size=" + file.length());
+            // Загружаем: pixeldrain → catbox fallback
+            log.i(TAG, "stopVoiceRecording: uploading, size=" + file.length());
             new Thread(() -> {
                 try {
                     byte[] bytes = new byte[(int) file.length()];
@@ -1760,10 +1900,18 @@ public class MainActivity extends Activity {
                         log.i(TAG, "stopVoiceRecording: cancelled before upload, aborting");
                         return;
                     }
-                    String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
                     String fileName = "voice_" + System.currentTimeMillis() + ".m4a";
-                    log.i(TAG, "stopVoiceRecording: calling nativeUploadFile fileName=" + fileName);
-                    String result = nativeUploadFile(b64, fileName, "audio/mp4");
+                    log.i(TAG, "stopVoiceRecording: trying pixeldrain for " + fileName);
+                    String result = null;
+                    try {
+                        result = _pixeldrainUploadBytes(bytes, fileName, "audio/mp4", null);
+                        if (!new org.json.JSONObject(result).optBoolean("ok")) { result = null; }
+                    } catch (Exception pdEx) { log.w(TAG, "pixeldrain voice fallback: " + pdEx.getMessage()); result = null; }
+                    if (result == null) {
+                        log.i(TAG, "stopVoiceRecording: pixeldrain failed, using catbox");
+                        String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+                        result = nativeUploadFile(b64, fileName, "audio/mp4");
+                    }
                     log.i(TAG, "stopVoiceRecording: upload result=" + result.substring(0, Math.min(result.length(), 100)));
                     // Проверяем ещё раз после долгого upload
                     if (_voiceCancelled) {

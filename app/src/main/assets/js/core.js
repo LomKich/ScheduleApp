@@ -705,7 +705,6 @@ function loadLocal(){
     S.customProxy=d.customProxy||'';
     S.proxyProvider=d.proxyProvider||'corsproxy';
     S.appIcon=d.appIcon||'orange';
-    S.customTheme=d.customTheme||null;
     const inp=document.getElementById('url-input');
     if(inp)inp.value=S.url;
     const pi=document.getElementById('proxy-input');
@@ -721,7 +720,6 @@ function saveLocal(){
     dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy,proxyProvider:S.proxyProvider,
     appIcon:S.appIcon,liquidGlass:S.liquidGlass,liquidGlassOpt:S.liquidGlassOpt,
     customBgBlurEnabled:S.customBgBlurEnabled,
-    customTheme:S.customTheme||null,
     hasBg: !!S.customBg
   }));
   // Фон хранится отдельно (может быть >1МБ base64)
@@ -2931,6 +2929,10 @@ function saveSecret(obj){stor.set(SECRET_KEY,JSON.stringify(obj));}
 const HI_KEY='sched_hiscores';
 function loadHiScores(){try{return JSON.parse(stor.get(HI_KEY)||'{}');}catch(e){return{};}}
 function saveHi(game, score) {
+  // Читы активны — рекорды не сохраняются ни локально, ни в Supabase
+  if (window._cheatModeActive) {
+    return Math.max(score, loadHiScores()[game] || 0);
+  }
   const h = loadHiScores();
   if (!h[game] || score > h[game]) {
     h[game] = score;
@@ -2960,6 +2962,34 @@ function saveHi(game, score) {
   return Math.max(score, h[game] || 0);
 }
 function getHi(game){return loadHiScores()[game]||0;}
+
+// ── Применяем чит-режим к играм ──────────────────────────────────
+function _applyCheatMode(on) {
+  // Визуальный HUD — красная плашка вверху
+  document.getElementById('cheat-hud')?.remove();
+  if (on) {
+    const hud = document.createElement('div');
+    hud.id = 'cheat-hud';
+    hud.style.cssText = [
+      'position:fixed;top:0;left:0;right:0;z-index:88888;',
+      'background:rgba(200,30,30,.88);color:#fff;',
+      'font-size:11px;font-weight:700;text-align:center;',
+      'padding:3px 0 3px;letter-spacing:.08em;',
+      'pointer-events:none;font-family:monospace;',
+      'text-shadow:0 1px 2px rgba(0,0,0,.5);'
+    ].join('');
+    hud.textContent = '⚡ ЧИТ-РЕЖИМ АКТИВЕН — РЕКОРДЫ НЕ СОХРАНЯЮТСЯ ⚡';
+    document.body.appendChild(hud);
+  }
+
+  // Патчим игры через глобальные флаги которые проверяют сами игры
+  window._cheatNoHitbox   = on;  // Дино — отключить коллизии
+  window._cheatSnakeWalls = on;  // Змейка — стены проходимы
+  window._cheatTetSlow    = on;  // Тетрис — медленные фигуры
+  window._cheatFlappyGap  = on;  // Флаппи — большой зазор
+  window._cheatBrBounce   = on;  // Арканоид — мяч не теряется
+  window._cheatGeoSlow    = on;  // Геодаш — замедление
+}
 
 // ══ CMD-КОНСОЛЬ ══
 let _cmdVVListener = null;
@@ -3550,6 +3580,44 @@ function cmdExec(raw){
         cmdPrint('ok','🗑 Конфиг Supabase сброшен. Используется встроенный.');
       } else {
         cmdPrint('err','Неизвестная подкоманда. Доступно: status, set, test, reset');
+      }
+    } break;
+
+    // ── Читерские способности для мини-игр ──────────────────────
+    case 'cheat': {
+      const sec3 = loadSecret();
+      const isOn = !!window._cheatModeActive;
+
+      if (arg === 'off' || (arg !== 'on' && isOn)) {
+        // Выключаем
+        window._cheatModeActive = false;
+        delete sec3.cheatMode;
+        saveSecret(sec3);
+        // Убираем визуальный индикатор
+        document.getElementById('cheat-hud')?.remove();
+        cmdPrint('ok', '🚫 Чит-режим ВЫКЛЮЧЕН. Рекорды снова сохраняются.');
+        _applyCheatMode(false);
+      } else if (arg === 'on' || (arg !== 'off' && !isOn)) {
+        // Включаем
+        window._cheatModeActive = true;
+        sec3.cheatMode = true;
+        saveSecret(sec3);
+        cmdPrint('warn', '⚠️  ЧИТ-РЕЖИМ АКТИВИРОВАН');
+        cmdPrint('info', '┌─────────────────────────────────────────┐');
+        cmdPrint('info', '│  Активные читы для мини-игр:            │');
+        cmdPrint('info', '│  🦕 Дино       — бессмертие (нет хитбокс)│');
+        cmdPrint('info', '│  🐍 Змейка     — стены проходимы        │');
+        cmdPrint('info', '│  🧱 Тетрис     — замедление фигур 3×     │');
+        cmdPrint('info', '│  🐦 Флаппи     — увеличенные зазоры      │');
+        cmdPrint('info', '│  🎯 Арканоид   — неубиваемый мяч         │');
+        cmdPrint('info', '│  ⬡  Геодаш     — замедление 0.5×         │');
+        cmdPrint('info', '└─────────────────────────────────────────┘');
+        cmdPrint('err',  '⛔ Рекорды НЕ сохраняются и НЕ отправляются');
+        _applyCheatMode(true);
+      } else {
+        // Показываем статус
+        cmdPrint(isOn ? 'warn' : 'info', 'Чит-режим: ' + (isOn ? '✅ ВКЛЮЧЁН (рекорды не пишутся)' : '❌ выключен'));
+        cmdPrint('info', 'Использование: cheat on / cheat off');
       }
     } break;
 
@@ -4897,6 +4965,7 @@ showGreeting();
   const sec=loadSecret();
   if(sec.discoIntensity!=null) discoApplyIntensity(sec.discoIntensity);
   if(sec.disco){discoStart();}
+  if(sec.cheatMode){ window._cheatModeActive = true; _applyCheatMode(true); }
   if(sec.snow){snowStart();}
   // /sound восстанавливается через S.muted в loadLocal()
 })();
