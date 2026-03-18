@@ -1513,6 +1513,8 @@ public class MainActivity extends Activity {
         }
 
         private boolean _pendingVoiceRecordRetry = false;
+
+        private String getVersionName() {
             try {
                 return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
             } catch (Exception e) {
