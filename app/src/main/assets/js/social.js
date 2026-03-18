@@ -96,7 +96,7 @@ function updateNavProfileIcon(p) {
   const wrap = btn?.querySelector('.nav-icon-wrap');
   if (!wrap) return;
   if (p && p.avatarType === 'emoji' && p.avatar) {
-    wrap.innerHTML = `<span style="font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center">${p.avatar}</span>`;
+    wrap.innerHTML = `<span style="font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;margin-top:3px">${p.avatar}</span>`;
   } else if (p && p.avatarType === 'photo' && p.avatarData) {
     wrap.innerHTML = `<img src="${p.avatarData}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`;
   } else {
@@ -1901,7 +1901,8 @@ async function sbPollPresence() {
     username: u.username, name: u.name,
     avatar: u.avatar, avatarType: u.avatar_type, avatarData: u.avatar_data,
     color: u.color, status: u.status,
-    vip: u.vip, badge: u.badge
+    vip: u.vip, badge: u.badge,
+    banner: u.banner || null, frame: u.frame || null, bio: u.bio || ''
   });
   _profileOnlinePeers = unique
     .filter(u => u.username !== myUsername && (now - (u.ts||0)) < 300000)
@@ -1911,6 +1912,42 @@ async function sbPollPresence() {
     .filter(u => u.username !== myUsername)
     .map(u => ({ ..._mapU(u), _online: (now - (u.ts||0)) < 300000 }));
   profileUpdateOnlineCount();
+
+  // Подгружаем баннеры из таблицы users (там хранится banner, frame, bio)
+  sbEnrichUsersFromUsersTable().catch(() => {});
+}
+
+// Обогащаем _allKnownUsers данными из таблицы users (banner, frame, bio, avatar_data)
+async function sbEnrichUsersFromUsersTable() {
+  if (!sbReady() || !_allKnownUsers.length) return;
+  try {
+    const usernames = _allKnownUsers.map(u => u.username).slice(0, 50);
+    const q = usernames.map(u => encodeURIComponent(u)).join(',');
+    const rows = await sbGet('users', `select=username,banner,frame,bio,avatar_data,avatar_type,vip,badge,color&username=in.(${usernames.map(u => '"' + u + '"').join(',')})&limit=50`);
+    if (!Array.isArray(rows)) return;
+    rows.forEach(row => {
+      const user = _allKnownUsers.find(u => u.username === row.username);
+      if (user) {
+        if (row.banner    !== undefined) user.banner    = row.banner;
+        if (row.frame     !== undefined) user.frame     = row.frame;
+        if (row.bio       !== undefined) user.bio       = row.bio;
+        if (row.vip       !== undefined) user.vip       = row.vip;
+        if (row.badge     !== undefined) user.badge     = row.badge;
+        if (row.color     !== undefined) user.color     = row.color;
+        if (row.avatar_data && !user.avatarData) user.avatarData = row.avatar_data;
+      }
+      const peer = _profileOnlinePeers.find(u => u.username === row.username);
+      if (peer) {
+        if (row.banner    !== undefined) peer.banner    = row.banner;
+        if (row.frame     !== undefined) peer.frame     = row.frame;
+        if (row.bio       !== undefined) peer.bio       = row.bio;
+        if (row.vip       !== undefined) peer.vip       = row.vip;
+        if (row.badge     !== undefined) peer.badge     = row.badge;
+        if (row.color     !== undefined) peer.color     = row.color;
+        if (row.avatar_data && !peer.avatarData) peer.avatarData = row.avatar_data;
+      }
+    });
+  } catch(e) {}
 }
 
 function profileUpdateOnlineCount() {
@@ -3623,6 +3660,8 @@ function messengerRenderMessages(animateLast) {
     // Sticker rendering
     const isSticker = msg.sticker;
     const isImage   = msg.image;
+    const isFile    = msg.fileLink && msg.fileType === 'file';
+    const isVideo   = msg.fileLink && msg.fileType === 'video';
     const bubbleBg  = (isSticker || isImage) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
     const bubblePad = (isSticker || isImage) ? '0' : '8px 12px 6px';
     const msgContent = isSticker
@@ -3632,7 +3671,15 @@ function messengerRenderMessages(animateLast) {
             <img src="${msg.image}" style="display:block;width:100%;max-width:240px;border-radius:14px" loading="lazy">
             <div style="position:absolute;bottom:4px;right:6px;font-size:10px;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.6);display:flex;align-items:center;gap:2px">${msgFormatTime(msg.ts)}${status}</div>
           </div>`
-        : (replyQuote + escHtml(msg.text));
+        : (isFile || isVideo)
+          ? `<div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:28px">${_gdFileEmoji(msg.fileName)}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">${escHtml(msg.fileName||'Файл')}</div>
+                <a href="${escHtml(msg.fileLink)}" target="_blank" style="font-size:11px;color:${isMe?'rgba(255,255,255,.8)':'var(--accent)'};text-decoration:none">⬇ Скачать с Drive</a>
+              </div>
+            </div>`
+          : (replyQuote + escHtml(msg.text));
 
     // Reactions display
     const reactionsHtml = msg.reactions && Object.keys(msg.reactions).length
@@ -4377,12 +4424,97 @@ function mcAutoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
-// ── Отправка изображения (VIP only) ──────────────────────────────────
+// ── Медиа-меню — выбор: фото, видео, файл ─────────────────────────
+function mcPickMedia() {
+  const existing = document.getElementById('mc-media-sheet');
+  if (existing) { existing.remove(); return; }
+  const sheet = document.createElement('div');
+  sheet.id = 'mc-media-sheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9100;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:mcFadeIn .15s ease';
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(16px + var(--safe-bot));overflow:hidden;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:8px auto 12px"></div>
+      <button onclick="mcPickImage();document.getElementById('mc-media-sheet')?.remove()"
+        style="width:100%;padding:15px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span style="font-size:22px">📷</span> Фото из галереи
+      </button>
+      <button onclick="mcPickVideo();document.getElementById('mc-media-sheet')?.remove()"
+        style="width:100%;padding:15px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span style="font-size:22px">🎬</span> Видео
+      </button>
+      <button onclick="mcPickFile();document.getElementById('mc-media-sheet')?.remove()"
+        style="width:100%;padding:15px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <span style="font-size:22px">📄</span> Файл (PDF, ZIP, DOC…)
+      </button>
+    </div>`;
+  sheet.addEventListener('click', () => sheet.remove());
+  document.body.appendChild(sheet);
+}
+
+// ─── Google Drive upload helper ────────────────────────────────────
+// Загружает файл (base64 или Blob) на Google Drive через публичный API
+// CLIENT_ID должен быть настроен в Google Cloud Console с Web origin = домен приложения
+const GD_FOLDER_NAME  = 'ScheduleApp Чат';
+let   _gdAccessToken  = null;
+let   _gdFolderId     = null;
+
+async function gdGetToken() {
+  if (_gdAccessToken) return _gdAccessToken;
+  return new Promise((resolve, reject) => {
+    if (!window.google?.accounts?.oauth2) { reject(new Error('Google API не загружен')); return; }
+    const CLIENT_ID = (window.GOOGLE_CLIENT_ID || '');
+    if (!CLIENT_ID) { reject(new Error('GOOGLE_CLIENT_ID не задан')); return; }
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: (resp) => {
+        if (resp.error) { reject(new Error(resp.error)); return; }
+        _gdAccessToken = resp.access_token;
+        resolve(_gdAccessToken);
+      },
+    });
+    client.requestAccessToken();
+  });
+}
+
+async function gdEnsureFolder() {
+  if (_gdFolderId) return _gdFolderId;
+  const token = await gdGetToken();
+  // Ищем папку
+  const q = encodeURIComponent(`name='${GD_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  const data = await r.json();
+  if (data.files && data.files.length > 0) { _gdFolderId = data.files[0].id; return _gdFolderId; }
+  // Создаём папку
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: GD_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  const folder = await cr.json();
+  _gdFolderId = folder.id;
+  return _gdFolderId;
+}
+
+async function gdUploadFile(blob, fileName, mimeType) {
+  const token    = await gdGetToken();
+  const folderId = await gdEnsureFolder();
+  const meta = JSON.stringify({ name: fileName, parents: [folderId] });
+  const formData = new FormData();
+  formData.append('metadata', new Blob([meta], { type: 'application/json' }));
+  formData.append('file', blob, fileName);
+  const r = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink',
+    { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: formData }
+  );
+  if (!r.ok) throw new Error('Drive upload failed: ' + r.status);
+  return await r.json(); // { id, webViewLink, webContentLink }
+}
+
+// ── Отправка изображения ──────────────────────────────────────────
 function mcPickImage() {
-  if (!vipCheck()) {
-    toast('🔒 Отправка фото — только для VIP');
-    return;
-  }
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'image/*';
@@ -4392,10 +4524,9 @@ function mcPickImage() {
     const file = e.target.files[0];
     inp.remove();
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) { toast('❌ Фото слишком большое (макс. 8 МБ)'); return; }
+    if (file.size > 20 * 1024 * 1024) { toast('❌ Фото слишком большое (макс. 20 МБ)'); return; }
     const reader = new FileReader();
     reader.onload = (ev) => {
-      // Сжимаем до разумного размера
       const img = new Image();
       img.onload = () => {
         const MAX = 900;
@@ -4409,12 +4540,129 @@ function mcPickImage() {
         cv.getContext('2d').drawImage(img, 0, 0, w, h);
         const data = cv.toDataURL('image/jpeg', 0.82);
         mcSendImage(data);
+        // Фоновая загрузка на Google Drive
+        cv.toBlob(blob => {
+          if (!blob) return;
+          gdUploadFile(blob, 'photo_' + Date.now() + '.jpg', 'image/jpeg').then(res => {
+            if (res?.webViewLink) sLog('info', 'Photo uploaded to Drive: ' + res.webViewLink);
+          }).catch(() => {}); // молча, не блокируем отправку
+        }, 'image/jpeg', 0.82);
       };
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
   };
   inp.click();
+}
+
+// ── Отправка видео ─────────────────────────────────────────────────
+function mcPickVideo() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'video/*';
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.onchange = async (e) => {
+    const file = e.target.files[0];
+    inp.remove();
+    if (!file) return;
+    const MAX_MB = 100;
+    if (file.size > MAX_MB * 1024 * 1024) { toast(`❌ Видео слишком большое (макс. ${MAX_MB} МБ)`); return; }
+    const p = profileLoad();
+    if (!p || !_msgCurrentChat) return;
+    toast('⬆️ Загружаем видео на Google Drive…');
+    try {
+      const res = await gdUploadFile(file, file.name || ('video_' + Date.now() + '.mp4'), file.type || 'video/mp4');
+      const link = res.webViewLink || res.webContentLink;
+      if (!link) throw new Error('no link');
+      // Отправляем сообщение со ссылкой
+      const ts  = Date.now();
+      const msg = {
+        from: p.username, to: _msgCurrentChat,
+        text: `🎬 [${file.name||'Видео'}](${link})`,
+        ts, delivered: false, read: false,
+        fileLink: link, fileName: file.name, fileType: 'video'
+      };
+      const msgs = msgLoad();
+      if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
+      msgs[_msgCurrentChat].push(msg);
+      msgSave(msgs);
+      const chats = chatsLoad();
+      if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
+      messengerRenderMessages(true);
+      SFX.play && SFX.play('msgSend');
+      setTimeout(() => { const b = document.getElementById('mc-messages'); if (b) b.scrollTop = b.scrollHeight; }, 80);
+      sbInsert('messages', {
+        chat_key: sbChatKey(p.username, _msgCurrentChat), from_user: p.username,
+        to_user: _msgCurrentChat, text: `🎬 ${file.name||'Видео'}`, ts,
+        extra: JSON.stringify({ fileLink: link, fileName: file.name, fileType: 'video' })
+      });
+      toast('✅ Видео загружено!');
+    } catch(err) {
+      toast('❌ Ошибка загрузки видео: ' + (err.message || err));
+    }
+  };
+  inp.click();
+}
+
+// ── Отправка файла ─────────────────────────────────────────────────
+function mcPickFile() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '*/*';
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.onchange = async (e) => {
+    const file = e.target.files[0];
+    inp.remove();
+    if (!file) return;
+    const MAX_MB = 100;
+    if (file.size > MAX_MB * 1024 * 1024) { toast(`❌ Файл слишком большой (макс. ${MAX_MB} МБ)`); return; }
+    const p = profileLoad();
+    if (!p || !_msgCurrentChat) return;
+    toast('⬆️ Загружаем файл на Google Drive…');
+    try {
+      const res = await gdUploadFile(file, file.name || ('file_' + Date.now()), file.type || 'application/octet-stream');
+      const link = res.webViewLink || res.webContentLink;
+      if (!link) throw new Error('no link');
+      const fileEmoji = _gdFileEmoji(file.name);
+      const ts  = Date.now();
+      const msg = {
+        from: p.username, to: _msgCurrentChat,
+        text: `${fileEmoji} [${file.name}](${link})`,
+        ts, delivered: false, read: false,
+        fileLink: link, fileName: file.name, fileType: 'file'
+      };
+      const msgs = msgLoad();
+      if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
+      msgs[_msgCurrentChat].push(msg);
+      msgSave(msgs);
+      const chats = chatsLoad();
+      if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
+      messengerRenderMessages(true);
+      SFX.play && SFX.play('msgSend');
+      setTimeout(() => { const b = document.getElementById('mc-messages'); if (b) b.scrollTop = b.scrollHeight; }, 80);
+      sbInsert('messages', {
+        chat_key: sbChatKey(p.username, _msgCurrentChat), from_user: p.username,
+        to_user: _msgCurrentChat, text: `${fileEmoji} ${file.name}`, ts,
+        extra: JSON.stringify({ fileLink: link, fileName: file.name, fileType: 'file' })
+      });
+      toast('✅ Файл загружен!');
+    } catch(err) {
+      toast('❌ Ошибка загрузки файла: ' + (err.message || err));
+    }
+  };
+  inp.click();
+}
+
+function _gdFileEmoji(name) {
+  if (!name) return '📄';
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const map = { pdf:'📕', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', ppt:'📊', pptx:'📊',
+    zip:'🗜️', rar:'🗜️', '7z':'🗜️', txt:'📃', mp3:'🎵', ogg:'🎵', wav:'🎵',
+    mp4:'🎬', mov:'🎬', avi:'🎬', mkv:'🎬', png:'🖼️', jpg:'🖼️', jpeg:'🖼️', gif:'🖼️',
+    apk:'📦', exe:'⚙️', js:'💻', py:'💻', html:'💻', json:'💻' };
+  return map[ext] || '📄';
 }
 
 function mcSendImage(dataUrl) {
@@ -4432,6 +4680,11 @@ function mcSendImage(dataUrl) {
   if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
   messengerRenderMessages(true);
   SFX.play('msgSend');
+  // Принудительно скроллим вниз после рендера
+  setTimeout(() => {
+    const body = document.getElementById('mc-messages');
+    if (body) body.scrollTop = body.scrollHeight;
+  }, 80);
   sbPollChat(p.username, _msgCurrentChat);
   // Отправляем изображение через extra поле (base64)
   const chatKey = sbChatKey(p.username, _msgCurrentChat);
@@ -4444,12 +4697,23 @@ function mcSendImage(dataUrl) {
   });
 }
 
-// ── Клавиатура: плавное смещение поля ввода через padding-bottom ──
-// adjustResize уменьшает window.innerHeight — мы отслеживаем это
-// и плавно двигаем input bar через CSS transition.
-// С adjustResize WebView сжимается сам — никакого translateY не нужно.
-// Просто скроллим сообщения вниз когда клавиатура открылась.
+// ── Клавиатура: скролл чата вниз при фокусе и при изменении viewport ──
 (function() {
+  // При фокусе на поле ввода — сразу скроллим вниз (до появления клавиатуры)
+  document.addEventListener('focusin', function(e) {
+    if (e.target && e.target.id === 'mc-input') {
+      // Небольшая задержка чтобы WebView успел сжаться
+      setTimeout(() => {
+        const list = document.getElementById('mc-messages');
+        if (list) list.scrollTop = list.scrollHeight;
+      }, 50);
+      setTimeout(() => {
+        const list = document.getElementById('mc-messages');
+        if (list) list.scrollTop = list.scrollHeight;
+      }, 300);
+    }
+  }, { passive: true });
+
   if (!window.visualViewport) return;
   let _kbOpen = false;
   const _initH = window.innerHeight;

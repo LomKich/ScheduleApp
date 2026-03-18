@@ -2210,6 +2210,8 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
   height: 100% !important;
   max-height: 100% !important;
   overflow: hidden !important;
+  /* Нав-бар теперь виден — убираем нижний padding экрана, mc-input-bar сам обрабатывает safe-area */
+  padding-bottom: 0 !important;
 }
 /* Хедер всегда зафиксирован сверху — не двигается при трансформации */
 #s-messenger-chat .hdr {
@@ -2218,6 +2220,8 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
   top: 0 !important;
   z-index: 10 !important;
   background: var(--surface) !important;
+  transform: none !important;
+  will-change: auto !important;
 }
 #mc-messages { flex: 1 1 0 !important; min-height: 0 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
 #mc-input-bar { flex-shrink: 0 !important; }
@@ -2227,11 +2231,11 @@ body.kb-open .screen.active:not(#s-messenger-chat) {
   transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
 }
 
-/* Фон аватарок = цвет акцента темы по умолчанию */
+/* Фон аватарок с эмодзи = accent цвет текущей темы */
 .profile-avatar,
 .mc-hdr-avatar-wrap,
 [data-avatar-bg] {
-  background: var(--surface2) !important;
+  background: color-mix(in srgb, var(--accent) 30%, var(--surface2)) !important;
 }
 /* ══════════════════════════════════════════════════════════════════
    NOTCH / CUTOUT / DYNAMIC ISLAND — поддержка вырезов камеры
@@ -2576,7 +2580,7 @@ body.kb-open .screen.active:not(#s-messenger-chat) {
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.4.5 — Android</div>
+        <div class="item-sub" id="app-version-str">4.4.6 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2923,7 +2927,7 @@ body.kb-open .screen.active:not(#s-messenger-chat) {
     <button id="mc-photo-btn"
       style="width:38px;height:38px;border-radius:50%;background:var(--surface2);border:none;color:var(--muted);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s;margin-bottom:2px"
       onmousedown="event.preventDefault()" ontouchstart="event.preventDefault();this.style.transform='scale(.9)'"
-      ontouchend="this.style.transform='';mcPickImage()">📷</button>
+      ontouchend="this.style.transform='';mcPickMedia()">📎</button>
     <div style="flex:1;background:var(--surface2);border-radius:20px;display:flex;align-items:flex-end;padding:8px 14px;gap:8px;min-height:42px">
       <textarea id="mc-input" placeholder="Сообщение..." rows="1"
         style="flex:1;background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:15px;resize:none;max-height:120px;line-height:1.4;padding:0"
@@ -3158,32 +3162,7 @@ body.kb-open .screen.active:not(#s-messenger-chat) {
         </div>
         <div class="egg-card-arrow">›</div>
       </div>
-      <div class="egg-card" onclick="eggStartGame('doom')" style="border-color:rgba(200,0,0,0.4);background:linear-gradient(135deg,rgba(80,0,0,0.5),var(--surface2))">
-        <div class="egg-card-icon">🔫</div>
-        <div class="egg-card-body">
-          <div class="egg-card-name" style="color:#ff4444">DOOM</div>
-          <div class="egg-card-desc">Оригинальный DOOM 1993 — убивай демонов в аду!</div>
-          <div class="egg-card-badge" style="color:#ff4444;background:rgba(200,0,0,0.2);border-color:rgba(200,0,0,0.5)">v4.0.0 ✦ КЛАССИКА ☠️</div>
-        </div>
-        <div class="egg-card-arrow" style="color:#ff4444">›</div>
-      </div>
 
-      <div class="egg-card" onclick="openMinecraftClassic()" style="border-color:rgba(80,200,80,0.4);background:linear-gradient(135deg,rgba(0,60,0,0.5),var(--surface2))">
-        <div class="egg-card-icon">⛏️</div>
-        <div class="egg-card-body">
-          <div class="egg-card-name" style="color:#4cff4c">Minecraft</div>
-          <div class="egg-card-desc">Строй, ломай блоки, выживай в 3D мире!</div>
-          <div class="egg-card-badge" style="color:#4cff4c;background:rgba(0,180,0,0.2);border-color:rgba(0,180,0,0.5)">v1.0.0 ✦ 3D ВЫЖИВАНИЕ 🌲</div>
-        </div>
-        <div class="egg-card-arrow" style="color:#4cff4c">›</div>
-      </div>
-<div class="egg-card-body">
-          
-          <div class="egg-card-desc">Шутер от первого лица — убивай монстров!</div>
-          <div class="egg-card-badge" style="color:#ffaa00;background:rgba(200,100,0,0.2);border-color:rgba(200,100,0,0.5)">v1.0.0 ✦ КЛАССИКА 🔥</div>
-        </div>
-        <div class="egg-card-arrow" style="color:#ffaa00">›</div>
-      </div>
     </div>
   </div>
 
@@ -3500,8 +3479,7 @@ body.kb-open .screen.active:not(#s-messenger-chat) {
 </div>
 
 <!-- ══ Game iframe overlays ══ -->
-<div id="overlay-doom" class="game-iframe-overlay"></div>
-<div id="overlay-minecraft" class="game-iframe-overlay"></div>
+
 <div id="overlay-ascii" class="game-iframe-overlay"></div>
 
 <!-- ══ Модальное окно обновления (в стиле приложения) ══ -->

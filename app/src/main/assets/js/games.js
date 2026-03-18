@@ -4205,7 +4205,7 @@ function _closeGame(overlayId) {
 }
 window.addEventListener('message', function(e) {
   if (!e.data || e.data.type !== 'gameClose') return;
-  const map = { doom:'overlay-doom', minecraft:'overlay-minecraft', quake:'overlay-quake', ascii_player:'overlay-ascii' };
+  const map = { quake:'overlay-quake', ascii_player:'overlay-ascii' };
   const id = map[e.data.game];
   if (id) _closeGame(id);
   if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
@@ -4213,24 +4213,8 @@ window.addEventListener('message', function(e) {
 });
 
 
-function doomStart() {
-  if (window.Android && window.Android.setOrientation) Android.setOrientation('landscape');
-  document.getElementById('egg-overlay').classList.remove('show');
-  setTimeout(() => _openGame('overlay-doom', 'doom.html'), 200);
-}
-function doomStop() {
-  _closeGame('overlay-doom');
-  if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
-}
-function minecraftStart() {
-  if (window.Android && window.Android.setOrientation) Android.setOrientation('landscape');
-  document.getElementById('egg-overlay').classList.remove('show');
-  setTimeout(() => _openGame('overlay-minecraft', 'minecraft_classic.html'), 200);
-}
-function minecraftStop() {
-  _closeGame('overlay-minecraft');
-  if (window.Android && window.Android.setOrientation) Android.setOrientation('portrait');
-}
+
+
 
 // ══════════════════════════════════════════════
 // 🔐 СЕКРЕТНЫЙ ASCII-ВИДЕОПЛЕЕР (33%/33%/33%)

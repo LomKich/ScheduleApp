@@ -1932,7 +1932,7 @@ function _navMovePill(activeId) {
 }
 
 // ── Показывать навигацию только на нужных экранах ──────────────────────────
-const NAV_VISIBLE_SCREENS = new Set(['s-home','s-settings','s-bells','s-profile']);
+const NAV_VISIBLE_SCREENS = new Set(['s-home','s-settings','s-bells','s-profile','s-messenger','s-messenger-chat','s-groups-chat']);
 function updateNavVisibility(screenId) {
   const nav = document.getElementById('global-bottom-nav');
   if (!nav) return;
@@ -2591,7 +2591,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.4.5';
+const APP_VERSION='4.4.6';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
