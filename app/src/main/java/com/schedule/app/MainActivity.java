@@ -344,7 +344,6 @@ public class MainActivity extends Activity {
     }
 
     private void injectStatusBarHeight() {
-        // Используем WindowInsetsCompat — единственный надёжный способ на Android 11+
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(
             getWindow().getDecorView(), (v, insets) -> {
                 androidx.core.graphics.Insets sysInsets = insets.getInsets(
@@ -354,20 +353,35 @@ public class MainActivity extends Activity {
                 float density = getResources().getDisplayMetrics().density;
                 int topDp = Math.round(sysInsets.top    / density);
                 int botDp = Math.round(sysInsets.bottom / density);
-                log.i(TAG, "injectStatusBarHeight: statusBar=" + topDp + "dp navBar=" + botDp + "dp");
+                // Если bottom=0 при жест-навигации — берём резервное значение из ресурсов
+                if (botDp == 0) {
+                    int navBarId = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+                    if (navBarId > 0) {
+                        int navPx = getResources().getDimensionPixelSize(navBarId);
+                        botDp = Math.max(botDp, Math.round(navPx / density));
+                    }
+                    // Для жест-навигации минимум 10dp
+                    if (botDp == 0) botDp = 10;
+                }
+                final int finalTop = topDp, finalBot = botDp;
+                log.i(TAG, "injectStatusBarHeight: statusBar=" + finalTop + "dp navBar=" + finalBot + "dp");
                 String js = String.format(
                     "document.documentElement.style.setProperty('--safe-top','%dpx');" +
                     "document.documentElement.style.setProperty('--safe-top-native','%dpx');" +
                     "document.documentElement.style.setProperty('--safe-bot','%dpx');" +
                     "console.log('[StatusBar] safe-top=%dpx safe-bot=%dpx');",
-                    topDp, topDp, botDp, topDp, botDp
+                    finalTop, finalTop, finalBot, finalTop, finalBot
                 );
                 webView.post(() -> webView.evaluateJavascript(js, null));
                 return insets;
             }
         );
-        // Принудительно запрашиваем insets (если decor уже готов)
         androidx.core.view.ViewCompat.requestApplyInsets(getWindow().getDecorView());
+        // Повторный запрос через 500мс — на случай если первый пришёл до layout
+        getWindow().getDecorView().postDelayed(
+            () -> androidx.core.view.ViewCompat.requestApplyInsets(getWindow().getDecorView()),
+            500
+        );
     }
 
     private void injectErrorHandler() {

@@ -13,7 +13,7 @@
 <!-- Twemoji JS: replaces emoji text nodes with Apple-style <img> tags -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/twemoji.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <!-- MEGA.nz SDK — UMD build, грузится как обычный скрипт (без dynamic import) -->
-<script src="https://cdn.jsdelivr.net/npm/megajs@0.16.2/browser/mega.js"
+<script src="https://unpkg.com/megajs@0.16.2/browser/mega.js"
         onload="window._megaReady=true"
         onerror="window._megaReady=false;console.error('megajs UMD load failed')"></script>
 <style>
@@ -2605,7 +2605,7 @@ body::after {
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.4.9 — Android</div>
+        <div class="item-sub" id="app-version-str">4.4.10 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
