@@ -15,6 +15,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.graphics.Rect;
+import android.media.MediaRecorder;
 import android.net.Uri;
 import android.net.VpnService;
 import android.os.Build;
@@ -72,6 +73,12 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]>   fileChooserCallback = null;
     private boolean                isNativeBgPick = false;
     private android.webkit.PermissionRequest _pendingPermissionRequest = null;
+
+    // ── Нативная запись голосовых (обход ограничений WebView getUserMedia) ──
+    private MediaRecorder  _voiceRecorder   = null;
+    private java.io.File   _voiceFile       = null;
+    private long           _voiceStartMs    = 0;
+    private android.os.Handler _voiceTimerHandler = null;
 
     // Java-side poll timer — работает даже когда WebView заморожен в фоне
     private android.os.Handler     pollHandler;
@@ -684,6 +691,15 @@ public class MainActivity extends Activity {
                     "if(typeof toast==='function')toast('🎤 Нет доступа к микрофону')", null));
             }
             _pendingPermissionRequest = null;
+            // Если ждали нативную запись — перезапускаем
+            if (_pendingVoiceRecordRetry && grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                _pendingVoiceRecordRetry = false;
+                webView.post(() -> webView.evaluateJavascript(
+                    "if(typeof mcVoiceRetryAfterPermission==='function')mcVoiceRetryAfterPermission();", null));
+            } else {
+                _pendingVoiceRecordRetry = false;
+            }
         }
     }
     @Override
@@ -1347,7 +1363,156 @@ public class MainActivity extends Activity {
             }
         }
 
-        private String getVersionName() {
+        // ══════════════════════════════════════════════════════════════════
+        // 🎤 НАТИВНАЯ ЗАПИСЬ ГОЛОСА (обход getUserMedia в file:// WebView)
+        // JS: Android.startVoiceRecording() → запись
+        //     Android.stopVoiceRecording()  → загрузка + колбэк onNativeVoiceDone(url,dur,mime)
+        //     Android.cancelVoiceRecording() → отмена
+        // ══════════════════════════════════════════════════════════════════
+
+        @JavascriptInterface
+        public void startVoiceRecording() {
+            log.i(TAG, "startVoiceRecording called");
+            // Проверяем разрешение RECORD_AUDIO
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    MainActivity.this, android.Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                log.w(TAG, "startVoiceRecording: RECORD_AUDIO not granted, requesting...");
+                _pendingVoiceRecordRetry = true;
+                androidx.core.app.ActivityCompat.requestPermissions(
+                    MainActivity.this,
+                    new String[]{ android.Manifest.permission.RECORD_AUDIO },
+                    AUDIO_PERM_CODE);
+                return;
+            }
+            log.i(TAG, "startVoiceRecording: permission OK, initializing MediaRecorder");
+            stopVoiceRecording(); // на всякий случай останавливаем предыдущую
+            try {
+                _voiceFile = java.io.File.createTempFile("voice_", ".m4a", getCacheDir());
+                log.i(TAG, "startVoiceRecording: temp file=" + _voiceFile.getAbsolutePath());
+                _voiceRecorder = new MediaRecorder();
+                _voiceRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+                _voiceRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+                _voiceRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+                _voiceRecorder.setAudioSamplingRate(44100);
+                _voiceRecorder.setAudioEncodingBitRate(128000);
+                _voiceRecorder.setOutputFile(_voiceFile.getAbsolutePath());
+                _voiceRecorder.setOnErrorListener((mr, what, extra) ->
+                    log.e(TAG, "MediaRecorder error: what=" + what + " extra=" + extra));
+                _voiceRecorder.prepare();
+                log.i(TAG, "startVoiceRecording: prepare() OK");
+                _voiceRecorder.start();
+                _voiceStartMs = System.currentTimeMillis();
+                log.i(TAG, "startVoiceRecording: recording started, maxDur=60s");
+                // Тикаем каждую секунду → JS обновляет таймер
+                _voiceTimerHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                Runnable tick = new Runnable() {
+                    @Override public void run() {
+                        if (_voiceRecorder == null) return;
+                        int sec = (int)((System.currentTimeMillis() - _voiceStartMs) / 1000);
+                        log.i(TAG, "Voice tick: " + sec + "s");
+                        webView.evaluateJavascript(
+                            "if(typeof onNativeVoiceTick==='function')onNativeVoiceTick(" + sec + ")", null);
+                        if (sec < 60) _voiceTimerHandler.postDelayed(this, 1000);
+                        else { log.i(TAG, "Voice max duration reached, auto-stop"); stopVoiceRecording(); }
+                    }
+                };
+                _voiceTimerHandler.postDelayed(tick, 1000);
+            } catch (Exception e) {
+                log.e(TAG, "startVoiceRecording error: " + e.getMessage());
+                _cleanupVoice();
+                webView.post(() -> webView.evaluateJavascript(
+                    "if(typeof onNativeVoiceError==='function')onNativeVoiceError('Не удалось запустить запись: " + e.getMessage() + "')", null));
+            }
+        }
+
+        @JavascriptInterface
+        public void stopVoiceRecording() {
+            if (_voiceRecorder == null) {
+                log.w(TAG, "stopVoiceRecording: recorder is null, ignoring");
+                return;
+            }
+            log.i(TAG, "stopVoiceRecording called");
+            if (_voiceTimerHandler != null) { _voiceTimerHandler.removeCallbacksAndMessages(null); _voiceTimerHandler = null; }
+            final int duration = (int)((System.currentTimeMillis() - _voiceStartMs) / 1000);
+            final java.io.File file = _voiceFile;
+            try {
+                _voiceRecorder.stop();
+                _voiceRecorder.release();
+                log.i(TAG, "stopVoiceRecording: recorder stopped OK, duration=" + duration + "s");
+            } catch (Exception e) {
+                log.w(TAG, "stopVoiceRecording stop error: " + e.getMessage());
+            }
+            _voiceRecorder = null;
+            _voiceFile     = null;
+            if (file == null || !file.exists()) {
+                log.w(TAG, "stopVoiceRecording: file is null or missing");
+                webView.post(() -> webView.evaluateJavascript(
+                    "if(typeof onNativeVoiceError==='function')onNativeVoiceError('Файл записи не найден')", null));
+                return;
+            }
+            log.i(TAG, "stopVoiceRecording: file size=" + file.length() + " bytes");
+            if (file.length() < 500) {
+                log.w(TAG, "stopVoiceRecording: file too small (" + file.length() + " bytes)");
+                file.delete();
+                webView.post(() -> webView.evaluateJavascript(
+                    "if(typeof onNativeVoiceError==='function')onNativeVoiceError('Запись слишком короткая')", null));
+                return;
+            }
+            // Загружаем на catbox в фоне
+            log.i(TAG, "stopVoiceRecording: uploading to catbox, size=" + file.length());
+            new Thread(() -> {
+                try {
+                    byte[] bytes = new byte[(int) file.length()];
+                    java.io.FileInputStream fis = new java.io.FileInputStream(file);
+                    int read = fis.read(bytes); fis.close();
+                    log.i(TAG, "stopVoiceRecording: read " + read + " bytes from file");
+                    file.delete();
+                    String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+                    String fileName = "voice_" + System.currentTimeMillis() + ".m4a";
+                    log.i(TAG, "stopVoiceRecording: calling nativeUploadFile fileName=" + fileName);
+                    String result = nativeUploadFile(b64, fileName, "audio/mp4");
+                    log.i(TAG, "stopVoiceRecording: upload result=" + result.substring(0, Math.min(result.length(), 100)));
+                    org.json.JSONObject res = new org.json.JSONObject(result);
+                    if (res.optBoolean("ok")) {
+                        final String url = res.getString("url");
+                        final int dur = duration;
+                        log.i(TAG, "stopVoiceRecording: upload OK url=" + url + " dur=" + dur);
+                        webView.post(() -> webView.evaluateJavascript(
+                            "if(typeof onNativeVoiceDone==='function')onNativeVoiceDone('"
+                            + url + "'," + dur + ",'audio/mp4')", null));
+                    } else {
+                        final String err = res.optString("error", "Upload failed");
+                        log.e(TAG, "stopVoiceRecording: upload failed: " + err);
+                        webView.post(() -> webView.evaluateJavascript(
+                            "if(typeof onNativeVoiceError==='function')onNativeVoiceError('" + err + "')", null));
+                    }
+                } catch (Exception e) {
+                    log.e(TAG, "stopVoiceRecording upload error: " + e.getMessage());
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof onNativeVoiceError==='function')onNativeVoiceError('" + e.getMessage() + "')", null));
+                }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void cancelVoiceRecording() {
+            log.i(TAG, "cancelVoiceRecording called");
+            if (_voiceTimerHandler != null) { _voiceTimerHandler.removeCallbacksAndMessages(null); _voiceTimerHandler = null; }
+            _cleanupVoice();
+            log.i(TAG, "cancelVoiceRecording: done");
+        }
+
+        private void _cleanupVoice() {
+            if (_voiceRecorder != null) {
+                try { _voiceRecorder.stop(); } catch (Exception ignored) {}
+                try { _voiceRecorder.release(); } catch (Exception ignored) {}
+                _voiceRecorder = null;
+            }
+            if (_voiceFile != null) { _voiceFile.delete(); _voiceFile = null; }
+        }
+
+        private boolean _pendingVoiceRecordRetry = false;
             try {
                 return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
             } catch (Exception e) {
