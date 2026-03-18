@@ -368,26 +368,32 @@ function profileCreate() {
   if (!name) { if(errEl)errEl.textContent='Введи имя'; return; }
   if (username.length < 3) { if(errEl)errEl.textContent='Юзернейм слишком короткий'; return; }
   if (!pwd) { if(errEl)errEl.textContent='Придумай пароль'; return; }
-  // Check uniqueness locally one more time
   const existingAccounts = accountsLoad();
   if (existingAccounts[username]) { if(errEl)errEl.textContent='Этот ник уже занят'; return; }
+
+  // Случайный цвет если пользователь не выбрал
+  const randomColor = PROFILE_COLORS[Math.floor(Math.random() * PROFILE_COLORS.length)];
+  // Случайный emoji если пользователь не поменял дефолт
+  const defaultEmoji = '😊';
+  const finalEmoji = (_loginSelectedEmoji && _loginSelectedEmoji !== defaultEmoji)
+    ? _loginSelectedEmoji
+    : _ALL_EMOJI[Math.floor(Math.random() * _ALL_EMOJI.length)];
+
   const profile = {
     name, username,
     avatarType: 'emoji',
-    avatar: _loginSelectedEmoji,
+    avatar: finalEmoji,
     bio: '',
     status: 'online',
-    color: PROFILE_COLORS[0],
+    color: randomColor,
     createdAt: Date.now(),
     uid: Date.now().toString(36),
     pwdHash: profileHashPwd(pwd),
   };
   profileSave(profile);
-  // Сохранить в локальный список аккаунтов
   const accounts = accountsLoad();
-  accounts[username] = { name, avatar: _loginSelectedEmoji, createdAt: profile.createdAt, pwdHash: profile.pwdHash };
+  accounts[username] = { name, avatar: finalEmoji, createdAt: profile.createdAt, pwdHash: profile.pwdHash };
   accountsSave(accounts);
-  // Сохранить полный профиль в Supabase users
   sbSaveUser(profile);
   updateNavProfileIcon(profile);
   profileConnect(profile);
