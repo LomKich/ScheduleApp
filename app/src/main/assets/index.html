@@ -2209,8 +2209,7 @@ body.tg-style .inp {
 body.tg-style ::-webkit-scrollbar-track { background: var(--tg-bg) !important; }
 body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !important; }
 
-/* Chat screen keyboard fix — adjustResize в манифесте сжимает WebView автоматически.
-   Используем height:100% чтобы экран сжимался вместе с WebView, а не оставался 100dvh */
+/* Chat screen: header fixed, messages scroll, input at bottom */
 #s-messenger-chat {
   display: flex !important;
   flex-direction: column !important;
@@ -2218,9 +2217,28 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
   max-height: 100% !important;
   overflow: hidden !important;
 }
-#s-messenger-chat .hdr { flex-shrink: 0 !important; position: relative !important; z-index: 5 !important; }
+/* Хедер всегда зафиксирован сверху — не двигается при трансформации */
+#s-messenger-chat .hdr {
+  flex-shrink: 0 !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  background: var(--surface) !important;
+}
 #mc-messages { flex: 1 1 0 !important; min-height: 0 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
 #mc-input-bar { flex-shrink: 0 !important; }
+
+/* Глобальный сдвиг при клавиатуре для ВСЕХ экранов с input/textarea */
+body.kb-open .screen.active:not(#s-messenger-chat) {
+  transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Фон аватарок = цвет акцента темы по умолчанию */
+.profile-avatar,
+.mc-hdr-avatar-wrap,
+[data-avatar-bg] {
+  background: var(--surface2) !important;
+}
 /* ══════════════════════════════════════════════════════════════════
    NOTCH / CUTOUT / DYNAMIC ISLAND — поддержка вырезов камеры
    ══════════════════════════════════════════════════════════════════ */
@@ -2564,7 +2582,7 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.4.3 — Android</div>
+        <div class="item-sub" id="app-version-str">4.4.4 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>

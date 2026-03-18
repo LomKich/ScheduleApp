@@ -1149,7 +1149,6 @@ function profilePickPhoto() {
   if (window.Android && typeof Android.pickImageForBackground === 'function') {
     Android.pickImageForBackground();
   } else {
-    // Fallback: file input for non-Android environments
     const inp = document.createElement('input');
     inp.type = 'file'; inp.accept = 'image/*';
     inp.onchange = () => {
@@ -1164,13 +1163,29 @@ function profilePickPhoto() {
 
 function _profileHandleAvatarDataUrl(dataUrl) {
   _profileWaitingForPhoto = false;
+  const onEditScreen = document.getElementById('s-profile-edit')?.classList.contains('active');
   openImageCrop(dataUrl, {
     mode: 'avatar',
     onDone: cropped => {
       _profileAvatarMode = 'photo';
-      const inner = document.getElementById('edit-avatar-inner');
-      if (inner) inner.innerHTML = `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
       window._profileTempAvatarData = cropped;
+      if (onEditScreen) {
+        // Обновляем превью на экране редактирования
+        const inner = document.getElementById('edit-avatar-inner');
+        if (inner) inner.innerHTML = `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
+      } else {
+        // Сохраняем сразу — пользователь нажал "Выбрать фото" с экрана профиля
+        const p = profileLoad();
+        if (!p) return;
+        p.avatarType = 'photo';
+        p.avatarData = cropped;
+        profileSave(p);
+        window._profileTempAvatarData = null;
+        updateNavProfileIcon(p);
+        profileRenderScreen();
+        sbPresencePut(p);
+        toast('✅ Фото обновлено');
+      }
     }
   });
 }
@@ -2406,7 +2421,8 @@ function profileRenderOnline() {
     const badgeObj = typeof PROFILE_BADGES !== 'undefined' && u.badge
       ? PROFILE_BADGES.find(b => b.id === u.badge) : null;
     return `
-      <div class="online-user-row">
+      <div class="online-user-row" onclick="${isMe ? '' : `peerProfileOpen('${escHtml(u.username)}')`}"
+        style="cursor:${isMe ? 'default' : 'pointer'};-webkit-tap-highlight-color:transparent">
         <div style="width:48px;height:48px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;position:relative">
           ${u.avatarType === 'photo' && u.avatarData
             ? `<img src="${u.avatarData}" style="width:48px;height:48px;border-radius:50%;object-fit:cover">`
@@ -2423,11 +2439,8 @@ function profileRenderOnline() {
           <div style="font-size:12px;color:var(--muted)">@${escHtml(u.username)}</div>
           <div style="font-size:11px;color:${isOnline?statusObj.color:'var(--muted)'};margin-top:2px">${isOnline ? statusObj.emoji+' '+statusObj.label : '⚫ Не в сети'}</div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-          ${!isMe && !isFriend ? `<button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:11px" onclick="profileAddFriend('${escHtml(u.username)}')">+ Друг</button>` : ''}
-          ${!isMe ? `<button class="btn btn-accent" style="width:auto;padding:6px 12px;font-size:11px" onclick="messengerOpenChatFrom('${escHtml(u.username)}')">💬 Написать</button>` : ''}
-          ${isFriend && !isMe ? '<span style="font-size:18px">👥</span>' : ''}
-        </div>
+        ${!isMe && !isFriend ? `<button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();profileAddFriend('${escHtml(u.username)}')">+ Друг</button>` : ''}
+        ${isFriend && !isMe ? '<span style="font-size:18px;flex-shrink:0">👥</span>' : ''}
       </div>
     `;
   }).join('');
@@ -4435,32 +4448,41 @@ function mcSendImage(dataUrl) {
 // adjustResize уменьшает window.innerHeight — мы отслеживаем это
 // и плавно двигаем input bar через CSS transition.
 (function() {
-  // Плавное поднятие чата при открытии клавиатуры.
-  // Используем ТОЛЬКО visualViewport — он точно отражает видимую область без клавиатуры.
-  // window.innerHeight НЕ используем — с adjustResize он уже уменьшен и даст 0.
   if (!window.visualViewport) return;
-
   let _lastOffset = 0;
 
   function onKbChange() {
-    const chatScreen = document.getElementById('s-messenger-chat');
-    if (!chatScreen || !chatScreen.classList.contains('active')) return;
-
-    const vv   = window.visualViewport;
-    // offsetTop > 0 означает что экран прокрутился — это и есть высота клавиатуры
+    const vv     = window.visualViewport;
     const offset = Math.round(vv.offsetTop);
-
     if (offset === _lastOffset) return;
     _lastOffset = offset;
 
-    chatScreen.style.transition = offset > 0
-      ? 'transform 0.22s cubic-bezier(0.4,0,0.2,1)'
-      : 'transform 0.2s cubic-bezier(0.4,0,0.2,1)';
-    chatScreen.style.transform = offset > 10 ? `translateY(-${offset}px)` : '';
+    const chatScreen = document.getElementById('s-messenger-chat');
+    const isChatActive = chatScreen?.classList.contains('active');
 
-    if (offset > 10) {
-      const list = document.getElementById('mc-messages');
-      if (list) requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+    if (isChatActive) {
+      // В чате: поднимаем только поле ввода + сообщения через transform всего экрана
+      chatScreen.style.transition = offset > 0
+        ? 'transform 0.22s cubic-bezier(0.4,0,0.2,1)'
+        : 'transform 0.18s cubic-bezier(0.4,0,0.2,1)';
+      chatScreen.style.transform = offset > 10 ? `translateY(-${offset}px)` : '';
+      if (offset > 10) {
+        const list = document.getElementById('mc-messages');
+        if (list) requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+      }
+    } else {
+      // На других экранах: сдвигаем активный экран вверх если есть фокусированный input
+      const activeScreen = document.querySelector('.screen.active');
+      const focused = document.activeElement;
+      const isInput = focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA');
+      if (activeScreen && isInput) {
+        activeScreen.style.transition = offset > 0
+          ? 'transform 0.22s cubic-bezier(0.4,0,0.2,1)'
+          : 'transform 0.18s cubic-bezier(0.4,0,0.2,1)';
+        activeScreen.style.transform = offset > 10 ? `translateY(-${offset}px)` : '';
+      } else if (activeScreen) {
+        activeScreen.style.transform = '';
+      }
     }
   }
 
@@ -4558,6 +4580,7 @@ function peerProfileOpen(username) {
   const noCopy    = isCopyBlocked(username);
 
   // Баннер/фон — тот же подход что и у своего профиля
+  const hasPhoto  = peer.avatarType === 'photo' && peer.avatarData;
   const peerBannerStyle = peer.banner
     ? (peer.banner.startsWith('background:') ? peer.banner : `background:${peer.banner}`)
     : `background:linear-gradient(135deg,${peer.color||'var(--accent)'}66,${peer.color||'var(--accent)'}22)`;
