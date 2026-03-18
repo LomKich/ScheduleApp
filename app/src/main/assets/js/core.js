@@ -1736,7 +1736,7 @@ const SCREEN_PARENTS = {
   's-groups':        {parent:'s-home',           nav:'nav-home'},
   's-schedule':      {parent:'s-groups',         nav:'nav-home'},
   's-bells':         {parent:'s-home',           nav:'nav-bells'},
-  's-settings':      {parent:'s-home',           nav:'nav-home'},
+  's-settings':      {parent:'s-profile',        nav:'nav-profile'},
   's-themes':        {parent:'s-settings',       nav:null},
   's-teachers':      {parent:'s-home',           nav:'nav-home'},
   's-profile-edit':  {parent:'s-profile',        nav:'nav-profile'},
@@ -1932,7 +1932,7 @@ function _navMovePill(activeId) {
 }
 
 // ── Показывать навигацию только на нужных экранах ──────────────────────────
-const NAV_VISIBLE_SCREENS = new Set(['s-home','s-settings','s-bells','s-profile','s-messenger','s-messenger-chat','s-groups-chat']);
+const NAV_VISIBLE_SCREENS = new Set(['s-home','s-settings','s-bells','s-profile','s-messenger','s-groups-chat']);
 function updateNavVisibility(screenId) {
   const nav = document.getElementById('global-bottom-nav');
   if (!nav) return;
@@ -1987,7 +1987,7 @@ showScreen = function(id, dir) {
     's-leaderboard':    's-profile',
     's-login':          's-home',
     's-peer-profile':   's-messenger-chat',
-    's-settings':       's-home',
+    's-settings':       's-profile',
     's-bells':          's-home',
     's-homework':       's-home',
     's-groups-chat':    's-profile',
@@ -2151,16 +2151,17 @@ showScreen = function(id, dir) {
       const idx   = TAB_ORDER.indexOf(cur);
 
       if (isTab) {
-        // On tabs: horizontal swipe between tabs
-        if (adx > ady) {
+        // На вкладках: горизонтальный свайп между вкладками
+        // Защита: горизонталь должна явно доминировать (adx > ady*1.8) и пройти 18px
+        if (adx > ady * 1.8 && adx > 18) {
           if (dx < 0 && idx < TAB_ORDER.length - 1) {
-            // Swipe LEFT → next tab
+            // Свайп ВЛЕВО → следующая вкладка
             g.mode      = 'tab-h';
             g.dir       = 'left';
             g.targetId  = TAB_ORDER[idx + 1];
             g.targetNavId = TAB_NAVIDS[idx + 1];
           } else if (dx > 0 && idx > 0) {
-            // Swipe RIGHT → prev tab
+            // Свайп ВПРАВО → предыдущая вкладка
             g.mode      = 'tab-h';
             g.dir       = 'right';
             g.targetId  = TAB_ORDER[idx - 1];
@@ -2172,8 +2173,10 @@ showScreen = function(id, dir) {
           g.mode = 'scroll';
         }
       } else {
-        // Sub-screens
+        // Под-экраны
         const useDown = SWIPE_DOWN_BACK.has(cur);
+        // back-h: только если свайп начат с левой кромки (≤45px) — как iOS edge swipe
+        const fromLeftEdge = g.startX <= 45;
         if (useDown && ady > adx && dy > 0) {
           // back-v только если скролл-контейнер уже в самом верху
           const scrollEl = document.querySelector('#' + cur + ' .body');
@@ -2185,7 +2188,8 @@ showScreen = function(id, dir) {
           } else {
             g.mode = 'scroll';
           }
-        } else if (!useDown && adx > ady && dx > 0) {
+        } else if (!useDown && adx > ady * 1.5 && dx > 0) {
+          // back-h: горизонталь доминирует — свайп с любой части экрана
           g.mode     = 'back-h';
           g.dir      = 'right';
           g.targetId = getBackTarget();
@@ -2260,7 +2264,8 @@ showScreen = function(id, dir) {
 
     let commit = false;
     if (g.mode === 'tab-h') {
-      commit = Math.abs(dx) > W() * COMMIT_RATIO || vx > 350;
+      // Для вкладок: нужно пройти 40% ширины ИЛИ скорость > 500px/s — защита от случайных свайпов
+      commit = Math.abs(dx) > W() * 0.40 || vx > 500;
     } else if (g.mode === 'back-h') {
       commit = dx > W() * COMMIT_RATIO || vx > 350;
     } else if (g.mode === 'back-v') {
@@ -2591,7 +2596,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.4.6';
+const APP_VERSION='4.4.7';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();

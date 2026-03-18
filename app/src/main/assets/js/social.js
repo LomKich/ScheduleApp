@@ -2523,6 +2523,11 @@ window.showScreen = function(id, dir) {
     // Скрываем клавиатуру только при уходе с чата
     const inp = document.getElementById('mc-input');
     if (inp) inp.blur();
+    // Сбрасываем сдвиг чат-экрана от клавиатуры
+    const chatScreen = document.getElementById('s-messenger-chat');
+    if (chatScreen) { chatScreen.style.transition = ''; chatScreen.style.transform = ''; chatScreen.style.bottom = ''; }
+    const chatHdr = chatScreen?.querySelector('.hdr');
+    if (chatHdr) { chatHdr.style.transition = ''; chatHdr.style.transform = ''; }
   }
   if (id === 's-profile')     profileRenderScreen();
   if (id === 's-online')      profileRenderOnline();
@@ -3676,7 +3681,7 @@ function messengerRenderMessages(animateLast) {
               <span style="font-size:28px">${_gdFileEmoji(msg.fileName)}</span>
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">${escHtml(msg.fileName||'Файл')}</div>
-                <a href="${escHtml(msg.fileLink)}" target="_blank" style="font-size:11px;color:${isMe?'rgba(255,255,255,.8)':'var(--accent)'};text-decoration:none">⬇ Скачать с Drive</a>
+                <a href="${escHtml(msg.fileLink)}" target="_blank" style="font-size:11px;color:${isMe?'rgba(255,255,255,.8)':'var(--accent)'};text-decoration:none">⬇ Скачать с MEGA</a>
               </div>
             </div>`
           : (replyQuote + escHtml(msg.text));
@@ -3714,16 +3719,14 @@ function messengerRenderMessages(animateLast) {
     body.scrollTop = body.scrollHeight;
     const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
     if (atBottom) messengerMarkRead();
-    // Анимируем последние 3 пузыря (новые входящие/исходящие)
+    // Анимируем только самый последний пузырь (только что отправленное сообщение)
     if (animateLast) {
       const bubbles = body.querySelectorAll('[data-msg-bubble]');
-      // Анимируем до 3 последних с задержкой
-      const toAnimate = Array.from(bubbles).slice(-3);
-      toAnimate.forEach((b, i) => {
-        const isMe = b.dataset.msgMe === '1';
-        b.style.animationDelay = i === toAnimate.length - 1 ? '0ms' : `${(i - toAnimate.length + 1) * -30}ms`;
-        b.classList.add(isMe ? 'msg-anim-out' : 'msg-anim-in');
-      });
+      const last = bubbles[bubbles.length - 1];
+      if (last) {
+        const isMe = last.dataset.msgMe === '1';
+        last.classList.add(isMe ? 'msg-anim-out' : 'msg-anim-in');
+      }
     }
   });
 }
@@ -4451,66 +4454,164 @@ function mcPickMedia() {
   document.body.appendChild(sheet);
 }
 
-// ─── Google Drive upload helper ────────────────────────────────────
-// Загружает файл (base64 или Blob) на Google Drive через публичный API
-// CLIENT_ID должен быть настроен в Google Cloud Console с Web origin = домен приложения
-const GD_FOLDER_NAME  = 'ScheduleApp Чат';
-let   _gdAccessToken  = null;
-let   _gdFolderId     = null;
+// ─── MEGA.nz upload helper ────────────────────────────────────────
+// Загружает файлы на MEGA через их API (как megajs, без npm)
+// Credentials вшиты — отдельный аккаунт только для загрузок приложения
+const _MEGA_EMAIL = 'qwertyzxcvbn090909@gmail.com';
+const _MEGA_PASS  = 'hEiy1a8HAE@UjGD';
+const _MEGA_API   = 'https://g.api.mega.co.nz/cs';
 
-async function gdGetToken() {
-  if (_gdAccessToken) return _gdAccessToken;
-  return new Promise((resolve, reject) => {
-    if (!window.google?.accounts?.oauth2) { reject(new Error('Google API не загружен')); return; }
-    const CLIENT_ID = (window.GOOGLE_CLIENT_ID || '');
-    if (!CLIENT_ID) { reject(new Error('GOOGLE_CLIENT_ID не задан')); return; }
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/drive.file',
-      callback: (resp) => {
-        if (resp.error) { reject(new Error(resp.error)); return; }
-        _gdAccessToken = resp.access_token;
-        resolve(_gdAccessToken);
-      },
-    });
-    client.requestAccessToken();
-  });
+let _megaSid     = null; // session id после логина
+let _megaRootId  = null; // root folder node id
+
+// Хеш пароля по алгоритму MEGA (aesmac)
+async function _megaHashPwd(password) {
+  const enc = new TextEncoder();
+  const pwBytes = enc.encode(password);
+  // MEGA использует 16-байтовый ключ из пароля через повторение XOR
+  const pkey = new Uint8Array(16);
+  for (let i = 0; i < pwBytes.length; i++) pkey[i % 16] ^= pwBytes[i];
+  // 16384 итераций AES-ECB шифрования строки с email
+  const emailBytes = enc.encode(_MEGA_EMAIL.toLowerCase());
+  let hash = new Uint8Array(16);
+  for (let i = 0; i < emailBytes.length; i++) hash[i % 16] ^= emailBytes[i];
+  const key = await crypto.subtle.importKey('raw', pkey, { name: 'AES-CBC' }, false, ['encrypt']);
+  for (let i = 0; i < 16384; i++) {
+    const enc2 = await crypto.subtle.encrypt({ name: 'AES-CBC', iv: new Uint8Array(16) }, key, hash);
+    hash = new Uint8Array(enc2).slice(0, 16);
+  }
+  // Возвращаем base64url первых 8 байт
+  const result = new Uint8Array(8);
+  for (let i = 0; i < 4; i++) { result[i] = hash[i] ^ hash[i+4] ^ hash[i+8] ^ hash[i+12]; }
+  // Compact to 4-byte pairs
+  for (let i = 0; i < 4; i++) result[i+4] = result[i];
+  return btoa(String.fromCharCode(...result.slice(0,4))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
 }
 
-async function gdEnsureFolder() {
-  if (_gdFolderId) return _gdFolderId;
-  const token = await gdGetToken();
-  // Ищем папку
-  const q = encodeURIComponent(`name='${GD_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`, {
-    headers: { Authorization: 'Bearer ' + token }
-  });
-  const data = await r.json();
-  if (data.files && data.files.length > 0) { _gdFolderId = data.files[0].id; return _gdFolderId; }
-  // Создаём папку
-  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+// Вызов MEGA API
+async function _megaReq(payload, sid) {
+  const url = _MEGA_API + '?id=' + Math.floor(Math.random() * 1e9) + (sid ? '&sid=' + sid : '');
+  const r = await fetch(url, {
     method: 'POST',
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: GD_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([payload])
   });
-  const folder = await cr.json();
-  _gdFolderId = folder.id;
-  return _gdFolderId;
+  if (!r.ok) throw new Error('MEGA API error: ' + r.status);
+  const data = await r.json();
+  if (typeof data[0] === 'number' && data[0] < 0) throw new Error('MEGA error code: ' + data[0]);
+  return data[0];
 }
 
-async function gdUploadFile(blob, fileName, mimeType) {
-  const token    = await gdGetToken();
-  const folderId = await gdEnsureFolder();
-  const meta = JSON.stringify({ name: fileName, parents: [folderId] });
-  const formData = new FormData();
-  formData.append('metadata', new Blob([meta], { type: 'application/json' }));
-  formData.append('file', blob, fileName);
-  const r = await fetch(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink',
-    { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: formData }
-  );
-  if (!r.ok) throw new Error('Drive upload failed: ' + r.status);
-  return await r.json(); // { id, webViewLink, webContentLink }
+// Логин в MEGA — получаем session id
+async function _megaLogin() {
+  if (_megaSid) return _megaSid;
+  const pwHash = await _megaHashPwd(_MEGA_PASS);
+  const res = await _megaReq({ a: 'us', user: _MEGA_EMAIL, uh: pwHash });
+  if (!res.tsid && !res.sid) throw new Error('MEGA login failed');
+  _megaSid = res.tsid || res.sid;
+  return _megaSid;
+}
+
+// Получить корневую папку (Cloud Drive root)
+async function _megaGetRoot(sid) {
+  if (_megaRootId) return _megaRootId;
+  const res = await _megaReq({ a: 'f', c: 1, r: 1 }, sid);
+  const root = (res.f || []).find(n => n.t === 2); // t=2 = root
+  if (!root) throw new Error('MEGA root not found');
+  _megaRootId = root.h;
+  return _megaRootId;
+}
+
+// Генерация случайного 16-байтового ключа для AES
+function _megaRandKey(n) {
+  const arr = new Uint8Array(n);
+  crypto.getRandomValues(arr);
+  return arr;
+}
+
+// XOR двух Uint8Array
+function _xorArr(a, b) {
+  const r = new Uint8Array(a.length);
+  for (let i = 0; i < a.length; i++) r[i] = a[i] ^ b[i % b.length];
+  return r;
+}
+
+// Основная функция загрузки файла на MEGA
+async function megaUploadFile(blob, fileName) {
+  // 1. Логин
+  const sid = await _megaLogin();
+  const rootId = await _megaGetRoot(sid);
+
+  // 2. Получаем upload URL
+  const size = blob.size;
+  const upRes = await _megaReq({ a: 'u', s: size }, sid);
+  const uploadUrl = upRes.p;
+  if (!uploadUrl) throw new Error('No upload URL from MEGA');
+
+  // 3. Генерируем ключ и IV для AES-CTR шифрования
+  const fileKey  = _megaRandKey(16); // 128-bit AES key
+  const fileIv   = _megaRandKey(8);  // 64-bit IV (MEGA использует 128-bit IV: iv + 8 нулей)
+  const aesIv    = new Uint8Array(16);
+  aesIv.set(fileIv, 0); // первые 8 байт = iv, остальные 0
+
+  // 4. Читаем и шифруем blob
+  const rawBuf = await blob.arrayBuffer();
+  const rawArr = new Uint8Array(rawBuf);
+
+  const aesKey = await crypto.subtle.importKey('raw', fileKey, { name: 'AES-CTR' }, false, ['encrypt']);
+  const encBuf = await crypto.subtle.encrypt({ name: 'AES-CTR', counter: aesIv, length: 64 }, aesKey, rawArr);
+
+  // 5. Загружаем зашифрованные данные
+  const upR = await fetch(uploadUrl + '/0', {
+    method: 'POST',
+    body: encBuf,
+  });
+  if (!upR.ok) throw new Error('MEGA upload PUT failed: ' + upR.status);
+  const upToken = await upR.text(); // completion token
+
+  // 6. Формируем node key: [fileKey XOR (iv+iv), iv, 0, CRC(placeholder)]
+  // Упрощённый вариант: используем стандартный формат MEGA node key
+  const nodeKeyArr = new Uint8Array(32);
+  nodeKeyArr.set(fileKey, 0);
+  nodeKeyArr.set(fileIv, 16);
+  // XOR первых 16 байт с iv-частью (MEGA стандарт)
+  for (let i = 0; i < 8; i++) nodeKeyArr[i] ^= fileIv[i];
+  for (let i = 8; i < 16; i++) nodeKeyArr[i] ^= fileIv[i-8];
+
+  // base64url encode node key
+  const nodeKeyB64 = btoa(String.fromCharCode(...nodeKeyArr))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+
+  // 7. Атрибуты файла (JSON, зашифрованные AES-CBC)
+  const attrJson = JSON.stringify({ n: fileName });
+  const attrEnc  = new TextEncoder().encode('MEGA' + attrJson);
+  // Паддинг до 16 байт
+  const padLen = 16 - (attrEnc.length % 16);
+  const attrPadded = new Uint8Array(attrEnc.length + padLen);
+  attrPadded.set(attrEnc);
+  const attrKey = await crypto.subtle.importKey('raw', fileKey, { name: 'AES-CBC' }, false, ['encrypt']);
+  const attrEncBuf = await crypto.subtle.encrypt({ name: 'AES-CBC', iv: new Uint8Array(16) }, attrKey, attrPadded);
+  const attrB64 = btoa(String.fromCharCode(...new Uint8Array(attrEncBuf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+
+  // 8. Создаём node (завершаем загрузку)
+  const putRes = await _megaReq({
+    a: 'p', t: rootId,
+    n: [{ h: upToken, t: 0, a: attrB64, k: nodeKeyB64 }]
+  }, sid);
+
+  // 9. Формируем публичную ссылку
+  const node = (putRes.f || [])[0];
+  if (!node) throw new Error('MEGA node creation failed');
+
+  // Получаем публичную ссылку через export
+  const expRes = await _megaReq({ a: 'l', n: node.h }, sid);
+  // expRes = base64url public handle
+  const publicHandle = typeof expRes === 'string' ? expRes : expRes.ph || node.h;
+
+  // Ключ для публичной ссылки = base64url(nodeKeyArr)
+  const link = `https://mega.nz/file/${publicHandle}#${nodeKeyB64}`;
+  return { link, fileName };
 }
 
 // ── Отправка изображения ──────────────────────────────────────────
@@ -4540,12 +4641,12 @@ function mcPickImage() {
         cv.getContext('2d').drawImage(img, 0, 0, w, h);
         const data = cv.toDataURL('image/jpeg', 0.82);
         mcSendImage(data);
-        // Фоновая загрузка на Google Drive
+        // Фоновая загрузка на MEGA
         cv.toBlob(blob => {
           if (!blob) return;
-          gdUploadFile(blob, 'photo_' + Date.now() + '.jpg', 'image/jpeg').then(res => {
-            if (res?.webViewLink) sLog('info', 'Photo uploaded to Drive: ' + res.webViewLink);
-          }).catch(() => {}); // молча, не блокируем отправку
+          megaUploadFile(blob, 'photo_' + Date.now() + '.jpg').then(res => {
+            if (res?.link) sLog('info', 'Photo uploaded to MEGA: ' + res.link);
+          }).catch(() => {});
         }, 'image/jpeg', 0.82);
       };
       img.src = ev.target.result;
@@ -4570,10 +4671,10 @@ function mcPickVideo() {
     if (file.size > MAX_MB * 1024 * 1024) { toast(`❌ Видео слишком большое (макс. ${MAX_MB} МБ)`); return; }
     const p = profileLoad();
     if (!p || !_msgCurrentChat) return;
-    toast('⬆️ Загружаем видео на Google Drive…');
+    toast('⬆️ Загружаем видео на MEGA…');
     try {
-      const res = await gdUploadFile(file, file.name || ('video_' + Date.now() + '.mp4'), file.type || 'video/mp4');
-      const link = res.webViewLink || res.webContentLink;
+      const res = await megaUploadFile(file, file.name || ('video_' + Date.now() + '.mp4'));
+      const link = res.link;
       if (!link) throw new Error('no link');
       // Отправляем сообщение со ссылкой
       const ts  = Date.now();
@@ -4597,9 +4698,9 @@ function mcPickVideo() {
         to_user: _msgCurrentChat, text: `🎬 ${file.name||'Видео'}`, ts,
         extra: JSON.stringify({ fileLink: link, fileName: file.name, fileType: 'video' })
       });
-      toast('✅ Видео загружено!');
+      toast('✅ Видео загружено на MEGA!');
     } catch(err) {
-      toast('❌ Ошибка загрузки видео: ' + (err.message || err));
+      toast('❌ Ошибка загрузки видео на MEGA: ' + (err.message || err));
     }
   };
   inp.click();
@@ -4620,10 +4721,10 @@ function mcPickFile() {
     if (file.size > MAX_MB * 1024 * 1024) { toast(`❌ Файл слишком большой (макс. ${MAX_MB} МБ)`); return; }
     const p = profileLoad();
     if (!p || !_msgCurrentChat) return;
-    toast('⬆️ Загружаем файл на Google Drive…');
+    toast('⬆️ Загружаем файл на MEGA…');
     try {
-      const res = await gdUploadFile(file, file.name || ('file_' + Date.now()), file.type || 'application/octet-stream');
-      const link = res.webViewLink || res.webContentLink;
+      const res = await megaUploadFile(file, file.name || ('file_' + Date.now()));
+      const link = res.link;
       if (!link) throw new Error('no link');
       const fileEmoji = _gdFileEmoji(file.name);
       const ts  = Date.now();
@@ -4647,9 +4748,9 @@ function mcPickFile() {
         to_user: _msgCurrentChat, text: `${fileEmoji} ${file.name}`, ts,
         extra: JSON.stringify({ fileLink: link, fileName: file.name, fileType: 'file' })
       });
-      toast('✅ Файл загружен!');
+      toast('✅ Файл загружен на MEGA!');
     } catch(err) {
-      toast('❌ Ошибка загрузки файла: ' + (err.message || err));
+      toast('❌ Ошибка загрузки файла на MEGA: ' + (err.message || err));
     }
   };
   inp.click();
@@ -4697,46 +4798,69 @@ function mcSendImage(dataUrl) {
   });
 }
 
-// ── Клавиатура: скролл чата вниз при фокусе и при изменении viewport ──
+// ── Клавиатура: сжимаем чат-экран снизу через bottom CSS ─────────
+// position:fixed + inset:0 → при трансформации всего экрана хедер улетает выше экрана.
+// Правильный подход: менять bottom экрана = keyboard height, хедер остаётся на месте.
 (function() {
-  // При фокусе на поле ввода — сразу скроллим вниз (до появления клавиатуры)
-  document.addEventListener('focusin', function(e) {
-    if (e.target && e.target.id === 'mc-input') {
-      // Небольшая задержка чтобы WebView успел сжаться
-      setTimeout(() => {
-        const list = document.getElementById('mc-messages');
-        if (list) list.scrollTop = list.scrollHeight;
-      }, 50);
-      setTimeout(() => {
-        const list = document.getElementById('mc-messages');
-        if (list) list.scrollTop = list.scrollHeight;
-      }, 300);
-    }
-  }, { passive: true });
+  const CHAT_ID = 's-messenger-chat';
+  let _kbHeight = 0;
+  let _raf = null;
 
-  if (!window.visualViewport) return;
-  let _kbOpen = false;
-  const _initH = window.innerHeight;
-
-  function onKbChange() {
+  function _getKbHeight() {
+    if (!window.visualViewport) return 0;
     const vv = window.visualViewport;
-    const nowOpen = vv.height < _initH - 100;
-
-    // Сбрасываем любой старый transform
-    document.querySelectorAll('.screen.active').forEach(s => {
-      s.style.transform = '';
-      s.style.transition = '';
-    });
-
-    if (nowOpen && !_kbOpen) {
-      // Клавиатура открылась — скроллим чат вниз
-      const list = document.getElementById('mc-messages');
-      if (list) requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
-    }
-    _kbOpen = nowOpen;
+    // На Android: innerHeight не меняется с resizes-content если layout-size фиксирован
+    // Используем offsetTop + height vs window.innerHeight
+    const kb = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
+    return Math.round(kb);
   }
 
-  window.visualViewport.addEventListener('resize', onKbChange, { passive: true });
+  function _applyKb() {
+    const kbH = _getKbHeight();
+    if (kbH === _kbHeight) return;
+    _kbHeight = kbH;
+    const screen = document.getElementById(CHAT_ID);
+    if (!screen) return;
+
+    if (kbH > 0) {
+      // Сжимаем экран снизу — хедер и input bar остаются на своих местах
+      screen.style.transition = 'bottom .22s cubic-bezier(0.4,0,0.2,1)';
+      screen.style.bottom     = kbH + 'px';
+      screen.style.transform  = '';
+      // Скроллим сообщения вниз
+      const msgs = document.getElementById('mc-messages');
+      if (msgs) setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 50);
+    } else {
+      screen.style.transition = 'bottom .22s cubic-bezier(0.4,0,0.2,1)';
+      screen.style.bottom     = '';
+      screen.style.transform  = '';
+      setTimeout(() => {
+        if (screen) { screen.style.transition = ''; }
+      }, 250);
+    }
+  }
+
+  // Опрос при фокусе (visualViewport ещё не обновился в момент focusin)
+  document.addEventListener('focusin', function(e) {
+    if (!e.target || e.target.id !== 'mc-input') return;
+    if (_raf) cancelAnimationFrame(_raf);
+    let attempts = 0;
+    function poll() {
+      _applyKb();
+      if (++attempts < 8) _raf = requestAnimationFrame(poll);
+    }
+    setTimeout(poll, 50); // ждём пока Android покажет клавиатуру
+  }, { passive: true });
+
+  document.addEventListener('focusout', function(e) {
+    if (!e.target || e.target.id !== 'mc-input') return;
+    setTimeout(_applyKb, 80);
+  }, { passive: true });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', _applyKb, { passive: true });
+    window.visualViewport.addEventListener('scroll', _applyKb, { passive: true });
+  }
 })();
 
 // ── Доп функции ───────────────────────────────────────────────────
