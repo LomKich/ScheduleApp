@@ -129,15 +129,9 @@ public class MessagingForegroundService extends Service {
         try {
             Intent restartIntent = new Intent(getApplicationContext(), MessagingForegroundService.class);
             android.app.PendingIntent pi;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                pi = android.app.PendingIntent.getService(
+            pi = android.app.PendingIntent.getService(
                     getApplicationContext(), 1, restartIntent,
                     android.app.PendingIntent.FLAG_ONE_SHOT | android.app.PendingIntent.FLAG_IMMUTABLE);
-            } else {
-                pi = android.app.PendingIntent.getService(
-                    getApplicationContext(), 1, restartIntent,
-                    android.app.PendingIntent.FLAG_ONE_SHOT);
-            }
             android.app.AlarmManager am =
                 (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
             if (am != null) {
