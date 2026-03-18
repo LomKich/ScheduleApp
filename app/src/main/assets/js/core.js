@@ -1911,16 +1911,24 @@ function updateNavActive(aid) {
 }
 
 // ── Sliding pill indicator (как тумблер ученик/учитель) ────────────
-// Порядок вкладок для pill — совпадает с grid-template-columns
+// Порядок вкладок для pill
 const _NAV_PILL_IDS = ['nav-home', 'nav-bells', 'nav-messenger', 'nav-profile'];
 
 function _navMovePill(activeId) {
-  const nav = document.getElementById('global-bottom-nav');
-  if (!nav) return;
-  const idx = _NAV_PILL_IDS.indexOf(activeId);
-  if (idx < 0) return;
-  // Устанавливаем CSS-переменную — pill сдвигается через transform translateX
-  nav.style.setProperty('--nav-active', String(idx));
+  const pill    = document.getElementById('nav-pill');
+  const btn     = document.getElementById(activeId);
+  const nav     = document.getElementById('global-bottom-nav');
+  if (!pill || !btn || !nav) return;
+
+  // Читаем реальные координаты в момент тапа — работает на любом DPI
+  const navRect = nav.getBoundingClientRect();
+  const btnRect = btn.getBoundingClientRect();
+
+  const left  = btnRect.left  - navRect.left + 4;
+  const width = btnRect.width - 8;
+
+  pill.style.left  = left  + 'px';
+  pill.style.width = width + 'px';
 }
 
 // ── Показывать навигацию только на нужных экранах ──────────────────────────
@@ -2583,7 +2591,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.4.4';
+const APP_VERSION='4.4.5';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
@@ -4575,12 +4583,13 @@ initSchedTapTrigger();
 setTimeout(() => {
   updateNavVisibility('s-home');
   _navMovePill('nav-home');
-  // Пре-рендер всех вкладок чтобы не было лага при первом переходе
   updateBgUI();
   applyBgBlurState();
   updateThemeCurrentRow();
   try { if (typeof profileRenderScreen === 'function') profileRenderScreen(); } catch(e) {}
 }, 100);
+// Повторная инициализация pill после полной отрисовки (для медленных устройств)
+setTimeout(() => { _navMovePill('nav-home'); }, 400);
 document.getElementById('url-input').value=S.url;
 
 loadFiles();

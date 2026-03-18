@@ -4447,47 +4447,32 @@ function mcSendImage(dataUrl) {
 // ── Клавиатура: плавное смещение поля ввода через padding-bottom ──
 // adjustResize уменьшает window.innerHeight — мы отслеживаем это
 // и плавно двигаем input bar через CSS transition.
+// С adjustResize WebView сжимается сам — никакого translateY не нужно.
+// Просто скроллим сообщения вниз когда клавиатура открылась.
 (function() {
   if (!window.visualViewport) return;
-  let _lastOffset = 0;
+  let _kbOpen = false;
+  const _initH = window.innerHeight;
 
   function onKbChange() {
-    const vv     = window.visualViewport;
-    const offset = Math.round(vv.offsetTop);
-    if (offset === _lastOffset) return;
-    _lastOffset = offset;
+    const vv = window.visualViewport;
+    const nowOpen = vv.height < _initH - 100;
 
-    const chatScreen = document.getElementById('s-messenger-chat');
-    const isChatActive = chatScreen?.classList.contains('active');
+    // Сбрасываем любой старый transform
+    document.querySelectorAll('.screen.active').forEach(s => {
+      s.style.transform = '';
+      s.style.transition = '';
+    });
 
-    if (isChatActive) {
-      // В чате: поднимаем только поле ввода + сообщения через transform всего экрана
-      chatScreen.style.transition = offset > 0
-        ? 'transform 0.22s cubic-bezier(0.4,0,0.2,1)'
-        : 'transform 0.18s cubic-bezier(0.4,0,0.2,1)';
-      chatScreen.style.transform = offset > 10 ? `translateY(-${offset}px)` : '';
-      if (offset > 10) {
-        const list = document.getElementById('mc-messages');
-        if (list) requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
-      }
-    } else {
-      // На других экранах: сдвигаем активный экран вверх если есть фокусированный input
-      const activeScreen = document.querySelector('.screen.active');
-      const focused = document.activeElement;
-      const isInput = focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA');
-      if (activeScreen && isInput) {
-        activeScreen.style.transition = offset > 0
-          ? 'transform 0.22s cubic-bezier(0.4,0,0.2,1)'
-          : 'transform 0.18s cubic-bezier(0.4,0,0.2,1)';
-        activeScreen.style.transform = offset > 10 ? `translateY(-${offset}px)` : '';
-      } else if (activeScreen) {
-        activeScreen.style.transform = '';
-      }
+    if (nowOpen && !_kbOpen) {
+      // Клавиатура открылась — скроллим чат вниз
+      const list = document.getElementById('mc-messages');
+      if (list) requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
     }
+    _kbOpen = nowOpen;
   }
 
   window.visualViewport.addEventListener('resize', onKbChange, { passive: true });
-  window.visualViewport.addEventListener('scroll', onKbChange, { passive: true });
 })();
 
 // ── Доп функции ───────────────────────────────────────────────────
