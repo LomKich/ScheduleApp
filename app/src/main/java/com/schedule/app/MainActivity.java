@@ -312,9 +312,8 @@ public class MainActivity extends Activity {
                 if (!url.startsWith("file://") && !url.contains("fonts.googleapis")) {
                     log.i(TAG, "fetch → " + url);
                 }
-                // Перехватываем JS-скрипты которые CDN отдаёт с неправильным MIME-типом
-                // (text/plain вместо application/javascript) при file:// origin
-                if (url.contains("megajs") || url.contains("twemoji")) {
+                // Перехватываем twemoji CDN — исправляем MIME-тип (text/plain → application/javascript)
+                if (url.contains("twemoji")) {
                     try {
                         java.net.URL jurl = new java.net.URL(url);
                         java.net.HttpURLConnection conn = (java.net.HttpURLConnection) jurl.openConnection();
@@ -1076,123 +1075,92 @@ public class MainActivity extends Activity {
         }
 
         /**
-         * OTA: скачать APK и запустить системный установщик.
-         * Скачивает во внутреннее хранилище (getFilesDir/apk/) и открывает
-         * стандартный диалог "Установить" — пользователю нужна одна кнопка.
+         * OTA: открыть ссылку на APK в браузере — пользователь скачивает сам.
+         * Прямой download+install удалён: он классифицируется Play Protect как dropper.
          */
         @JavascriptInterface
         public void downloadAndInstallApk(String originalUrl) {
-            log.i(TAG, "downloadAndInstallApk: " + originalUrl);
+            log.i(TAG, "downloadAndInstallApk → openUrl: " + originalUrl);
+            openUrl(originalUrl);
+        }
 
-            // Список URL для попытки: оригинал + зеркала ghproxy для России
-            final String[] candidates = {
-                originalUrl,
-                "https://ghproxy.com/"          + originalUrl,
-                "https://mirror.ghproxy.com/"   + originalUrl,
-                "https://ghfast.top/"            + originalUrl,
-                "https://gh.con.sh/"             + originalUrl,
-                "https://gitproxy.click/"        + originalUrl,
-            };
+        /**
+         * Загружает файл на catbox.moe (анонимно, до 200 МБ, хранится бессрочно).
+         * В Supabase уходит только короткий URL — base64 НЕ сохраняется в БД.
+         *
+         * @param base64   содержимое файла в Base64 (без data:... префикса)
+         * @param fileName имя файла с расширением ("voice.webm", "video.mp4", …)
+         * @param mimeType MIME-тип ("audio/webm", "video/mp4", …)
+         * @return JSON {ok:true, url:"https://files.catbox.moe/…"} или {ok:false, error:"…"}
+         */
+        @JavascriptInterface
+        public String nativeUploadFile(String base64, String fileName, String mimeType) {
+            log.i(TAG, "nativeUploadFile: " + fileName + " mime=" + mimeType
+                    + " b64len=" + (base64 != null ? base64.length() : 0));
+            try {
+                byte[] fileBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+                String boundary = "----CatboxBoundary" + Long.toHexString(System.currentTimeMillis());
 
-            new Thread(() -> {
-                java.io.File apkDir = new java.io.File(getFilesDir(), "apk");
-                if (!apkDir.exists()) apkDir.mkdirs();
-                java.io.File apkFile = new java.io.File(apkDir, "update.apk");
-                if (apkFile.exists()) apkFile.delete();
+                java.net.URL url = new java.net.URL("https://catbox.moe/user/api.php");
+                java.net.HttpURLConnection conn =
+                    (java.net.HttpURLConnection) url.openConnection(buildProxy());
+                conn.setRequestMethod("POST");
+                conn.setDoOutput(true);
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(120000);
+                conn.setRequestProperty("Content-Type",
+                    "multipart/form-data; boundary=" + boundary);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0");
 
-                Exception lastError = null;
-                for (String urlStr : candidates) {
-                    try {
-                        log.i(TAG, "downloadAndInstallApk trying: " + urlStr);
-                        final String displayUrl = urlStr.length() > 60
-                            ? urlStr.substring(0, 60) + "..." : urlStr;
-                        runOnUiThread(() -> webView.evaluateJavascript(
-                            "var _otaLbl=document.getElementById('ota-progress-label');" +
-                            "if(_otaLbl)_otaLbl.textContent='⏬ Пробую зеркало...'", null));
+                java.io.OutputStream os = conn.getOutputStream();
+                // reqtype=fileupload
+                String partReq = "--" + boundary + "\r\n"
+                    + "Content-Disposition: form-data; name=\"reqtype\"\r\n\r\n"
+                    + "fileupload\r\n";
+                os.write(partReq.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                // file part
+                String partFile = "--" + boundary + "\r\n"
+                    + "Content-Disposition: form-data; name=\"fileToUpload\"; filename=\""
+                    + fileName + "\"\r\n"
+                    + "Content-Type: " + mimeType + "\r\n\r\n";
+                os.write(partFile.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                os.write(fileBytes);
+                String partEnd = "\r\n--" + boundary + "--\r\n";
+                os.write(partEnd.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                os.flush();
+                os.close();
 
-                        java.net.URL url = new java.net.URL(urlStr);
-                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                        conn.setRequestMethod("GET");
-                        conn.setConnectTimeout(20000);
-                        conn.setReadTimeout(60000);
-                        conn.setRequestProperty("User-Agent",
-                            "Mozilla/5.0 ScheduleApp/" + getVersionName());
-                        conn.setInstanceFollowRedirects(true);
+                int status = conn.getResponseCode();
+                java.io.InputStream is = status < 400
+                    ? conn.getInputStream() : conn.getErrorStream();
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192]; int n;
+                while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
+                is.close();
+                conn.disconnect();
+                String body = baos.toString("UTF-8").trim();
 
-                        int status = conn.getResponseCode();
-                        if (status < 200 || status >= 300) {
-                            conn.disconnect();
-                            lastError = new Exception("HTTP " + status + " от " + displayUrl);
-                            log.w(TAG, "Mirror failed HTTP " + status + ": " + urlStr);
-                            continue;
-                        }
-
-                        // Качаем файл
-                        long total = conn.getContentLengthLong();
-                        java.io.InputStream is = conn.getInputStream();
-                        java.io.FileOutputStream fos = new java.io.FileOutputStream(apkFile);
-                        byte[] buf = new byte[16384];
-                        long downloaded = 0;
-                        int n;
-                        while ((n = is.read(buf)) != -1) {
-                            fos.write(buf, 0, n);
-                            downloaded += n;
-                            if (total > 0) {
-                                final int pct = (int)(downloaded * 100 / total);
-                                runOnUiThread(() -> webView.evaluateJavascript(
-                                    "var b=document.getElementById('ota-progress-bar');" +
-                                    "var l=document.getElementById('ota-progress-label');" +
-                                    "if(b)b.style.width='" + pct + "%';" +
-                                    "if(l)l.textContent='" + pct + "% — Скачиваю...'", null));
-                            }
-                        }
-                        fos.close();
-                        is.close();
-                        conn.disconnect();
-                        log.i(TAG, "APK downloaded: " + apkFile.length() + " bytes via " + urlStr);
-
-                        // Запускаем установщик
-                        runOnUiThread(() -> {
-                            try {
-                                android.net.Uri apkUri = androidx.core.content.FileProvider.getUriForFile(
-                                    MainActivity.this,
-                                    getPackageName() + ".fileprovider",
-                                    apkFile
-                                );
-                                android.content.Intent intent = new android.content.Intent(
-                                    android.content.Intent.ACTION_INSTALL_PACKAGE);
-                                intent.setDataAndType(apkUri,
-                                    "application/vnd.android.package-archive");
-                                intent.addFlags(
-                                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                                intent.addFlags(
-                                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                                intent.putExtra(
-                                    android.content.Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-                                startActivity(intent);
-                                log.i(TAG, "Installer launched");
-                            } catch (Exception e) {
-                                log.e(TAG, "Launch installer error: " + e.getMessage());
-                                webView.evaluateJavascript(
-                                    "if(typeof toast==='function')toast('❌ Не удалось открыть установщик')",
-                                    null);
-                            }
-                        });
-                        return; // успех — выходим из цикла
-
-                    } catch (Exception e) {
-                        lastError = e;
-                        log.w(TAG, "Mirror error: " + urlStr + " → " + e.getMessage());
-                    }
+                org.json.JSONObject res = new org.json.JSONObject();
+                if (status == 200 && body.startsWith("https://")) {
+                    res.put("ok", true);
+                    res.put("url", body);
+                    log.i(TAG, "nativeUploadFile OK: " + body);
+                } else {
+                    res.put("ok", false);
+                    res.put("error", "HTTP " + status + ": "
+                        + body.substring(0, Math.min(body.length(), 200)));
+                    log.w(TAG, "nativeUploadFile failed: " + status + " " + body);
                 }
-
-                // Все зеркала провалились
-                final String errMsg = lastError != null ? lastError.getMessage() : "Неизвестная ошибка";
-                log.e(TAG, "downloadAndInstallApk all mirrors failed: " + errMsg);
-                runOnUiThread(() -> webView.evaluateJavascript(
-                    "if(typeof toast==='function')toast('❌ Все зеркала недоступны: " +
-                    errMsg.replace("'", "") + "')", null));
-            }).start();
+                return res.toString();
+            } catch (Exception e) {
+                log.e(TAG, "nativeUploadFile error: " + e.getMessage());
+                try {
+                    org.json.JSONObject err = new org.json.JSONObject();
+                    err.put("ok", false);
+                    err.put("error", e.getMessage());
+                    return err.toString();
+                } catch (Exception ex) { return "{\"ok\":false,\"error\":\"unknown\"}"; }
+            }
         }
 
         private String getVersionName() {
