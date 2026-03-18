@@ -1746,6 +1746,7 @@ const SCREEN_PARENTS = {
   's-messenger':     {parent:'s-profile',        nav:'nav-profile'},
   's-messenger-chat':{parent:'s-messenger',      nav:'nav-profile'},
   's-login':         {parent:'s-home',           nav:'nav-home'},
+  's-groups-chat':   {parent:'s-profile',        nav:'nav-profile'},
 };
 
 // Вызывается из Android (кнопка Back на телефоне)
@@ -1981,6 +1982,7 @@ showScreen = function(id, dir) {
     's-settings':       's-home',
     's-bells':          's-home',
     's-homework':       's-home',
+    's-groups-chat':    's-profile',
   };
 
   // Экраны где свайп вниз = назад (sub-screens типа выбора группы, расписания)
@@ -2581,7 +2583,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.4.2';
+const APP_VERSION='4.4.3';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();

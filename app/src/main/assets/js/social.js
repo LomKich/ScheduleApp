@@ -591,10 +591,9 @@ function profileRenderScreen() {
   const friendWord = friendCount === 1 ? '\u0447\u0435\u043B\u043E\u0432\u0435\u043A' : friendCount < 5 ? '\u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430' : '\u0447\u0435\u043B\u043E\u0432\u0435\u043A';
 
   body.innerHTML = `
-    <!-- \u0411\u0430\u043D\u043D\u0435\u0440 + \u0430\u0432\u0430\u0442\u0430\u0440 -->
+    <!-- Баннер + аватар -->
     <div style="position:relative;margin:-16px -18px 0">
       <div style="${bannerStyle};height:140px;width:100%;background-size:cover;background-position:center"></div>
-      <button onclick="profileToggleEdit()" style="position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.45);border:none;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;backdrop-filter:blur(6px)">\u270F\uFE0F</button>
       <div style="position:absolute;bottom:-50px;left:50%;transform:translateX(-50%)">
         <div style="position:relative;display:inline-block">
           <div class="profile-avatar ${frameStyle.cls}" style="width:96px;height:96px;font-size:46px;border:3px solid ${p.color||'var(--accent)'};border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden;${frameStyle.style}">
@@ -620,41 +619,49 @@ function profileRenderScreen() {
       ${badgeObj ? `<div style="display:inline-block;margin-top:8px;font-size:12px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
     </div>
 
-    <!-- Кнопки под аватаром — стиль Telegram: квадратные с иконкой -->
-    <div style="display:flex;gap:10px;padding:0 16px 16px;justify-content:center">
-      <button onclick="profilePickPhoto()" title="Выбрать фото"
-        style="width:52px;height:52px;background:var(--surface2);border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;transition:background .15s,transform .1s;-webkit-tap-highlight-color:transparent"
-        ontouchstart="this.style.background='var(--surface3)'" ontouchend="this.style.background='var(--surface2)'">
-        📷
+    <!-- Кнопки действий: полная ширина, одна высота с другими строками -->
+    <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
+      <button onclick="profilePickPhoto()"
+        style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">📷</span>
+        <div style="font-size:14px;font-weight:700;color:var(--text)">Выбрать фото</div>
       </button>
-      <button onclick="profileToggleEdit()" title="Изменить"
-        style="width:52px;height:52px;background:var(--surface2);border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;transition:background .15s,transform .1s;-webkit-tap-highlight-color:transparent"
-        ontouchstart="this.style.background='var(--surface3)'" ontouchend="this.style.background='var(--surface2)'">
-        ✏️
+      <button onclick="profileToggleEdit()"
+        style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">✏️</span>
+        <div style="font-size:14px;font-weight:700;color:var(--text)">Изменить профиль</div>
       </button>
-      <button onclick="navTo('s-settings','nav-settings')" title="Настройки"
-        style="width:52px;height:52px;background:var(--surface2);border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;transition:background .15s,transform .1s;-webkit-tap-highlight-color:transparent"
-        ontouchstart="this.style.background='var(--surface3)'" ontouchend="this.style.background='var(--surface2)'">
-        ⚙️
+      <button onclick="navTo('s-settings','nav-settings')"
+        style="width:100%;padding:14px 16px;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">⚙️</span>
+        <div style="font-size:14px;font-weight:700;color:var(--text)">Настройки</div>
       </button>
     </div>
 
-    <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u0422\u0430\u0431\u043B\u0438\u0446\u0430 \u043B\u0438\u0434\u0435\u0440\u043E\u0432 + \u0414\u0440\u0443\u0437\u044C\u044F -->
+    <!-- Карточка: Таблица лидеров + Друзья + Группы -->
     <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
       <div onclick="showScreen('s-leaderboard')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">\u{1F3C6}</span>
+        <span style="font-size:22px;width:28px;text-align:center">🏆</span>
         <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">\u0422\u0430\u0431\u043B\u0438\u0446\u0430 \u043B\u0438\u0434\u0435\u0440\u043E\u0432</div>
-          <div style="font-size:12px;color:var(--muted)">\u0420\u0435\u043A\u043E\u0440\u0434\u044B \u0432 \u0438\u0433\u0440\u0430\u0445</div>
+          <div style="font-size:14px;font-weight:700">Таблица лидеров</div>
+          <div style="font-size:12px;color:var(--muted)">Рекорды в играх</div>
         </div>
-        <span style="color:var(--muted);font-size:18px">\u203A</span>
+        <span style="color:var(--muted);font-size:18px">›</span>
       </div>
-      <div onclick="profileRenderOnline();showScreen('s-online')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;-webkit-tap-highlight-color:transparent">
-        <span style="font-size:22px;width:28px;text-align:center">\u{1F465}</span>
+      <div onclick="profileRenderOnline();showScreen('s-online')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">👥</span>
         <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">\u0414\u0440\u0443\u0437\u044C\u044F</div>
+          <div style="font-size:14px;font-weight:700">Друзья</div>
           <div style="font-size:12px;color:var(--muted)">${friendCount} ${friendWord}</div>
         </div>
+      </div>
+      <div onclick="showGroupsList()" style="padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">💬</span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">Группы</div>
+          <div style="font-size:12px;color:var(--muted)">${groupsLoad().length} ${groupsLoad().length === 1 ? 'группа' : groupsLoad().length < 5 ? 'группы' : 'групп'}</div>
+        </div>
+        <span style="color:var(--muted);font-size:18px">›</span>
       </div>
     </div>
 
@@ -4428,26 +4435,37 @@ function mcSendImage(dataUrl) {
 // adjustResize уменьшает window.innerHeight — мы отслеживаем это
 // и плавно двигаем input bar через CSS transition.
 (function() {
-  // adjustResize в манифесте автоматически сжимает WebView при открытии клавиатуры.
-  // position:fixed;inset:0 на .screen адаптируется к новому window.innerHeight.
-  // Нам нужно только прокручивать список сообщений вниз.
+  // Плавное поднятие чата при открытии клавиатуры.
+  // Используем ТОЛЬКО visualViewport — он точно отражает видимую область без клавиатуры.
+  // window.innerHeight НЕ используем — с adjustResize он уже уменьшен и даст 0.
+  if (!window.visualViewport) return;
+
+  let _lastOffset = 0;
+
   function onKbChange() {
     const chatScreen = document.getElementById('s-messenger-chat');
     if (!chatScreen || !chatScreen.classList.contains('active')) return;
-    // Убираем любой translateY (мог остаться от старых версий)
-    chatScreen.style.transform = '';
-    chatScreen.style.transition = '';
-    // Прокручиваем вниз
-    const list = document.getElementById('mc-messages');
-    if (list) {
-      requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+
+    const vv   = window.visualViewport;
+    // offsetTop > 0 означает что экран прокрутился — это и есть высота клавиатуры
+    const offset = Math.round(vv.offsetTop);
+
+    if (offset === _lastOffset) return;
+    _lastOffset = offset;
+
+    chatScreen.style.transition = offset > 0
+      ? 'transform 0.22s cubic-bezier(0.4,0,0.2,1)'
+      : 'transform 0.2s cubic-bezier(0.4,0,0.2,1)';
+    chatScreen.style.transform = offset > 10 ? `translateY(-${offset}px)` : '';
+
+    if (offset > 10) {
+      const list = document.getElementById('mc-messages');
+      if (list) requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
     }
   }
 
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', onKbChange, { passive: true });
-  }
-  window.addEventListener('resize', onKbChange, { passive: true });
+  window.visualViewport.addEventListener('resize', onKbChange, { passive: true });
+  window.visualViewport.addEventListener('scroll', onKbChange, { passive: true });
 })();
 
 // ── Доп функции ───────────────────────────────────────────────────
@@ -4539,81 +4557,90 @@ function peerProfileOpen(username) {
   const blocked   = isBlocked(username);
   const noCopy    = isCopyBlocked(username);
 
-  // Фото или градиент как фон на весь верх
-  const hasPhoto  = peer.avatarType === 'photo' && peer.avatarData;
-  const heroBg    = hasPhoto
-    ? `background:url('${peer.avatarData}') center/cover no-repeat`
-    : `background:linear-gradient(160deg,${peer.color||'#e87722'},${peer.color||'#e87722'}88,#111)`;
+  // Баннер/фон — тот же подход что и у своего профиля
+  const peerBannerStyle = peer.banner
+    ? (peer.banner.startsWith('background:') ? peer.banner : `background:${peer.banner}`)
+    : `background:linear-gradient(135deg,${peer.color||'var(--accent)'}66,${peer.color||'var(--accent)'}22)`;
+  const peerAvatarHtml = hasPhoto
+    ? `<img src="${peer.avatarData}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : `<span style="font-size:46px;line-height:1">${peer.avatar||'😊'}</span>`;
 
   if (body) body.innerHTML = `
-    <!-- Герой — фото/аватар на весь верх -->
-    <div style="${heroBg};height:52vw;min-height:220px;max-height:340px;position:relative;flex-shrink:0">
-      ${!hasPhoto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:96px">${peer.avatar||'😊'}</div>` : ''}
-      <!-- Градиент снизу для читаемости текста -->
-      <div style="position:absolute;bottom:0;left:0;right:0;height:120px;background:linear-gradient(transparent,rgba(0,0,0,.75))"></div>
-      <!-- Имя и статус поверх фото снизу -->
-      <div style="position:absolute;bottom:14px;left:18px;right:18px">
-        <div style="font-size:22px;font-weight:800;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.5)">${escHtml(peer.name||username)}</div>
-        <div style="font-size:13px;color:rgba(255,255,255,.8);margin-top:2px">${isOnline ? '🟢 В сети' : '⚫ ' + (peer.status === 'online' ? 'Не в сети' : statusObj.label)}</div>
+    <!-- Баннер + аватар (тот же стиль что и собственный профиль) -->
+    <div style="position:relative;margin:0 0 0">
+      <div style="${peerBannerStyle};height:140px;width:100%;background-size:cover;background-position:center"></div>
+      <div style="position:absolute;bottom:-50px;left:50%;transform:translateX(-50%)">
+        <div style="position:relative;display:inline-block">
+          <div style="width:96px;height:96px;border-radius:50%;border:3px solid ${peer.color||'var(--accent)'};background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden">
+            ${peerAvatarHtml}
+          </div>
+          ${peer.vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))">👑</div>` : ''}
+        </div>
       </div>
     </div>
+    <div style="height:60px"></div>
 
-    <!-- Кнопки быстрых действий — как в Telegram -->
-    <div style="display:flex;gap:8px;padding:14px 16px;background:var(--surface2);border-bottom:1px solid var(--surface3)">
+    <!-- Имя, статус, bio — центрировано как в своём профиле -->
+    <div style="text-align:center;padding:0 16px 16px">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(peer.name||username)}</span>
+        ${peer.vip ? '<span style="background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">👑 VIP</span>' : ''}
+      </div>
+      <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(username)}</div>
+      <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${isOnline?'#4caf7d22':'rgba(255,255,255,.08)'};color:${isOnline?'#4caf7d':'var(--muted)'}">
+        ${isOnline ? '🟢 В сети' : '⚫ Не в сети'}
+      </div>
+      ${peer.bio ? `<div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5">${escHtml(peer.bio)}</div>` : ''}
+    </div>
+
+    <!-- Кнопки действий — такие же как в своём профиле -->
+    <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
       <button onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')"
-        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--accent)">
-        <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,var(--accent) 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">💬</div>
-        <span style="font-size:11px;font-weight:600">Чат</span>
+        style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;color:var(--text);font-family:inherit;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">💬</span>
+        <div style="font-size:14px;font-weight:700">Написать</div>
       </button>
       <button onclick="peerMuteShow('${username}')"
-        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:${isMuted(username)?'#e05555':'var(--accent)'}">
-        <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,${isMuted(username)?'#e05555':'var(--accent)'} 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">${isMuted(username)?'🔕':'🔔'}</div>
-        <span style="font-size:11px;font-weight:600">${isMuted(username)?'Включить':'Выключить'}</span>
-      </button>
-      <button onclick="peerSendGift('${username}')"
-        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--accent)">
-        <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,var(--accent) 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">🎁</div>
-        <span style="font-size:11px;font-weight:600">Подарок</span>
+        style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;color:var(--text);font-family:inherit;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">${isMuted(username)?'🔕':'🔔'}</span>
+        <div style="font-size:14px;font-weight:700">${isMuted(username)?'Включить уведомления':'Отключить уведомления'}</div>
       </button>
       <button onclick="${isFriend ? `profileRemoveFriend('${username}')` : `profileAddFriend('${username}')`}"
-        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:${isFriend?'#e05555':'var(--accent)'}">
-        <div style="width:44px;height:44px;border-radius:50%;background:color-mix(in srgb,${isFriend?'#e05555':'var(--accent)'} 15%,var(--surface));display:flex;align-items:center;justify-content:center;font-size:20px">${isFriend?'❌':'👥'}</div>
-        <span style="font-size:11px;font-weight:600">${isFriend?'Удалить':'В друзья'}</span>
+        style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;color:${isFriend?'var(--danger,#e05555)':'var(--text)'};font-family:inherit;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">${isFriend?'❌':'👥'}</span>
+        <div style="font-size:14px;font-weight:700">${isFriend?'Удалить из друзей':'Добавить в друзья'}</div>
       </button>
-      ${blocked ? `
-      <button onclick="peerBlockToggle('${username}')"
-        style="flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;color:#e05555">
-        <div style="width:44px;height:44px;border-radius:50%;background:rgba(224,85,85,.15);display:flex;align-items:center;justify-content:center;font-size:20px">🔓</div>
-        <span style="font-size:11px;font-weight:600">Разблок.</span>
+      <button onclick="peerSendGift('${username}')"
+        style="width:100%;padding:14px 16px;background:none;border:none;${blocked?'border-bottom:1px solid var(--surface3);':''}cursor:pointer;display:flex;align-items:center;gap:12px;color:var(--text);font-family:inherit;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">🎁</span>
+        <div style="font-size:14px;font-weight:700">Отправить подарок</div>
+      </button>
+      ${blocked ? `<button onclick="peerBlockToggle('${username}')"
+        style="width:100%;padding:14px 16px;background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:12px;color:var(--danger,#e05555);font-family:inherit;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:22px;width:28px;text-align:center">🔓</span>
+        <div style="font-size:14px;font-weight:700">Разблокировать</div>
       </button>` : ''}
     </div>
 
-    <!-- Информация о пользователе -->
-    <div style="background:var(--surface2);margin-top:8px;border-top:1px solid var(--surface3);border-bottom:1px solid var(--surface3)">
-      <!-- Username -->
-      <div style="padding:14px 20px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--surface3)">
-        <span style="font-size:20px;color:var(--accent);width:24px;text-align:center">@</span>
+    <!-- Информация -->
+    <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3)">
+        <span style="font-size:20px;color:var(--accent);width:28px;text-align:center">@</span>
         <div style="flex:1">
-          <div style="font-size:15px;color:var(--text)">@${escHtml(username)}</div>
+          <div style="font-size:14px;font-weight:700">@${escHtml(username)}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px">Имя пользователя</div>
         </div>
       </div>
-      <!-- Bio -->
-      <div style="padding:14px 20px;display:flex;align-items:flex-start;gap:14px${peer.bio ? ';border-bottom:1px solid var(--surface3)' : ''}">
-        <span style="font-size:20px;color:var(--muted);width:24px;text-align:center">📝</span>
+      <div style="padding:14px 16px;display:flex;align-items:flex-start;gap:12px">
+        <span style="font-size:20px;color:var(--muted);width:28px;text-align:center">📝</span>
         <div style="flex:1">
-          <div style="font-size:15px;color:${peer.bio ? 'var(--text)' : 'var(--muted)'};white-space:pre-wrap;line-height:1.5">${peer.bio ? escHtml(peer.bio) : 'Не указано'}</div>
+          <div style="font-size:14px;color:${peer.bio?'var(--text)':'var(--muted)'};white-space:pre-wrap;line-height:1.5">${peer.bio?escHtml(peer.bio):'Не указано'}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px">О себе</div>
         </div>
       </div>
     </div>
 
-    <!-- Защита от копирования (если включена) -->
-    ${noCopy ? `<div style="margin:8px 16px;padding:10px 14px;background:rgba(224,85,85,.12);border-radius:10px;border:1px solid rgba(224,85,85,.3);font-size:12px;color:#e05555">🔒 Копирование сообщений запрещено</div>` : ''}
-
-    <!-- VIP badge -->
-    ${peer.vip ? `<div style="margin:8px 16px;padding:10px 14px;background:rgba(245,197,24,.12);border-radius:10px;border:1px solid rgba(245,197,24,.3);font-size:12px;color:#f5c518;display:flex;align-items:center;gap:8px"><span>👑</span><span>VIP участник</span></div>` : ''}
-
+    ${noCopy ? `<div style="margin-bottom:8px;padding:10px 14px;background:rgba(224,85,85,.12);border-radius:12px;border:1px solid rgba(224,85,85,.3);font-size:12px;color:#e05555">🔒 Копирование сообщений запрещено</div>` : ''}
     <div style="height:24px"></div>
   `;
 
@@ -4949,3 +4976,43 @@ function _closeSheet(sheetEl) {
   `;
   document.head.appendChild(st);
 })();
+
+// ══════════════════════════════════════════════════════════════════
+// 💬 ЭКРАН ГРУПП
+// ══════════════════════════════════════════════════════════════════
+function showGroupsList() {
+  showScreen('s-groups-chat');
+  renderGroupsList();
+}
+
+function renderGroupsList() {
+  const list = document.getElementById('groups-chat-list');
+  if (!list) return;
+  const groups = groupsLoad();
+  const p = profileLoad();
+  if (!groups.length) {
+    list.innerHTML = `<div style="text-align:center;padding:48px 20px;color:var(--muted)">
+      <div style="font-size:40px;margin-bottom:12px">💬</div>
+      <div style="font-size:14px;margin-bottom:20px">Нет групп. Создай первую!</div>
+      <button class="btn btn-accent" style="max-width:260px" onclick="showCreateGroupDialog()">👥 Создать группу</button>
+    </div>`;
+    return;
+  }
+  list.innerHTML = groups.map(g => {
+    const msgs = msgLoad()[g.id] || [];
+    const last = msgs[msgs.length - 1];
+    const lastText = last ? (last.text || last.sticker || '📷') : 'Нет сообщений';
+    const lastTime = last ? msgFormatTime(last.ts) : '';
+    return `<div onclick="messengerOpenChat('${escHtml(g.id)}')"
+      style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)">
+      <div style="width:52px;height:52px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;border:1.5px solid var(--surface3)">${g.avatar||'👥'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(g.name)}</div>
+          <div style="font-size:11px;color:var(--muted);flex-shrink:0">${lastTime}</div>
+        </div>
+        <div style="font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(lastText)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
