@@ -38,6 +38,9 @@ import android.webkit.WebViewClient;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+import android.graphics.Color;
 
 import org.json.JSONObject;
 
@@ -106,13 +109,33 @@ public class MainActivity extends Activity {
         helper = SupabaseHelper.get(this, log);
         log.i(TAG, "SupabaseHelper готов (presence / messages / leaderboard / users / accounts)");
 
-        getWindow().setFlags(
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        );
-        getWindow().getDecorView().setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-        );
+        // Современный подход: контент рисуется за системными барами (status + nav)
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+        // Прозрачные статус-бар и навигационная панель
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+
+        // Android 10+: прозрачность жест-бара и контрастный фон контрастности
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            getWindow().setNavigationBarContrastEnforced(false);
+        }
+
+        // Иконки статус-бара — светлые (под тёмный фон приложения)
+        WindowInsetsControllerCompat wic = new WindowInsetsControllerCompat(
+            getWindow(), getWindow().getDecorView());
+        wic.setAppearanceLightStatusBars(false);
+        wic.setAppearanceLightNavigationBars(false);
+
+        // Контент заходит за вырез камеры (punch-hole / Dynamic Island)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode =
+                android.os.Build.VERSION.SDK_INT >= 30
+                ? android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                : android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(lp);
+        }
 
         prefs   = getSharedPreferences("schedule_prefs", Context.MODE_PRIVATE);
         webView = new WebView(this);
@@ -321,42 +344,30 @@ public class MainActivity extends Activity {
     }
 
     private void injectStatusBarHeight() {
-        // Получаем реальную высоту статус-бара + вырез камеры
-        int statusBarHeight = 0;
-        int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
-        if (resourceId > 0) {
-            statusBarHeight = getResources().getDimensionPixelSize(resourceId);
-        }
-        // На Android 9+ дополнительно учитываем вырез (notch/cutout)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-            android.view.WindowInsets insets = getWindow().getDecorView().getRootWindowInsets();
-            if (insets != null) {
-                android.view.DisplayCutout cutout = insets.getDisplayCutout();
-                if (cutout != null) {
-                    int cutoutTop = cutout.getSafeInsetTop();
-                    statusBarHeight = Math.max(statusBarHeight, cutoutTop);
-                }
+        // Используем WindowInsetsCompat — единственный надёжный способ на Android 11+
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(
+            getWindow().getDecorView(), (v, insets) -> {
+                androidx.core.graphics.Insets sysInsets = insets.getInsets(
+                    androidx.core.view.WindowInsetsCompat.Type.systemBars() |
+                    androidx.core.view.WindowInsetsCompat.Type.displayCutout()
+                );
+                float density = getResources().getDisplayMetrics().density;
+                int topDp = Math.round(sysInsets.top    / density);
+                int botDp = Math.round(sysInsets.bottom / density);
+                log.i(TAG, "injectStatusBarHeight: statusBar=" + topDp + "dp navBar=" + botDp + "dp");
+                String js = String.format(
+                    "document.documentElement.style.setProperty('--safe-top','%dpx');" +
+                    "document.documentElement.style.setProperty('--safe-top-native','%dpx');" +
+                    "document.documentElement.style.setProperty('--safe-bot','%dpx');" +
+                    "console.log('[StatusBar] safe-top=%dpx safe-bot=%dpx');",
+                    topDp, topDp, botDp, topDp, botDp
+                );
+                webView.post(() -> webView.evaluateJavascript(js, null));
+                return insets;
             }
-        }
-        // Дополнительный отступ снизу для навигационной панели
-        int navBarHeight = 0;
-        int navBarId = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
-        if (navBarId > 0) {
-            navBarHeight = getResources().getDimensionPixelSize(navBarId);
-        }
-        float density = getResources().getDisplayMetrics().density;
-        int statusBarDp = Math.round(statusBarHeight / density);
-        int navBarDp    = Math.round(navBarHeight / density);
-        log.i(TAG, "injectStatusBarHeight: statusBar=" + statusBarDp + "dp navBar=" + navBarDp + "dp");
-        // Записываем как CSS-переменные напрямую — переопределяет env(safe-area-inset-top)
-        String js = String.format(
-            "document.documentElement.style.setProperty('--safe-top','%dpx');" +
-            "document.documentElement.style.setProperty('--safe-top-native','%dpx');" +
-            "document.documentElement.style.setProperty('--safe-bot','%dpx');" +
-            "console.log('[StatusBar] safe-top=%dpx safe-bot=%dpx');",
-            statusBarDp, statusBarDp, navBarDp, statusBarDp, navBarDp
         );
-        webView.post(() -> webView.evaluateJavascript(js, null));
+        // Принудительно запрашиваем insets (если decor уже готов)
+        androidx.core.view.ViewCompat.requestApplyInsets(getWindow().getDecorView());
     }
 
     private void injectErrorHandler() {

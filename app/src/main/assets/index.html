@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0d0d0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,6 +12,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Nunito:wght@300;400;600;700;800&family=Rubik:wght@300;400;500;600;700;800&family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800&family=Unbounded:wght@300;400;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Comfortaa:wght@300;400;600;700&family=Jura:wght@300;400;500;600;700&family=Raleway:wght@300;400;500;600;700;800&family=Oswald:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700;800&family=Advent+Pro:wght@300;400;500;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Caveat:wght@400;500;600;700&family=Tektur:wght@400;500;600;700;800&family=Exo+2:wght@300;400;500;600;700;800&family=Fira+Code:wght@300;400;500;600;700&family=Prosto+One&family=Neucha&family=Lobster&family=Russo+One&family=Ubuntu:wght@300;400;500;700&family=PT+Sans:wght@400;700&family=PT+Serif:wght@400;700&family=Lora:wght@400;500;600;700&family=Merriweather:wght@300;400;700&family=Mulish:wght@300;400;500;600;700;800&family=Golos+Text:wght@400;500;600;700&family=Philosopher:ital,wght@0,400;0,700&family=Cormorant:wght@300;400;500;600;700&family=Podkova:wght@400;500;600;700;800&family=Forum&display=swap&subset=cyrillic" rel="stylesheet">
 <!-- Twemoji JS: replaces emoji text nodes with Apple-style <img> tags -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/twemoji.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- MEGA.nz SDK (official megajs ESM browser build) -->
+<script type="module">
+  try {
+    const { Storage } = await import('https://cdn.jsdelivr.net/npm/megajs@1.1.3/dist/main.browser-es.js');
+    window.MegaStorage = Storage;
+    window._megaReady = true;
+  } catch(e) {
+    window._megaReady = false;
+    console.error('megajs load failed:', e);
+  }
+</script>
 <style>
 :root{
   --bg:#0d0d0d;--surface:#161616;--surface2:#1f1f1f;--surface3:#2a2a2a;
@@ -2241,16 +2252,37 @@ body.kb-open .screen.active:not(#s-messenger-chat) {
    NOTCH / CUTOUT / DYNAMIC ISLAND — поддержка вырезов камеры
    ══════════════════════════════════════════════════════════════════ */
 
+/* ── Перекрытие системных зон — чтобы не было чёрных полос ── */
+/* Верхняя зона (статус-бар + вырез) — фон приложения */
+body::before {
+  content:'';
+  position:fixed;
+  top:0;left:0;right:0;
+  height:var(--safe-top,0px);
+  background:var(--bg);
+  z-index:9999;
+  pointer-events:none;
+}
+/* Нижняя зона (жест-бар) — фон приложения */
+body::after {
+  content:'';
+  position:fixed;
+  bottom:0;left:0;right:0;
+  height:var(--safe-bot,0px);
+  background:var(--bg);
+  z-index:9999;
+  pointer-events:none;
+}
+
 /* Нав-бар снизу учитывает жест-зону */
 .bottom-nav {
   padding-bottom: max(var(--safe-bot), env(safe-area-inset-bottom, 0px)) !important;
 }
 
-/* Шапки экранов учитывают вырез сверху */
+/* Шапки экранов — только боковые safe-area, vertical уже учтён padding-top у .screen */
 .hdr {
-  padding-top: max(var(--safe-top), env(safe-area-inset-top, 0px));
-  padding-left: max(var(--safe-left), env(safe-area-inset-left, 0px));
-  padding-right: max(var(--safe-right), env(safe-area-inset-right, 0px));
+  padding-left:  max(18px, calc(18px + env(safe-area-inset-left,  0px))) !important;
+  padding-right: max(18px, calc(18px + env(safe-area-inset-right, 0px))) !important;
 }
 
 /* Экраны: контент не залезает под вырез */
@@ -2580,7 +2612,7 @@ body.kb-open .screen.active:not(#s-messenger-chat) {
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.4.7 — Android</div>
+        <div class="item-sub" id="app-version-str">4.4.8 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
