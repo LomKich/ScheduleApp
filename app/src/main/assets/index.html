@@ -2215,20 +2215,30 @@ body.tg-style ::-webkit-scrollbar-thumb { background: var(--tg-surface3) !import
   height: 100% !important;
   max-height: 100% !important;
   overflow: hidden !important;
-  /* Нав-бар теперь виден — убираем нижний padding экрана, mc-input-bar сам обрабатывает safe-area */
+  /* Нав-бар теперь виден — убираем нижний padding экрана */
   padding-bottom: 0 !important;
 }
-/* Хедер всегда зафиксирован сверху — не двигается при трансформации */
+/* Хедер чата — sticky по умолчанию, JS переключит в fixed при клавиатуре */
 #s-messenger-chat .hdr {
   flex-shrink: 0 !important;
   position: sticky !important;
   top: 0 !important;
-  z-index: 10 !important;
+  z-index: 100 !important;
   background: var(--surface) !important;
-  will-change: auto !important;
+  width: 100% !important;
 }
 #mc-messages { flex: 1 1 0 !important; min-height: 0 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
-#mc-input-bar { flex-shrink: 0 !important; }
+/* Input bar — все стили в CSS, не зависим от inline */
+#mc-input-bar {
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 8px !important;
+  padding: 8px 12px calc(8px + var(--safe-bot)) !important;
+  background: var(--surface) !important;
+  border-top: 1px solid rgba(255,255,255,.06) !important;
+  flex-shrink: 0 !important;
+  width: 100% !important;
+}
 
 /* Глобальный сдвиг при клавиатуре для ВСЕХ экранов с input/textarea */
 body.kb-open .screen.active:not(#s-messenger-chat) {
@@ -2594,7 +2604,7 @@ body::before {
         ontouchstart="eggTap()"
         style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
         <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">4.4.11 — Android</div>
+        <div class="item-sub" id="app-version-str">4.4.12 — Android</div>
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
@@ -2932,12 +2942,13 @@ body::before {
     </div>
   </div>
   <!-- Input bar -->
-  <div id="mc-input-bar" style="display:flex;align-items:flex-end;gap:8px;padding:8px 12px calc(8px + var(--safe-bot));background:var(--surface);border-top:1px solid rgba(255,255,255,.06);flex-shrink:0"
+  <div id="mc-input-bar"
     onmousedown="if(event.target.tagName!=='TEXTAREA'){event.preventDefault();}"
     ontouchstart="if(event.target.tagName!=='TEXTAREA'){event.preventDefault();}" >
-    <button id="mc-sticker-btn" onclick="mcToggleStickerPanel()"
+    <button id="mc-sticker-btn"
       style="width:38px;height:38px;border-radius:50%;background:var(--surface2);border:none;color:var(--muted);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s;margin-bottom:2px"
-      onmousedown="event.preventDefault()" ontouchstart="event.preventDefault();this.style.transform='scale(.9)'" ontouchend="this.style.transform=''">🎭</button>
+      ontouchstart="this.style.transform='scale(.9)'"
+      ontouchend="this.style.transform='';mcToggleStickerPanel()">🎭</button>
     <button id="mc-photo-btn"
       style="width:38px;height:38px;border-radius:50%;background:var(--surface2);border:none;color:var(--muted);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s;margin-bottom:2px"
       onmousedown="event.preventDefault()" ontouchstart="event.preventDefault();this.style.transform='scale(.9)'"

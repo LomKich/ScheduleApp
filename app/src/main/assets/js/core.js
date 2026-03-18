@@ -2072,6 +2072,13 @@ showScreen = function(id, dir) {
     cur = toId;
     _pendingScreenId = toId;
 
+    // Закрываем клавиатуру если уходим из чата свайпом
+    if (prevCur === 's-messenger-chat') {
+      try { document.activeElement?.blur(); } catch(_) {}
+      const mcInp = document.getElementById('mc-input');
+      if (mcInp) mcInp.blur();
+    }
+
     updateNavVisibility(toId);
     if (toNavId) updateNavActive(toNavId);
     if (toId === 's-home') document.body.classList.add('on-home-screen');
@@ -2596,7 +2603,7 @@ function renderSchedule(group,hdr,sched,filename){
 }
 
 // ══ ПРИВЕТСТВИЕ ══
-const APP_VERSION='4.4.11';
+const APP_VERSION='4.4.12';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();

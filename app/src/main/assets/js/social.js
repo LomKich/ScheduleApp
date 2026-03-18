@@ -2520,14 +2520,20 @@ window.showScreen = function(id, dir) {
     _mcStickerPanelOpen = false;
     // Бар ответа
     mcCancelReply && mcCancelReply();
-    // Скрываем клавиатуру только при уходе с чата
+    // Скрываем клавиатуру — blur + фокус на body чтобы гарантированно закрыть
     const inp = document.getElementById('mc-input');
-    if (inp) inp.blur();
-    // Сбрасываем input bar если был зафиксирован клавиатурой
-    const chatInputBar = document.getElementById('mc-input-bar');
-    if (chatInputBar) { chatInputBar.style.cssText = ''; }
+    if (inp) {
+      inp.blur();
+      // На Android WebView blur() иногда не закрывает клавиатуру без явного переноса фокуса
+      try { document.activeElement?.blur(); } catch(_) {}
+    }
+    // Сбрасываем клавиатурный сдвиг
+    const chatScreen = document.getElementById('s-messenger-chat');
+    if (chatScreen) { chatScreen.style.transition = ''; chatScreen.style.transform = ''; }
+    const chatHdr = chatScreen?.querySelector('.hdr');
+    if (chatHdr) { chatHdr.style.position = ''; chatHdr.style.top = ''; chatHdr.style.left = ''; chatHdr.style.right = ''; chatHdr.style.zIndex = ''; chatHdr.style.background = ''; }
     const msgs = document.getElementById('mc-messages');
-    if (msgs) msgs.style.paddingBottom = '';
+    if (msgs) { msgs.style.paddingTop = ''; msgs.style.paddingBottom = ''; }
   }
   if (id === 's-profile')     profileRenderScreen();
   if (id === 's-online')      profileRenderOnline();
@@ -4702,12 +4708,12 @@ function mcSendImage(dataUrl) {
   });
 }
 
-// ── Клавиатура: фиксируем input bar над клавиатурой ──────────────
-// НЕ трогаем весь экран — только двигаем input bar вниз через CSS bottom
-// и добавляем padding-bottom сообщениям чтобы последнее не было перекрыто
+// ── Клавиатура: двигаем экран вверх, хедер фиксируем на экране ────
 (function() {
-  const CHAT_ID    = 's-messenger-chat';
+  const CHAT_ID = 's-messenger-chat';
   let _kbH = 0;
+  let _hdrFixed = false;
+  let _hdrHeight = 0;
 
   function _getKbH() {
     if (!window.visualViewport) return 0;
@@ -4720,41 +4726,58 @@ function mcSendImage(dataUrl) {
     if (kbH === _kbH) return;
     _kbH = kbH;
 
-    const screen   = document.getElementById(CHAT_ID);
-    const inputBar = document.getElementById('mc-input-bar');
-    const msgs     = document.getElementById('mc-messages');
-    if (!screen || !inputBar || !msgs) return;
+    const screen = document.getElementById(CHAT_ID);
+    if (!screen) return;
+    const hdr  = screen.querySelector('.hdr');
+    const msgs = document.getElementById('mc-messages');
 
     if (kbH > 0) {
-      // Фиксируем input bar над клавиатурой
-      inputBar.style.transition = 'bottom .2s cubic-bezier(0.4,0,0.2,1)';
-      inputBar.style.position   = 'fixed';
-      inputBar.style.bottom     = kbH + 'px';
-      inputBar.style.left       = '0';
-      inputBar.style.right      = '0';
-      inputBar.style.zIndex     = '100';
-      // Добавляем padding сообщениям = высота input bar + клавиатура
-      const barH = inputBar.offsetHeight || 60;
-      msgs.style.paddingBottom  = (barH + kbH) + 'px';
-      // Скроллим вниз
-      setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 50);
+      // 1. Двигаем весь экран вверх
+      screen.style.transition = 'transform .22s cubic-bezier(0.4,0,0.2,1)';
+      screen.style.transform  = `translateY(-${kbH}px)`;
+
+      // 2. Хедер — переключаем в fixed чтобы остался на экране
+      if (hdr && !_hdrFixed) {
+        _hdrHeight = hdr.offsetHeight || 60;
+        hdr.style.position   = 'fixed';
+        hdr.style.top        = '0';
+        hdr.style.left       = '0';
+        hdr.style.right      = '0';
+        hdr.style.zIndex     = '9999';
+        hdr.style.background = 'var(--surface)';
+        // Компенсируем место под фиксированный хедер в списке сообщений
+        if (msgs) msgs.style.paddingTop = _hdrHeight + 'px';
+        _hdrFixed = true;
+      }
+
+      // 3. Скролл вниз
+      if (msgs) setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 60);
+
     } else {
-      // Возвращаем в нормальный поток
-      inputBar.style.transition = 'bottom .2s cubic-bezier(0.4,0,0.2,1)';
-      inputBar.style.position   = '';
-      inputBar.style.bottom     = '';
-      inputBar.style.left       = '';
-      inputBar.style.right      = '';
-      inputBar.style.zIndex     = '';
-      msgs.style.paddingBottom  = '';
-      setTimeout(() => { inputBar.style.transition = ''; }, 220);
+      // Возвращаем экран на место
+      screen.style.transition = 'transform .22s cubic-bezier(0.4,0,0.2,1)';
+      screen.style.transform  = '';
+
+      // Возвращаем хедер в поток
+      if (hdr && _hdrFixed) {
+        hdr.style.position   = '';
+        hdr.style.top        = '';
+        hdr.style.left       = '';
+        hdr.style.right      = '';
+        hdr.style.zIndex     = '';
+        hdr.style.background = '';
+        if (msgs) msgs.style.paddingTop = '';
+        _hdrFixed = false;
+      }
+
+      setTimeout(() => { if (screen) screen.style.transition = ''; }, 240);
     }
   }
 
   document.addEventListener('focusin', (e) => {
     if (!e.target || e.target.id !== 'mc-input') return;
     setTimeout(_apply, 80);
-    setTimeout(_apply, 300);
+    setTimeout(_apply, 350);
   }, { passive: true });
 
   document.addEventListener('focusout', (e) => {
