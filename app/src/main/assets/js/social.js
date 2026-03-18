@@ -620,18 +620,21 @@ function profileRenderScreen() {
       ${badgeObj ? `<div style="display:inline-block;margin-top:8px;font-size:12px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
     </div>
 
-    <!-- Кнопки под аватаром: иконки без текста, компактные -->
+    <!-- Кнопки под аватаром — стиль Telegram: квадратные с иконкой -->
     <div style="display:flex;gap:10px;padding:0 16px 16px;justify-content:center">
       <button onclick="profilePickPhoto()" title="Выбрать фото"
-        style="width:48px;height:48px;background:var(--surface2);border:none;border-radius:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+        style="width:52px;height:52px;background:var(--surface2);border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;transition:background .15s,transform .1s;-webkit-tap-highlight-color:transparent"
+        ontouchstart="this.style.background='var(--surface3)'" ontouchend="this.style.background='var(--surface2)'">
         📷
       </button>
       <button onclick="profileToggleEdit()" title="Изменить"
-        style="width:48px;height:48px;background:var(--surface2);border:none;border-radius:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+        style="width:52px;height:52px;background:var(--surface2);border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;transition:background .15s,transform .1s;-webkit-tap-highlight-color:transparent"
+        ontouchstart="this.style.background='var(--surface3)'" ontouchend="this.style.background='var(--surface2)'">
         ✏️
       </button>
       <button onclick="navTo('s-settings','nav-settings')" title="Настройки"
-        style="width:48px;height:48px;background:var(--surface2);border:none;border-radius:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
+        style="width:52px;height:52px;background:var(--surface2);border:none;border-radius:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;transition:background .15s,transform .1s;-webkit-tap-highlight-color:transparent"
+        ontouchstart="this.style.background='var(--surface3)'" ontouchend="this.style.background='var(--surface2)'">
         ⚙️
       </button>
     </div>
@@ -1794,14 +1797,22 @@ function profileDisconnect() {
 let _presenceFirstPut = true;
 async function sbPresencePut(p) {
   if (!p || !sbReady()) return;
-  // Compress photo avatar to 60x60px base64 for presence storage
+  // Compress photo avatar to 80x80px base64 for presence storage
   let avatarDataToStore = null;
   if (p.avatarType === 'photo' && p.avatarData) {
     try {
-      const cv = document.createElement('canvas'); cv.width = cv.height = 60;
-      const img = new Image(); img.src = p.avatarData;
-      cv.getContext('2d').drawImage(img, 0, 0, 60, 60);
-      avatarDataToStore = cv.toDataURL('image/jpeg', 0.7);
+      await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const cv = document.createElement('canvas');
+          cv.width = cv.height = 80;
+          cv.getContext('2d').drawImage(img, 0, 0, 80, 80);
+          avatarDataToStore = cv.toDataURL('image/jpeg', 0.75);
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = p.avatarData;
+      });
     } catch(_) {}
   }
   const payload = {
@@ -2031,6 +2042,20 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
           if (_msgCurrentChat === otherUsername) messengerRenderMessages();
         }
         return; // не добавляем как обычное сообщение
+      }
+
+      // Обрабатываем delete_msg — собеседник удалил сообщение у всех
+      if (extraParsed?.type === 'delete_msg' && extraParsed?.msgTs) {
+        const targetTs = extraParsed.msgTs;
+        if (msgs[otherUsername]) {
+          const before = msgs[otherUsername].length;
+          msgs[otherUsername] = msgs[otherUsername].filter(m => m.ts !== targetTs);
+          if (msgs[otherUsername].length !== before) {
+            msgSave(msgs);
+            if (_msgCurrentChat === otherUsername) messengerRenderMessages();
+          }
+        }
+        return;
       }
       msgs[otherUsername].push({
         from: msg.from_user, to: myUsername,
@@ -4047,11 +4072,16 @@ function mcShowMsgMenu(idx) {
           onclick="mcCopyMsg(${idx});mcCloseMenu()">
           <span style="font-size:20px">📋</span> Копировать
         </button>
-        ${isMe ? `<div class="mc-action-sep"></div>
+        ${msg.image ? `<div class="mc-action-sep"></div>
+        <button class="mc-action-btn"
+          onclick="mcSaveImage(${idx});mcCloseMenu()">
+          <span style="font-size:20px">💾</span> Сохранить фото
+        </button>` : ''}
+        <div class="mc-action-sep"></div>
         <button class="mc-action-btn" style="color:var(--danger,#e05555)"
           onclick="mcConfirmDelete(${idx});mcCloseMenu()">
-          <span style="font-size:20px">🗑</span> Удалить
-        </button>` : ''}
+          <span style="font-size:20px">🗑</span> Удалить${isMe ? '' : ' у себя'}
+        </button>
       </div>
     </div>`;
 
@@ -4096,23 +4126,33 @@ function mcCopyMsg(idx) {
   toast('📋 Скопировано');
 }
 
-// ── Удаление сообщения (локально + с сервера) ─────────────────────
+// ── Удаление сообщения: анимация + сервер + синхронизация для всех ──
 async function mcDeleteMsg(idx) {
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) return;
   const msg = msgs[_msgCurrentChat][idx];
   if (!msg) return;
 
-  // Удаляем локально
+  // 1. Анимация исчезновения пузыря
+  const body = document.getElementById('mc-messages');
+  const bubbles = body?.querySelectorAll('[data-msg-bubble]');
+  const bubble  = bubbles?.[idx];
+  if (bubble) {
+    bubble.style.transition = 'transform .2s cubic-bezier(.4,0,.8,.6), opacity .18s ease';
+    bubble.style.transform  = 'scale(0.6)';
+    bubble.style.opacity    = '0';
+    await new Promise(r => setTimeout(r, 210));
+  }
+
+  // 2. Удаляем локально
   msgs[_msgCurrentChat].splice(idx, 1);
   msgSave(msgs);
   messengerRenderMessages();
 
-  // Удаляем с сервера по ts + chat_key
+  // 3. Удаляем с сервера (chat_key одинаковый для обоих)
   const p = profileLoad();
   if (p && sbReady() && msg.ts) {
     const chatKey = sbChatKey(p.username, _msgCurrentChat);
-    // Удаляем конкретное сообщение по ts и chat_key
     sbDelete('messages',
       `chat_key=eq.${encodeURIComponent(chatKey)}&ts=eq.${msg.ts}`
     ).catch(() => {});
@@ -4123,6 +4163,10 @@ async function mcDeleteMsg(idx) {
 function mcConfirmDelete(idx) {
   const existing = document.getElementById('mc-delete-confirm');
   if (existing) existing.remove();
+  const msgs = msgLoad();
+  const msg  = (msgs[_msgCurrentChat] || [])[idx];
+  const p    = profileLoad();
+  const isMe = msg?.from === p?.username;
 
   const overlay = document.createElement('div');
   overlay.id = 'mc-delete-confirm';
@@ -4131,21 +4175,44 @@ function mcConfirmDelete(idx) {
     <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot,0px));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">Удалить сообщение?</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Сообщение будет удалено у всех участников.</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">${isMe
+        ? 'Сообщение будет удалено у всех участников.'
+        : 'Сообщение будет удалено только у тебя.'}</div>
       <button onclick="mcDeleteMsg(${idx});document.getElementById('mc-delete-confirm')?.remove()"
         style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
-        🗑 Удалить
+        🗑 Удалить${isMe ? ' для всех' : ''}
       </button>
       <button onclick="document.getElementById('mc-delete-confirm')?.remove()"
         style="width:100%;padding:14px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">
         Отмена
       </button>
     </div>`;
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.remove();
-  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
 }
+
+// ── Сохранить изображение из сообщения ────────────────────────────
+function mcSaveImage(idx) {
+  const msgs = msgLoad();
+  const msg  = (msgs[_msgCurrentChat] || [])[idx];
+  if (!msg?.image) { toast('❌ Изображение не найдено'); return; }
+  try {
+    if (window.Android?.saveImageToGallery) {
+      window.Android.saveImageToGallery(msg.image);
+      toast('✅ Фото сохранено в галерею');
+      return;
+    }
+  } catch(_) {}
+  // Fallback: скачать через <a download>
+  const a = document.createElement('a');
+  a.href = msg.image;
+  a.download = `photo_${msg.ts}.jpg`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  toast('✅ Фото сохранено');
+}
+
 const MC_MSG_LIMIT = 200;
 
 async function mcEnforceMessageLimit(username) {
@@ -4361,33 +4428,26 @@ function mcSendImage(dataUrl) {
 // adjustResize уменьшает window.innerHeight — мы отслеживаем это
 // и плавно двигаем input bar через CSS transition.
 (function() {
-  let _prevVH = window.innerHeight;
-
-  function onViewportResize() {
+  // adjustResize в манифесте автоматически сжимает WebView при открытии клавиатуры.
+  // position:fixed;inset:0 на .screen адаптируется к новому window.innerHeight.
+  // Нам нужно только прокручивать список сообщений вниз.
+  function onKbChange() {
     const chatScreen = document.getElementById('s-messenger-chat');
     if (!chatScreen || !chatScreen.classList.contains('active')) return;
-
-    const vv = window.visualViewport;
-    const vvH = vv ? vv.height : window.innerHeight;
-    const kbHeight = Math.max(0, window.innerHeight - vvH);
-
-    // Плавное смещение всего экрана вверх
-    chatScreen.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
-    chatScreen.style.transform = kbHeight > 50
-      ? `translateY(-${kbHeight}px)`
-      : '';
-
-    // Скролл вниз после анимации
+    // Убираем любой translateY (мог остаться от старых версий)
+    chatScreen.style.transform = '';
+    chatScreen.style.transition = '';
+    // Прокручиваем вниз
     const list = document.getElementById('mc-messages');
-    if (list) setTimeout(() => { list.scrollTop = list.scrollHeight; }, 60);
+    if (list) {
+      requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+    }
   }
 
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', onViewportResize, { passive: true });
-    window.visualViewport.addEventListener('scroll', onViewportResize, { passive: true });
+    window.visualViewport.addEventListener('resize', onKbChange, { passive: true });
   }
-  // Fallback через window resize (для некоторых Android WebView)
-  window.addEventListener('resize', onViewportResize, { passive: true });
+  window.addEventListener('resize', onKbChange, { passive: true });
 })();
 
 // ── Доп функции ───────────────────────────────────────────────────

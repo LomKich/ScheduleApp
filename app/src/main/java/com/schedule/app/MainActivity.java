@@ -1858,5 +1858,39 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> injectStatusBarHeight());
         }
 
+        /** Сохраняет base64-изображение в галерею телефона */
+        @JavascriptInterface
+        public void saveImageToGallery(String base64Data) {
+            runOnUiThread(() -> {
+                try {
+                    // Убираем data URL prefix
+                    String data = base64Data;
+                    if (data.contains(",")) data = data.split(",")[1];
+                    byte[] bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT);
+                    String fileName = "ScheduleApp_" + System.currentTimeMillis() + ".jpg";
+                    android.content.ContentValues values = new android.content.ContentValues();
+                    values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName);
+                    values.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        values.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                            android.os.Environment.DIRECTORY_PICTURES);
+                    }
+                    android.net.Uri uri = getContentResolver().insert(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                    if (uri != null) {
+                        try (java.io.OutputStream os = getContentResolver().openOutputStream(uri)) {
+                            os.write(bytes);
+                        }
+                        webView.post(() -> webView.evaluateJavascript(
+                            "if(typeof toast==='function')toast('✅ Фото сохранено в галерею')", null));
+                    }
+                } catch (Exception e) {
+                    log.e(TAG, "saveImageToGallery error: " + e.getMessage());
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof toast==='function')toast('❌ Не удалось сохранить фото')", null));
+                }
+            });
+        }
+
     }
 }
