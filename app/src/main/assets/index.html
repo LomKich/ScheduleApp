@@ -12,10 +12,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Nunito:wght@300;400;600;700;800&family=Rubik:wght@300;400;500;600;700;800&family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@300;400;500;600;700;800&family=Unbounded:wght@300;400;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&family=Comfortaa:wght@300;400;600;700&family=Jura:wght@300;400;500;600;700&family=Raleway:wght@300;400;500;600;700;800&family=Oswald:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700;800&family=Advent+Pro:wght@300;400;500;600;700;800&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Caveat:wght@400;500;600;700&family=Tektur:wght@400;500;600;700;800&family=Exo+2:wght@300;400;500;600;700;800&family=Fira+Code:wght@300;400;500;600;700&family=Prosto+One&family=Neucha&family=Lobster&family=Russo+One&family=Ubuntu:wght@300;400;500;700&family=PT+Sans:wght@400;700&family=PT+Serif:wght@400;700&family=Lora:wght@400;500;600;700&family=Merriweather:wght@300;400;700&family=Mulish:wght@300;400;500;600;700;800&family=Golos+Text:wght@400;500;600;700&family=Philosopher:ital,wght@0,400;0,700&family=Cormorant:wght@300;400;500;600;700&family=Podkova:wght@400;500;600;700;800&family=Forum&display=swap&subset=cyrillic" rel="stylesheet">
 <!-- Twemoji JS: replaces emoji text nodes with Apple-style <img> tags -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/twemoji.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<!-- MEGA.nz SDK — UMD build, грузится как обычный скрипт (без dynamic import) -->
-<script src="https://unpkg.com/megajs@0.16.2/browser/mega.js"
-        onload="window._megaReady=true"
-        onerror="window._megaReady=false;console.error('megajs UMD load failed')"></script>
 <style>
 :root{
   --bg:#0d0d0d;--surface:#161616;--surface2:#1f1f1f;--surface3:#2a2a2a;
@@ -2349,7 +2345,7 @@ html.notch-off #s-login {
   <div class="body">
     <div class="home-hero">
       <div class="hero-card">
-        <div class="hero-title" id="hero-title-text" onclick="secretVersionTap()" ontouchstart="secretVersionTap()" style="cursor:default;user-select:none;-webkit-user-select:none">колледж<br>расписание</div>
+        <div class="hero-title" id="hero-title-text" onclick="secretVersionTap()" ontouchstart="secretVersionTap()" style="cursor:default;user-select:none;-webkit-user-select:none">Расписание<br>Студентам</div>
       </div>
     </div>
 
@@ -2358,22 +2354,22 @@ html.notch-off #s-login {
 
     <div class="mode-switch-wrap">
       <div class="mode-toggle-pill student" id="mode-toggle-pill">
-        <button class="mode-pill-btn active" id="mode-btn-student" onclick="setMode('student')">📚 Ученики</button>
-        <button class="mode-pill-btn" id="mode-btn-teacher" onclick="setMode('teacher')">👩‍🏫 Учителя</button>
+        <button class="mode-pill-btn active" id="mode-btn-student" onclick="setMode('student')">Студенты</button>
+        <button class="mode-pill-btn" id="mode-btn-teacher" onclick="setMode('teacher')">Педагоги</button>
       </div>
     </div>
     <div id="last-group-wrap" class="hidden">
-      <div class="section-label">Быстрый запуск</div>
+      <div class="section-label" id="last-group-label">Продолжить</div>
       <button class="last-group-btn" id="last-group-btn" onclick="jumpToLastGroup()"></button>
       <div style="height:14px"></div>
     </div>
     <div class="status" id="home-status"></div>
     <div class="progress"><div class="progress-bar" id="home-bar"></div></div>
     <div id="file-section" class="hidden">
-      <div class="section-label">Файл расписания</div>
+      <div class="section-label" id="file-section-label">Файлы</div>
       <div class="list" id="file-list"></div>
       <div style="height:14px"></div>
-      <button class="btn btn-accent" id="go-to-groups-btn" onclick="goToGroups()">Выбрать группу →</button>
+      <button class="btn btn-accent" id="go-to-groups-btn" onclick="goToGroups()">К группам →</button>
     </div>
     <div id="no-url-hint" class="hidden" style="text-align:center;padding:48px 20px">
       <div style="font-size:38px;margin-bottom:12px">⚙️</div>
@@ -2974,6 +2970,14 @@ html.notch-off #s-login {
         style="flex:1;background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:15px;resize:none;max-height:120px;line-height:1.4;padding:0"
         oninput="mcAutoResize(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();messengerSend()}"></textarea>
     </div>
+    <button id="mc-voice-btn"
+      style="width:38px;height:38px;border-radius:50%;background:var(--surface2);border:none;color:var(--muted);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s,color .15s;margin-bottom:2px;user-select:none;-webkit-user-select:none;touch-action:none"
+      onmousedown="mcVoiceTouchStart(event)"
+      onmouseup="mcVoiceTouchEnd(event)"
+      onmouseleave="mcVoiceTouchEnd(event)"
+      ontouchstart="mcVoiceTouchStart(event)"
+      ontouchmove="mcVoiceTouchMove(event)"
+      ontouchend="mcVoiceTouchEnd(event)">🎤</button>
     <button id="mc-send-btn"
       style="width:42px;height:42px;border-radius:50%;background:var(--accent);border:none;color:var(--btn-text,#fff);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s;margin-bottom:2px"
       onmousedown="event.preventDefault();messengerSend()"
