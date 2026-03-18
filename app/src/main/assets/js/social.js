@@ -1923,7 +1923,9 @@ async function profileConnect(p) {
     // Синхронизируем друзей и группы с сервера
     syncFriendsFromServer(p.username).catch(()=>{});
     syncGroupsFromServer(p.username).catch(()=>{});
+    sbStartGroupPolling(p.username);
     // Подтягиваем список чатов и последние сообщения
+    syncDeletedChatsFromServer(p.username).catch(()=>{});
     syncChatsFromServer(p.username).catch(()=>{});
   } catch(e) {
     if (sessionId === _connectSessionId) {
@@ -2440,6 +2442,23 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       if (extraParsed?.replyTo)  inReplyTo = extraParsed.replyTo;
       if (extraParsed?.image)    inImage   = extraParsed.image;
 
+      // Обрабатываем group_invite — добавляем группу локально
+      if (extraParsed?.type === 'group_invite' && extraParsed?.group) {
+        const inviteGroup = extraParsed.group;
+        const groups = groupsLoad();
+        if (!groups.find(g => g.id === inviteGroup.id)) {
+          groups.push(inviteGroup);
+          groupsSave(groups);
+          // Запускаем polling этой группы
+          sbPollGroupChat(myUsername, inviteGroup);
+          if (window.Android && typeof Android.log === 'function') {
+            Android.log('[GROUP] Получен инвайт в группу «' + inviteGroup.name + '»');
+          }
+        }
+        _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
+        return; // не показываем как обычное сообщение
+      }
+
       // Обрабатываем reaction_update — служебное сообщение синхронизации реакций
       if (extraParsed?.type === 'reaction' && extraParsed?.msgTs && extraParsed?.reactions !== undefined) {
         const targetTs = extraParsed.msgTs;
@@ -2769,57 +2788,73 @@ function profileRenderOnline() {
   const list = document.getElementById('online-list');
   const hdr  = document.getElementById('online-count-hdr');
   if (!list) return;
-  const p = profileLoad();
-  const raw = (document.getElementById('online-search')?.value || '').trim();
+  const p    = profileLoad();
+  const raw  = (document.getElementById('online-search')?.value || '').trim();
+  const friends   = friendsLoad();
+  const isAtSearch = raw.startsWith('@');
+  const searchVal  = isAtSearch ? raw.slice(1).toLowerCase() : raw.toLowerCase();
 
-  if (hdr) hdr.textContent = (_profileOnlinePeers.length + 1) + ' онлайн';
+  // Обновляем счётчик в заголовке
+  if (hdr) {
+    if (!raw) {
+      const onlineFriends = friends.filter(u => _profileOnlinePeers.some(x => x.username === u));
+      const total = friends.length;
+      hdr.textContent = total
+        ? total + ' ' + (total===1?'друг':total<5?'друга':'друзей') + (onlineFriends.length ? ' · ' + onlineFriends.length + ' онлайн' : '')
+        : 'Нет друзей';
+    } else {
+      hdr.textContent = isAtSearch ? 'Поиск пользователей' : 'Поиск по друзьям';
+    }
+  }
 
-  // ── Логика поиска ────────────────────────────────────────────────
-  // Нет запроса → показываем только онлайн
-  // @ник       → поиск по username (только не-друзья)
-  // текст      → поиск по имени (только друзья)
-  const isAtSearch   = raw.startsWith('@');
-  const searchVal    = isAtSearch ? raw.slice(1).toLowerCase() : raw.toLowerCase();
-  const friends      = friendsLoad();
-
-  const me = p ? [{ ...profilePublicData(p), _isMe: true, _online: true }] : [];
   let peers = [];
 
   if (!raw) {
-    // Без поиска — только онлайн
-    peers = [...me, ..._profileOnlinePeers];
+    // Без поиска: показываем ВСЕХ друзей (онлайн выше оффлайн)
+    const friendUsers = friends.map(username => {
+      const known = _allKnownUsers.find(x => x.username === username)
+                  || _profileOnlinePeers.find(x => x.username === username);
+      if (known) return known;
+      // Друг есть в списке, но данных о нём нет — возвращаем заглушку
+      return { username, name: username, avatar: '😊', color: 'var(--surface3)', _online: false };
+    });
+    // Сортируем: онлайн сначала
+    friendUsers.sort((a, b) => {
+      const ao = _profileOnlinePeers.some(x => x.username === a.username) ? 1 : 0;
+      const bo = _profileOnlinePeers.some(x => x.username === b.username) ? 1 : 0;
+      return bo - ao;
+    });
+    peers = friendUsers;
   } else if (isAtSearch) {
-    // @поиск — по username среди всех пользователей (включая друзей)
-    const candidates = _allKnownUsers.filter(u =>
+    // @поиск — по username среди всех (не только друзей)
+    peers = _allKnownUsers.filter(u =>
       u.username !== p?.username &&
       u.username?.toLowerCase().includes(searchVal)
     );
-    peers = [...candidates];
   } else {
-    // Обычный поиск — только по имени среди друзей
-    const candidates = _allKnownUsers.filter(u =>
+    // Обычный поиск — по имени только среди друзей
+    peers = _allKnownUsers.filter(u =>
       friends.includes(u.username) &&
-      u.name?.toLowerCase().includes(searchVal)
+      (u.name?.toLowerCase().includes(searchVal) || u.username?.toLowerCase().includes(searchVal))
     );
-    peers = [...candidates];
   }
 
-  // Подсказка в заголовке
   const hintEl = document.getElementById('online-search-hint');
   if (hintEl) {
-    if (!raw)           hintEl.textContent = '';
-    else if (isAtSearch) hintEl.textContent = '🔍 Поиск по @юзернейму среди всех';
-    else                 hintEl.textContent = '👥 Поиск по имени среди друзей';
+    if (!raw)            hintEl.textContent = '';
+    else if (isAtSearch) hintEl.textContent = '🔍 Поиск по @юзернейму среди всех пользователей';
+    else                 hintEl.textContent = '👥 Поиск по имени/нику среди друзей';
   }
 
   if (peers.length === 0) {
-    let emptyText = 'Никого нет онлайн';
-    if (raw && isAtSearch)  emptyText = 'Ищем @' + searchVal + '...';
-    if (raw && !isAtSearch) emptyText = 'Друзей с именем «' + raw + '» не найдено';
-    list.innerHTML = `<div style="color:var(--muted);text-align:center;padding:30px" id="online-empty-msg">${emptyText}</div>`;
+    let emptyText = !raw
+      ? '👥 Нет друзей. Найди людей через @поиск и добавь в друзья!'
+      : isAtSearch ? 'Ищем @' + searchVal + '...'
+                   : 'Друзей с именем «' + raw + '» не найдено';
+    list.innerHTML = `<div style="color:var(--muted);text-align:center;padding:30px;font-size:13px;line-height:1.6" id="online-empty-msg">${emptyText}</div>`;
   }
 
-  // Supabase-поиск: только при @поиске
+  // Supabase-поиск при @поиске или когда друг неизвестен
   if (isAtSearch && searchVal && sbReady()) {
     clearTimeout(_onlineSearchTimer);
     _onlineSearchTimer = setTimeout(async () => {
@@ -2852,6 +2887,28 @@ function profileRenderOnline() {
         }
       }
     }, 400);
+  }
+
+  // При пустом списке, но есть друзья без данных — подгружаем с сервера
+  if (!raw && friends.length && sbReady()) {
+    const unknownFriends = friends.filter(u => !_allKnownUsers.some(x => x.username === u));
+    if (unknownFriends.length) {
+      const unames = unknownFriends.slice(0,20).map(u => '"'+u+'"').join(',');
+      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,color,status,vip,badge&username=in.(${unames})&limit=20`)
+        .then(rows => {
+          if (!Array.isArray(rows)) return;
+          let added = false;
+          rows.forEach(u => {
+            if (!_allKnownUsers.some(x => x.username === u.username)) {
+              _allKnownUsers.push({ username: u.username, name: u.name, avatar: u.avatar,
+                avatarType: u.avatar_type, avatarData: u.avatar_data, color: u.color,
+                status: u.status, vip: u.vip, badge: u.badge, _online: false });
+              added = true;
+            }
+          });
+          if (added) profileRenderOnline();
+        }).catch(()=>{});
+    }
   }
 
   if (peers.length === 0) return;
@@ -3057,37 +3114,56 @@ function _fmtRemain(ms) {
 
 async function groupCreate(name, members) {
   const groups = groupsLoad();
-  const id = 'grp_' + Date.now();
-  const p = profileLoad();
+  const id  = 'grp_' + Date.now();
+  const p   = profileLoad();
+  const allMembers = [p.username, ...members.filter(u => u !== p.username)];
   const group = {
-    id, name,
-    avatar: '👥',
-    members: [p.username, ...members.filter(u => u !== p.username)],
+    id, name, avatar: '👥',
+    members: allMembers,
     createdBy: p.username,
     ts: Date.now()
   };
   groups.push(group);
   groupsSave(groups);
   toast('👥 Группа «' + name + '» создана!');
-  // Сохраняем все группы пользователя на сервер
-  if (sbReady()) {
-    _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
-      { groups: JSON.stringify(groups) },
-      { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
-    // Уведомляем остальных участников — они тоже сохраняют группу у себя
-    for (const member of group.members.filter(u => u !== p.username)) {
-      try {
-        const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(member)}&limit=1`);
-        const existingRaw = rows?.[0]?.groups;
-        const existing = existingRaw ? JSON.parse(existingRaw) : [];
-        if (!existing.find(g => g.id === group.id)) {
-          existing.push(group);
-          _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(member)}`,
-            { groups: JSON.stringify(existing) },
-            { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
-        }
-      } catch(e) {}
-    }
+
+  // Запускаем polling входящих сообщений группы
+  sbPollGroupChat(p.username, group);
+
+  if (!sbReady()) return group;
+
+  const groupJson = JSON.stringify(group);
+
+  // Сохраняем себе
+  _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+    { groups: JSON.stringify(groups) },
+    { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
+
+  // Уведомляем каждого участника двумя способами:
+  // 1) Патчим users.groups — они получат при следующем syncGroupsFromServer
+  // 2) Шлём им системное сообщение в inbox — они получат НЕМЕДЛЕННО через inbox-поллинг
+  for (const member of allMembers.filter(u => u !== p.username)) {
+    try {
+      // Способ 1: патчим users.groups
+      const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(member)}&limit=1`);
+      const existingRaw = rows?.[0]?.groups;
+      const existing = existingRaw ? JSON.parse(existingRaw) : [];
+      if (!existing.find(g => g.id === group.id)) {
+        existing.push(group);
+        _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(member)}`,
+          { groups: JSON.stringify(existing) },
+          { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
+      }
+      // Способ 2: системное inbox-сообщение с данными группы
+      await sbInsert('messages', {
+        chat_key: sbChatKey(p.username, member),
+        from_user: p.username,
+        to_user: member,
+        text: '👥 Добавил(а) тебя в группу «' + name + '»',
+        ts: Date.now(),
+        extra: JSON.stringify({ type: 'group_invite', group: group })
+      });
+    } catch(e) {}
   }
   return group;
 }
@@ -3116,6 +3192,111 @@ function groupGet(id) {
   return groupsLoad().find(g => g.id === id) || null;
 }
 
+// ── Поллинг входящих сообщений группы ────────────────────────────
+// Каждый участник поллит chat_key = 'group_<groupId>' с to_user = свой username
+function sbPollGroupChat(myUsername, group) {
+  if (!group || !group.id) return;
+  const chatKey = groupChatKey(group.id);
+  const streamKey = 'GRP:' + group.id + ':' + myUsername;
+  if (_fbMsgStreams[streamKey]) return; // уже поллим
+
+  const doCheck = async () => {
+    if (!sbReady()) return;
+    const lastTs = _fbLastMsgTs[streamKey] || 0;
+    const sinceTs = lastTs > 0 ? lastTs : (Date.now() - 30 * 24 * 60 * 60 * 1000);
+    // Тянем все сообщения этой группы адресованные МНЕ
+    const data = await sbGet('messages',
+      `select=*&chat_key=eq.${encodeURIComponent(chatKey)}&to_user=eq.${encodeURIComponent(myUsername)}&ts=gt.${sinceTs}&order=ts.asc&limit=100`
+    ).catch(() => null);
+    if (!Array.isArray(data) || !data.length) return;
+
+    const msgs = msgLoad();
+    if (!msgs[group.id]) msgs[group.id] = [];
+    let hasNew = false;
+    data.forEach(row => {
+      _fbLastMsgTs[streamKey] = Math.max(_fbLastMsgTs[streamKey]||0, row.ts);
+      const exists = msgs[group.id].some(m => m.ts === row.ts && m.from === row.from_user);
+      if (!exists) {
+        msgs[group.id].push({
+          from: row.from_user, to: group.id,
+          text: row.text || '', ts: row.ts,
+          delivered: true, read: _msgCurrentChat === group.id
+        });
+        hasNew = true;
+      }
+    });
+    if (hasNew) {
+      msgs[group.id].sort((a,b) => a.ts - b.ts);
+      msgSave(msgs);
+      const chats = chatsLoad();
+      if (!chats.includes(group.id)) { chats.unshift(group.id); chatsSave(chats); }
+      if (_msgCurrentChat === group.id) messengerRenderMessages();
+      else messengerUpdateBadge();
+    }
+  };
+
+  doCheck();
+  _fbMsgStreams[streamKey] = setInterval(doCheck, 2000);
+}
+
+// Запускаем polling для всех групп пользователя при подключении
+function sbStartGroupPolling(myUsername) {
+  const groups = groupsLoad();
+  groups.forEach(g => {
+    if (g.isPublic) {
+      // Публичная группа — все видят все сообщения
+      sbPollPublicGroup(myUsername, g);
+    } else {
+      sbPollGroupChat(myUsername, g);
+    }
+  });
+}
+
+// ── Поллинг публичной группы (баги/идеи) — показываем всем ───────
+function sbPollPublicGroup(myUsername, group) {
+  const chatKey = groupChatKey(group.id);
+  const streamKey = 'PUBGRP:' + group.id;
+  if (_fbMsgStreams[streamKey]) return;
+
+  const doCheck = async () => {
+    if (!sbReady()) return;
+    const lastTs = _fbLastMsgTs[streamKey] || 0;
+    const sinceTs = lastTs > 0 ? lastTs : (Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // Публичная — тянем все сообщения с этим chat_key (без фильтра to_user)
+    const data = await sbGet('messages',
+      `select=*&chat_key=eq.${encodeURIComponent(chatKey)}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
+    ).catch(() => null);
+    if (!Array.isArray(data) || !data.length) return;
+
+    const msgs = msgLoad();
+    if (!msgs[group.id]) msgs[group.id] = [];
+    let hasNew = false;
+    data.forEach(row => {
+      _fbLastMsgTs[streamKey] = Math.max(_fbLastMsgTs[streamKey]||0, row.ts);
+      const exists = msgs[group.id].some(m => m.ts === row.ts && m.from === row.from_user);
+      if (!exists) {
+        msgs[group.id].push({
+          from: row.from_user, to: group.id,
+          text: row.text || '', ts: row.ts,
+          delivered: true, read: _msgCurrentChat === group.id
+        });
+        hasNew = true;
+      }
+    });
+    if (hasNew) {
+      msgs[group.id].sort((a,b) => a.ts - b.ts);
+      msgSave(msgs);
+      const chats = chatsLoad();
+      if (!chats.includes(group.id)) { chats.unshift(group.id); chatsSave(chats); }
+      if (_msgCurrentChat === group.id) messengerRenderMessages();
+      else messengerUpdateBadge();
+    }
+  };
+
+  doCheck();
+  _fbMsgStreams[streamKey] = setInterval(doCheck, 3000);
+}
+
 // Подтягивает список чатов (собеседников) из Supabase при входе
 // Чтобы чаты были видны сразу после очистки кэша
 async function syncChatsFromServer(username) {
@@ -3131,11 +3312,12 @@ async function syncChatsFromServer(username) {
     if (Array.isArray(recv)) recv.forEach(r => { if (r.from_user !== username) partners.add(r.from_user); });
     if (!partners.size) return;
     // Объединяем с локальными
-    const local  = chatsLoad();
-    const merged = [...new Set([...local, ...partners])];
+    const local   = chatsLoad();
+    const deleted = deletedChatsLoad(); // не восстанавливаем удалённые
+    const merged  = [...new Set([...local, ...partners])].filter(u => !deleted.includes(u));
     chatsSave(merged);
     // Запускаем polling для каждого нового собеседника
-    partners.forEach(u => { if (!local.includes(u)) sbPollChat(username, u); });
+    partners.forEach(u => { if (!local.includes(u) && !deleted.includes(u)) sbPollChat(username, u); });
   } catch(e) {}
 }
 
@@ -3154,20 +3336,41 @@ async function groupSendMessage(groupId, text) {
   const msg = { from: p.username, to: groupId, text, ts, delivered: false, read: false };
   msgs[groupId].push(msg);
   msgSave(msgs);
-  // Отправляем каждому участнику через Supabase
-  for (const member of group.members) {
-    if (member === p.username) continue;
+  if (_msgCurrentChat === groupId) messengerRenderMessages(true);
+
+  if (group.isPublic) {
+    // Публичная группа: один broadcast-запрос без to_user
     try {
       await sbInsert('messages', {
-        chat_key: chatKey, from_user: p.username, to_user: member, text, ts
+        chat_key: chatKey, from_user: p.username,
+        to_user: '__broadcast__', text, ts
       });
     } catch(e) {}
+  } else {
+    // Обычная группа — шлём каждому участнику
+    for (const member of group.members) {
+      if (member === p.username) continue;
+      try {
+        await sbInsert('messages', {
+          chat_key: chatKey, from_user: p.username, to_user: member, text, ts
+        });
+      } catch(e) {}
+    }
   }
 }
 
 function showCreateGroupDialog() {
-  const online = (_profileOnlinePeers || []).filter(u => u.username !== profileLoad()?.username);
-  if (online.length === 0) { toast('Нет онлайн пользователей для группы'); return; }
+  const p = profileLoad();
+  // Показываем всех друзей + онлайн пользователей (не только онлайн)
+  const friends = friendsLoad();
+  const candidates = [
+    ..._allKnownUsers.filter(u => friends.includes(u.username) && u.username !== p?.username),
+    ..._profileOnlinePeers.filter(u => !friends.includes(u.username) && u.username !== p?.username)
+  ];
+  // Дедупликация
+  const seen = new Set();
+  const users = candidates.filter(u => { if (seen.has(u.username)) return false; seen.add(u.username); return true; });
+
   const sheet = document.createElement('div');
   sheet.id = 'create-group-sheet';
   sheet.style.cssText = 'position:fixed;inset:0;z-index:9900;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.6)';
@@ -3176,18 +3379,25 @@ function showCreateGroupDialog() {
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
       <div style="font-size:17px;font-weight:700;margin-bottom:12px">👥 Создать группу</div>
       <input id="grp-name-inp" class="inp" placeholder="Название группы" style="margin-bottom:12px">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Участники:</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Участники (друзья и онлайн):</div>
       <div id="grp-members-list">
-        ${online.map(u => `
+        ${users.length === 0
+          ? '<div style="color:var(--muted);padding:16px;text-align:center">Нет доступных пользователей</div>'
+          : users.map(u => {
+            const isOnline = _profileOnlinePeers.some(x => x.username === u.username);
+            return `
           <label style="display:flex;align-items:center;gap:12px;padding:10px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;border-bottom:1px solid rgba(255,255,255,.05)">
             <div style="width:28px;height:28px;border-radius:8px;border:2px solid var(--surface3);background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0" class="grp-chk-box" data-val="${u.username}">
             </div>
-            <div style="width:36px;height:36px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${u.avatar||'😊'}</div>
-            <div style="flex:1">
-              <div style="font-size:14px;font-weight:600">${u.name||u.username}</div>
-              <div style="font-size:12px;color:var(--muted)">@${u.username}</div>
+            <div style="position:relative;width:36px;height:36px;flex-shrink:0">
+              <div style="width:36px;height:36px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px">${u.avatar||'😊'}</div>
+              ${isOnline ? '<div style="position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;background:#4caf7d;border:2px solid var(--surface)"></div>' : ''}
             </div>
-          </label>`).join('')}
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:600">${escHtml(u.name||u.username)}</div>
+              <div style="font-size:12px;color:var(--muted)">@${escHtml(u.username)}${isOnline ? ' · <span style="color:#4caf7d">онлайн</span>' : ''}</div>
+            </div>
+          </label>`;}).join('')}
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn-surface" style="flex:1" onclick="document.getElementById('create-group-sheet').remove()">Отмена</button>
@@ -3213,6 +3423,7 @@ function showCreateGroupDialog() {
     if (!name) { toast('Введи название'); return; }
     const checked = [...sheet.querySelectorAll('.grp-chk-box.selected')].map(b => b.dataset.val);
     if (!checked.length) { toast('Выбери хотя бы одного участника'); return; }
+    if (!name) { toast('Введи название группы'); return; }
     groupCreate(name, checked);
     sheet.remove();
   });
@@ -3949,6 +4160,158 @@ const PINNED_CHATS_KEY = 'sapp_pinned_chats_v1';
 function pinnedChatsLoad() { try { return JSON.parse(localStorage.getItem(PINNED_CHATS_KEY)||'[]'); } catch(e) { return []; } }
 function pinnedChatsSave(d) { localStorage.setItem(PINNED_CHATS_KEY, JSON.stringify(d)); }
 
+// ── Удалённые чаты — синхронизируются с Supabase (колонка hidden_chats) ──────
+const DELETED_CHATS_KEY = 'sapp_deleted_chats_v1';
+
+// ══════════════════════════════════════════════════════════════════
+// 🎨 CHAT WALLPAPER — VIP-only per-chat background
+// ══════════════════════════════════════════════════════════════════
+const CHAT_WALLS_KEY = 'sapp_chat_walls_v2';
+function chatWallsLoad() { try { return JSON.parse(localStorage.getItem(CHAT_WALLS_KEY)||'{}'); } catch(e) { return {}; } }
+function chatWallsSave(d) { localStorage.setItem(CHAT_WALLS_KEY, JSON.stringify(d)); }
+
+function chatWallGet(chatId) {
+  if (!chatId) return null;
+  return chatWallsLoad()[chatId] || null;
+}
+
+/** Применяет фон к mc-messages */
+function chatWallApply(chatId) {
+  const body = document.getElementById('mc-messages');
+  if (!body) return;
+  const wall = chatWallGet(chatId);
+  if (wall) {
+    body.style.backgroundImage  = wall.startsWith('data:') || wall.startsWith('http') ? `url('${wall}')` : 'none';
+    body.style.backgroundSize   = 'cover';
+    body.style.backgroundPosition = 'center';
+    body.style.backgroundColor  = wall.startsWith('#') ? wall : '';
+    body.style.backgroundRepeat = 'no-repeat';
+    // Делаем пузыри немного прозрачными поверх фото-фона
+    if (wall.startsWith('data:') || wall.startsWith('http')) {
+      body.style.setProperty('--bubble-me-bg', 'rgba(var(--accent-rgb,54,132,255),.85)');
+      body.style.setProperty('--bubble-them-bg', 'rgba(30,30,30,.82)');
+    }
+  } else {
+    body.style.backgroundImage  = '';
+    body.style.backgroundColor  = '';
+    body.removeProperty && body.style.removeProperty('--bubble-me-bg');
+    body.removeProperty && body.style.removeProperty('--bubble-them-bg');
+  }
+}
+
+function chatWallSet(chatId, value) {
+  const walls = chatWallsLoad();
+  if (value) walls[chatId] = value;
+  else delete walls[chatId];
+  chatWallsSave(walls);
+  chatWallApply(chatId);
+}
+
+/** Открывает диалог выбора фона чата — только VIP */
+function showChatWallpaperPicker(chatId) {
+  if (!vipCheck()) {
+    toast('🔒 Фон чата — только для VIP');
+    return;
+  }
+  const current = chatWallGet(chatId);
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9500;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.55);animation:mcFadeIn .15s ease';
+
+  const PRESETS = [
+    { label:'Убрать', value:null, bg:'var(--surface3)', ico:'🚫' },
+    { label:'Тёмный', value:'#0d0d0d', bg:'#0d0d0d', ico:'' },
+    { label:'Морской', value:'linear-gradient(135deg,#0f2027,#203a43,#2c5364)', bg:'linear-gradient(135deg,#0f2027,#203a43,#2c5364)', ico:'' },
+    { label:'Закат',  value:'linear-gradient(135deg,#f7971e,#ffd200,#ff5f6d)', bg:'linear-gradient(135deg,#f7971e,#ffd200,#ff5f6d)', ico:'' },
+    { label:'Лес',   value:'linear-gradient(135deg,#134e5e,#71b280)', bg:'linear-gradient(135deg,#134e5e,#71b280)', ico:'' },
+    { label:'Ночь',  value:'linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)', bg:'linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)', ico:'' },
+    { label:'Роза',  value:'linear-gradient(135deg,#ff9a9e,#fad0c4)', bg:'linear-gradient(135deg,#ff9a9e,#fad0c4)', ico:'' },
+    { label:'Фото',  value:'__pick__', bg:'var(--surface2)', ico:'🖼' },
+  ];
+
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:16px 16px calc(20px + var(--safe-bot));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+        🎨 Фон чата <span style="font-size:10px;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px;font-weight:800">VIP</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+        ${PRESETS.map(p => `
+          <div onclick="chatWallPickPreset('${chatId}','${p.value||''}');this.closest('[style*=fixed]').remove()"
+            style="border-radius:14px;height:72px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:8px;cursor:pointer;border:${current===p.value?'2.5px solid var(--accent)':'2px solid transparent'};background:${p.bg};box-shadow:0 2px 8px rgba(0,0,0,.3);position:relative;overflow:hidden">
+            ${p.ico ? `<span style="font-size:22px">${p.ico}</span>` : ''}
+            <span style="font-size:10px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8);font-weight:600">${p.label}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  sheet.addEventListener('click', () => sheet.remove());
+  document.body.appendChild(sheet);
+}
+
+function chatWallPickPreset(chatId, value) {
+  if (value === '__pick__') {
+    // Открываем пикер изображений
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
+    document.body.appendChild(inp);
+    inp.onchange = async (e) => {
+      const file = e.target.files[0]; inp.remove();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => chatWallSet(chatId, ev.target.result);
+      reader.readAsDataURL(file);
+    };
+    inp.click();
+    return;
+  }
+  chatWallSet(chatId, value || null);
+  toast(value ? '🎨 Фон установлен' : '🎨 Фон убран');
+}
+
+
+function deletedChatsLoad() { try { return JSON.parse(localStorage.getItem(DELETED_CHATS_KEY)||'[]'); } catch(e) { return []; } }
+function deletedChatsSave(d) { localStorage.setItem(DELETED_CHATS_KEY, JSON.stringify(d)); }
+
+/** Помечает чат как удалённый локально + синхронизирует в Supabase */
+function _markChatDeleted(username) {
+  const deleted = deletedChatsLoad();
+  if (!deleted.includes(username)) {
+    deleted.push(username);
+    deletedChatsSave(deleted);
+  }
+  const p = profileLoad();
+  if (p && sbReady()) {
+    _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+      { hidden_chats: JSON.stringify(deleted) },
+      { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
+  }
+}
+
+/** Синхронизирует список удалённых чатов с сервера при входе */
+async function syncDeletedChatsFromServer(username) {
+  if (!sbReady() || !username) return;
+  try {
+    const rows = await sbGet('users', `select=hidden_chats&username=eq.${encodeURIComponent(username)}&limit=1`);
+    if (!Array.isArray(rows) || !rows.length) return;
+    const raw = rows[0].hidden_chats;
+    if (!raw) return;
+    const serverDeleted = JSON.parse(raw);
+    if (!Array.isArray(serverDeleted)) return;
+    const local = deletedChatsLoad();
+    const merged = [...new Set([...local, ...serverDeleted])];
+    deletedChatsSave(merged);
+    // Убираем удалённые из списка чатов и сообщений
+    const msgs = msgLoad();
+    let chats = chatsLoad();
+    let changed = false;
+    merged.forEach(u => {
+      if (chats.includes(u)) { chats = chats.filter(x => x !== u); changed = true; }
+      if (msgs[u]) { delete msgs[u]; changed = true; }
+    });
+    if (changed) { chatsSave(chats); msgSave(msgs); }
+  } catch(e) {}
+}
+
 function togglePinChat(username) {
   console.log('[Pin] togglePinChat:', username);
   const pins = pinnedChatsLoad();
@@ -4023,9 +4386,15 @@ function msgToggleSelect(username, e) {
   if (_msgSelected.has(username)) _msgSelected.delete(username);
   else _msgSelected.add(username);
   _msgUpdateSelectCount();
-  // Обновить визуал конкретной строки
+  // Обновить визуал конкретной строки с анимацией
   const row = document.querySelector(`[data-chat-user="${CSS.escape(username)}"]`);
-  if (row) row.classList.toggle('chat-selected', _msgSelected.has(username));
+  if (row) {
+    row.classList.toggle('chat-selected', _msgSelected.has(username));
+    row.classList.remove('chat-row-selecting');
+    void row.offsetWidth; // reflow
+    row.classList.add('chat-row-selecting');
+    row.addEventListener('animationend', () => row.classList.remove('chat-row-selecting'), { once: true });
+  }
 }
 
 function _msgUpdateSelectCount() {
@@ -4054,14 +4423,30 @@ function msgDeleteSelected() {
 
 function _doDeleteSelectedChats() {
   const msgs = msgLoad(), chats = chatsLoad();
-  _msgSelected.forEach(u => {
-    delete msgs[u];
-    const i = chats.indexOf(u);
-    if (i !== -1) chats.splice(i, 1);
-    const p = profileLoad();
-    if (p) { const k = sbChatKey(p.username, u); clearInterval(_fbMsgStreams[k]); delete _fbMsgStreams[k]; }
-  });
-  msgSave(msgs); chatsSave(chats); msgSelectCancel(); messengerUpdateBadge();
+  const toDelete = [..._msgSelected];
+
+  // Анимируем каждую строку перед удалением
+  const rows = toDelete.map(u => document.querySelector(`[data-chat-user="${CSS.escape(u)}"]`)).filter(Boolean);
+
+  const doDelete = () => {
+    toDelete.forEach(u => {
+      delete msgs[u];
+      const i = chats.indexOf(u);
+      if (i !== -1) chats.splice(i, 1);
+      const p = profileLoad();
+      if (p) { const k = sbChatKey(p.username, u); clearInterval(_fbMsgStreams[k]); delete _fbMsgStreams[k]; }
+      _markChatDeleted(u);
+    });
+    msgSave(msgs); chatsSave(chats); msgSelectCancel(); messengerUpdateBadge();
+    messengerRenderList();
+  };
+
+  if (rows.length > 0) {
+    rows.forEach(r => r.classList.add('chat-row-deleting'));
+    setTimeout(doDelete, 320); // ждём конца анимации
+  } else {
+    doDelete();
+  }
 }
 
 function msgPinSelected() {
@@ -4092,6 +4477,7 @@ function messengerDeleteCurrentChat() {
     clearInterval(_fbMsgStreams[key]);
     delete _fbMsgStreams[key];
   }
+  _markChatDeleted(username); // синхронизируем с Supabase
   showScreen('s-messenger', 'back');
   messengerRenderList();
   messengerUpdateBadge();
@@ -4229,7 +4615,7 @@ function messengerRenderList(filter) {
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
           <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(displayName)}${_localNick ? `<span style="font-size:10px;color:var(--muted);margin-left:4px">@${escHtml(username)}</span>` : ''}</div>
           <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-            ${_pinned && !_msgSelectMode ? '<span style="font-size:10px;opacity:.4;transform:rotate(45deg);display:inline-block">📌</span>' : ''}
+            ${_pinned && !_msgSelectMode ? `<button onclick="event.stopPropagation();togglePinChat('${username}')" style="background:none;border:none;padding:0 2px;cursor:pointer;font-size:12px;opacity:.55;line-height:1" title="Открепить">📌</button>` : ''}
             <span style="font-size:11px;color:${unread>0?'var(--accent)':'var(--muted)'}">${timeStr}</span>
           </div>
         </div>
@@ -4370,6 +4756,7 @@ function _doOpenChat(username) {
 
   showScreen('s-messenger-chat');
   messengerRenderMessages();
+  chatWallApply(username); // применяем фон чата
   // Рендерим закреплённое сообщение и иконку mute
   mcRenderPinBar();
   _mcUpdateMuteIcon();
@@ -4421,15 +4808,32 @@ function messengerRenderMessages(animateLast) {
     const showDate = dateStr !== lastDate;
     lastDate = dateStr;
     const showAvatar = !isMe && (lastFrom !== msg.from || showDate);
+    const showName  = !isMe && (lastFrom !== msg.from || showDate); // имя автора в группах
     lastFrom = msg.from;
     const isLast = idx === chatMsgs.length - 1;
     const nextIsOther = idx < chatMsgs.length - 1 && chatMsgs[idx+1].from !== msg.from;
     const showTail = isLast || nextIsOther;
 
-    const peer = _profileOnlinePeers.find(u => u.username === msg.from);
-    const avatarEl = showAvatar && !isMe
-      ? `<div style="width:28px;height:28px;border-radius:50%;background:${peer?.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;align-self:flex-end">${peer?.avatar||'😊'}</div>`
-      : `<div style="width:28px;flex-shrink:0"></div>`;
+    // Ищем данные отправителя: сначала онлайн, потом все известные, потом кэш групп
+    const peer = _profileOnlinePeers.find(u => u.username === msg.from)
+              || _allKnownUsers.find(u => u.username === msg.from);
+
+    // Определяем — это групповой чат?
+    const _isGroupChat = _msgCurrentChat && (
+      _msgCurrentChat === PUBLIC_GROUP_ID ||
+      _msgCurrentChat.startsWith('grp_')
+    );
+
+    // Аватар: фото > emoji > первая буква
+    const _peerColor = peer?.color || 'var(--surface3)';
+    const _hasPhoto = (peer?.avatarType === 'photo' || peer?.avatar_type === 'photo') && (peer?.avatarData || peer?.avatar_data);
+    const _peerAvatar = _hasPhoto
+      ? `<img src="${peer.avatarData||peer.avatar_data}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`
+      : `<span style="font-size:13px;line-height:1">${peer?.avatar || msg.from.charAt(0).toUpperCase()}</span>`;
+
+    const avatarEl = (_isGroupChat && showAvatar && !isMe)
+      ? `<div style="width:28px;height:28px;border-radius:50%;background:${_peerColor};display:flex;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-end;overflow:hidden;cursor:pointer" onclick="peerProfileOpen('${msg.from}')">${_peerAvatar}</div>`
+      : `<div style="width:${_isGroupChat ? '28' : '0'}px;flex-shrink:0"></div>`;
 
     // Telegram-style статус: ⏰ pending → ✓ sent → ✓✓ delivered
     const status = isMe ? (() => {
@@ -4650,6 +5054,11 @@ function messengerRenderMessages(animateLast) {
           ).join('')}
          </div>` : '';
 
+    // В группах показываем имя отправителя над первым пузырём серии
+    const senderNameHtml = (_isGroupChat && showName && !isMe)
+      ? `<div style="font-size:11px;font-weight:700;color:${_peerColor};margin-bottom:2px;padding-left:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">${escHtml(peer?.name||peer?.displayName||msg.from)}</div>`
+      : '';
+
     return `${dateSep}
     <div data-msg-bubble data-msg-me="${isMe?'1':'0'}" data-msg-idx="${idx}"
       style="display:flex;gap:6px;justify-content:${isMe?'flex-end':'flex-start'};align-items:flex-end;margin-bottom:${showTail?'4px':'1px'};position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none"
@@ -4662,10 +5071,13 @@ function messengerRenderMessages(animateLast) {
       ${isMe ? '' : avatarEl}
       <!-- Swipe reply-arrow hint (свайп вправо→влево, стрелка всегда слева от пузыря) -->
       <div class="mc-reply-hint" style="position:absolute;left:-24px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .12s;font-size:18px;pointer-events:none;z-index:1">↩</div>
-      <div class="mc-bubble-inner" style="max-width:78%;padding:${bubblePad};border-radius:${bubbleRadius};background:${bubbleBg};color:${isMe?'var(--btn-text,#fff)':'var(--text)'};font-size:14px;line-height:1.5;word-break:break-word;position:relative;transition:transform .18s cubic-bezier(.4,0,.2,1)">
+      <div style="display:flex;flex-direction:column;max-width:78%">
+        ${senderNameHtml}
+      <div class="mc-bubble-inner" style="padding:${bubblePad};border-radius:${bubbleRadius};background:${bubbleBg};color:${isMe?'var(--btn-text,#fff)':'var(--text)'};font-size:14px;line-height:1.5;word-break:break-word;position:relative;transition:transform .18s cubic-bezier(.4,0,.2,1)">
         ${msgContent}
         ${(isSticker || isImage) ? '' : `<div style="font-size:10px;opacity:.65;text-align:right;margin-top:2px;display:flex;align-items:center;justify-content:flex-end;gap:2px">${msgFormatTime(msg.ts)}${status}</div>`}
         ${reactionsHtml}
+      </div>
       </div>
     </div>`;
   }).join('');
@@ -5826,7 +6238,7 @@ function mcPickAudio() {
     if (!file) return;
     _pendingUploadBlob = file; _pendingUploadMime = file.type;
     if (file.size > 200 * 1024 * 1024) { toast('❌ Файл слишком большой (макс. 200 МБ)'); return; }
-    _mcShowUploadToast('voice', file.name || 'Аудио');
+    _mcInChatSendingShow('voice', file.name || 'Аудио');
     try {
       const b64 = await new Promise((res, rej) => {
         const r = new FileReader();
@@ -5838,7 +6250,7 @@ function mcPickAudio() {
       _mcSendMediaMsg({ url, fileName: file.name || 'Аудио', fileType: 'voice', fileSize: file.size,
         _blob: file, _mime: file.type });
       _mcHideUploadToast(true);
-    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка загрузки')); }
+    } catch(err) { _mcInChatSendingHide(); toast('❌ ' + (err.message || 'Ошибка загрузки')); }
   };
   inp.click();
 }
@@ -5895,7 +6307,7 @@ window.onNativeVoiceTick = function(sec) {
 };
 window.onNativeVoiceDone = function(url, duration, mimeType) {
   // Toast уже показан в _mcVoiceSend через _mcShowUploadToast
-  _mcHideUploadToast(true);
+  _mcInChatSendingHide();
   _mcSendMediaMsg({ url, fileName: 'voice_' + Date.now() + '.m4a',
     fileType: 'voice', duration: duration });
 };
@@ -6044,6 +6456,79 @@ const _uploadIcons = {
   image: '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>',
 };
 
+// ══════════════════════════════════════════════════════════════════
+// 📤 IN-CHAT SENDING BUBBLE — Telegram-стиль
+// Пузырь отправки показывается ВНУТРИ чата, а не в глобальном тосте.
+// Выглядит как реальное сообщение с иконкой типа + спиннер + прогресс.
+// ══════════════════════════════════════════════════════════════════
+
+const _IC_SEND_ID = 'mc-in-chat-sending';
+
+/**
+ * Показывает в нижней части чата пузырь «отправляется…»
+ * точно такого же вида как настоящий пузырь, но с анимацией загрузки.
+ * fileType: 'voice' | 'circle' | 'video' | 'file' | 'image'
+ * label: имя файла (необязательно)
+ */
+function _mcInChatSendingShow(fileType, label) {
+  _mcInChatSendingHide(); // убираем предыдущий
+  const body = document.getElementById('mc-messages');
+  if (!body) { _mcShowUploadToast(fileType, label); return; } // fallback если чат не открыт
+
+  const el = document.createElement('div');
+  el.id = _IC_SEND_ID;
+  el.className = 'mc-ics-wrap';
+
+  const icons = {
+    voice: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`,
+    circle:`<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="9" stroke="white" stroke-width="2" fill="none"/><circle cx="12" cy="9" r="3" fill="white"/><path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="white"/></svg>`,
+    video: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`,
+    file:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`,
+    image: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
+  };
+  const ico = icons[fileType] || icons.file;
+  const displayLabel = label || { voice:'Голосовое', circle:'Видеосообщение', video:'Видео', file:'Файл', image:'Фото' }[fileType] || 'Файл';
+
+  el.innerHTML = `
+    <div class="mc-ics-bubble">
+      <div class="mc-ics-icon">
+        <svg class="mc-ics-spinner" viewBox="0 0 44 44">
+          <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="3.5"/>
+          <circle cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="3.5"
+            stroke-dasharray="28 85" stroke-linecap="round"
+            style="transform-origin:center;animation:mc-ics-spin .9s linear infinite"/>
+        </svg>
+        <div class="mc-ics-ico-inner">${ico}</div>
+      </div>
+      <div class="mc-ics-info">
+        <div class="mc-ics-label">${escHtml(displayLabel.slice(0,30))}</div>
+        <div class="mc-ics-sub" id="mc-ics-sub">Отправляю…</div>
+      </div>
+      <div class="mc-ics-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>`;
+
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+}
+
+/** Обновляет подпись под именем файла (например «⬆ 42%») */
+function _mcInChatSendingUpdate(fileType, subText) {
+  const sub = document.getElementById('mc-ics-sub');
+  if (sub) sub.textContent = subText || 'Отправляю…';
+}
+
+/** Убирает in-chat bubble */
+function _mcInChatSendingHide() {
+  const el = document.getElementById(_IC_SEND_ID);
+  if (!el) return;
+  el.style.animation = 'mc-ics-out .18s ease forwards';
+  setTimeout(() => el.remove(), 200);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+
 let _uploadToastTimer = null;
 
 function _mcShowUploadToast(fileType, label) {
@@ -6115,6 +6600,7 @@ async function _catboxUpload(base64, fileName, mimeType, onProgress) {
       window.onUploadProgress = (id, pct) => {
         if (id !== callbackId) return;
         _mcUpdateUploadToastProgress(pct);
+        _mcInChatSendingUpdate(null, '⬆ ' + Math.round(pct) + '%');
         onProgress && onProgress(pct);
       };
       window.onUploadDone = (id, url) => {
@@ -6287,7 +6773,7 @@ function mcPickVideo() {
     if (!file) return;
     _pendingUploadBlob = file; _pendingUploadMime = file.type;
     if (file.size > 200 * 1024 * 1024) { toast('❌ Видео слишком большое (макс. 200 МБ)'); return; }
-    _mcShowUploadToast('video', file.name || 'Видео');
+    _mcInChatSendingShow('video', file.name || 'Видео');
     try {
       const [b64, thumbData] = await Promise.all([
         new Promise((res, rej) => {
@@ -6302,8 +6788,8 @@ function mcPickVideo() {
       const url = await _catboxUpload(b64, file.name || ('video_' + Date.now() + '.' + ext), file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: file.name || 'Видео', fileType: 'video',
         fileSize: file.size, thumbData, _blob: file, _mime: file.type });
-      _mcHideUploadToast(true);
-    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка загрузки видео')); }
+      _mcInChatSendingHide();
+    } catch(err) { _mcInChatSendingHide(); toast('❌ ' + (err.message || 'Ошибка загрузки видео')); }
   };
   inp.click();
 }
@@ -6319,7 +6805,7 @@ function mcPickFile() {
     if (!file) return;
     if (file.size > 200 * 1024 * 1024) { toast('❌ Файл слишком большой (макс. 200 МБ)'); return; }
     const _isAud2 = ['mp3','ogg','wav','flac','aac','m4a','opus','wma'].includes((file.name.split('.').pop()||'').toLowerCase());
-    _mcShowUploadToast(_isAud2 ? 'voice' : 'file', file.name || 'Файл');
+    _mcInChatSendingShow(_isAud2 ? 'voice' : 'file', file.name || 'Файл');
     try {
       const b64 = await new Promise((res, rej) => {
         const r = new FileReader();
@@ -6330,8 +6816,8 @@ function mcPickFile() {
       const url = await _catboxUpload(b64, file.name || ('file_' + Date.now()), file.type || 'application/octet-stream');
       _mcSendMediaMsg({ url, fileName: file.name || 'Файл', fileType: 'file',
         fileSize: file.size, _blob: file, _mime: file.type });
-      _mcHideUploadToast(true);
-    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка загрузки файла')); }
+      _mcInChatSendingHide();
+    } catch(err) { _mcInChatSendingHide(); toast('❌ ' + (err.message || 'Ошибка загрузки файла')); }
   };
   inp.click();
 }
@@ -6340,71 +6826,58 @@ function mcPickFile() {
 // ══════════════════════════════════════════════════════════════════
 // ⭕ ЗАПИСЬ КРУЖКА — нативный Camera2 Activity (Telegram-стиль)
 // Вызывает Android.startCircleRecord() → CircleRecordActivity
-// Коллбэки: onNativeCircleDone(b64, mime) / onNativeCircleCancelled() / onNativeCircleError(msg)
-// Fallback: выбор из галереи если Android API недоступен
+// ══════════════════════════════════════════════════════════════════
+// ⭕ КРУЖОК — нативный Camera2 + зажатие как у голосового
 // ══════════════════════════════════════════════════════════════════
 
-function mcStartCircleRecord() {
-  console.log('[Circle] mcStartCircleRecord called');
+// Активна ли сейчас запись кружка
+let _mcCircleActive = false;
 
-  // Нативный нативный Camera2 рекордер (приоритет)
+/** Запускает CircleRecordActivity при ЗАЖАТИИ кнопки в режиме кружка */
+function mcStartCircleRecord() {
+  if (_mcCircleActive) return;
   if (window.Android && typeof Android.startCircleRecord === 'function') {
-    console.log('[Circle] using native Camera2 recorder');
-    _mcCircleNativeWait();
+    _mcCircleActive = true;
+    _mcInChatSendingShow('circle', null);
     Android.startCircleRecord();
     return;
   }
-
-  // Fallback: показываем выбор галерея/камера
+  // Fallback — галерея/камера
   _mcCircleFallbackSheet();
 }
 
-// ── Нативный путь: ожидание результата от CircleRecordActivity ─────
+/**
+ * Java → JS: Java загрузила видео на CDN, передаёт готовый URL.
+ * Не передаёт base64 — он слишком большой для evaluateJavascript.
+ */
+window.onNativeCircleUploading = function() {
+  console.log('[Circle] uploading...');
+  _mcInChatSendingUpdate('circle', '⬆ Загружаю...');
+};
 
-let _mcCircleNativeActive = false;
-let _mcCircleNativeToast  = null;
-
-function _mcCircleNativeWait() {
-  _mcCircleNativeActive = true;
-  _mcShowUploadToast('video', '⭕ Открываю камеру...');
-}
-
-/** Вызывается из Java когда запись завершена и видео готово. */
-window.onNativeCircleDone = async function(b64, mime) {
-  console.log('[Circle] onNativeCircleDone, size=' + (b64 ? b64.length : 0));
-  _mcCircleNativeActive = false;
-  if (!b64 || b64.length === 0) {
-    _mcHideUploadToast(false);
-    toast('❌ Пустое видео');
-    return;
-  }
-
-  _mcShowUploadToast('video', '⭕ Видеосообщение');
-  try {
-    // Генерируем миниатюру из base64
-    const thumbData = await _mcVideoThumbFromB64(b64, mime || 'video/mp4').catch(() => null);
-    const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.mp4', mime || 'video/mp4');
-    _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle',
-      fileSize: Math.round(b64.length * 3 / 4), thumbData });
-    _mcHideUploadToast(true);
-  } catch(err) {
-    _mcHideUploadToast(false);
-    toast('❌ ' + (err.message || 'Ошибка загрузки'));
-  }
+window.onNativeCircleUploaded = function(url, fileSize) {
+  console.log('[Circle] uploaded url=' + url);
+  _mcCircleActive = false;
+  _mcInChatSendingHide();
+  _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle',
+    fileSize: fileSize || 0, thumbData: null });
 };
 
 window.onNativeCircleCancelled = function() {
-  console.log('[Circle] onNativeCircleCancelled');
-  _mcCircleNativeActive = false;
-  _mcHideUploadToast(false);
+  console.log('[Circle] cancelled');
+  _mcCircleActive = false;
+  _mcInChatSendingHide();
 };
 
 window.onNativeCircleError = function(msg) {
-  console.error('[Circle] onNativeCircleError:', msg);
-  _mcCircleNativeActive = false;
-  _mcHideUploadToast(false);
+  console.error('[Circle] error:', msg);
+  _mcCircleActive = false;
+  _mcInChatSendingHide();
   toast('❌ Ошибка камеры: ' + (msg || ''));
 };
+
+// onNativeCircleDone — legacy, на случай старых версий Java (не используется)
+window.onNativeCircleDone = function() {};
 
 /** Генерирует превью кружка из base64-видео. */
 async function _mcVideoThumbFromB64(b64, mime) {
@@ -6472,7 +6945,7 @@ function _mcPickCircleFile() {
     const file = e.target.files[0]; inp.remove();
     if (!file) return;
     if (file.size > 100 * 1024 * 1024) { toast('❌ Видео слишком большое (макс. 100 МБ)'); return; }
-    _mcShowUploadToast('video', '⭕ Видеосообщение');
+    _mcInChatSendingShow('circle', '⭕ Видеосообщение');
     try {
       const [b64, thumbData] = await Promise.all([
         new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }),
@@ -6481,8 +6954,8 @@ function _mcPickCircleFile() {
       const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
       const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.' + ext, file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: file.name, fileType: 'circle', fileSize: file.size, thumbData });
-      _mcHideUploadToast(true);
-    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка')); }
+      _mcInChatSendingHide();
+    } catch(err) { _mcInChatSendingHide(); toast('❌ ' + (err.message || 'Ошибка')); }
   };
   inp.click();
 }
@@ -6508,7 +6981,7 @@ function _mcPickCircleCameraActual() {
   inp.onchange = async (e) => {
     const file = e.target.files[0]; inp.remove();
     if (!file) return;
-    _mcShowUploadToast('video', '⭕ Видеосообщение');
+    _mcInChatSendingShow('circle', '⭕ Видеосообщение');
     try {
       const [b64, thumbData] = await Promise.all([
         new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }),
@@ -6516,8 +6989,8 @@ function _mcPickCircleCameraActual() {
       ]);
       const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.mp4', file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle', fileSize: file.size, thumbData });
-      _mcHideUploadToast(true);
-    } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка')); }
+      _mcInChatSendingHide();
+    } catch(err) { _mcInChatSendingHide(); toast('❌ ' + (err.message || 'Ошибка')); }
   };
   inp.click();
 }
@@ -6555,10 +7028,16 @@ function mcVoiceTouchStart(e) {
   _mcVoiceStartX = _vt.clientX || _vt.pageX || 0;
   _mcVoiceStartY = _vt.clientY || _vt.pageY || 0;
 
-  // Режим кружка — показываем UI выбора (без задержки)
+  // Режим кружка — ЗАЖАТИЕ запускает CircleRecordActivity напрямую
+  // Никаких промежуточных шитов, как голосовое сообщение
   if (_mcVoiceMode === 'circle') {
-    console.log('[Voice] circle mode tap');
-    mcStartCircleRecord();
+    console.log('[Voice] circle hold — starting native recorder');
+    // Короткий тап (< 280мс) → переключаемся обратно на голосовой
+    clearTimeout(_mcVoiceHoldTimer);
+    _mcVoiceHoldTimer = setTimeout(() => {
+      if (_mcVoiceCancelled) return;
+      mcStartCircleRecord();
+    }, 280);
     return;
   }
 
@@ -6578,6 +7057,7 @@ function _mcVoiceStartRecording() {
   if (window.Android && typeof window.Android.startVoiceRecording === 'function') {
     console.log('[Voice] starting native recorder');
     _mcVoiceNative  = true;
+    _mcInChatSendingShow('voice', 'Голосовое сообщение');
     _mcVoiceSeconds = 0;
     _mcWaveBuf.fill(0.06); _mcWaveSmooth.fill(0.06); _mcWaveHead = 0; _mcWaveTick = 0;
     window.Android.startVoiceRecording();
@@ -6888,6 +7368,47 @@ async function mcVoicePlay(url, id) {
   // Проверяем локальный кэш
   const _cachedVoice = await mcCacheGet(url).catch(() => null);
   if (_cachedVoice) { console.log('[VoicePlay] cache hit:', id); url = _cachedVoice; }
+
+  // Если URL внешний — пробуем загрузить через Java (обходит SSL-блокировки без VPN)
+  // catbox.moe и pixeldrain дают ERR_SSL_PROTOCOL_ERROR в WebView без VPN/прокси
+  const isExternal = url.startsWith('https://files.catbox.moe') ||
+                     url.startsWith('https://pixeldrain.com') ||
+                     url.startsWith('http://');
+  if (isExternal && !url.startsWith('blob:') && window.Android &&
+      typeof Android.nativeDownloadBase64 === 'function') {
+    try {
+      const btn = document.getElementById('vbtn_' + id);
+      if (btn) btn.style.opacity = '0.5';
+      const raw = await new Promise((res) => {
+        // nativeDownloadBase64 блокирующий — запускаем в setTimeout чтобы не фризить UI
+        setTimeout(() => res(Android.nativeDownloadBase64(url)), 0);
+      });
+      if (btn) btn.style.opacity = '';
+      const parsed = JSON.parse(raw);
+      if (parsed.ok && parsed.base64) {
+        // Определяем mime по расширению
+        const ext = url.split('.').pop().toLowerCase().split('?')[0];
+        const mimeMap = { m4a:'audio/mp4', mp3:'audio/mpeg', ogg:'audio/ogg',
+                          aac:'audio/aac', opus:'audio/ogg', wav:'audio/wav' };
+        const mime = mimeMap[ext] || 'audio/mp4';
+        const bin = atob(parsed.base64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const blob = new Blob([arr], { type: mime });
+        url = URL.createObjectURL(blob);
+        // Кэшируем для будущих воспроизведений
+        mcCacheSave(url.replace('blob:','__blob:'), blob, mime).catch(() => {});
+        console.log('[VoicePlay] Java download OK, blobUrl created, size=', blob.size);
+      } else {
+        console.warn('[VoicePlay] Java download failed:', parsed.error, '— пробуем WebView напрямую');
+      }
+    } catch(e) {
+      console.warn('[VoicePlay] Java download exception:', e, '— пробуем WebView напрямую');
+      const btn = document.getElementById('vbtn_' + id);
+      if (btn) btn.style.opacity = '';
+    }
+  }
+
   const time = document.getElementById('vtime_' + id);
   if (_mcAudios[id]) {
     const a = _mcAudios[id];

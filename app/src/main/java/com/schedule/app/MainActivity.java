@@ -745,6 +745,9 @@ public class MainActivity extends Activity {
                 String videoPath = data.getStringExtra(CircleRecordActivity.EXTRA_VIDEO_PATH);
                 if (videoPath != null && !videoPath.isEmpty()) {
                     log.i(TAG, "CircleRecord: got video path=" + videoPath);
+                    // Уведомляем JS что видео снято, идёт загрузка
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof onNativeCircleUploading==='function')onNativeCircleUploading()", null));
                     new Thread(() -> {
                         try {
                             java.io.File f = new java.io.File(videoPath);
@@ -753,19 +756,57 @@ public class MainActivity extends Activity {
                                     "if(typeof onNativeCircleError==='function')onNativeCircleError('File not found')", null));
                                 return;
                             }
+                            // Читаем файл
                             byte[] bytes = new byte[(int) f.length()];
                             java.io.FileInputStream fis = new java.io.FileInputStream(f);
-                            fis.read(bytes); fis.close();
-                            String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                            int totalRead = 0, n;
+                            while (totalRead < bytes.length &&
+                                   (n = fis.read(bytes, totalRead, bytes.length - totalRead)) != -1) {
+                                totalRead += n;
+                            }
+                            fis.close();
                             f.delete();
-                            log.i(TAG, "CircleRecord: encoded " + bytes.length + " bytes");
-                            final String fb64 = b64;
+                            log.i(TAG, "CircleRecord: uploading " + bytes.length + " bytes");
+
+                            // Загружаем напрямую на CDN (pixeldrain → catbox)
+                            // Не передаём base64 через JS-мост — слишком большой для evaluateJavascript
+                            String fileName = "circle_" + System.currentTimeMillis() + ".mp4";
+                            String result = null;
+                            try {
+                                result = _pixeldrainUploadBytes(bytes, fileName, "video/mp4", null);
+                            } catch (Exception pdEx) {
+                                log.w(TAG, "pixeldrain circle fallback: " + pdEx.getMessage());
+                            }
+                            if (result == null || !result.contains("\"ok\":true")) {
+                                try {
+                                    result = _catboxUploadBytes(bytes, fileName, "video/mp4", null);
+                                } catch (Exception cbEx) {
+                                    log.w(TAG, "catbox circle error: " + cbEx.getMessage());
+                                }
+                            }
+
+                            if (result != null && result.contains("\"ok\":true")) {
+                                try {
+                                    org.json.JSONObject jo = new org.json.JSONObject(result);
+                                    String url = jo.optString("url", "");
+                                    if (!url.isEmpty()) {
+                                        final String fileUrl = url;
+                                        final long fileSize = bytes.length;
+                                        log.i(TAG, "CircleRecord: CDN OK url=" + fileUrl);
+                                        runOnUiThread(() -> webView.evaluateJavascript(
+                                            "if(typeof onNativeCircleUploaded==='function')onNativeCircleUploaded('" +
+                                            fileUrl.replace("'", "\'") + "'," + fileSize + ")", null));
+                                        return;
+                                    }
+                                } catch (Exception je) { log.e(TAG, "parse url: " + je.getMessage()); }
+                            }
+                            log.e(TAG, "CircleRecord upload failed");
                             runOnUiThread(() -> webView.evaluateJavascript(
-                                "if(typeof onNativeCircleDone==='function')onNativeCircleDone('" + fb64 + "','video/mp4')", null));
+                                "if(typeof onNativeCircleError==='function')onNativeCircleError('Upload failed')", null));
                         } catch (Exception e) {
-                            log.e(TAG, "CircleRecord encode error: " + e.getMessage());
+                            log.e(TAG, "CircleRecord error: " + e.getMessage());
                             runOnUiThread(() -> webView.evaluateJavascript(
-                                "if(typeof onNativeCircleError==='function')onNativeCircleError('Encode error')", null));
+                                "if(typeof onNativeCircleError==='function')onNativeCircleError('Error')", null));
                         }
                     }).start();
                 }

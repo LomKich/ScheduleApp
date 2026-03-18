@@ -1155,6 +1155,31 @@ function tetDrawMsg(msg) {
 // ══════════════════════════════════════════════════════════════════
 
 // ── SCREAMER (15% шанс на проигрыш в любой игре) ─────────────────
+// ── Кэш: загружаем кастомное изображение скримера 1 раз ──────────
+let _screamerCustomImg = null;      // null = не проверяли, false = нет файла, string = data-url
+let _screamerImgChecked = false;
+
+async function _loadScreamerImage() {
+  if (_screamerImgChecked) return _screamerCustomImg;
+  _screamerImgChecked = true;
+  const exts = ['jpg','jpeg','png','gif','webp'];
+  for (const ext of exts) {
+    try {
+      const resp = await fetch('sounds/screamer.' + ext);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        _screamerCustomImg = URL.createObjectURL(blob);
+        console.log('[SCREAMER] Custom image loaded: screamer.' + ext);
+        return _screamerCustomImg;
+      }
+    } catch(e) {}
+  }
+  _screamerCustomImg = false;
+  return false;
+}
+// Предзагрузка при старте (без блокировки)
+setTimeout(_loadScreamerImage, 3000);
+
 function triggerScreamer() {
   if (Math.random() > 0.15) return;
   console.log('[SCREAMER] triggered!');
@@ -1168,7 +1193,11 @@ function triggerScreamer() {
     'animation:none;pointer-events:all;'
   ].join('');
 
-  // Страшное лицо SVG — встроенное, без внешних ресурсов
+  // Используем кастомное изображение если есть, иначе — встроенный SVG
+  if (_screamerCustomImg) {
+    overlay.innerHTML = `<img src="${_screamerCustomImg}" style="max-width:100%;max-height:100%;object-fit:contain;pointer-events:none">`;
+  } else {
+  // Встроенное SVG-лицо
   overlay.innerHTML = `<svg width="280" height="280" viewBox="0 0 280 280" xmlns="http://www.w3.org/2000/svg">
     <ellipse cx="140" cy="140" rx="120" ry="130" fill="#c9a87c"/>
     <ellipse cx="140" cy="160" rx="115" ry="125" fill="#d4b896"/>
@@ -1205,6 +1234,7 @@ function triggerScreamer() {
     <ellipse cx="22" cy="140" rx="22" ry="30" fill="#c9a87c"/>
     <ellipse cx="258" cy="140" rx="22" ry="30" fill="#c9a87c"/>
   </svg>`;
+  } // end if custom image
 
   document.body.appendChild(overlay);
 
@@ -1235,6 +1265,12 @@ function triggerScreamer() {
 }
 
 function _screamerPlaySound() {
+  // Если в папке sounds/ есть screamer.ogg — используем его
+  if (typeof SFX !== 'undefined' && !SFX.isMuted()) {
+    // Попробуем воспроизвести из папки (громче, для скримера)
+    try { SFX.play('screamer', 1.0); } catch(e) {}
+  }
+  // Продолжаем с процедурным звуком как дополнительный слой / fallback
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
 

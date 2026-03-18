@@ -224,17 +224,144 @@ const SFX = (() => {
     msgReceive() { tone(660, 'sine', 0.01, 0.02, 0.18, 0.04); },
   };
 
+
+  // ── Звуки из папки sounds/ — ОСНОВНОЙ источник для всех SFX ─────
+  // Все звуки хранятся в assets/sounds/*.ogg
+  // Пользователь может заменить любой файл своим.
+  const _extBuffers = {};
+
+  async function _loadExtSound(name, file) {
+    try {
+      const ctx = ac();
+      if (!ctx) return;
+      const resp = await fetch('sounds/' + file);
+      if (!resp.ok) return;
+      const ab = await resp.arrayBuffer();
+      const buf = await new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
+      _extBuffers[name] = buf;
+    } catch(e) {}
+  }
+
+  function _playExt(name, vol) {
+    const ctx = ac();
+    if (!ctx || muted || !_extBuffers[name]) return false;
+    const src = ctx.createBufferSource();
+    src.buffer = _extBuffers[name];
+    const g = ctx.createGain();
+    g.gain.value = vol !== undefined ? vol : 0.75;
+    src.connect(g); g.connect(ctx.destination);
+    src.start();
+    return true;
+  }
+
+  // ── Маппинг: имя звука → файл в папке sounds/ ──────────────────
+  // Группы: несколько имён SFX → один файл
+  const _soundFiles = {
+    // Мессенджер
+    msgSend:      'msg_send.ogg',
+    msgReceive:   'msg_receive.ogg',
+    // UI
+    btnClick:     'btn_click.ogg',
+    btnAccent:    'btn_click.ogg',
+    keyTap:       'btn_click.ogg',
+    // Навигация
+    navHome:      'nav_screen.ogg',
+    navBells:     'nav_screen.ogg',
+    navSettings:  'nav_screen.ogg',
+    screenPush:   'nav_screen.ogg',
+    screenBack:   'nav_screen.ogg',
+    // Статусы
+    toastShow:    'toast.ogg',
+    success:      'success.ogg',
+    error:        'error.ogg',
+    // Темы
+    themeSelect:  'theme_select.ogg',
+    // Игры — общее
+    eggOpen:      'game_start.ogg',
+    gameSelect:   'game_start.ogg',
+    // Конец игры
+    tetGameOver:  'game_over.ogg',
+    snakeDie:     'game_over.ogg',
+    pongLose:     'game_over.ogg',
+    bbGameOver:   'game_over.ogg',
+    brLive:       'game_over.ogg',
+    dinoCactus:   'game_over.ogg',
+    dinoJump:     'nav_screen.ogg',
+    // Змейка
+    snakeEat:     'snake_eat.ogg',
+    snakeTurn:    'btn_click.ogg',
+    // Тетрис
+    tetLine:      'tetris_line.ogg',
+    tetMove:      'btn_click.ogg',
+    tetRotate:    'btn_click.ogg',
+    tetDrop:      'btn_click.ogg',
+    brLevelUp:    'success.ogg',
+    // Пинг-понг
+    pongHit:      'pong_hit.ogg',
+    pongWall:     'pong_hit.ogg',
+    pongScore:    'success.ogg',
+    // Пузыри
+    bubPop:       'bubble_pop.ogg',
+    bubMiss:      'error.ogg',
+    bubCombo:     'success.ogg',
+    // Скример — только звук (изображение отдельно)
+    screamer:     'screamer.ogg',
+    // Прочее
+    dinoScore:    'btn_click.ogg',
+    bbPlace:      'btn_click.ogg',
+    bbLine:       'tetris_line.ogg',
+    brBrick:      'pong_hit.ogg',
+    brWall:       'pong_hit.ogg',
+    brPaddle:     'pong_hit.ogg',
+    tttPlace:     'btn_click.ogg',
+    tttWin:       'success.ogg',
+    tttLose:      'game_over.ogg',
+    tttDraw:      'toast.ogg',
+  };
+
+  let _soundsLoaded = false;
+  function _loadAllSounds() {
+    if (_soundsLoaded) return;
+    _soundsLoaded = true;
+    // Загружаем уникальные файлы
+    const uniqueFiles = [...new Set(Object.values(_soundFiles))];
+    // Строим обратный маппинг файл→имена
+    const fileToNames = {};
+    Object.entries(_soundFiles).forEach(([name, file]) => {
+      if (!fileToNames[file]) fileToNames[file] = [];
+      fileToNames[file].push(name);
+    });
+    uniqueFiles.forEach(file => {
+      _loadExtSound('__file__' + file, file).then(() => {
+        // Когда файл загружен — копируем буфер для всех имён которые его используют
+        if (_extBuffers['__file__' + file]) {
+          (fileToNames[file] || []).forEach(name => {
+            _extBuffers[name] = _extBuffers['__file__' + file];
+          });
+        }
+      }).catch(() => {});
+    });
+  }
+
   return {
-    play(name) { try { if (sounds[name]) sounds[name](); } catch(e){} },
+    play(name, vol) {
+      try {
+        // Внешний звук из папки sounds/ — приоритет
+        if (_extBuffers[name] && _playExt(name, vol)) return;
+        // Fallback: процедурный звук
+        if (sounds[name]) sounds[name]();
+      } catch(e){}
+    },
     toggle()   { muted = !muted; return muted; },
     isMuted()  { return muted; },
-    init()     { ac(); }
+    init()     { ac(); },
+    loadSounds() { _loadAllSounds(); }
   };
 })();
 
 // Разблокировать AudioContext при первом жесте
-document.addEventListener('click',      () => SFX.init(), {once:true});
-document.addEventListener('touchstart', () => SFX.init(), {once:true});
+document.addEventListener('click',      () => { SFX.init(); SFX.loadSounds(); }, {once:true});
+document.addEventListener('touchstart', () => { SFX.init(); SFX.loadSounds(); }, {once:true});
 
 // ── Глобальный btnClick на все кнопки без явного SFX ────────────
 document.addEventListener('pointerdown', e => {
@@ -700,6 +827,11 @@ function loadLocal(){
     S.customBg = stor.get('sched_bg') || '';
     S.url=d.url||DEFAULT_URL;
     S.dns=d.dns||'system';
+    // Кастомная тема — хранится отдельно чтобы не потерять при обновлении
+    try {
+      const ct = stor.get('sched_custom_theme');
+      S.customTheme = ct ? JSON.parse(ct) : null;
+    } catch(e) { S.customTheme = null; }
     S.customDns=d.customDns||'';
     S.dpi=d.dpi||'general';
     S.customProxy=d.customProxy||'';
@@ -726,6 +858,9 @@ function saveLocal(){
   try {
     if(S.customBg) stor.set('sched_bg', S.customBg);
     else stor.del('sched_bg');
+    // Кастомная тема — отдельный ключ, не сбрасывается при обновлении
+    if(S.customTheme) stor.set('sched_custom_theme', JSON.stringify(S.customTheme));
+    else stor.del('sched_custom_theme');
   } catch(e) {
     // Если квота превышена — уведомляем пользователя
     toast('⚠️ Не удалось сохранить фон: изображение слишком большое');
