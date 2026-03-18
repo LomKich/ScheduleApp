@@ -775,6 +775,9 @@ public class MainActivity extends Activity {
                     "if(typeof onNativeCircleCancelled==='function')onNativeCircleCancelled()", null));
             }
         }
+    }
+
+    private void startVpnService() {
         String dnsKey      = prefs.getString("dns_key", "system");
         String dohUrl      = prefs.getString("doh_url", "");
         String dpiStrategy = prefs.getString("dpi_strategy", "general");
