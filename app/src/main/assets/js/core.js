@@ -3779,7 +3779,7 @@ function cmdExec(raw){
           overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column';
           const bar = document.createElement('div');
           bar.style.cssText = 'background:#161823;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0';
-          bar.innerHTML = '<span style="font-size:18px">🎵</span><span style="color:#fff;font-size:16px;font-weight:700;flex:1">TikTok</span><button onclick="this.closest('div[style*=z-index]').remove()" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer">✕ Закрыть</button>';
+          bar.innerHTML = `<span style="font-size:18px">🎵</span><span style="color:#fff;font-size:16px;font-weight:700;flex:1">TikTok</span><button onclick="this.closest('[style*=z-index]').remove()" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer">✕ Закрыть</button>`;
           const frame = document.createElement('iframe');
           frame.src = 'https://www.tiktok.com';
           frame.style.cssText = 'flex:1;border:none;width:100%';
@@ -4070,51 +4070,6 @@ function renderTeacherSchedule(teacher, hdr, entries, filename){
 
 
 
-function loadNotes(){try{return JSON.parse(stor.get('pair_notes')||'{}');}catch(e){return{};}}
-function saveNote(key,text){const n=loadNotes();if(text.trim())n[key]=text.trim();else delete n[key];stor.set('pair_notes',JSON.stringify(n));}
-function openNote(pairRoman,groupOrTeacher){
-  closeNote(); // закрыть предыдущую если есть
-  const key=groupOrTeacher+'::'+pairRoman;
-  const notes=loadNotes();
-  const existing=notes[key]||'';
-  const overlay=document.createElement('div');
-  overlay.id='note-overlay';
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px';
-  // Закрытие по тапу на фон
-  overlay.addEventListener('click', e => { if(e.target===overlay) closeNote(); });
-  const sheet = document.createElement('div');
-  sheet.style.cssText='background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;border:1.5px solid var(--surface3)';
-  const title = document.createElement('div');
-  title.style.cssText='font-size:14px;font-weight:700;margin-bottom:12px;color:var(--accent)';
-  title.textContent='📝 Заметка — пара '+pairRoman;
-  const ta = document.createElement('textarea');
-  ta.id='note-ta';
-  ta.style.cssText='width:100%;height:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:10px;color:var(--text);font-family:inherit;font-size:13px;padding:10px;resize:none;outline:none;box-sizing:border-box';
-  ta.placeholder='Что-то важное к этой паре...';
-  ta.value=existing;
-  const btns = document.createElement('div');
-  btns.style.cssText='display:flex;gap:8px;margin-top:10px';
-  const saveBtn = document.createElement('button');
-  saveBtn.style.cssText='flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;cursor:pointer';
-  saveBtn.textContent='Сохранить';
-  saveBtn.onclick = () => { saveNote(key, ta.value); closeNote(); toast('💾 Заметка сохранена'); };
-  const closeBtn = document.createElement('button');
-  closeBtn.style.cssText='padding:12px 16px;background:var(--surface2);color:var(--muted);border:none;border-radius:10px;font-family:inherit;cursor:pointer;font-size:18px;font-weight:700';
-  closeBtn.textContent='✕';
-  closeBtn.onclick = closeNote;
-  btns.appendChild(saveBtn);
-  btns.appendChild(closeBtn);
-  sheet.appendChild(title);
-  sheet.appendChild(ta);
-  sheet.appendChild(btns);
-  overlay.appendChild(sheet);
-  document.body.appendChild(overlay);
-  _noteOverlay = overlay;
-  setTimeout(()=>ta.focus(),50);
-}
-function closeNote(){
-  if(_noteOverlay){ _noteOverlay.remove(); _noteOverlay=null; }
-}
 // Добавляем кнопку заметки к каждой паре в renderSchedule и renderTeacherSchedule
 
 // ══ СЧЁТЧИК ПОСЕЩЕНИЙ ══

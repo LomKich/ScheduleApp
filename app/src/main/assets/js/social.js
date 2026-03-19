@@ -10021,9 +10021,6 @@ function _renderNotchToggle(mode) {
   );
 })();
 
-// ┄┄ Stub для _mcUpdateMuteIcon (кнопка удалена из хедера) ┄┄┄┄┄┄┄┄┄┄┄┄┄
-function _mcUpdateMuteIcon() {}
-
 // ┄┄ Анимация кнопки ◆ в чате ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 (function patchShowMore() {
   const orig = window.messengerShowMore;
