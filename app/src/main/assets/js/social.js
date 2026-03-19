@@ -155,7 +155,7 @@ function updateNavProfileIcon(p) {
   const wrap = btn?.querySelector('.nav-icon-wrap');
   if (!wrap) return;
   if (p && p.avatarType === 'emoji' && p.avatar) {
-    wrap.innerHTML = `<span style="font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;margin-top:3px">${p.avatar}</span>`;
+    wrap.innerHTML = `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center">${_emojiImg(p.avatar,24)}</div>`;
   } else if (p && p.avatarType === 'photo' && p.avatarData) {
     wrap.innerHTML = `<img src="${p.avatarData}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`;
   } else {
@@ -655,7 +655,7 @@ function profileRenderScreen() {
 
   const avatarHtml = p.avatarType === 'photo' && p.avatarData
     ? `<img src="${p.avatarData}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-    : `<span style="font-size:42px;line-height:1">${p.avatar||'\u{1F60A}'}</span>`;
+    : `<div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center">${_emojiImg(p.avatar||'😊',46)}</div>`;
 
   const friendCount = friendsLoad().length;
   const friendWord = friendCount === 1 ? '\u0447\u0435\u043B\u043E\u0432\u0435\u043A' : friendCount < 5 ? '\u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430' : '\u0447\u0435\u043B\u043E\u0432\u0435\u043A';
@@ -669,7 +669,7 @@ function profileRenderScreen() {
           <div class="profile-avatar ${frameStyle.cls}" style="width:96px;height:96px;font-size:46px;border:3px solid ${p.color||'var(--accent)'};border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden;${frameStyle.style}">
             ${avatarHtml}
           </div>
-          ${vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))"><span class="vip-crown">\u{1F451}</span></div>` : ''}
+          ${vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))">${_emojiImg("👑",22)}</div>` : ''}
         </div>
       </div>
     </div>
@@ -679,14 +679,14 @@ function profileRenderScreen() {
     <div style="text-align:center;padding:0 16px 12px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(p.name)}</span>
-        ${vip ? '<span class="vip-badge-pill"><span class="vip-crown">\u{1F451}</span> VIP</span>' : ''}
+        ${vip ? '<span class="vip-badge-pill">${_emojiImg("👑",14)} VIP</span>' : ''}
       </div>
       <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(p.username)}</div>
       <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${statusObj.color}22;color:${statusObj.color}">
-        ${statusObj.emoji} ${statusObj.label}
+        ${_emojiImg(statusObj.emoji,14)} ${statusObj.label}
       </div>
       ${p.bio ? `<div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5">${escHtml(p.bio)}</div>` : ''}
-      ${badgeObj ? `<div style="display:inline-block;margin-top:8px;font-size:12px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
+      ${badgeObj ? `<div style="display:inline-block;margin-top:8px;font-size:12px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${_emojiImg(badgeObj.emoji,14)} ${badgeObj.label}</div>` : ''}
     </div>
 
     <!-- Кнопки действий: Telegram-style   три кнопки в ряд -->
@@ -895,7 +895,7 @@ function profileInitEditScreen() {
       btn.className = 'status-chip' + (s.id === _editSelectedStatus ? ' selected' : '');
       btn.style.background = s.id === _editSelectedStatus ? s.color + '22' : 'var(--surface2)';
       btn.style.color = s.color;
-      btn.innerHTML = `${s.emoji} ${s.label}`;
+      btn.innerHTML = `${typeof _emojiImg==='function' ? _emojiImg(s.emoji,14) : s.emoji} ${s.label}`;
       btn.onclick = () => {
         _editSelectedStatus = s.id;
         statusPicker.querySelectorAll('.status-chip').forEach(c => {
@@ -989,7 +989,7 @@ function profileInitEditScreen() {
     const btn = document.createElement('button');
     btn.className = 'btn btn-surface';
     btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);box-shadow:0 0 0 2px var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
-    btn.textContent = f.label + (locked ? ' 👑' : '');
+    btn.innerHTML = f.label + (locked ? ' '+(typeof _emojiImg==="function"?_emojiImg("👑",12):"👑") : '');
     btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetFrame(id);
     framesWrap.appendChild(btn);
   });
@@ -1014,7 +1014,7 @@ function profileInitEditScreen() {
     const btn = document.createElement('button');
     btn.className = 'btn btn-surface';
     btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;color:${b.color};${sel ? `box-shadow:0 0 0 2px ${b.color};` : ''}${locked ? 'opacity:.45;' : ''}`;
-    btn.textContent = b.emoji + ' ' + b.label + (locked ? ' 👑' : '');
+    btn.innerHTML = (typeof _emojiImg==="function"?_emojiImg(b.emoji,14):b.emoji) + ' ' + b.label + (locked ? ' '+(typeof _emojiImg==="function"?_emojiImg("👑",12):"👑") : '');
     btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetBadge(b.id);
     badgesWrap.appendChild(btn);
   });
@@ -1033,7 +1033,7 @@ function profileInitEditScreen() {
     const btn = document.createElement('button');
     btn.className = 'btn btn-surface';
     btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);border-color:var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
-    btn.textContent = b.label + (locked ? ' 👑' : '');
+    btn.innerHTML = b.label + (locked ? ' ' + (typeof _emojiImg==='function' ? _emojiImg('👑',12) : '👑') : '');
     btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetBanner(b.id);
     bannersWrap.appendChild(btn);
   });
@@ -1065,7 +1065,7 @@ function profileInitEditScreen() {
     promo.innerHTML = `
       <div class="sep"></div>
       <div style="background:linear-gradient(135deg,#f5c51822,#e8772222);border:1px solid #f5c51844;border-radius:14px;padding:16px;text-align:center;margin-bottom:12px">
-        <div style="font-size:24px;margin-bottom:6px">👑</div>
+        <div style="font-size:24px;margin-bottom:6px">${typeof _emojiImg==="function"?_emojiImg("👑",24):"👑"}</div>
         <div style="font-weight:800;margin-bottom:4px">VIP Аккаунт</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Фото-аватар · рамки · значки · баннеры</div>
         <div style="font-size:11px;color:var(--muted)">Введи <code style="color:var(--accent);background:var(--surface3);padding:2px 6px;border-radius:4px">/vip КОД</code> в CMD</div>
@@ -3048,7 +3048,7 @@ function profileUpdateP2PStatus(msg) {
       sEl.textContent = '🔒 P2P выключен   только прямое подключение';
     } else {
       const s = p2pActiveStrategy();
-      sEl.textContent = s.emoji + ' Канал: ' + s.label;
+      sEl.innerHTML = (typeof _emojiImg==='function' ? _emojiImg(s.emoji,13) : s.emoji) + ' Канал: ' + s.label;
     }
   }
 }
@@ -3228,11 +3228,11 @@ function profileRenderOnline() {
           <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${escHtml(u.name)}
             ${isMe ? '<span style="color:var(--accent);font-size:11px">(ты)</span>' : ''}
-            ${u.vip ? '<span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 6px;border-radius:6px">👑 VIP</span>' : ''}
-            ${badgeObj ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${badgeObj.color}22;color:${badgeObj.color}">${badgeObj.emoji} ${badgeObj.label}</span>` : ''}
+            ${u.vip ? '<span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 6px;border-radius:6px">${_emojiImg("👑",10)} VIP</span>' : ''}
+            ${badgeObj ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${badgeObj.color}22;color:${badgeObj.color}">${_emojiImg(badgeObj.emoji,12)} ${badgeObj.label}</span>` : ''}
           </div>
           <div style="font-size:12px;color:var(--muted)">@${escHtml(u.username)}</div>
-          <div style="font-size:11px;color:${isOnline?statusObj.color:'var(--muted)'};margin-top:2px">${isOnline ? statusObj.emoji+' '+statusObj.label : '⚡ Не в сети'}</div>
+          <div style="font-size:11px;color:${isOnline?statusObj.color:'var(--muted)'};margin-top:2px">${isOnline ? _emojiImg(statusObj.emoji,12)+' '+statusObj.label : _emojiImg('⚡',12)+' Не в сети'}</div>
         </div>
         ${!isMe && !isFriend ? `<button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();profileAddFriend('${escHtml(u.username)}')">+ Друг</button>` : ''}
         ${isFriend && !isMe ? '<span style="font-size:18px;flex-shrink:0">👥</span>' : ''}
@@ -3557,7 +3557,7 @@ function showGroupSettings(groupId) {
     <!-- Шапка с кнопкой назад -->
     <div style="display:flex;align-items:center;gap:0;padding:calc(var(--safe-top,44px) + 4px) 8px 0;flex-shrink:0;min-height:56px">
       <button onclick="document.getElementById('group-settings-screen').remove()"
-        style="background:none;border:none;color:var(--accent);font-size:16px;padding:8px 12px;cursor:pointer;font-family:inherit;font-weight:600">  Назад</button>
+        class="hdr-back" style="padding:8px 12px">Назад</button>
       <div style="flex:1;text-align:center;font-size:17px;font-weight:700;margin-right:60px">Настройки группы</div>
     </div>
 
@@ -3665,7 +3665,7 @@ function _gsRenderMembers(group, p, isCreator) {
     const hasPhoto = (peer?.avatarType==='photo'||peer?.avatar_type==='photo') && (peer?.avatarData||peer?.avatar_data);
     const avatarInner = hasPhoto
       ? `<img src="${peer.avatarData||peer.avatar_data}" style="width:40px;height:40px;border-radius:50%;object-fit:cover">`
-      : `<span style="font-size:20px">${peer?.avatar||'😊'}</span>`;
+      : `${_emojiImg(peer?.avatar||'😊',22)}`;
 
     const canRemove = isCreator && !isMe && !group.isPublic;
     return `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;${idx>0?'border-top:1px solid rgba(255,255,255,.05)':''}">
@@ -3802,8 +3802,7 @@ function groupPickAvatar(groupId) {
       <input type="file" id="grp-av-file-inp" accept="image/*" style="display:none">
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Или выбери эмодзи:</div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
-        ${EMOJIS.map(e => `<button onclick="groupSetAvatar('${groupId}','${e}');this.closest('[style*=fixed]').remove()"
-          style="background:var(--surface2);border:none;border-radius:12px;font-size:28px;padding:10px;cursor:pointer;-webkit-tap-highlight-color:transparent">${e}</button>`).join('')}
+        ${EMOJIS.map(e => `<button onclick="groupSetAvatar('${groupId}','${e}');this.closest('[style*=fixed]').remove()" style="background:var(--surface2);border:none;border-radius:12px;padding:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center">${typeof _emojiImg==="function"?_emojiImg(e,28):e}</button>`).join('')}
       </div>
     </div>`;
   sheet.addEventListener('click', () => sheet.remove());
@@ -3911,7 +3910,7 @@ function groupAddMemberDialog(groupId) {
         const isOnline = _profileOnlinePeers.some(x => x.username === u.username);
         return `<button onclick="groupAddMember('${groupId}','${escHtml(u.username)}');this.closest('[style*=fixed]').remove()"
           style="width:100%;background:none;border:none;color:var(--text);font-family:inherit;padding:10px 0;display:flex;align-items:center;gap:12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)">
-          <div style="width:38px;height:38px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${u.avatar||'😊'}</div>
+          <div style="width:38px;height:38px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${_emojiImg(u.avatar||'😊',22)}</div>
           <div style="text-align:left">
             <div style="font-size:14px;font-weight:600">${escHtml(u.name||u.username)}</div>
             <div style="font-size:12px;color:${isOnline?'#4caf7d':'var(--muted)'}">@${escHtml(u.username)}${isOnline?' · онлайн':''}</div>
@@ -4324,7 +4323,7 @@ function showCreateGroupDialog() {
             <div style="width:28px;height:28px;border-radius:8px;border:2px solid var(--surface3);background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0" class="grp-chk-box" data-val="${u.username}">
             </div>
             <div style="position:relative;width:36px;height:36px;flex-shrink:0">
-              <div style="width:36px;height:36px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px">${u.avatar||'😊'}</div>
+              <div style="width:36px;height:36px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px">${_emojiImg(u.avatar||'😊',22)}</div>
               ${isOnline ? '<div style="position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;background:#4caf7d;border:2px solid var(--surface)"></div>' : ''}
             </div>
             <div style="flex:1">
@@ -4827,10 +4826,91 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Локальный рендерер emoji из файлов assets/emoji/ ──────────────────────────
 // Использует IOS_EMOJI_MAP (ios_emoji_map.js) и локальные PNG-файлы.
-// На Android: file:///android_asset/emoji/…   На веб: CDN twemoji как раньше.
+// Путь: filesDir/emoji/ (скачанный пак) → android_asset/emoji/ (fallback из APK если есть)
+// На веб: CDN twemoji как раньше.
 
-const _EMOJI_BASE = 'file:///android_asset/emoji/';
+// Базовый путь к emoji — устанавливается после проверки готовности пака
+let _EMOJI_BASE = 'file:///android_asset/emoji/'; // дефолт, перезаписывается ниже
+let _emojiPackReady = false;
+
+// EMOJI_PACK_ZIP_URL — прямая ссылка на ZIP-релиз в отдельном репозитории.
+// Формат ZIP: внутри папка emoji/ со структурой act/, food/, ppl/ и т.д.
+// Пример: https://github.com/LOMKICH/ScheduleApp-emoji/releases/latest/download/emoji.zip
+const EMOJI_PACK_ZIP_URL = 'https://github.com/LOMKICH/ScheduleApp-emoji/releases/latest/download/emoji.zip';
+
+/**
+ * Инициализация emoji-пака при старте приложения.
+ * Проверяет маркер-файл через Java — если готов, сразу включает рендерер.
+ * Если нет — запускает загрузку через 3 секунды (не мешает старту).
+ *
+ * Пак персистентен: хранится в filesDir Android, переживает перезапуски.
+ * Удаляется только при "Очистить данные" приложения или его удалении.
+ */
+function _initEmojiPack() {
+  if (!window.Android) {
+    _emojiPackReady = false; // веб — используем twemoji
+    return;
+  }
+  try {
+    if (window.Android.isEmojiPackReady()) {
+      _emojiPackReady = true;
+      console.log('[emoji] pack ready ✅');
+    } else {
+      console.log('[emoji] pack not ready, will download in 3s');
+      setTimeout(_startEmojiPackDownload, 3000);
+    }
+  } catch(e) {
+    console.warn('[emoji] initEmojiPack error:', e);
+  }
+}
+
+/**
+ * Запускает тихую фоновую загрузку ZIP-пака эмодзи.
+ * Никакого UI — скачивание происходит незаметно.
+ */
+function _startEmojiPackDownload() {
+  if (!window.Android?.downloadEmojiPackZip) return;
+  try { if (window.Android.isEmojiPackReady()) { _emojiPackReady = true; return; } } catch(_) {}
+  console.log('[emoji] starting silent background download');
+  window.Android.downloadEmojiPackZip(EMOJI_PACK_ZIP_URL);
+}
+
+/**
+ * Колбэк из Java — вызывается после завершения загрузки.
+ * Прогресс не отображается — только активируем рендерер когда всё готово.
+ */
+function onEmojiPackProgress(pct, label, isDone) {
+  if (isDone) {
+    _emojiPackReady = true;
+    _twemojiParse(document.body);
+    console.log('[emoji] pack ready:', label);
+  } else if (pct === -1) {
+    console.warn('[emoji] download error:', label);
+  }
+}
+
 let _emojiObserver = null;
+
+/**
+ * Возвращает <img> для одного emoji символа с явным px-размером.
+ * Используется для аватарок где font-size контейнера не совпадает с нужным размером.
+ * @param {string} emoji  — символ emoji, напр. '😊'
+ * @param {number} size   — размер в px (по умолчанию 20)
+ * @param {string} [style] — доп. CSS
+ */
+function _emojiImg(emoji, size, style) {
+  if (!emoji || typeof IOS_EMOJI_MAP === 'undefined') return emoji || '';
+  const path = IOS_EMOJI_MAP[emoji];
+  const sz = size || 20;
+  if (!path || !_emojiPackReady) {
+    return `<span style="font-size:${sz}px;line-height:1;display:inline-block">${emoji}</span>`;
+  }
+  const extra = style ? ';' + style : '';
+  return `<img src="${_EMOJI_BASE}${path}" alt="${emoji}" ` +
+    `style="display:inline-block;width:${sz}px;height:${sz}px;vertical-align:-.2em;` +
+    `object-fit:contain;flex-shrink:0${extra}" class="emoji-img" draggable="false" ` +
+    `onerror="this.outerHTML='${emoji}'">`;
+}
 
 // Заменяет emoji в строке text на <img> теги с локальными ассетами.
 // Возвращает HTML-строку, или null если emoji не найдено.
@@ -4847,8 +4927,11 @@ function _localEmojiHtml(text) {
       const sub = text.substring(i, i + len);
       const path = IOS_EMOJI_MAP[sub];
       if (path) {
-        result += `<img src="${_EMOJI_BASE}${path}" alt="${sub}" width="20" height="20" ` +
-          `style="display:inline-block;vertical-align:-.25em;margin:0 .03em;pointer-events:none" ` +
+        // Используем 1.15em вместо фиксированных px — emoji масштабируется вместе с
+        // родительским font-size: и в стикерах (52px→60px), и в кнопках (13px→15px)
+        result += `<img src="${_EMOJI_BASE}${path}" alt="${sub}" ` +
+          `style="display:inline-block;width:1.15em;height:1.15em;vertical-align:-.2em;` +
+          `margin:0 .03em;pointer-events:none;object-fit:contain" ` +
           `class="emoji-img" draggable="false">`;
         i += len;
         changed = true;
@@ -4921,6 +5004,7 @@ function _twemojiParse(node) {
 function _initTwemoji() {
   // На Android — сразу запускаем локальный рендерер, не ждём twemoji
   if (window.Android && typeof IOS_EMOJI_MAP !== 'undefined') {
+    _initEmojiPack(); // проверяем пак и при необходимости качаем
     _localEmojiParse(document.body);
     if (_emojiObserver) return;
     _emojiObserver = new MutationObserver(mutations => {
@@ -5534,7 +5618,7 @@ function _leaderboardDrawLocal() {
         return `
           <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:${isMe?'color-mix(in srgb,var(--accent) 10%,var(--surface2))':'var(--surface2)'};border-radius:14px;border:1.5px solid ${isMe?'var(--accent)':'var(--surface3)'};margin-bottom:8px">
             <div style="font-size:18px;width:28px;text-align:center;flex-shrink:0">${medal}</div>
-            <div style="width:38px;height:38px;border-radius:50%;background:${e.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${e.avatar||'😊'}</div>
+            <div style="width:38px;height:38px;border-radius:50%;background:${e.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${_emojiImg(e.avatar||'😊',22)}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:14px;font-weight:700;${isMe?'color:var(--accent)':''}">${escHtml(e.name||e.username)}${isMe?' (ты)':''}</div>
               <div style="font-size:11px;color:var(--muted)">@${escHtml(e.username)}</div>
@@ -6074,7 +6158,7 @@ function messengerRenderList(filter) {
       ? `<img src="${_groupData.avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
       : (peer?.avatarType === 'photo' || peer?.avatar_type === 'photo') && avatarData
         ? `<img src="${avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
-        : `<span style="font-size:28px">${avatar}</span>`;
+        : `${_emojiImg(avatar,30)}`;
 
     const _pinned = _pins.includes(username);
     // Локальный никнейм (если задан)
@@ -6136,7 +6220,7 @@ function messengerRenderList(filter) {
               }
               if (last.sticker) {
                 return (_isMe ? `<span style="color:var(--accent);font-weight:600">Ты: </span>` : '')
-                  + `<span>${escHtml(last.sticker)}</span>`
+                  + `<span>${typeof _emojiImg==='function' ? _emojiImg(last.sticker,16) : escHtml(last.sticker)}</span>`
                   + `<span style="color:var(--muted)"> Стикер</span>`;
               }
               // Обычный текст
@@ -6382,7 +6466,7 @@ function messengerRenderMessages(animateLast) {
     const _hasPhoto = (peer?.avatarType === 'photo' || peer?.avatar_type === 'photo') && (peer?.avatarData || peer?.avatar_data);
     const _peerAvatar = _hasPhoto
       ? `<img src="${peer.avatarData||peer.avatar_data}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`
-      : `<span style="font-size:13px;line-height:1">${peer?.avatar || msg.from.charAt(0).toUpperCase()}</span>`;
+      : `${_emojiImg(peer?.avatar || msg.from.charAt(0).toUpperCase(), 18)}`;
 
     const avatarEl = (_isGroupChat && showAvatar && !isMe)
       ? `<div style="width:28px;height:28px;border-radius:50%;background:${_peerColor};display:flex;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-end;overflow:hidden;cursor:pointer" onclick="peerProfileOpen('${msg.from}')">${_peerAvatar}</div>`
@@ -6487,7 +6571,7 @@ function messengerRenderMessages(animateLast) {
     const tgText    = isMe ? '#fff' : 'var(--text)';
 
     const msgContent = isSticker
-      ? `<div class="mc-sticker-wrap" style="font-size:56px;line-height:1.1;text-align:center">${escHtml(msg.sticker)}</div>`
+      ? `<div class="mc-sticker-wrap" style="font-size:56px;line-height:1.1;text-align:center">${typeof _emojiImg==='function' ? _emojiImg(msg.sticker,56) : escHtml(msg.sticker)}</div>`
 
       // ┄┄ ФОТО   скруглённые углы, gradient overlay, время поверх ┄┄┄┄┄┄┄┄┄┄
       : isImage
@@ -6629,7 +6713,7 @@ function messengerRenderMessages(animateLast) {
     const reactionsHtml = msg.reactions && Object.keys(msg.reactions).length
       ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">
           ${Object.entries(msg.reactions).map(([em,users])=>
-            `<span onclick="mcToggleReaction(${idx},'${em}')" style="background:rgba(255,255,255,.12);border-radius:10px;padding:2px 7px;font-size:13px;cursor:pointer">${em} ${users.length}</span>`
+            `<span onclick="mcToggleReaction(${idx},'${em}')" style="background:rgba(255,255,255,.12);border-radius:10px;padding:2px 7px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:3px">${typeof _emojiImg==='function'?_emojiImg(em,16):em} ${users.length}</span>`
           ).join('')}
          </div>` : '';
 
@@ -7282,7 +7366,7 @@ function _mcSelectionForward() {
     const peer = _profileOnlinePeers.find(x=>x.username===u) || _allKnownUsers.find(x=>x.username===u);
     return `<button onclick="mcDoForwardMulti('${escHtml(u)}');document.getElementById('mc-forward-sheet').remove()"
       style="width:100%;padding:12px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.04)">
-      <div style="width:38px;height:38px;border-radius:50%;background:${peer?.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${peer?.avatar||'😊'}</div>
+      <div style="width:38px;height:38px;border-radius:50%;background:${peer?.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${_emojiImg(peer?.avatar||'😊',22)}</div>
       <span style="font-weight:600">${escHtml(peer?.name||u)}</span>
     </button>`;
   }).join('');
@@ -7471,7 +7555,7 @@ function mcShowMsgMenu(idx) {
   const freeButtons = MC_REACTIONS_FREE.map((em, i) =>
     `<button class="mc-reaction-btn"
       style="animation:mcEmojiIn .22s cubic-bezier(.34,1.3,.64,1) ${i*25}ms both"
-      onclick="mcToggleReaction(${idx},'${em}');mcCloseMenu()">${em}</button>`
+      onclick="mcToggleReaction(${idx},'${em}');mcCloseMenu()">${typeof _emojiImg==="function"?_emojiImg(em,26):em}</button>`
   ).join('');
 
   // VIP grid (все 30)
@@ -7479,7 +7563,7 @@ function mcShowMsgMenu(idx) {
     const locked = MC_REACTIONS_VIP.includes(em) && !isVip;
     return `<button class="mc-reaction-btn"
       style="opacity:${locked?'.35':'1'}"
-      onclick="${locked ? "toast('🔒 VIP')" : `mcToggleReaction(${idx},'${em}');mcCloseMenu()`}">${em}</button>`;
+      onclick="${locked ? "toast('🔒 VIP')" : `mcToggleReaction(${idx},'${em}');mcCloseMenu()`}">${typeof _emojiImg==="function"?_emojiImg(em,24):em}</button>`;
   }).join('');
 
   overlay.innerHTML = `
@@ -7750,7 +7834,7 @@ function mcForwardMsg(idx) {
     const peer = _profileOnlinePeers.find(x=>x.username===u) || _allKnownUsers.find(x=>x.username===u);
     return `<button onclick="mcDoForward('${escHtml(u)}');document.getElementById('mc-forward-sheet').remove()"
       style="width:100%;padding:12px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.04)">
-      <div style="width:38px;height:38px;border-radius:50%;background:${peer?.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${peer?.avatar||'😊'}</div>
+      <div style="width:38px;height:38px;border-radius:50%;background:${peer?.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${_emojiImg(peer?.avatar||'😊',22)}</div>
       <span style="font-weight:600">${escHtml(peer?.name||u)}</span>
     </button>`;
   }).join('');
@@ -7820,8 +7904,8 @@ function mcRenderStickerPanel() {
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:4px">
         ${pack.stickers.map(s => locked
-          ? `<span style="font-size:36px;opacity:.3;cursor:not-allowed" onclick="toast('🔒 Стикер только для VIP')">${s}</span>`
-          : `<span style="font-size:36px;cursor:pointer;transition:transform .1s" ontouchstart="this.style.transform='scale(1.25)'" ontouchend="this.style.transform=''" onclick="mcSendSticker('${s}')">${s}</span>`
+          ? `<span style="font-size:36px;opacity:.3;cursor:not-allowed" onclick="toast('🔒 Стикер только для VIP')">${typeof _emojiImg==='function'?_emojiImg(s,36):s}</span>`
+          : `<span style="font-size:36px;cursor:pointer;transition:transform .1s" ontouchstart="this.style.transform='scale(1.25)'" ontouchend="this.style.transform=''" onclick="mcSendSticker('${s}')">${typeof _emojiImg==='function'?_emojiImg(s,36):s}</span>`
         ).join('')}
       </div>
     </div>`;
@@ -9349,8 +9433,8 @@ function peerProfileOpen(username) {
   if (hdr) {
     hdr.style.cssText = 'position:absolute;top:0;left:0;right:0;z-index:10;background:transparent;border:none;box-shadow:none';
     hdr.innerHTML = `
-      <button class="hdr-back" style="background:rgba(0,0,0,.35);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)"
-        onclick="SFX.play('screenBack');showScreen('s-messenger-chat','back')"> </button>
+      <button class="hdr-back" style="background:rgba(0,0,0,.35);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-size:22px;padding:0;color:#fff"
+        onclick="SFX.play('screenBack');showScreen('s-messenger-chat','back')">‹</button>
       <div style="flex:1"></div>
       <button onclick="peerShowMenu('${username}')"
         style="background:rgba(0,0,0,.35);border:none;border-radius:50%;width:36px;height:36px;
@@ -9395,7 +9479,7 @@ function peerProfileOpen(username) {
           <div style="width:96px;height:96px;border-radius:50%;border:3px solid ${peer.color||'var(--accent)'};background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden">
             ${peerAvatarHtml}
           </div>
-          ${peer.vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))">👑</div>` : ''}
+          ${peer.vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))">${_emojiImg("👑",22)}</div>` : ''}
         </div>
       </div>
     </div>
@@ -9405,7 +9489,7 @@ function peerProfileOpen(username) {
     <div style="text-align:center;padding:0 16px 16px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(peer.name||username)}</span>
-        ${peer.vip ? '<span style="background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">👑 VIP</span>' : ''}
+        ${peer.vip ? '<span style="background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">${_emojiImg("👑",10)} VIP</span>' : ''}
       </div>
       <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(username)}</div>
       <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${isOnline?'#4caf7d22':'rgba(255,255,255,.08)'};color:${isOnline?'#4caf7d':'var(--muted)'}">
@@ -10265,7 +10349,7 @@ function msgFabToggle() {
     if (btn) {
       btn.style.transform = 'rotate(45deg)';
       // Не используем textContent   twemoji уже заменил emoji на <img>
-      btn.innerHTML = '<img src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/274c.svg" width="20" height="20" style="pointer-events:none;vertical-align:middle" alt="✅">';
+      btn.innerHTML = (typeof _emojiImg==="function" ? _emojiImg('❌',20) : '❌');
     }
   } else { msgFabClose(); }
 }
@@ -10277,7 +10361,7 @@ function msgFabClose() {
   if (btn) {
     btn.style.transform = '';
     // Используем img twemoji напрямую   надёжнее чем twemoji.parse
-    btn.innerHTML = '<img src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/270f.svg" width="22" height="22" style="pointer-events:none;vertical-align:middle" alt="✏️">';
+    btn.innerHTML = (typeof _emojiImg==="function" ? _emojiImg('✏️',22) : '✏️');
   }
 }
 document.addEventListener('click', (e) => {
@@ -10461,7 +10545,7 @@ function renderGroupsList() {
     const rowBg    = isPublic ? 'rgba(255,255,255,.018)' : '';
     const _grpAvatarHtml = (g.avatarType === 'photo' && g.avatarData)
       ? `<img src="${g.avatarData}" style="width:52px;height:52px;border-radius:${avatarR};object-fit:cover;display:block">`
-      : `<span style="font-size:28px">${g.avatar||'👥'}</span>`;
+      : `${_emojiImg(g.avatar||'👥',30)}`;
     return `<div onclick="messengerOpenChat('${escHtml(g.id)}')"
       style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);background:${rowBg}">
       <div style="width:52px;height:52px;border-radius:${avatarR};background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;overflow:hidden">${_grpAvatarHtml}</div>

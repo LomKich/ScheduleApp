@@ -406,6 +406,59 @@ public class MainActivity extends Activity {
                 // ── Hot-patch: если файл был обновлён — отдаём из filesDir ────────────
                 if (url.startsWith("file:///android_asset/")) {
                     String assetPath = url.substring("file:///android_asset/".length());
+                    // Emoji pack: сначала ищем в filesDir/emoji (скачанный пак)
+                    if (assetPath.startsWith("emoji/")) {
+                        java.io.File emojiFile = new java.io.File(getFilesDir(), assetPath);
+                        if (emojiFile.exists()) {
+                            try {
+                                return new WebResourceResponse("image/png", null,
+                                    new java.io.FileInputStream(emojiFile));
+                            } catch (Exception e) {
+                                log.w(TAG, "emoji serve error: " + e.getMessage());
+                            }
+                        }
+                        // Emoji ещё не скачан — возвращаем null (браузер покажет broken img)
+                        return null;
+                    }
+                    // Hot-patch файлы
+                    java.io.File patchFile = new java.io.File(
+                        new java.io.File(getFilesDir(), "hotpatch"), assetPath);
+                    if (patchFile.exists()) {
+                        try {
+                            String mime = "text/html";
+                            if (assetPath.endsWith(".js"))  mime = "application/javascript";
+                            if (assetPath.endsWith(".css")) mime = "text/css";
+                            if (assetPath.endsWith(".json"))mime = "application/json";
+                            log.i(TAG, "hotpatch serving: " + assetPath);
+                            return new WebResourceResponse(mime, "UTF-8",
+                                new java.io.FileInputStream(patchFile));
+                        } catch (Exception e) {
+                            log.w(TAG, "hotpatch read error: " + e.getMessage());
+                        }
+                    }
+                }
+                // Перехватываем twemoji CDN — исправляем MIME-тип (text/plain → application/javascript)
+                if (url.contains("twemoji")) {
+                    try {
+                        java.net.URL jurl = new java.net.URL(url);
+                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) jurl.openConnection();
+                        conn.setRequestMethod("GET");
+                        conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+                        conn.setConnectTimeout(10000);
+                        conn.setReadTimeout(15000);
+                        conn.connect();
+                        if (conn.getResponseCode() == 200) {
+                            java.io.InputStream is = conn.getInputStream();
+                            return new WebResourceResponse(
+                                "application/javascript", "UTF-8", is
+                            );
+                        }
+                    } catch (Exception e) {
+                        log.w(TAG, "intercept fetch failed for " + url + ": " + e.getMessage());
+                    }
+                }
+                return super.shouldInterceptRequest(view, req);
+            }
                     java.io.File patchFile = new java.io.File(
                         new java.io.File(getFilesDir(), "hotpatch"), assetPath);
                     if (patchFile.exists()) {
@@ -1829,6 +1882,198 @@ public class MainActivity extends Activity {
                 if (ch != null) for (java.io.File c : ch) deleteRecursive(c);
             }
             f.delete();
+        }
+
+        // ── Emoji Pack ────────────────────────────────────────────────────────
+
+        // ══ Emoji Pack ════════════════════════════════════════════════════════
+
+        /**
+         * true если emoji-пак полностью распакован.
+         * Проверяет маркер-файл .ready — создаётся только после успешной распаковки.
+         * Персистентно: filesDir сохраняется между перезапусками приложения.
+         */
+        @JavascriptInterface
+        public boolean isEmojiPackReady() {
+            java.io.File marker = new java.io.File(
+                new java.io.File(getFilesDir(), "emoji"), ".ready");
+            boolean ready = marker.exists();
+            log.i(TAG, "isEmojiPackReady: " + ready);
+            return ready;
+        }
+
+        /**
+         * Скачивает ZIP-архив emoji-пака и распаковывает в filesDir/emoji/.
+         * Запускается в фоновом потоке — не блокирует UI.
+         * Прогресс: вызывает JS-функцию onEmojiPackProgress(pct, label, isDone).
+         *   pct = 0-100 (прогресс), -1 = ошибка
+         *   isDone = true когда пак полностью готов
+         *
+         * Сохранение персистентно: filesDir не очищается при перезапуске приложения.
+         * Очищается только при "Очистить данные" в настройках или удалении приложения.
+         */
+        @JavascriptInterface
+        public void downloadEmojiPackZip(final String zipUrl) {
+            log.i(TAG, "downloadEmojiPackZip: " + zipUrl);
+            new Thread(() -> {
+                java.io.File emojiDir = new java.io.File(getFilesDir(), "emoji");
+                java.io.File tmpZip   = new java.io.File(getFilesDir(), "emoji_pack.zip");
+                java.io.File marker   = new java.io.File(emojiDir, ".ready");
+
+                // Чистим предыдущую незавершённую попытку
+                marker.delete();
+                deleteRecursive(emojiDir);
+                emojiDir.mkdirs();
+                tmpZip.delete();
+
+                try {
+                    // 1. Скачиваем ZIP (с зеркалами для России)
+                    final String[] mirrors = {
+                        zipUrl,
+                        zipUrl.replace("github.com",
+                            "ghproxy.com/https://github.com"),
+                        zipUrl.replace("github.com",
+                            "mirror.ghproxy.com/https://github.com"),
+                        zipUrl.replace("github.com",
+                            "ghfast.top/https://github.com"),
+                    };
+
+                    boolean downloaded = false;
+                    for (String mirrorUrl : mirrors) {
+                        try {
+                            _jsCallback("onEmojiPackProgress(0,'⬇ Подключаюсь...',false)");
+                            java.net.URL url = new java.net.URL(mirrorUrl);
+                            java.net.HttpURLConnection conn =
+                                (java.net.HttpURLConnection) url.openConnection();
+                            conn.setConnectTimeout(20_000);
+                            conn.setReadTimeout(120_000);
+                            conn.setRequestProperty("User-Agent", "Mozilla/5.0 ScheduleApp");
+                            conn.setInstanceFollowRedirects(true);
+                            conn.connect();
+                            if (conn.getResponseCode() != 200) {
+                                conn.disconnect(); continue;
+                            }
+                            long total = conn.getContentLengthLong();
+                            java.io.InputStream is = conn.getInputStream();
+                            java.io.FileOutputStream fos =
+                                new java.io.FileOutputStream(tmpZip);
+                            byte[] buf = new byte[65536]; int n; long got = 0;
+                            while ((n = is.read(buf)) != -1) {
+                                fos.write(buf, 0, n);
+                                got += n;
+                                if (total > 0 && got % (512 * 1024) == 0) {
+                                    int pct = (int)(got * 45 / total);
+                                    String label = "⬇ " + (got/1024/1024) +
+                                        " / " + (total/1024/1024) + " МБ";
+                                    _jsCallback("onEmojiPackProgress(" + pct +
+                                        ",'" + label + "',false)");
+                                }
+                            }
+                            fos.close(); is.close(); conn.disconnect();
+                            downloaded = true;
+                            log.i(TAG, "emoji ZIP downloaded: " + tmpZip.length());
+                            break;
+                        } catch (Exception e) {
+                            log.w(TAG, "emoji mirror fail: " + e.getMessage());
+                        }
+                    }
+
+                    if (!downloaded || tmpZip.length() < 1024)
+                        throw new Exception("Не удалось скачать архив");
+
+                    // 2. Считаем записи для точного прогресса
+                    _jsCallback("onEmojiPackProgress(46,'📦 Распаковываю...',false)");
+                    int totalEntries = 0;
+                    {
+                        java.util.zip.ZipInputStream ctr =
+                            new java.util.zip.ZipInputStream(
+                                new java.io.BufferedInputStream(
+                                    new java.io.FileInputStream(tmpZip)));
+                        while (ctr.getNextEntry() != null) {
+                            totalEntries++; ctr.closeEntry();
+                        }
+                        ctr.close();
+                    }
+
+                    // 3. Распаковываем
+                    java.util.zip.ZipInputStream zis =
+                        new java.util.zip.ZipInputStream(
+                            new java.io.BufferedInputStream(
+                                new java.io.FileInputStream(tmpZip)));
+                    java.util.zip.ZipEntry entry;
+                    int extracted = 0;
+                    while ((entry = zis.getNextEntry()) != null) {
+                        String name = entry.getName();
+                        if (name.contains("..") || name.startsWith("/")) {
+                            zis.closeEntry(); continue;
+                        }
+                        java.io.File out = new java.io.File(emojiDir, name);
+                        if (entry.isDirectory()) {
+                            out.mkdirs();
+                        } else {
+                            out.getParentFile().mkdirs();
+                            java.io.FileOutputStream fos =
+                                new java.io.FileOutputStream(out);
+                            byte[] b = new byte[8192]; int r;
+                            while ((r = zis.read(b)) != -1) fos.write(b, 0, r);
+                            fos.close();
+                        }
+                        extracted++;
+                        zis.closeEntry();
+                        if (totalEntries > 0 && extracted % 200 == 0) {
+                            int pct = 46 + (int)(extracted * 54L / totalEntries);
+                            _jsCallback("onEmojiPackProgress(" + pct +
+                                ",'📦 " + extracted + "/" + totalEntries + "',false)");
+                        }
+                    }
+                    zis.close();
+                    tmpZip.delete();
+
+                    // 4. Маркер готовности — записываем количество файлов
+                    java.io.FileWriter fw = new java.io.FileWriter(marker);
+                    fw.write(String.valueOf(extracted));
+                    fw.close();
+
+                    log.i(TAG, "emoji pack ready, files: " + extracted);
+                    _jsCallback("onEmojiPackProgress(100,'✅ Эмодзи готовы! ("
+                        + extracted + " файлов)',true)");
+
+                } catch (Exception e) {
+                    log.e(TAG, "emoji pack error: " + e.getMessage());
+                    tmpZip.delete();
+                    deleteRecursive(emojiDir);
+                    emojiDir.mkdirs();
+                    String msg = e.getMessage() != null
+                        ? e.getMessage().substring(0, Math.min(e.getMessage().length(), 50))
+                              .replace("'", "")
+                        : "неизвестная ошибка";
+                    _jsCallback("onEmojiPackProgress(-1,'❌ " + msg + "',false)");
+                }
+            }, "emoji-zip-dl").start();
+        }
+
+        /** Вызывает JS-функцию из фонового потока через WebView.post() */
+        private void _jsCallback(final String js) {
+            if (webView != null) {
+                String safe = js.replace("\", "\\");
+                webView.post(() -> webView.evaluateJavascript(
+                    "(function(){try{" + safe + "}catch(e){}})()", null));
+            }
+        }
+
+        /**
+         * Удаляет emoji-пак и маркер — при следующем запуске скачается снова.
+         */
+        @JavascriptInterface
+        public void clearEmojiPack() {
+            try {
+                java.io.File emojiDir = new java.io.File(getFilesDir(), "emoji");
+                deleteRecursive(emojiDir);
+                emojiDir.mkdirs();
+                log.i(TAG, "clearEmojiPack: done");
+            } catch (Exception e) {
+                log.e(TAG, "clearEmojiPack error: " + e.getMessage());
+            }
         }
 
         /**

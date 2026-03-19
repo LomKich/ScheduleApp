@@ -1754,7 +1754,7 @@ function renderThemeGrid(){
       c.innerHTML=`
         <div class="theme-swatch">${t.sw.map(cl=>`<div class="swatch" style="background:${cl}"></div>`).join('')}</div>
         <div style="flex:1;min-width:0">
-          <div class="theme-name" style="font-size:13px;font-weight:700">${t.ico||''} ${t.name}</div>
+          <div class="theme-name" style="font-size:13px;font-weight:700">${t.ico ? (typeof _emojiImg==='function' ? _emojiImg(t.ico,14) : t.ico) : ''} ${t.name}</div>
         </div>
         <span class="theme-check">✓</span>`;
       c.onclick=()=>{SFX.play('themeSelect');applyTheme(key);}; g.appendChild(c);

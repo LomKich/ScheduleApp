@@ -139,9 +139,11 @@ body.glass-mode #s-home.active{
 }
 .hdr-back{
   background:none;border:none;color:var(--accent);
-  width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:22px;
+  padding:8px 4px 8px 0;cursor:pointer;font-size:16px;font-weight:600;
   display:flex;align-items:center;justify-content:center;
-  position:relative;overflow:hidden;flex-shrink:0
+  position:relative;overflow:hidden;flex-shrink:0;
+  font-family:inherit;letter-spacing:-.01em;
+  -webkit-tap-highlight-color:transparent
 }
 .hdr-title{font-size:16px;font-weight:700;flex:1;letter-spacing:-.01em}
 .hdr-sub{font-size:11px;color:var(--muted);margin-top:2px;font-weight:400}
@@ -1876,42 +1878,16 @@ body.on-home-screen #live-blur-canvas {
 }
 .coin-streak{font-size:12px;color:var(--muted);text-align:center;min-height:18px;margin-top:4px}
 
-/* ── Dice 3D — solid cube, Telegram style ── */
-.dice-scene{
-  width:120px;height:120px;margin:16px auto 0;
-  perspective:480px;cursor:pointer;
-  user-select:none;-webkit-user-select:none;
-  filter:drop-shadow(0 10px 28px rgba(0,0,0,.5))
+/* ── Dice Lottie ── */
+.dice-lottie-wrap {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.dice-cube{
-  width:120px;height:120px;position:relative;
-  transform-style:preserve-3d;
-  transform:rotateX(-30deg) rotateY(30deg)
+.dice-lottie-wrap.rolling {
+  pointer-events: none;
 }
-/* Each face is exactly 120×120 and positioned so faces meet perfectly */
-.dice-face{
-  position:absolute;width:120px;height:120px;
-  border-radius:14px;
-  box-sizing:border-box;backface-visibility:hidden;
-  display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
-  padding:14px;gap:2px
-}
-.dice-face-front {transform:translateZ(60px);         background:linear-gradient(155deg,#ffffff,#ededed)}
-.dice-face-back  {transform:rotateY(180deg) translateZ(60px); background:linear-gradient(155deg,#d0d0d0,#c0c0c0)}
-.dice-face-right {transform:rotateY( 90deg) translateZ(60px); background:linear-gradient(155deg,#e6e6e6,#d6d6d6)}
-.dice-face-left  {transform:rotateY(-90deg) translateZ(60px); background:linear-gradient(155deg,#dcdcdc,#cccccc)}
-.dice-face-top   {transform:rotateX( 90deg) translateZ(60px); background:linear-gradient(155deg,#f8f8f8,#efefef)}
-.dice-face-bottom{transform:rotateX(-90deg) translateZ(60px); background:linear-gradient(155deg,#cecece,#bebebe)}
-.dice-dot{
-  width:13px;height:13px;border-radius:50%;
-  background:radial-gradient(circle at 38% 32%,#ff5252 0%,#c62828 100%);
-  box-shadow:0 1px 3px rgba(0,0,0,.4);
-  justify-self:center;align-self:center
-}
-.dice-cell{display:flex;align-items:center;justify-content:center}
-
-/* Dice cube animation driven by JS (no CSS keyframes needed) */
-.dice-cube{transition:none}
 
 /* ── Tanks controls ── */
 .tanks-controls{
@@ -2803,7 +2779,7 @@ html.notch-off #s-login {
 <!-- ДОМАШНЕЕ ЗАДАНИЕ -->
 <div class="screen" id="s-homework">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">Назад</button>
     <div class="hdr-title">📚 Домашнее задание</div>
     <button onclick="hwAddNew()" style="background:none;border:none;color:var(--accent);font-size:22px;padding:8px;cursor:pointer">＋</button>
   </div>
@@ -2825,7 +2801,7 @@ html.notch-off #s-login {
 <!-- ГРУППЫ -->
 <div class="screen" id="s-groups">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">Назад</button>
     <div><div class="hdr-title" id="groups-title">Выбор группы</div>
     <div class="hdr-sub" id="groups-sub"></div></div>
   </div>
@@ -2843,7 +2819,7 @@ html.notch-off #s-login {
 <!-- УЧИТЕЛЯ (поиск по учителям из студенческой версии) -->
 <div class="screen" id="s-teachers">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">Назад</button>
     <div><div class="hdr-title" id="teachers-title">Выбор учителя</div>
     <div class="hdr-sub" id="teachers-sub"></div></div>
   </div>
@@ -2863,7 +2839,7 @@ html.notch-off #s-login {
 <div class="screen" id="s-schedule">
   <div class="sched-header" id="sched-header-tap">
     <div style="display:flex;align-items:center;gap:10px;flex:1">
-      <button class="hdr-back" onclick="schedBack()">‹</button>
+      <button class="hdr-back" onclick="schedBack()">Назад</button>
       <div style="flex:1">
         <div class="sched-group" id="sched-group-name"></div>
         <div class="sched-date" id="sched-date"></div>
@@ -2901,7 +2877,7 @@ html.notch-off #s-login {
 <!-- ЗВОНКИ -->
 <div class="screen" id="s-bells">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">Назад</button>
     <div class="hdr-title">Расписание звонков</div>
   </div>
   <div style="padding:12px 18px 0;flex-shrink:0">
@@ -2915,7 +2891,7 @@ html.notch-off #s-login {
 <!-- НАСТРОЙКИ -->
 <div class="screen" id="s-settings">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">Назад</button>
     <div class="hdr-title">Настройки</div>
   </div>
   <div class="body">
@@ -3032,7 +3008,7 @@ html.notch-off #s-login {
 <!-- ВЫБОР ТЕМЫ -->
 <div class="screen" id="s-themes">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-settings','back')">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-settings','back')">Назад</button>
     <div>
       <div class="hdr-title">Тема оформления</div>
       <div class="hdr-sub" id="theme-screen-sub">Выбери цветовую схему</div>
@@ -3063,7 +3039,7 @@ html.notch-off #s-login {
 <!-- ЭКРАН ПРОФИЛЯ -->
 <div class="screen" id="s-profile">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');goHome()">Назад</button>
     <div class="hdr-title">Профиль</div>
   </div>
   <div class="body" id="profile-body">
@@ -3075,7 +3051,7 @@ html.notch-off #s-login {
 <!-- ЭКРАН РЕДАКТИРОВАНИЯ ПРОФИЛЯ -->
 <div class="screen" id="s-profile-edit">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">Назад</button>
     <div class="hdr-title">Редактировать</div>
     <button style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:700;padding:8px;cursor:pointer" onclick="profileSaveEdit()">Сохранить</button>
   </div>
@@ -3230,7 +3206,7 @@ html.notch-off #s-login {
 <!-- ГРУППЫ -->
 <div class="screen" id="s-groups-chat">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">Назад</button>
     <div class="hdr-title">💬 Группы</div>
     <button onclick="showCreateGroupDialog()" style="background:none;border:none;color:var(--accent);font-size:22px;padding:8px;cursor:pointer">＋</button>
   </div>
@@ -3241,7 +3217,7 @@ html.notch-off #s-login {
 
 <div class="screen" id="s-online">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">Назад</button>
     <div class="hdr-title">Друзья</div>
     <button id="online-refresh-btn" style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;padding:8px;cursor:pointer" onclick="onlineRefresh()">↻ Обновить</button>
   </div>
@@ -3261,7 +3237,7 @@ html.notch-off #s-login {
 <!-- ТАБЛИЦА ЛИДЕРОВ -->
 <div class="screen" id="s-leaderboard">
   <div class="hdr">
-    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">Назад</button>
     <div class="hdr-title">🏆 Лидерборд</div>
   </div>
   <div class="body">
@@ -3305,7 +3281,7 @@ html.notch-off #s-login {
 <!-- MESSENGER_SCREEN_LIST -->
 <div class="screen" id="s-messenger">
   <div class="hdr" id="msg-hdr-normal">
-    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
+    <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">Назад</button>
     <div class="hdr-title">💬 Сообщения</div>
   </div>
   <div class="hdr" id="msg-hdr-select" style="display:none;padding:0 6px 0 10px;min-height:56px">
@@ -3374,7 +3350,7 @@ html.notch-off #s-login {
 <!-- MESSENGER_SCREEN_CHAT -->
 <div class="screen" id="s-messenger-chat" style="display:flex;flex-direction:column">
   <div class="hdr" style="padding-bottom:8px;cursor:pointer" onclick="messengerShowInfo()">
-    <button class="hdr-back" onclick="event.stopPropagation();SFX.play('screenBack');showScreen('s-messenger','back')">‹</button>
+    <button class="hdr-back" onclick="event.stopPropagation();SFX.play('screenBack');showScreen('s-messenger','back')">Назад</button>
     <div id="mc-hdr-avatar" style="width:36px;height:36px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;margin-right:10px">😊</div>
     <div style="flex:1;min-width:0">
       <div id="mc-hdr-name" style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">...</div>
@@ -3488,7 +3464,7 @@ html.notch-off #s-login {
     pointer-events:all">
     <button onclick="SFX.play('screenBack');showScreen('s-home','back')"
       style="background:none;border:none;color:#fff;font-size:26px;padding:4px 10px 4px 0;cursor:pointer;
-             -webkit-tap-highlight-color:transparent;line-height:1;font-weight:300">‹</button>
+             -webkit-tap-highlight-color:transparent;line-height:1;font-weight:300">Назад</button>
     <!-- Shorts wordmark -->
     <div style="display:flex;align-items:center;gap:6px">
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
@@ -3543,7 +3519,7 @@ html.notch-off #s-login {
     background:#0f0f0f;padding:calc(var(--safe-top,0px)+10px) 16px 16px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <button onclick="document.getElementById('yt-search-overlay').style.display='none'"
-        style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px">‹</button>
+        style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px">Назад</button>
       <div style="flex:1;background:#272727;border-radius:8px;display:flex;align-items:center;gap:8px;padding:8px 14px">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input id="yt-search-input" placeholder="Поиск Shorts..." autocomplete="off"
@@ -3990,8 +3966,9 @@ html.notch-off #s-login {
   <div id="egg-dice" class="egg-game" style="display:none">
     <div class="egg-game-title">🎲 Кубик</div>
     <div class="egg-score" id="dice-score-label">Всего бросков: 0</div>
-    <div style="display:flex;gap:24px;justify-content:center;align-items:center;min-height:160px" id="dice-cubes-wrap">
-      <!-- Кубики рендерятся динамически JS -->
+    <!-- Контейнер для Lottie-стикеров кубика -->
+    <div id="dice-cubes-wrap" style="display:flex;gap:16px;justify-content:center;align-items:center;min-height:180px">
+      <!-- Lottie-контейнеры создаются динамически -->
     </div>
     <div class="dice-result" id="dice-result" style="font-size:28px;font-weight:800;color:var(--accent);min-height:42px;text-align:center;margin-top:8px"></div>
     <div id="dice-history" style="font-size:12px;color:var(--muted);text-align:center;margin-top:4px;min-height:20px"></div>
@@ -4051,7 +4028,7 @@ html.notch-off #s-login {
 <!-- ══ osu! Режим — полноэкранный оверлей на уровне body ══ -->
 <div id="egg-bubbles" style="display:none;position:fixed;inset:0;z-index:3500;background:var(--bg);flex-direction:column;align-items:center;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:calc(var(--safe-top) + 50px) 14px calc(var(--safe-bot) + 16px)">
   <!-- Кнопка назад -->
-  <button onclick="bubbleClose()" style="position:fixed;top:calc(var(--safe-top)+10px);left:12px;z-index:3501;width:36px;height:36px;border-radius:50%;background:var(--surface2);border:none;color:var(--accent);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4)">‹</button>
+  <button onclick="bubbleClose()" style="position:fixed;top:calc(var(--safe-top)+10px);left:12px;z-index:3501;width:36px;height:36px;border-radius:50%;background:var(--surface2);border:none;color:var(--accent);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4)">✕</button>
   <div style="font-size:18px;font-weight:800;color:#ff66aa;text-shadow:0 0 14px rgba(255,102,170,0.55);margin-top:2px;letter-spacing:-.02em">🎵 osu! Режим</div>
   <div class="diff-picker" style="margin:8px 0 4px">
     <button class="diff-btn" onclick="bubDifficulty='easy';updateDiffBtns('bubbles')">🐢 Easy</button>
@@ -4137,6 +4114,15 @@ html.notch-off #s-login {
 </div>
 
 
+<script src="js/lottie.min.js"></script>
+<script>
+// Если локальный lottie не загрузился — фолбэк на CDN
+if (typeof lottie === 'undefined') {
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js';
+  document.head.appendChild(s);
+}
+</script>
 <script src="js/core.js"></script>
 <script src="js/games.js"></script>
 <script src="js/social.js"></script>

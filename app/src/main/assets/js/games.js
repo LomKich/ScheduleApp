@@ -3621,156 +3621,138 @@ function coinUpdateScore(){
 }
 
 // ══════════════════════════════════════════════════════════════════
-// ── 🎲 КУБИК 3D (v4.0.0) — Telegram-style CSS 3D ─────────────────
 // ══════════════════════════════════════════════════════════════════
-let diceRolling=false, diceTotalRolls=0, diceHistory=[];
+// ── 🎲 КУБИК (v5.0.0) — Telegram Lottie Stickers ─────────────────
+// ══════════════════════════════════════════════════════════════════
+// Использует анимации из стикерпака JustPlay_stickers (Telegram).
+// Файлы: assets/dice/dice_1.json … dice_6.json (Lottie JSON)
+// Lottie-web загружается через js/lottie.min.js (или CDN фолбэк).
 
-// Standard dice opposite faces: 1↔6, 2↔5, 3↔4
-// Face assignment: front=1, back=6, right=2, left=5, top=3, bottom=4
-// Rotation to bring each face toward viewer (rotateX, rotateY):
-// Face values: top=1, bottom=6, front=2, back=5, right=3, left=4
-// Rotation to bring each face toward viewer (rotateX, rotateY):
-// front: rx=0,ry=0 | back: rx=0,ry=180 | right: rx=0,ry=-90
-// left: rx=0,ry=90 | top: rx=-90,ry=0  | bottom: rx=90,ry=0
-const DICE_FACE_ROT={1:{rx:-90,ry:0},2:{rx:0,ry:0},3:{rx:0,ry:-90},4:{rx:0,ry:90},5:{rx:0,ry:180},6:{rx:90,ry:0}};
-const DICE_FACE_VALS={front:2,back:5,right:3,left:4,top:1,bottom:6};
-// Dot grid positions (3x3 grid, col/row 1-3)
-const DICE_DOTS_GRID={
-  1:[[2,2]],
-  2:[[1,1],[3,3]],
-  3:[[1,1],[2,2],[3,3]],
-  4:[[1,1],[3,1],[1,3],[3,3]],
-  5:[[1,1],[3,1],[2,2],[1,3],[3,3]],
-  6:[[1,1],[3,1],[1,2],[3,2],[1,3],[3,3]]
-};
+let diceRolling = false, diceTotalRolls = 0, diceHistory = [];
+const _diceAnims = {};   // { slotId: lottie Animation instance }
+const _diceCache = {};   // { face: JSON data } — предзагруженные данные
 
-function diceBuildFace(val){
-  const face=document.createElement('div');
-  face.className='dice-face dice-face-front'; // class set by caller
-  const dots=DICE_DOTS_GRID[val]||[[2,2]];
-  const placed=new Set(dots.map(([c,r])=>c+','+r));
-  for(let r=1;r<=3;r++) for(let c=1;c<=3;c++){
-    const cell=document.createElement('div');
-    cell.className='dice-cell';
-    if(placed.has(c+','+r)){
-      const dot=document.createElement('div');
-      dot.className='dice-dot';
-      cell.appendChild(dot);
+// ── Предзагрузка данных всех 6 граней ────────────────────────────
+async function _dicePreload() {
+  const base = window.Android
+    ? 'file:///android_asset/dice/'
+    : 'dice/';
+  for (let face = 1; face <= 6; face++) {
+    if (_diceCache[face]) continue;
+    try {
+      const resp = await fetch(base + 'dice_' + face + '.json');
+      _diceCache[face] = await resp.json();
+    } catch(e) {
+      console.warn('[dice] preload face', face, e);
     }
-    face.appendChild(cell);
   }
-  return face;
 }
 
-function diceCreateCube(id){
-  const scene=document.createElement('div');
-  scene.className='dice-scene';
-  scene.id='dice-scene-'+id;
-  const cube=document.createElement('div');
-  cube.className='dice-cube';
-  cube.id='dice-cube-'+id;
-  Object.entries(DICE_FACE_VALS).forEach(([faceName,val])=>{
-    const face=diceBuildFace(val);
-    face.className='dice-face dice-face-'+faceName;
-    cube.appendChild(face);
+// ── Создаёт один слот для стикера кубика ─────────────────────────
+function _diceCreateSlot(id) {
+  const size = 160;
+  const el = document.createElement('div');
+  el.className = 'dice-lottie-wrap';
+  el.id = 'dice-slot-' + id;
+  el.style.cssText = `width:${size}px;height:${size}px`;
+  return el;
+}
+
+// ── Загружает нужную грань в слот и воспроизводит анимацию ───────
+function _dicePlayFace(slotId, face, onDone) {
+  const container = document.getElementById('dice-slot-' + slotId);
+  if (!container) { onDone && onDone(); return; }
+  container.classList.add('rolling');
+
+  // Уничтожаем предыдущую анимацию если есть
+  if (_diceAnims[slotId]) {
+    try { _diceAnims[slotId].destroy(); } catch(_) {}
+    delete _diceAnims[slotId];
+  }
+  container.innerHTML = '';
+
+  const data = _diceCache[face];
+  if (!data || typeof lottie === 'undefined') {
+    // Фолбэк: просто цифра
+    container.innerHTML = `<div style="width:160px;height:160px;display:flex;align-items:center;justify-content:center;font-size:80px;font-weight:900;color:var(--accent)">${face}</div>`;
+    container.classList.remove('rolling');
+    onDone && onDone();
+    return;
+  }
+
+  const anim = lottie.loadAnimation({
+    container,
+    renderer: 'svg',
+    loop: false,
+    autoplay: true,
+    animationData: data,
   });
-  scene.appendChild(cube);
-  return scene;
+  _diceAnims[slotId] = anim;
+
+  anim.addEventListener('complete', () => {
+    container.classList.remove('rolling');
+    onDone && onDone();
+  });
+  // Timeout-guard: если событие complete не пришло
+  setTimeout(() => {
+    if (!container.classList.contains('rolling')) return;
+    container.classList.remove('rolling');
+    onDone && onDone();
+  }, 3500);
 }
 
-function diceAnimateCube(cubeEl, targetVal, onDone){
-  // Face rotations to show face toward viewer (these are the REST angles)
-  const f=DICE_FACE_ROT[targetVal]||{rx:0,ry:0};
-  // Final resting pose = tilt offset + face offset + N full turns
-  const spX=3+Math.floor(Math.random()*3);
-  const spY=3+Math.floor(Math.random()*3);
-  const endRx = spX*360 + f.rx - 30;
-  const endRy = spY*360 + f.ry + 30;
-
-  const startRx=-30, startRy=30;
-  const dur=1100; // ms total
-  let startTime=null;
-
-  // Easing: fast spin + decelerate + bounce
-  function ease(t){
-    // 0→0.6: cubic ease-in-out (spinning up and most of air time)
-    // 0.6→1: overshoot + settle
-    if(t<0.6) return t/0.6; // linear progress for spin part
-    const t2=(t-0.6)/0.4;
-    // bounce settle: overshoot then spring back
-    const bounce=1+0.08*Math.sin(t2*Math.PI*2.5)*Math.exp(-t2*4);
-    return bounce;
+// ── Инициализация при открытии игры ──────────────────────────────
+function diceInit() {
+  diceRolling = false; diceTotalRolls = 0; diceHistory = [];
+  const wrap = document.getElementById('dice-cubes-wrap');
+  if (wrap) {
+    wrap.innerHTML = '';
+    wrap.appendChild(_diceCreateSlot(0));
   }
-
-  // Height arc: goes up, comes down, small bounce
-  function heightOffset(t){
-    if(t<0.55) return -Math.sin(t/0.55*Math.PI)*32; // up arc
-    const t2=(t-0.55)/0.45;
-    // land: small bounce
-    if(t2<0.35) return 10*(t2/0.35); // squash down
-    const t3=(t2-0.35)/0.65;
-    return Math.sin(t3*Math.PI)*-8*Math.exp(-t3*3); // tiny bounce up
-  }
-
-  function frame(ts){
-    if(!startTime) startTime=ts;
-    const raw=Math.min(1,(ts-startTime)/dur);
-    const e=ease(raw);
-    const rx=startRx+(endRx-startRx)*Math.min(e,1);
-    const ry=startRy+(endRy-startRy)*Math.min(e,1);
-    const ty=heightOffset(raw);
-    cubeEl.style.transform=`rotateX(${rx}deg) rotateY(${ry}deg) translateY(${ty}px)`;
-    if(raw<1) requestAnimationFrame(frame);
-    else{
-      cubeEl.style.transform=`rotateX(${endRx}deg) rotateY(${endRy}deg)`;
-      onDone();
-    }
-  }
-  requestAnimationFrame(frame);
+  document.getElementById('dice-result').textContent = '';
+  document.getElementById('dice-history').textContent = '';
+  document.getElementById('dice-score-label').textContent = 'Всего бросков: 0';
+  // Предзагрузка данных
+  _dicePreload();
+  // Показываем случайную грань как превью
+  const preview = Math.ceil(Math.random() * 6);
+  setTimeout(() => _dicePlayFace(0, preview, null), 100);
 }
 
-function diceInit(){
-  diceRolling=false; diceTotalRolls=0; diceHistory=[];
-  const wrap=document.getElementById('dice-cubes-wrap');
-  if(wrap){ wrap.innerHTML=''; wrap.appendChild(diceCreateCube(0)); }
-  document.getElementById('dice-result').textContent='';
-  document.getElementById('dice-history').textContent='';
-  document.getElementById('dice-score-label').textContent='Всего бросков: 0';
-}
+// ── Бросок одного или двух кубиков ───────────────────────────────
+function diceRoll(count) {
+  if (diceRolling) return;
+  diceRolling = true;
+  SFX.play && SFX.play('pongHit');
+  document.getElementById('dice-result').textContent = '';
 
-function diceRoll(count){
-  if(diceRolling) return;
-  diceRolling=true;
-  SFX.play('pongHit');
-  document.getElementById('dice-result').textContent='';
-  const wrap=document.getElementById('dice-cubes-wrap');
-  wrap.innerHTML='';
-  const results=[];
-  for(let i=0;i<count;i++) results.push(Math.floor(Math.random()*6)+1);
-  const cubeEls=[];
-  for(let i=0;i<count;i++){
-    const scene=diceCreateCube(i);
-    wrap.appendChild(scene);
-    cubeEls.push(document.getElementById('dice-cube-'+i));
-  }
-  let done=0;
-  cubeEls.forEach((cube,i)=>{
-    setTimeout(()=>{
-      diceAnimateCube(cube, results[i], ()=>{
+  const wrap = document.getElementById('dice-cubes-wrap');
+  wrap.innerHTML = '';
+  for (let i = 0; i < count; i++) wrap.appendChild(_diceCreateSlot(i));
+
+  const results = Array.from({length: count}, () => Math.ceil(Math.random() * 6));
+  let done = 0;
+
+  results.forEach((face, i) => {
+    setTimeout(() => {
+      _dicePlayFace(i, face, () => {
         done++;
-        if(done===count){
-          const sum=results.reduce((a,b)=>a+b,0);
-          const emoji=sum>=count*5?'🔥':sum<=count*2?'😅':'✨';
-          document.getElementById('dice-result').textContent=emoji+' '+(count>1?'Сумма: '+sum:results[0]);
+        if (done === count) {
+          const sum = results.reduce((a, b) => a + b, 0);
+          const emoji = sum >= count * 5 ? '🔥' : sum <= count * 2 ? '😅' : '✨';
+          document.getElementById('dice-result').textContent =
+            emoji + ' ' + (count > 1 ? 'Сумма: ' + sum : results[0]);
           diceTotalRolls++;
-          diceHistory.unshift(count===1?results[0]:'('+results.join('+')+')')  ;
-          if(diceHistory.length>8) diceHistory.pop();
-          document.getElementById('dice-history').textContent='История: '+diceHistory.join(' · ');
-          document.getElementById('dice-score-label').textContent='Всего бросков: '+diceTotalRolls;
-          diceRolling=false;
+          diceHistory.unshift(count === 1 ? results[0] : '(' + results.join('+') + ')');
+          if (diceHistory.length > 8) diceHistory.pop();
+          document.getElementById('dice-history').textContent =
+            'История: ' + diceHistory.join(' · ');
+          document.getElementById('dice-score-label').textContent =
+            'Всего бросков: ' + diceTotalRolls;
+          diceRolling = false;
         }
       });
-    }, i*150);
+    }, i * 200); // небольшая задержка между кубиками
   });
 }
 
