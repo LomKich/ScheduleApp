@@ -1624,7 +1624,7 @@ public class MainActivity extends Activity {
 
         /** Вспомогательный метод: системный drawable */
         private android.graphics.drawable.Drawable getSystemDrawable(android.content.Context ctx, int res) {
-            return android.graphics.drawable.DrawableCompat.wrap(
+            return androidx.core.graphics.drawable.DrawableCompat.wrap(
                 androidx.core.content.ContextCompat.getDrawable(ctx, res)).mutate();
         }
 
