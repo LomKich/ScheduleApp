@@ -2080,47 +2080,12 @@ window._javaTick = async function() {
   // Каждый тик: открытый чат
   if (_msgCurrentChat) {
     try {
-      const _isGroupTick = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
-      if (_isGroupTick) {
-        // Группа — поллим по groupChatKey без фильтра to_user
-        const gChatKey = groupChatKey(_msgCurrentChat);
-        const gStreamKey = 'GRP:' + _msgCurrentChat;
-        const gLastTs = _fbLastMsgTs[gStreamKey] || 0;
-        const gData = await sbGet('messages',
-          `select=*&chat_key=eq.${encodeURIComponent(gChatKey)}&ts=gt.${gLastTs}&order=ts.asc&limit=100`
-        );
-        if (Array.isArray(gData) && gData.length > 0) {
-          const group = groupGet(_msgCurrentChat);
-          if (group) {
-            const msgs2 = msgLoad();
-            if (!msgs2[_msgCurrentChat]) msgs2[_msgCurrentChat] = [];
-            let hasNew2 = false;
-            gData.forEach(row => {
-              _fbLastMsgTs[gStreamKey] = Math.max(_fbLastMsgTs[gStreamKey]||0, row.ts);
-              const exists = msgs2[_msgCurrentChat].some(m => m.ts===row.ts && m.from===row.from_user);
-              if (!exists) {
-                let ep2 = null; try { if(row.extra) ep2=JSON.parse(row.extra); } catch(_){}
-                msgs2[_msgCurrentChat].push({
-                  from: row.from_user, to: _msgCurrentChat, text: row.text||'', ts: row.ts,
-                  delivered: true, read: true,
-                  ...(ep2?.fileLink?{fileLink:ep2.fileLink}:{}),
-                  ...(ep2?.fileType?{fileType:ep2.fileType}:{}),
-                  ...(ep2?.fileName?{fileName:ep2.fileName}:{}),
-                });
-                hasNew2 = true;
-              }
-            });
-            if (hasNew2) { msgs2[_msgCurrentChat].sort((a,b)=>a.ts-b.ts); msgSave(msgs2); messengerRenderMessages(); }
-          }
-        }
-      } else {
-        const key = sbChatKey(pr.username, _msgCurrentChat);
-        const data = await sbGet('messages',
-          `select=*&chat_key=eq.${encodeURIComponent(key)}&ts=gt.${_fbLastMsgTs[key]||0}&order=ts.asc&limit=50`
-        );
-        if (Array.isArray(data) && data.length > 0) {
-          sbHandleIncomingMessages(pr.username, _msgCurrentChat, data);
-        }
+      const key = sbChatKey(pr.username, _msgCurrentChat);
+      const data = await sbGet('messages',
+        `select=*&chat_key=eq.${encodeURIComponent(key)}&ts=gt.${_fbLastMsgTs[key]||0}&order=ts.asc&limit=50`
+      );
+      if (Array.isArray(data) && data.length > 0) {
+        sbHandleIncomingMessages(pr.username, _msgCurrentChat, data);
       }
     } catch(e) {}
   }
@@ -2427,11 +2392,11 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
   rows.forEach(msg => {
     if (msg.from_user === myUsername) {
       // Своё сообщение — обновляем delivered или восстанавливаем если кэш был очищен
-      // Пропускаем служебные reaction_update и read_receipt сообщения
+      // Пропускаем служебные reaction_update сообщения
       if (msg.extra) {
         try {
           const ep = JSON.parse(msg.extra);
-          if (ep?.type === 'reaction' || ep?.type === 'read_receipt') {
+          if (ep?.type === 'reaction') {
             _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
             return; // служебное — не восстанавливаем
           }
@@ -2486,23 +2451,6 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       if (extraParsed?.replyTo)  inReplyTo = extraParsed.replyTo;
       if (extraParsed?.image)    inImage   = extraParsed.image;
 
-      // Обрабатываем group_deleted — удаляем группу локально
-      if (extraParsed?.type === 'group_deleted' && extraParsed?.groupId) {
-        const gid = extraParsed.groupId;
-        const groups = groupsLoad().filter(g => g.id !== gid);
-        groupsSave(groups);
-        const msgs2 = msgLoad();
-        delete msgs2[gid];
-        msgSave(msgs2);
-        chatsSave(chatsLoad().filter(u => u !== gid));
-        _markChatDeleted(gid);
-        if (_msgCurrentChat === gid) showScreen('s-messenger', 'back');
-        renderGroupsList && renderGroupsList();
-        messengerUpdateBadge();
-        _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
-        return;
-      }
-
       // Обрабатываем group_invite — добавляем группу локально
       if (extraParsed?.type === 'group_invite' && extraParsed?.group) {
         const inviteGroup = extraParsed.group;
@@ -2518,24 +2466,6 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         }
         _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
         return; // не показываем как обычное сообщение
-      }
-
-      // Обрабатываем read_receipt — получатель прочитал наши сообщения
-      if (extraParsed?.type === 'read_receipt' && extraParsed?.upToTs) {
-        const upTo = extraParsed.upToTs;
-        const allMsgs = msgs[otherUsername] || [];
-        let rChanged = false;
-        allMsgs.forEach(m => {
-          if (m.from === myUsername && !m.read && m.ts <= upTo) {
-            m.read = true; rChanged = true;
-          }
-        });
-        if (rChanged) {
-          msgSave(msgs);
-          if (_msgCurrentChat === otherUsername) messengerRenderMessages();
-        }
-        _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
-        return;
       }
 
       // Обрабатываем reaction_update — служебное сообщение синхронизации реакций
@@ -3191,6 +3121,65 @@ function _fmtRemain(ms) {
   return m > 0 ? m + ' мин ' + s + ' сек' : Math.round(ms/1000) + ' сек';
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 🛡 МОДЕРАЦИЯ ГРУППЫ — фильтр мата
+// ══════════════════════════════════════════════════════════════════════
+
+const _PROFANITY = [
+  // Русский мат — базовые формы и вариации
+  'блять','блядь','блядина','блядский','блядство',
+  'пиздец','пизда','пиздить','пиздёж','пиздатый','пизданутый','пиздануть',
+  'ёбаный','ёбать','ёб','ебать','ебаный','ебало','ебанутый','ёбнутый','ёбнуть','ёбаный',
+  'хуй','хуйня','хуёвый','хуета','нахуй','похуй','похуйство','хуесос',
+  'пидор','пидорас','пидорский',
+  'сука','суки','сукин',
+  'мудак','мудила','мудацкий',
+  'залупа','залупиться',
+  'блядина','блять',
+  'ёпта','епта','ептать',
+  'сволочь','ёп','еп',
+  'курва','шлюха','шлюшка',
+  'долбоёб','долбаёб','долбоёбина',
+  'придурок','ублюдок','выблядок',
+  'ёбнутый','ёбнуться',
+  'уёбок','уёбище','уёбывать',
+  'пиздануть','пиздюлина','пиздюли',
+  'ёбля','ёбарь',
+  'манда','мандавошка',
+  'мразь','мразота',
+  'тварь',
+  'ёптить','йоптить',
+  'пиздобол','пиздёж',
+  'хуйло','хуйня',
+  'ёбать','ёбётся',
+  // Транслит и замены
+  'bl4t','bl9d','pizd','huy','huyna','ebat','ebal','eblo',
+  'pidor','pidoras','suka'
+];
+
+// Компилируем один RegExp для скорости
+const _PROFANITY_RE = new RegExp(
+  _PROFANITY.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
+  'giu'
+);
+
+/**
+ * Заменяет матерные слова звёздочками нужной длины.
+ * Работает только если группа включила модерацию.
+ */
+function _applyProfanityFilter(text) {
+  return text.replace(_PROFANITY_RE, m => '*'.repeat(m.length));
+}
+
+/**
+ * Проверяет, включена ли модерация для текущей группы.
+ */
+function _groupModerationEnabled(groupId) {
+  if (!groupId) return false;
+  const g = groupGet(groupId);
+  return !!(g && g.moderation);
+}
+
 async function groupCreate(name, members) {
   const groups = groupsLoad();
   const id  = 'grp_' + Date.now();
@@ -3271,568 +3260,21 @@ function groupGet(id) {
   return groupsLoad().find(g => g.id === id) || null;
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// ⚙️ НАСТРОЙКИ ГРУППЫ — Telegram-style
-// ══════════════════════════════════════════════════════════════════════
-
-/** Открывает экран настроек группы (как в Telegram) */
-function showGroupSettings(groupId) {
-  const group = groupGet(groupId);
-  if (!group) return;
-  const p = profileLoad();
-  const isCreator = group.createdBy === p?.username;
-  const isPublic  = group.id === PUBLIC_GROUP_ID;
-
-  const existing = document.getElementById('group-settings-screen');
-  if (existing) existing.remove();
-
-  const screen = document.createElement('div');
-  screen.id = 'group-settings-screen';
-  screen.style.cssText = 'position:fixed;inset:0;z-index:9600;background:var(--bg);display:flex;flex-direction:column;animation:mcSlideRight .22s cubic-bezier(.34,1.1,.64,1)';
-
-  const avatarBg = isPublic
-    ? 'linear-gradient(135deg,var(--accent),var(--accent2,#c45f0a))'
-    : 'linear-gradient(135deg,#2b5797,#1e3f6f)';
-  const memberCount = group.members.length;
-  const memberWord  = memberCount===1?'участник':memberCount<5?'участника':'участников';
-
-  // Аватар группы — кликабельный для смены (только создатель)
-  const avatarClick = (!isPublic && isCreator) ? `onclick="groupPickAvatar('${groupId}')"` : '';
-  const avatarCursor = (!isPublic && isCreator) ? 'cursor:pointer' : '';
-
-  screen.innerHTML = `
-    <style>
-      @keyframes mcSlideRight { from{transform:translateX(100%)} to{transform:none} }
-      .gs-btn { width:100%;padding:16px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;-webkit-tap-highlight-color:transparent }
-      .gs-btn:active { background:rgba(255,255,255,.06) }
-      .gs-btn.danger { color:var(--danger,#c94f4f) }
-      .gs-sep { height:1px;background:rgba(255,255,255,.06);margin:0 20px }
-    </style>
-
-    <!-- Шапка с кнопкой назад -->
-    <div style="display:flex;align-items:center;gap:0;padding:calc(var(--safe-top,44px) + 4px) 8px 0;flex-shrink:0;min-height:56px">
-      <button onclick="document.getElementById('group-settings-screen').remove()"
-        style="background:none;border:none;color:var(--accent);font-size:16px;padding:8px 12px;cursor:pointer;font-family:inherit;font-weight:600">‹ Назад</button>
-      <div style="flex:1;text-align:center;font-size:17px;font-weight:700;margin-right:60px">Настройки группы</div>
-    </div>
-
-    <div style="flex:1;overflow-y:auto;padding-bottom:calc(24px + var(--safe-bot))">
-
-      <!-- Аватар и название -->
-      <div style="display:flex;flex-direction:column;align-items:center;padding:24px 20px 20px">
-        <div ${avatarClick} style="width:80px;height:80px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:40px;position:relative;${avatarCursor}" id="gs-avatar-wrap">
-          <span id="gs-avatar-emoji">${group.avatar||'👥'}</span>
-          ${(!isPublic && isCreator) ? '<div style="position:absolute;bottom:0;right:0;width:26px;height:26px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></div>' : ''}
-        </div>
-        <div style="margin-top:12px;font-size:20px;font-weight:700;color:var(--text);text-align:center" id="gs-name-display">${escHtml(group.name)}</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:4px">${memberCount} ${memberWord}</div>
-        ${isPublic ? '<div style="font-size:11px;color:var(--accent);margin-top:4px;font-weight:600">Публичная группа</div>' : ''}
-        ${isCreator && !isPublic ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">Вы — создатель</div>' : ''}
-      </div>
-
-      <!-- Описание группы (если есть) -->
-      ${group.description ? `<div style="background:var(--surface2);border-radius:14px;margin:0 16px 12px;padding:12px 16px;font-size:14px;color:var(--muted);line-height:1.5">${escHtml(group.description)}</div>` : ''}
-
-      <!-- Секция: Изменить группу (только создатель) -->
-      ${!isPublic && isCreator ? `
-      <div style="background:var(--surface);border-radius:16px;margin:0 16px 12px;overflow:hidden">
-        <button class="gs-btn" onclick="groupRenameDialog('${groupId}')">
-          <span style="width:34px;height:34px;border-radius:10px;background:#2b5797;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-          </span>
-          <div style="flex:1">
-            <div>Изменить название</div>
-            <div style="font-size:12px;color:var(--muted)">${escHtml(group.name)}</div>
-          </div>
-          <span style="color:var(--muted)">›</span>
-        </button>
-        <div class="gs-sep"></div>
-        <button class="gs-btn" onclick="groupEditDescription('${groupId}')">
-          <span style="width:34px;height:34px;border-radius:10px;background:#1a7a3a;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8zm0-4h8v2H8zm0-4h5v2H8z"/></svg>
-          </span>
-          <div style="flex:1">
-            <div>Описание</div>
-            <div style="font-size:12px;color:var(--muted)">${group.description ? escHtml(group.description.slice(0,40)) + (group.description.length>40?'…':'') : 'Добавить описание'}</div>
-          </div>
-          <span style="color:var(--muted)">›</span>
-        </button>
-      </div>` : ''}
-
-      <!-- Секция: Участники -->
-      <div style="padding:8px 20px 4px;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Участники</div>
-      <div style="background:var(--surface);border-radius:16px;margin:0 16px 12px;overflow:hidden" id="gs-members-list">
-        ${_gsRenderMembers(group, p, isCreator)}
-        ${isCreator && !isPublic ? `
-        <div class="gs-sep"></div>
-        <button class="gs-btn" onclick="groupAddMemberDialog('${groupId}')">
-          <span style="width:34px;height:34px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-          </span>
-          Добавить участника
-        </button>` : ''}
-      </div>
-
-      <!-- Секция: Уведомления -->
-      <div style="background:var(--surface);border-radius:16px;margin:0 16px 12px;overflow:hidden">
-        <button class="gs-btn" onclick="peerMuteShow('${groupId}');document.getElementById('group-settings-screen').remove()">
-          <span style="width:34px;height:34px;border-radius:10px;background:#6d4c9e;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="${isMuted(groupId)?'M11 7.17V4.06c-.38.05-.75.14-1.1.27L7.81 2.24A9.9 9.9 0 0 1 12 1.5c4.97 0 9 4.03 9 9 0 1.46-.35 2.83-.97 4.04l-1.68-1.68A6.97 6.97 0 0 0 19 10.5c0-3.97-3.18-7.2-8-7.33zm7.26 14.09L17 19.85V20H7l-2-2v-1l-2-2v-1l16 16-1.74-1.74zM11 7.17L13 9.17V10.5c0 .55-.45 1-1 1H9.83l1.17 1.17V10.5c0 1.38-.56 2.63-1.46 3.54L7 15.83V17l2 2h8.17l2 2H5.17l-.88-.88-2.84-2.84L0 14.56l1.41-1.41L2 13.97V10.5C2 7.15 4.85 4.47 8.6 4.06L11 6.46v.71z':'M11 3.07V2.05A10.003 10.003 0 0 0 2 12c0 5.52 4.48 10 10 10s10-4.48 10-10c0-4.93-3.55-9.02-8.25-9.84v2.04C16.74 5.05 20 8.31 20 12c0 4.42-3.58 8-8 8s-8-3.58-8-8c0-3.69 3.26-6.95 7-7.93zM12 8v5l4.28 2.54.72-1.21-3.5-2.08V8H12zm-1-5.07V5h2V2.93c-.33-.05-.66-.08-1-.08-.34 0-.67.03-1 .08z'}"/></svg>
-          </span>
-          <div style="flex:1">${isMuted(groupId) ? 'Включить уведомления' : 'Отключить уведомления'}</div>
-          <span style="color:var(--muted)">›</span>
-        </button>
-      </div>
-
-      <!-- Секция: Опасные действия -->
-      <div style="background:var(--surface);border-radius:16px;margin:0 16px 12px;overflow:hidden">
-        ${!isPublic ? `
-        <button class="gs-btn danger" onclick="groupLeaveConfirm('${groupId}')">
-          <span style="width:34px;height:34px;border-radius:10px;background:rgba(201,79,79,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="#c94f4f"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
-          </span>
-          Покинуть группу
-        </button>
-        ${isCreator ? `<div class="gs-sep"></div>` : ''}` : ''}
-        ${isCreator && !isPublic ? `
-        <button class="gs-btn danger" onclick="groupDeleteForAll('${groupId}')">
-          <span style="width:34px;height:34px;border-radius:10px;background:rgba(201,79,79,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="#c94f4f"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-          </span>
-          Удалить группу для всех
-        </button>` : ''}
-      </div>
-
-    </div>`;
-
-  document.body.appendChild(screen);
-}
-
-/** Рендерит список участников группы */
-function _gsRenderMembers(group, p, isCreator) {
-  return group.members.map((username, idx) => {
-    const peer = _allKnownUsers.find(u => u.username === username)
-              || _profileOnlinePeers.find(u => u.username === username);
-    const name = peer?.name || username;
-    const isMe = username === p?.username;
-    const isOwner = username === group.createdBy;
-    const isOnline = _profileOnlinePeers.some(u => u.username === username);
-    const hasPhoto = (peer?.avatarType==='photo'||peer?.avatar_type==='photo') && (peer?.avatarData||peer?.avatar_data);
-    const avatarInner = hasPhoto
-      ? `<img src="${peer.avatarData||peer.avatar_data}" style="width:40px;height:40px;border-radius:50%;object-fit:cover">`
-      : `<span style="font-size:20px">${peer?.avatar||'😊'}</span>`;
-
-    const canRemove = isCreator && !isMe && !group.isPublic;
-    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;${idx>0?'border-top:1px solid rgba(255,255,255,.05)':''}">
-      <div style="width:40px;height:40px;border-radius:50%;background:${peer?.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;position:relative">
-        ${avatarInner}
-        ${isOnline?'<div style="position:absolute;bottom:1px;right:1px;width:10px;height:10px;border-radius:50%;background:#4caf7d;border:2px solid var(--surface)"></div>':''}
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(name)}${isMe?' <span style="font-size:11px;color:var(--muted)">(вы)</span>':''}</div>
-        <div style="font-size:12px;color:${isOwner?'var(--accent)':'var(--muted)'}">@${escHtml(username)}${isOwner?' · создатель':''}</div>
-      </div>
-      ${canRemove?`<button onclick="groupKickMember('${group.id}','${escHtml(username)}')" style="background:none;border:none;color:var(--muted);font-size:20px;padding:4px 8px;cursor:pointer;line-height:1">×</button>`:''}
-    </div>`;
-  }).join('');
-}
-
-// ── Переименование группы ─────────────────────────────────────────
-function groupRenameDialog(groupId) {
-  const group = groupGet(groupId);
-  if (!group) return;
-  const sheet = document.createElement('div');
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9700;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;animation:mcFadeIn .15s ease';
-  sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px;padding:24px 20px;width:100%;max-width:340px" onclick="event.stopPropagation()">
-      <div style="font-size:17px;font-weight:700;margin-bottom:16px">Изменить название</div>
-      <input id="group-rename-inp" class="inp" value="${escHtml(group.name)}" placeholder="Название группы" style="margin-bottom:16px">
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-surface" style="flex:1" onclick="this.closest('[style*=fixed]').remove()">Отмена</button>
-        <button class="btn btn-accent" style="flex:1" onclick="groupRenameSubmit('${groupId}')">Сохранить</button>
-      </div>
-    </div>`;
-  sheet.addEventListener('click', () => sheet.remove());
-  document.body.appendChild(sheet);
-  setTimeout(() => document.getElementById('group-rename-inp')?.focus(), 100);
-}
-
-async function groupRenameSubmit(groupId) {
-  const inp = document.getElementById('group-rename-inp');
-  const newName = inp?.value.trim();
-  if (!newName) { toast('Введи название'); return; }
-  document.querySelector('[style*="fixed"][style*="align-items:center"]')?.remove();
-
-  const groups = groupsLoad();
-  const g = groups.find(x => x.id === groupId);
-  if (!g) return;
-  g.name = newName;
-  groupsSave(groups);
-
-  // Обновляем на сервере для всех участников
-  const p = profileLoad();
-  if (sbReady() && p) {
-    for (const member of g.members) {
-      try {
-        const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(member)}&limit=1`);
-        const existing = rows?.[0]?.groups ? JSON.parse(rows[0].groups) : [];
-        const idx = existing.findIndex(x => x.id === groupId);
-        if (idx !== -1) { existing[idx].name = newName; }
-        else existing.push(g);
-        _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(member)}`,
-          { groups: JSON.stringify(existing) },
-          { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
-      } catch(e) {}
-    }
-    // Системное сообщение в группу
-    await sbInsert('messages', {
-      chat_key: groupChatKey(groupId),
-      from_user: p.username, to_user: '__broadcast__',
-      text: '✏️ ' + p.username + ' переименовал группу в «' + newName + '»',
-      ts: Date.now(), extra: JSON.stringify({ type: 'group_rename', newName, groupId })
-    }).catch(()=>{});
-  }
-
-  // Обновляем UI
-  const nameEl = document.getElementById('gs-name-display');
-  if (nameEl) nameEl.textContent = newName;
-  if (_msgCurrentChat === groupId) {
-    const hdr = document.getElementById('mc-hdr-name');
-    if (hdr) hdr.textContent = newName;
-  }
-  renderGroupsList();
-  toast('✅ Название изменено');
-}
-
-// ── Описание группы ───────────────────────────────────────────────
-function groupEditDescription(groupId) {
-  const group = groupGet(groupId);
-  if (!group) return;
-  const sheet = document.createElement('div');
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9700;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;animation:mcFadeIn .15s ease';
-  sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px;padding:24px 20px;width:100%;max-width:340px" onclick="event.stopPropagation()">
-      <div style="font-size:17px;font-weight:700;margin-bottom:16px">Описание группы</div>
-      <textarea id="group-desc-inp" class="inp" placeholder="Опиши группу..." style="margin-bottom:16px;min-height:80px;resize:none">${escHtml(group.description||'')}</textarea>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-surface" style="flex:1" onclick="this.closest('[style*=fixed]').remove()">Отмена</button>
-        <button class="btn btn-accent" style="flex:1" onclick="groupSaveDescription('${groupId}')">Сохранить</button>
-      </div>
-    </div>`;
-  sheet.addEventListener('click', () => sheet.remove());
-  document.body.appendChild(sheet);
-}
-
-function groupSaveDescription(groupId) {
-  const desc = document.getElementById('group-desc-inp')?.value.trim() || '';
-  document.querySelector('[style*="fixed"][style*="align-items:center"]')?.remove();
-  const groups = groupsLoad();
-  const g = groups.find(x => x.id === groupId);
-  if (!g) return;
-  g.description = desc;
-  groupsSave(groups);
-  toast('✅ Описание сохранено');
-  // Обновляем на сервере
-  const p = profileLoad();
-  if (sbReady() && p) {
-    _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
-      { groups: JSON.stringify(groups) },
-      { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
-  }
-  showGroupSettings(groupId); // перерендерим
-}
-
-// ── Смена аватара (эмодзи) ────────────────────────────────────────
-function groupPickAvatar(groupId) {
-  const EMOJIS = ['👥','🎮','📚','🎵','🏆','🔥','💡','🚀','🌟','🎯','💪','🎉','🌈','🐉','⚡','🎭','🏠','🌍','🎨','🤝','💼','🎓','🏋️','🎤','🌺'];
-  const sheet = document.createElement('div');
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9700;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
-  sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:16px;animation:mcSlideUp .22s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
-      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="font-size:15px;font-weight:700;margin-bottom:14px">Аватар группы</div>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
-        ${EMOJIS.map(e => `<button onclick="groupSetAvatar('${groupId}','${e}');this.closest('[style*=fixed]').remove()"
-          style="background:var(--surface2);border:none;border-radius:12px;font-size:28px;padding:10px;cursor:pointer;-webkit-tap-highlight-color:transparent">${e}</button>`).join('')}
-      </div>
-    </div>`;
-  sheet.addEventListener('click', () => sheet.remove());
-  document.body.appendChild(sheet);
-}
-
-function groupSetAvatar(groupId, emoji) {
-  const groups = groupsLoad();
-  const g = groups.find(x => x.id === groupId);
-  if (!g) return;
-  g.avatar = emoji;
-  groupsSave(groups);
-  const el = document.getElementById('gs-avatar-emoji');
-  if (el) el.textContent = emoji;
-  renderGroupsList();
-  toast('✅ Аватар изменён');
-  const p = profileLoad();
-  if (sbReady() && p) {
-    _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
-      { groups: JSON.stringify(groups) },
-      { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
-  }
-}
-
-// ── Добавление участника ──────────────────────────────────────────
-function groupAddMemberDialog(groupId) {
-  const group = groupGet(groupId);
-  if (!group) return;
-  const friends = friendsLoad();
-  const candidates = [
-    ..._allKnownUsers.filter(u => friends.includes(u.username) && !group.members.includes(u.username)),
-    ..._profileOnlinePeers.filter(u => !group.members.includes(u.username) && !friends.includes(u.username))
-  ];
-  const seen = new Set();
-  const users = candidates.filter(u => { if(seen.has(u.username)) return false; seen.add(u.username); return true; });
-
-  if (!users.length) { toast('Нет доступных пользователей для добавления'); return; }
-
-  const sheet = document.createElement('div');
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9700;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.55);animation:mcFadeIn .15s ease';
-  sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:16px;max-height:70vh;overflow-y:auto;animation:mcSlideUp .22s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
-      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 14px"></div>
-      <div style="font-size:15px;font-weight:700;margin-bottom:12px">Добавить участника</div>
-      ${users.map(u => {
-        const isOnline = _profileOnlinePeers.some(x => x.username === u.username);
-        return `<button onclick="groupAddMember('${groupId}','${escHtml(u.username)}');this.closest('[style*=fixed]').remove()"
-          style="width:100%;background:none;border:none;color:var(--text);font-family:inherit;padding:10px 0;display:flex;align-items:center;gap:12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)">
-          <div style="width:38px;height:38px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${u.avatar||'😊'}</div>
-          <div style="text-align:left">
-            <div style="font-size:14px;font-weight:600">${escHtml(u.name||u.username)}</div>
-            <div style="font-size:12px;color:${isOnline?'#4caf7d':'var(--muted)'}">@${escHtml(u.username)}${isOnline?' · онлайн':''}</div>
-          </div>
-        </button>`;
-      }).join('')}
-    </div>`;
-  sheet.addEventListener('click', () => sheet.remove());
-  document.body.appendChild(sheet);
-}
-
-async function groupAddMember(groupId, username) {
-  const groups = groupsLoad();
-  const g = groups.find(x => x.id === groupId);
-  if (!g || g.members.includes(username)) return;
-  g.members.push(username);
-  groupsSave(groups);
-  toast('✅ @' + username + ' добавлен(а) в группу');
-  const p = profileLoad();
-  if (!sbReady() || !p) return;
-  // Уведомляем нового участника
-  try {
-    const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(username)}&limit=1`);
-    const existing = rows?.[0]?.groups ? JSON.parse(rows[0].groups) : [];
-    if (!existing.find(x => x.id === groupId)) {
-      existing.push(g);
-      _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
-        { groups: JSON.stringify(existing) },
-        { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
-    }
-    await sbInsert('messages', {
-      chat_key: sbChatKey(p.username, username),
-      from_user: p.username, to_user: username,
-      text: '👥 Добавил(а) тебя в группу «' + g.name + '»',
-      ts: Date.now(), extra: JSON.stringify({ type: 'group_invite', group: g })
-    });
-    // Системное сообщение в чат
-    await sbInsert('messages', {
-      chat_key: groupChatKey(groupId),
-      from_user: p.username, to_user: '__broadcast__',
-      text: '👤 ' + p.username + ' добавил(а) @' + username,
-      ts: Date.now()
-    });
-  } catch(e) {}
-  // Перерендерим настройки если открыты
-  const screen = document.getElementById('group-settings-screen');
-  if (screen) showGroupSettings(groupId);
-}
-
-// ── Исключить участника (только создатель) ───────────────────────
-async function groupKickMember(groupId, username) {
-  const group = groupGet(groupId);
-  const p = profileLoad();
-  if (!group || !p || group.createdBy !== p.username) return;
-  if (!confirm('Исключить @' + username + ' из группы?')) return;
-
-  const groups = groupsLoad();
-  const g = groups.find(x => x.id === groupId);
-  if (!g) return;
-  g.members = g.members.filter(m => m !== username);
-  groupsSave(groups);
-  toast('🚫 @' + username + ' исключён из группы');
-
-  if (!sbReady()) return;
-  // Удаляем группу у исключённого
-  try {
-    const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(username)}&limit=1`);
-    const existing = rows?.[0]?.groups ? JSON.parse(rows[0].groups) : [];
-    _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
-      { groups: JSON.stringify(existing.filter(x => x.id !== groupId)) },
-      { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
-    // Системное сообщение
-    await sbInsert('messages', {
-      chat_key: groupChatKey(groupId),
-      from_user: p.username, to_user: '__broadcast__',
-      text: '🚫 ' + p.username + ' исключил(а) @' + username,
-      ts: Date.now()
-    });
-  } catch(e) {}
-  showGroupSettings(groupId);
-}
-
-// ── Покинуть группу ───────────────────────────────────────────────
-function groupLeaveConfirm(groupId) {
-  const group = groupGet(groupId);
-  const p = profileLoad();
-  if (!group || !p) return;
-  const isCreator = group.createdBy === p.username;
-
-  const sheet = document.createElement('div');
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;animation:mcFadeIn .15s ease';
-  sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px;padding:24px 20px;width:100%;max-width:320px" onclick="event.stopPropagation()">
-      <div style="font-size:17px;font-weight:700;margin-bottom:8px">Покинуть группу?</div>
-      <div style="font-size:14px;color:var(--muted);margin-bottom:20px;line-height:1.5">
-        ${isCreator ? 'Вы создатель. При выходе группа останется для других участников, но вы потеряете управление.' : 'Вы покинете группу «' + escHtml(group.name) + '».'}
-      </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-surface" style="flex:1" onclick="this.closest('[style*=fixed]').remove()">Отмена</button>
-        <button class="btn" style="flex:1;background:var(--danger,#c94f4f);color:#fff" onclick="groupLeave('${groupId}');this.closest('[style*=fixed]').remove()">Покинуть</button>
-      </div>
-    </div>`;
-  sheet.addEventListener('click', () => sheet.remove());
-  document.body.appendChild(sheet);
-}
-
-async function groupLeave(groupId) {
-  const p = profileLoad();
-  const group = groupGet(groupId);
-  if (!p || !group) return;
-
-  // Удаляем локально
-  const groups = groupsLoad().filter(g => g.id !== groupId);
-  groupsSave(groups);
-  const msgs = msgLoad();
-  delete msgs[groupId];
-  msgSave(msgs);
-  const chats = chatsLoad().filter(u => u !== groupId);
-  chatsSave(chats);
-  _markChatDeleted(groupId);
-
-  // Закрываем чат и настройки
-  document.getElementById('group-settings-screen')?.remove();
-  if (_msgCurrentChat === groupId) showScreen('s-groups-chat', 'back');
-  renderGroupsList();
-  messengerUpdateBadge();
-  toast('Вы покинули группу');
-
-  if (!sbReady()) return;
-  // Обновляем свой список групп на сервере
-  _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
-    { groups: JSON.stringify(groups) },
-    { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
-  // Системное сообщение
-  try {
-    await sbInsert('messages', {
-      chat_key: groupChatKey(groupId),
-      from_user: p.username, to_user: '__broadcast__',
-      text: '👋 @' + p.username + ' покинул(а) группу',
-      ts: Date.now()
-    });
-  } catch(e) {}
-}
-
-// ── Удалить группу для всех (только создатель) ───────────────────
-function groupDeleteForAll(groupId) {
-  const group = groupGet(groupId);
-  if (!group) return;
-  const sheet = document.createElement('div');
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;animation:mcFadeIn .15s ease';
-  sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px;padding:24px 20px;width:100%;max-width:320px" onclick="event.stopPropagation()">
-      <div style="font-size:17px;font-weight:700;margin-bottom:8px;color:var(--danger,#c94f4f)">Удалить группу для всех?</div>
-      <div style="font-size:14px;color:var(--muted);margin-bottom:20px;line-height:1.5">
-        Группа «${escHtml(group.name)}» и все сообщения в ней будут удалены у всех ${group.members.length} участников. Это действие необратимо.
-      </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-surface" style="flex:1" onclick="this.closest('[style*=fixed]').remove()">Отмена</button>
-        <button class="btn" style="flex:1;background:var(--danger,#c94f4f);color:#fff" onclick="groupDeleteForAllConfirmed('${groupId}');this.closest('[style*=fixed]').remove()">Удалить для всех</button>
-      </div>
-    </div>`;
-  sheet.addEventListener('click', () => sheet.remove());
-  document.body.appendChild(sheet);
-}
-
-async function groupDeleteForAllConfirmed(groupId) {
-  const p = profileLoad();
-  const group = groupGet(groupId);
-  if (!p || !group || group.createdBy !== p.username) return;
-
-  toast('🗑 Удаляю группу...');
-
-  // Для каждого участника удаляем группу из их users.groups
-  if (sbReady()) {
-    for (const member of group.members) {
-      try {
-        const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(member)}&limit=1`);
-        const existing = rows?.[0]?.groups ? JSON.parse(rows[0].groups) : [];
-        _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(member)}`,
-          { groups: JSON.stringify(existing.filter(g => g.id !== groupId)) },
-          { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
-        // Отправляем системное сообщение об удалении
-        if (member !== p.username) {
-          await sbInsert('messages', {
-            chat_key: sbChatKey(p.username, member),
-            from_user: p.username, to_user: member,
-            text: '🗑 Создатель удалил группу «' + group.name + '»',
-            ts: Date.now(),
-            extra: JSON.stringify({ type: 'group_deleted', groupId })
-          });
-        }
-      } catch(e) {}
-    }
-  }
-
-  // Удаляем локально
-  const groups = groupsLoad().filter(g => g.id !== groupId);
-  groupsSave(groups);
-  const msgs = msgLoad();
-  delete msgs[groupId];
-  msgSave(msgs);
-  chatsSave(chatsLoad().filter(u => u !== groupId));
-  _markChatDeleted(groupId);
-
-  document.getElementById('group-settings-screen')?.remove();
-  if (_msgCurrentChat === groupId) showScreen('s-groups-chat', 'back');
-  renderGroupsList();
-  messengerUpdateBadge();
-  toast('✅ Группа удалена для всех');
-}
-
-
-
 // ── Поллинг входящих сообщений группы ────────────────────────────
-// Поллинг группы — один общий канал без фильтра to_user
-// Каждый участник читает все сообщения с chat_key = 'group_<id>'
+// Каждый участник поллит chat_key = 'group_<groupId>' с to_user = свой username
 function sbPollGroupChat(myUsername, group) {
   if (!group || !group.id) return;
   const chatKey = groupChatKey(group.id);
-  // Единый ключ для группы (не per-user) — экономим интервалы
-  const streamKey = 'GRP:' + group.id;
-  if (_fbMsgStreams[streamKey]) return;
+  const streamKey = 'GRP:' + group.id + ':' + myUsername;
+  if (_fbMsgStreams[streamKey]) return; // уже поллим
 
   const doCheck = async () => {
     if (!sbReady()) return;
     const lastTs = _fbLastMsgTs[streamKey] || 0;
     const sinceTs = lastTs > 0 ? lastTs : (Date.now() - 30 * 24 * 60 * 60 * 1000);
-    // Тянем ВСЕ сообщения группы — без фильтра to_user
+    // Тянем все сообщения этой группы адресованные МНЕ
     const data = await sbGet('messages',
-      `select=*&chat_key=eq.${encodeURIComponent(chatKey)}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
+      `select=*&chat_key=eq.${encodeURIComponent(chatKey)}&to_user=eq.${encodeURIComponent(myUsername)}&ts=gt.${sinceTs}&order=ts.asc&limit=100`
     ).catch(() => null);
     if (!Array.isArray(data) || !data.length) return;
 
@@ -3843,26 +3285,12 @@ function sbPollGroupChat(myUsername, group) {
       _fbLastMsgTs[streamKey] = Math.max(_fbLastMsgTs[streamKey]||0, row.ts);
       const exists = msgs[group.id].some(m => m.ts === row.ts && m.from === row.from_user);
       if (!exists) {
-        // Парсим extra для медиа-сообщений
-        let extraParsed = null;
-        try { if (row.extra) extraParsed = JSON.parse(row.extra); } catch(_) {}
         msgs[group.id].push({
           from: row.from_user, to: group.id,
           text: row.text || '', ts: row.ts,
-          delivered: true, read: _msgCurrentChat === group.id,
-          ...(extraParsed?.fileLink  ? { fileLink:  extraParsed.fileLink  } : {}),
-          ...(extraParsed?.fileType  ? { fileType:  extraParsed.fileType  } : {}),
-          ...(extraParsed?.fileName  ? { fileName:  extraParsed.fileName  } : {}),
-          ...(extraParsed?.fileSize  ? { fileSize:  extraParsed.fileSize  } : {}),
-          ...(extraParsed?.duration  ? { duration:  extraParsed.duration  } : {}),
-          ...(extraParsed?.thumbData ? { thumbData: extraParsed.thumbData } : {}),
-          ...(extraParsed?.replyTo   ? { replyTo:   extraParsed.replyTo   } : {}),
+          delivered: true, read: _msgCurrentChat === group.id
         });
         hasNew = true;
-      } else {
-        // Обновляем delivered для своих сообщений
-        const local = msgs[group.id].find(m => m.ts === row.ts && m.from === row.from_user);
-        if (local && !local.delivered) { local.delivered = true; hasNew = true; }
       }
     });
     if (hasNew) {
@@ -3883,8 +3311,12 @@ function sbPollGroupChat(myUsername, group) {
 function sbStartGroupPolling(myUsername) {
   const groups = groupsLoad();
   groups.forEach(g => {
-    // Обе функции теперь работают одинаково (без фильтра to_user)
-    sbPollGroupChat(myUsername, g);
+    if (g.isPublic) {
+      // Публичная группа — все видят все сообщения
+      sbPollPublicGroup(myUsername, g);
+    } else {
+      sbPollGroupChat(myUsername, g);
+    }
   });
 }
 
@@ -3961,26 +3393,44 @@ function groupChatKey(groupId) { return 'group_' + groupId; }
 function groupIsKey(chatKey)   { return chatKey && chatKey.startsWith('group_'); }
 function groupIdFromKey(chatKey){ return chatKey ? chatKey.replace('group_', '') : null; }
 
-async function groupSendMessage(groupId, text, extra) {
+async function groupSendMessage(groupId, text) {
   const p = profileLoad();
   const group = groupGet(groupId);
   if (!p || !group) return;
+
+  // Применяем фильтр мата если включена модерация
+  if (_groupModerationEnabled(groupId)) {
+    text = _applyProfanityFilter(text);
+  }
+
   const ts = Date.now();
-  // ВСЕГДА используем groupChatKey — не sbChatKey
   const chatKey = groupChatKey(groupId);
+  const msgs = msgLoad();
+  if (!msgs[groupId]) msgs[groupId] = [];
+  const msg = { from: p.username, to: groupId, text, ts, delivered: false, read: false };
+  msgs[groupId].push(msg);
+  msgSave(msgs);
+  if (_msgCurrentChat === groupId) messengerRenderMessages(true);
 
-  // Одна запись на всю группу с to_user='__broadcast__'
-  // Все участники поллят chat_key без фильтра to_user → получают её
-  const row = {
-    chat_key: chatKey,
-    from_user: p.username,
-    to_user: '__broadcast__',
-    text: text || '',
-    ts
-  };
-  if (extra) row.extra = typeof extra === 'string' ? extra : JSON.stringify(extra);
-
-  await sbInsert('messages', row);
+  if (group.isPublic) {
+    // Публичная группа: один broadcast-запрос без to_user
+    try {
+      await sbInsert('messages', {
+        chat_key: chatKey, from_user: p.username,
+        to_user: '__broadcast__', text, ts
+      });
+    } catch(e) {}
+  } else {
+    // Обычная группа — шлём каждому участнику
+    for (const member of group.members) {
+      if (member === p.username) continue;
+      try {
+        await sbInsert('messages', {
+          chat_key: chatKey, from_user: p.username, to_user: member, text, ts
+        });
+      } catch(e) {}
+    }
+  }
 }
 
 function showCreateGroupDialog() {
@@ -4357,6 +3807,13 @@ function peerShowMenu(username) {
   document.body.appendChild(sheet);
 }
 
+// ── messengerMarkRead ─────────────────────────────────────────────
+function messengerMarkRead() {
+  if (!_msgCurrentChat) return;
+  const p = profileLoad();
+  const msgs = msgLoad();
+  if (!msgs[_msgCurrentChat]) return;
+  let changed = false;
 // ── messengerMarkRead ─────────────────────────────────────────────
 function messengerMarkRead() {
   if (!_msgCurrentChat) return;
@@ -5394,17 +4851,10 @@ function _doOpenChat(username) {
   const hdrName = document.getElementById('mc-hdr-name');
   const hdrSub  = document.getElementById('mc-hdr-sub');
   const hdrAvatar = document.getElementById('mc-hdr-avatar');
-  const _openedGroup = (username === PUBLIC_GROUP_ID || username.startsWith('grp_')) ? groupGet(username) : null;
-  if (hdrName) hdrName.textContent = _openedGroup ? _openedGroup.name : (localNickGet(username) || peer?.name || username);
-  if (hdrSub) {
-    if (_openedGroup) {
-      hdrSub.textContent = _openedGroup.members.length + ' участников';
-    } else {
-      hdrSub.textContent = peer
-        ? (_profileOnlinePeers.find(u => u.username === username) ? '🟢 В сети' : '⚫ Не в сети')
-        : ('@' + username);
-    }
-  }
+  if (hdrName) hdrName.textContent = localNickGet(username) || peer?.name || username;
+  if (hdrSub)  hdrSub.textContent  = peer
+    ? (_profileOnlinePeers.find(u => u.username === username) ? '🟢 В сети' : '⚫ Не в сети')
+    : ('@' + username);
   if (hdrAvatar) {
     const hasPhoto = (peer?.avatarType === 'photo') && peer?.avatarData;
     hdrAvatar.style.background = hasPhoto ? 'transparent' : (peer?.color || 'var(--surface3)');
@@ -5636,27 +5086,42 @@ function messengerRenderMessages(animateLast) {
 
       // ── КРУЖОК (видеосообщение) — круглое превью + play ─────────────────
       : isCircle
-        ? `<div data-no-menu style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
-               onclick="mcVideoOpen('${safeUrl}','Видеосообщение')">
-             ${msg.thumbData
-               ? `<img src="${escHtml(msg.thumbData)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
-               : `<div style="width:100%;height:100%;position:relative;background:#111">
-                 <div style="position:absolute;inset:0;background:linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 50%,#1a1a1a 75%);background-size:200% 100%;animation:skelShimmer 1.4s infinite"></div>
-                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                   <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.25);border-top-color:rgba(255,255,255,.75);border-radius:50%;animation:mvpSpin .8s linear infinite"></div>
+        ? (() => {
+            const circId = 'circ_' + idx;
+            return `<div data-no-menu style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#111;" id="circwrap_${circId}">
+             <!-- Превью / скелет -->
+             <div id="circthumb_${circId}" style="position:absolute;inset:0;border-radius:50%;overflow:hidden;cursor:pointer" onclick="mcCirclePlay('${safeUrl}','${circId}')">
+               ${msg.thumbData
+                 ? `<img src="${escHtml(msg.thumbData)}" style="width:100%;height:100%;object-fit:cover;display:block" loading="lazy">`
+                 : `<div style="width:100%;height:100%;position:relative;background:#111">
+                     <div style="position:absolute;inset:0;background:linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 50%,#1a1a1a 75%);background-size:200% 100%;animation:skelShimmer 1.4s infinite"></div>
+                   </div>`
+               }
+               <!-- Кнопка play -->
+               <div id="circplay_${circId}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+                 <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.48);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
+                   <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
                  </div>
-               </div>`
-             }
-             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-               <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.48);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
                </div>
              </div>
+             <!-- Инлайн видео (скрыто до нажатия) -->
+             <video id="circvid_${circId}" src="${safeUrl}" playsinline preload="none" loop
+               style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;display:none;cursor:pointer"
+               onclick="mcCircleToggle('${circId}')">
+             </video>
+             <!-- Кнопка паузы поверх видео -->
+             <div id="circpause_${circId}" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;cursor:pointer;pointer-events:none">
+               <div style="width:50px;height:50px;border-radius:50%;background:rgba(0,0,0,.38);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s" id="circpauseico_${circId}">
+                 <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+               </div>
+             </div>
+             <!-- Время + статус -->
              <div style="position:absolute;bottom:10px;right:10px;display:flex;align-items:center;gap:3px;pointer-events:none">
                <span style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.7)">${msgFormatTime(msg.ts)}</span>
                <span style="font-size:11px;color:rgba(255,255,255,.9)">${status}</span>
              </div>
-           </div>`
+           </div>`;
+          })()
 
       // ── ВИДЕО — превью + круглая play + duration badge ────────────────────
       : isVideo
@@ -5829,21 +5294,7 @@ function messengerSend() {
   // Лимит 200 сообщений — удаляем старые и с сервера
   mcEnforceMessageLimit(_msgCurrentChat);
 
-  // ── Групповой чат: используем groupSendMessage (broadcast) ────────
-  const _isGroupSend = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
-  if (_isGroupSend) {
-    groupSendMessage(_msgCurrentChat, text).then(() => {
-      msg.delivered = true; msg.pending = false;
-      msgSave(msgs); messengerRenderMessages(); _outboxUpdateStatusBar();
-    }).catch(() => {
-      msg.pending = true; msgSave(msgs);
-      messengerRenderMessages(); _outboxUpdateStatusBar();
-    });
-    if (_msgCurrentChat === PUBLIC_GROUP_ID) _publicGroupCooldownSet(p.username);
-    return;
-  }
-
-  // ── Личный чат ────────────────────────────────────────────────────
+  // Запустить polling
   sbPollChat(p.username, _msgCurrentChat);
 
   const chatKey = sbChatKey(p.username, _msgCurrentChat);
@@ -5856,18 +5307,33 @@ function messengerSend() {
             extra: replyTo ? JSON.stringify({ replyTo }) : null }
   };
 
+  // Пробуем отправить сразу; если упадёт — кладём в очередь
   sbInsert('messages', outboxItem.data).then(res => {
     if (res) {
       msg.delivered = true; msg.pending = false;
-      msgSave(msgs); messengerRenderMessages(); _outboxUpdateStatusBar();
+      msgSave(msgs);
+      messengerRenderMessages();
+      _outboxUpdateStatusBar();
     } else {
-      msg.pending = true; msgSave(msgs);
-      outboxPush(outboxItem); messengerRenderMessages(); _outboxUpdateStatusBar();
+      // Сервер вернул ошибку — в очередь
+      msg.pending = true;
+      msgSave(msgs);
+      outboxPush(outboxItem);
+      messengerRenderMessages();
+      _outboxUpdateStatusBar();
     }
   }).catch(() => {
-    msg.pending = true; msgSave(msgs);
-    outboxPush(outboxItem); messengerRenderMessages(); _outboxUpdateStatusBar();
+    // Сети нет — в очередь, сообщение уже видно локально
+    msg.pending = true;
+    msgSave(msgs);
+    outboxPush(outboxItem);
+    messengerRenderMessages();
+    _outboxUpdateStatusBar();
   });
+
+  if (_msgCurrentChat === PUBLIC_GROUP_ID) {
+    _publicGroupCooldownSet(p.username);
+  }
 }
 
 
@@ -6011,6 +5477,10 @@ function mcBubbleTouchMove(e, row, idx) {
   const t  = e.touches[0];
   const dx = t.clientX - _mcDragStartX;
   const dy = Math.abs(t.clientY - _mcDragStartY);
+
+  // В режиме выделения — не отменяем по движению, просто игнорируем свайп
+  if (_mcMultiSelect) return;
+
   if (dy > 14) { clearTimeout(_mcLongPressTimer); return; } // вертикальный скролл
   if (Math.abs(dx) < 5 && !_mcDragging) return;
 
@@ -7393,12 +6863,6 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
     id: 'media_' + ts, type: 'media', localChat: _msgCurrentChat, ts,
     data: _mediaOutboxData2
   };
-  // Для групп переопределяем outbox data с правильным chat_key
-  const _isGroupMedia = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
-  if (_isGroupMedia) {
-    _mediaOutboxData2.chat_key = groupChatKey(_msgCurrentChat);
-    _mediaOutboxData2.to_user  = '__broadcast__';
-  }
   sbInsert('messages', _mediaOutboxData2).then(res => {
     if (res) {
       msg.delivered = true; msg.pending = false;
@@ -7737,7 +7201,6 @@ function _mcVoiceStartRecording() {
   if (window.Android && typeof window.Android.startVoiceRecording === 'function') {
     console.log('[Voice] starting native recorder');
     _mcVoiceNative  = true;
-    _mcInChatSendingShow('voice', 'Голосовое сообщение');
     _mcVoiceSeconds = 0;
     _mcWaveBuf.fill(0.06); _mcWaveSmooth.fill(0.06); _mcWaveHead = 0; _mcWaveTick = 0;
     window.Android.startVoiceRecording();
@@ -7813,17 +7276,31 @@ function mcVoiceTouchMove(e) {
 
 // ── Отпустить: отправить (Telegram hold-to-record) ──────────────────────
 function mcVoiceTouchEnd(e) {
-  // Отменяем таймер задержки — если отпустили до начала записи
   clearTimeout(_mcVoiceHoldTimer);
   _mcVoiceHoldTimer = null;
 
-  // Возвращаем UI на место если был сдвинут
+  // Возвращаем UI на место
   const ui = document.getElementById('mc-voice-ui');
   if (ui) { ui.style.transform = ''; ui.style.opacity = ''; }
   const hint = document.getElementById('mc-voice-hint');
   if (hint) { hint.style.opacity = '1'; hint.textContent = 'Свайп для отмены'; }
 
-  // Короткий тап (< 280мс) без активной записи → переключаем mic↔circle
+  // Режим кружка — отпустили → сигнал остановить запись
+  if (_mcVoiceMode === 'circle') {
+    const tapDur = Date.now() - _mcVoiceTouchTs;
+    if (_mcCircleActive) {
+      // Идёт запись → останавливаем
+      if (window.Android && typeof Android.stopCircleRecord === 'function') {
+        Android.stopCircleRecord();
+      }
+    } else if (tapDur < 280) {
+      // Короткий тап до начала записи → переключить режим
+      mcToggleVoiceMode();
+    }
+    return;
+  }
+
+  // Короткий тап без активной записи → переключаем mic↔circle
   const tapDur = Date.now() - _mcVoiceTouchTs;
   if (!_mcVoiceRecorder && !_mcVoiceNative) {
     if (tapDur < 280) {
@@ -8226,14 +7703,12 @@ function messengerShowMore() {
   const username = _msgCurrentChat;
   if (!username) return;
 
-  // Если это групповой чат — открываем настройки группы
-  if (username === PUBLIC_GROUP_ID || username.startsWith('grp_')) {
-    showGroupSettings(username);
-    return;
-  }
-
   const existing = document.getElementById('msg-action-sheet');
   if (existing) { _closeSheet(existing); return; }
+
+  // Если это групповой чат — показываем настройки группы
+  const isGrp = username.startsWith('grp_') || username === PUBLIC_GROUP_ID;
+  if (isGrp) { _showGroupMoreSheet(username); return; }
 
   const peer = _profileOnlinePeers.find(u => u.username === username)
              || _allKnownUsers.find(u => u.username === username);
@@ -8269,6 +7744,108 @@ function messengerShowMore() {
   document.body.appendChild(sheet);
 }
 
+// ── Шит настроек группы ───────────────────────────────────────────
+function _showGroupMoreSheet(groupId) {
+  const p = profileLoad();
+  const group = groupGet(groupId);
+  if (!group) return;
+  const isOwner = group.createdBy === p?.username;
+  const modOn   = !!group.moderation;
+
+  const sheet = document.createElement('div');
+  sheet.id = 'msg-action-sheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:8888;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:mcFadeIn .15s ease';
+
+  const ownerSection = isOwner ? `
+    <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
+    <div style="padding:14px 20px 6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Настройки владельца</div>
+    <!-- Модерация -->
+    <div style="padding:10px 20px 14px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:15px;color:var(--text);display:flex;align-items:center;gap:8px">
+          🛡 Модерация чата
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Заменять мат звёздочками</div>
+      </div>
+      <button id="grp-mod-toggle" onclick="_toggleGroupModeration('${escHtml(groupId)}')"
+        style="width:50px;height:28px;border-radius:14px;border:none;cursor:pointer;transition:background .2s;background:${modOn ? 'var(--accent)' : 'var(--surface3)'};position:relative;flex-shrink:0">
+        <span style="position:absolute;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:left .2s;left:${modOn ? '25px' : '3px'}"></span>
+      </button>
+    </div>
+    <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
+    <button onclick="_showGroupRenameDialog('${escHtml(groupId)}');_closeSheet(document.getElementById('msg-action-sheet'))"
+      style="width:100%;padding:16px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+      <span style="font-size:22px">✏️</span> Переименовать группу
+    </button>
+    <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
+    <button onclick="groupDelete('${escHtml(groupId)}');_closeSheet(document.getElementById('msg-action-sheet'))"
+      style="width:100%;padding:16px 20px;background:none;border:none;color:var(--danger,#c94f4f);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+      <span style="font-size:22px">🗑</span> Удалить группу
+    </button>` : `
+    <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
+    <button onclick="groupLeave('${escHtml(groupId)}');_closeSheet(document.getElementById('msg-action-sheet'))"
+      style="width:100%;padding:16px 20px;background:none;border:none;color:var(--danger,#c94f4f);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+      <span style="font-size:22px">🚪</span> Покинуть группу
+    </button>`;
+
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(16px + var(--safe-bot));overflow:hidden;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
+      <div style="width:40px;height:4px;border-radius:2px;background:var(--surface3);margin:8px auto 16px"></div>
+      <div style="padding:4px 20px 12px;font-size:17px;font-weight:700">${escHtml(group.name)}</div>
+      <div style="height:1px;background:rgba(255,255,255,.06);margin:0 20px"></div>
+      <div style="padding:10px 20px;font-size:13px;color:var(--muted)">
+        👥 ${group.members?.length || 1} участник(ов)
+        ${modOn ? ' · 🛡 Модерация включена' : ''}
+      </div>
+      ${ownerSection}
+    </div>`;
+
+  sheet.addEventListener('click', e => { if (e.target === sheet) _closeSheet(sheet); });
+  document.body.appendChild(sheet);
+}
+
+// Переключает модерацию и сохраняет в группу
+function _toggleGroupModeration(groupId) {
+  const groups = groupsLoad();
+  const g = groups.find(x => x.id === groupId);
+  if (!g) return;
+  g.moderation = !g.moderation;
+  groupsSave(groups);
+
+  // Обновляем toggle-кнопку без перезакрытия шита
+  const btn = document.getElementById('grp-mod-toggle');
+  if (btn) {
+    btn.style.background = g.moderation ? 'var(--accent)' : 'var(--surface3)';
+    const knob = btn.querySelector('span');
+    if (knob) knob.style.left = g.moderation ? '25px' : '3px';
+  }
+
+  // Синхронизируем группу для всех участников
+  const p = profileLoad();
+  if (p?.username) {
+    _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+      { groups: JSON.stringify(groups) },
+      { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
+  }
+
+  toast(g.moderation ? '🛡 Модерация включена' : '🛡 Модерация выключена');
+}
+
+function _showGroupRenameDialog(groupId) {
+  const g = groupGet(groupId);
+  if (!g) return;
+  const name = prompt('Новое название группы:', g.name);
+  if (!name || !name.trim()) return;
+  const groups = groupsLoad();
+  const gi = groups.find(x => x.id === groupId);
+  if (gi) { gi.name = name.trim(); groupsSave(groups); }
+  toast('✅ Группа переименована');
+  renderGroupsList && renderGroupsList();
+  // Обновляем шапку чата
+  const hdrName = document.getElementById('mc-hdr-name');
+  if (hdrName && _msgCurrentChat === groupId) hdrName.textContent = name.trim();
+}
+
 function messengerClearChat(username) {
   if (!confirm('Удалить чат с @' + username + '?')) return;
   const msgs = msgLoad();
@@ -8283,12 +7860,7 @@ function messengerClearChat(username) {
 
 function messengerShowInfo() {
   const username = _msgCurrentChat;
-  if (!username) return;
-  if (username === PUBLIC_GROUP_ID || username.startsWith('grp_')) {
-    showGroupSettings(username);
-    return;
-  }
-  peerProfileOpen(username);
+  if (username) peerProfileOpen(username);
 }
 
 // ── Открытие профиля другого пользователя ─────────────────────────
@@ -8557,6 +8129,63 @@ function peerProfileOpen(username) {
 })();
 
 // ── Фуллскрин видеоплеер с Telegram-стилем ────────────────────────
+// ── Инлайн-плеер кружков (воспроизводит прямо в чате) ─────────────
+let _mcCirclePlaying = null; // id текущего играющего кружка
+
+function mcCirclePlay(url, id) {
+  // Останавливаем предыдущий
+  if (_mcCirclePlaying && _mcCirclePlaying !== id) {
+    const prev = document.getElementById('circvid_' + _mcCirclePlaying);
+    if (prev) { prev.pause(); prev.currentTime = 0; }
+    _mcCircleReset(_mcCirclePlaying);
+  }
+  _mcCirclePlaying = id;
+
+  const thumb = document.getElementById('circthumb_' + id);
+  const vid   = document.getElementById('circvid_'   + id);
+  const pause = document.getElementById('circpause_' + id);
+
+  if (!vid) return;
+
+  // Скрываем превью, показываем видео
+  if (thumb) thumb.style.display = 'none';
+  vid.style.display = 'block';
+  if (pause) pause.style.display = 'flex';
+
+  vid.play().catch(e => {
+    console.error('[Circle] play error:', e);
+    _mcCircleReset(id);
+  });
+
+  // По окончании — возвращаем превью
+  vid.onended = () => _mcCircleReset(id);
+}
+
+function mcCircleToggle(id) {
+  const vid = document.getElementById('circvid_' + id);
+  if (!vid) return;
+  const ico = document.getElementById('circpauseico_' + id);
+  if (vid.paused) {
+    vid.play();
+    if (ico) { ico.style.opacity = '0'; }
+  } else {
+    vid.pause();
+    if (ico) { ico.style.opacity = '1'; }
+  }
+}
+
+function _mcCircleReset(id) {
+  const thumb = document.getElementById('circthumb_' + id);
+  const vid   = document.getElementById('circvid_'   + id);
+  const pause = document.getElementById('circpause_' + id);
+  const ico   = document.getElementById('circpauseico_' + id);
+  if (vid)   { vid.pause(); vid.currentTime = 0; vid.style.display = 'none'; }
+  if (thumb) thumb.style.display = '';
+  if (pause) pause.style.display = 'none';
+  if (ico)   ico.style.opacity = '0';
+  if (_mcCirclePlaying === id) _mcCirclePlaying = null;
+}
+
 async function mcVideoOpen(url, name) {
   console.log('[VideoPlayer] opening:', name, url?.substring(0,60));
   // Останавливаем предыдущий плеер
