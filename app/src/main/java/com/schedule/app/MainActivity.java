@@ -449,9 +449,13 @@ public class MainActivity extends Activity {
                         conn.connect();
                         if (conn.getResponseCode() == 200) {
                             java.io.InputStream is = conn.getInputStream();
-                            return new WebResourceResponse(
+                            WebResourceResponse resp = new WebResourceResponse(
                                 "application/javascript", "UTF-8", is
                             );
+                            java.util.Map<String, String> headers = new java.util.HashMap<>();
+                            headers.put("Access-Control-Allow-Origin", "*");
+                            resp.setResponseHeaders(headers);
+                            return resp;
                         }
                     } catch (Exception e) {
                         log.w(TAG, "intercept fetch failed for " + url + ": " + e.getMessage());
