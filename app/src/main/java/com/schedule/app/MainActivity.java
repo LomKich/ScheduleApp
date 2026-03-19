@@ -369,6 +369,25 @@ public class MainActivity extends Activity {
                 if (!url.startsWith("file://") && !url.contains("fonts.googleapis")) {
                     log.i(TAG, "fetch → " + url);
                 }
+                // ── Hot-patch: если файл был обновлён — отдаём из filesDir ────────────
+                if (url.startsWith("file:///android_asset/")) {
+                    String assetPath = url.substring("file:///android_asset/".length());
+                    java.io.File patchFile = new java.io.File(
+                        new java.io.File(getFilesDir(), "hotpatch"), assetPath);
+                    if (patchFile.exists()) {
+                        try {
+                            String mime = "text/html";
+                            if (assetPath.endsWith(".js"))  mime = "application/javascript";
+                            if (assetPath.endsWith(".css")) mime = "text/css";
+                            if (assetPath.endsWith(".json"))mime = "application/json";
+                            log.i(TAG, "hotpatch serving: " + assetPath);
+                            return new WebResourceResponse(mime, "UTF-8",
+                                new java.io.FileInputStream(patchFile));
+                        } catch (Exception e) {
+                            log.w(TAG, "hotpatch read error: " + e.getMessage());
+                        }
+                    }
+                }
                 // Перехватываем twemoji CDN — исправляем MIME-тип (text/plain → application/javascript)
                 if (url.contains("twemoji")) {
                     try {
@@ -1620,6 +1639,86 @@ public class MainActivity extends Activity {
                 webView.clearCache(true);
                 webView.clearHistory();
             });
+        }
+
+        /**
+         * Горячий патч: сохраняет файл в filesDir/hotpatch/<assetPath>.
+         * JS вызывает это после скачивания изменённого файла.
+         * shouldInterceptRequest подхватит его при следующей загрузке.
+         * @param assetPath  относительный путь, напр. "js/social.js" или "index.html"
+         * @param content    содержимое файла (UTF-8 строка)
+         * @return "ok" или сообщение об ошибке
+         */
+        @JavascriptInterface
+        public String hotPatchSaveFile(String assetPath, String content) {
+            try {
+                // Безопасность: запрещаем path traversal
+                if (assetPath.contains("..") || assetPath.startsWith("/")) {
+                    return "err: invalid path";
+                }
+                java.io.File dir = new java.io.File(getFilesDir(), "hotpatch");
+                java.io.File target = new java.io.File(dir, assetPath);
+                target.getParentFile().mkdirs();
+                java.io.FileWriter fw = new java.io.FileWriter(target, false);
+                fw.write(content);
+                fw.close();
+                log.i(TAG, "hotPatchSaveFile: saved " + assetPath + " (" + content.length() + " chars)");
+                return "ok";
+            } catch (Exception e) {
+                log.e(TAG, "hotPatchSaveFile error: " + e.getMessage());
+                return "err: " + e.getMessage();
+            }
+        }
+
+        /**
+         * Горячий патч: возвращает список установленных патчей (JSON массив путей).
+         */
+        @JavascriptInterface
+        public String hotPatchList() {
+            try {
+                java.io.File dir = new java.io.File(getFilesDir(), "hotpatch");
+                if (!dir.exists()) return "[]";
+                org.json.JSONArray arr = new org.json.JSONArray();
+                listFilesRecursive(dir, dir, arr);
+                return arr.toString();
+            } catch (Exception e) {
+                return "[]";
+            }
+        }
+
+        private void listFilesRecursive(java.io.File root, java.io.File current, org.json.JSONArray arr) {
+            java.io.File[] files = current.listFiles();
+            if (files == null) return;
+            for (java.io.File f : files) {
+                if (f.isDirectory()) {
+                    listFilesRecursive(root, f, arr);
+                } else {
+                    String rel = root.toURI().relativize(f.toURI()).getPath();
+                    arr.put(rel);
+                }
+            }
+        }
+
+        /**
+         * Горячий патч: удалить все патчи (откат к assets).
+         */
+        @JavascriptInterface
+        public void hotPatchClearAll() {
+            try {
+                java.io.File dir = new java.io.File(getFilesDir(), "hotpatch");
+                deleteRecursive(dir);
+                log.i(TAG, "hotPatchClearAll: done");
+            } catch (Exception e) {
+                log.e(TAG, "hotPatchClearAll error: " + e.getMessage());
+            }
+        }
+
+        private void deleteRecursive(java.io.File f) {
+            if (f.isDirectory()) {
+                java.io.File[] ch = f.listFiles();
+                if (ch != null) for (java.io.File c : ch) deleteRecursive(c);
+            }
+            f.delete();
         }
 
         /**
