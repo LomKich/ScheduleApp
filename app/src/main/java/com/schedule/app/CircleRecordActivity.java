@@ -29,6 +29,7 @@ import android.view.ViewOutlineProvider;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 
@@ -67,6 +68,8 @@ public class CircleRecordActivity extends Activity {
     private ProgressRingView  progressRing;
     private TextView          timerText;
     private View              switchBtn;
+    private View              bottomBar;       // нижняя панель (скрыта до начала записи)
+    private View              lockBtn;         // кнопка замка справа
 
     private int dp(float v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
@@ -140,13 +143,15 @@ public class CircleRecordActivity extends Activity {
     @SuppressLint("ClickableViewAccessibility")
     private View buildUi() {
         int screenW = getResources().getDisplayMetrics().widthPixels;
-        int screenH = getResources().getDisplayMetrics().heightPixels;
-        int circleSize = Math.min(dp(240), screenW - dp(48));
 
+        // Круг — почти во всю ширину экрана (как в Telegram)
+        int circleSize = screenW - dp(32);
+
+        // ── Root: чёрный фон на весь экран ──────────────────────
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.TRANSPARENT);
+        root.setBackgroundColor(0xFF000000);
 
-        // TextureView обрезан в круг через clipToOutline
+        // ── TextureView (кружок) — горизонтально центрирован, от верха ──
         textureView = new TextureView(this);
         textureView.setSurfaceTextureListener(surfaceListener);
         textureView.setClipToOutline(true);
@@ -157,60 +162,163 @@ public class CircleRecordActivity extends Activity {
         });
         FrameLayout.LayoutParams tvLp = new FrameLayout.LayoutParams(circleSize, circleSize);
         tvLp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
-        tvLp.topMargin = (int)(screenH * 0.15f); // 15% от верха экрана
+        tvLp.topMargin = dp(52);
+        tvLp.leftMargin = dp(16);
+        tvLp.rightMargin = dp(16);
         root.addView(textureView, tvLp);
 
-        // Прогресс-кольцо поверх TextureView
+        // ── Прогресс-кольцо поверх TextureView ──────────────────
         progressRing = new ProgressRingView(this);
         progressRing.setVisibility(View.GONE);
-        int ringSize = circleSize + dp(12);
+        int ringSize = circleSize + dp(10);
         FrameLayout.LayoutParams ringLp = new FrameLayout.LayoutParams(ringSize, ringSize);
         ringLp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
-        ringLp.topMargin = tvLp.topMargin - dp(6);
+        ringLp.topMargin = tvLp.topMargin - dp(5);
         root.addView(progressRing, ringLp);
 
-        // Таймер под кружком
-        timerText = new TextView(this);
-        timerText.setTextColor(0xFFFF3B30);
-        timerText.setTextSize(16);
-        timerText.setGravity(Gravity.CENTER);
-        timerText.setText("0:00");
-        timerText.setVisibility(View.GONE);
-        FrameLayout.LayoutParams timerLp = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
-        timerLp.gravity = Gravity.TOP;
-        timerLp.topMargin = tvLp.topMargin + circleSize + dp(12);
-        root.addView(timerText, timerLp);
+        // ── Кнопка замка справа от кружка (вертикально по центру) ──
+        lockBtn = makeLockBtn();
+        FrameLayout.LayoutParams lockLp = new FrameLayout.LayoutParams(dp(44), dp(44));
+        lockLp.gravity = Gravity.END | Gravity.TOP;
+        lockLp.topMargin = tvLp.topMargin + circleSize / 2 - dp(22);
+        lockLp.rightMargin = dp(8);
+        root.addView(lockBtn, lockLp);
+        lockBtn.setVisibility(View.GONE);
 
-        // Кнопка отмены (X) слева снизу
-        View cancelBtn = makeRoundBtn("✕", dp(52));
-        FrameLayout.LayoutParams cancelLp = new FrameLayout.LayoutParams(dp(52), dp(52));
-        cancelLp.gravity = Gravity.BOTTOM | Gravity.START;
-        cancelLp.setMargins(dp(32), 0, 0, dp(52));
-        root.addView(cancelBtn, cancelLp);
-        cancelBtn.setOnClickListener(v -> cancel());
-
-        // Переключить камеру справа снизу
-        switchBtn = makeRoundBtn("⟳", dp(52));
-        FrameLayout.LayoutParams switchLp = new FrameLayout.LayoutParams(dp(52), dp(52));
-        switchLp.gravity = Gravity.BOTTOM | Gravity.END;
-        switchLp.setMargins(0, 0, dp(32), dp(52));
-        root.addView(switchBtn, switchLp);
-        switchBtn.setOnClickListener(v -> switchCamera());
-
-        // Подсказка снизу
-        TextView hint = new TextView(this);
-        hint.setTextColor(0xCCFFFFFF);
-        hint.setTextSize(13);
-        hint.setGravity(Gravity.CENTER);
-        hint.setText("Отпустите для отправки");
-        FrameLayout.LayoutParams hintLp = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
-        hintLp.gravity = Gravity.BOTTOM;
-        hintLp.bottomMargin = dp(14);
-        root.addView(hint, hintLp);
+        // ── Нижняя панель (появляется после начала записи) ────────
+        bottomBar = buildBottomBar();
+        FrameLayout.LayoutParams bbLp = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(72));
+        bbLp.gravity = Gravity.BOTTOM;
+        bbLp.bottomMargin = dp(12);
+        root.addView(bottomBar, bbLp);
+        bottomBar.setVisibility(View.GONE);
 
         return root;
+    }
+
+    /** Нижняя панель в стиле Telegram: [flip+flash] | [●timer ← отмена] | [📷] */
+    private View buildBottomBar() {
+        FrameLayout wrap = new FrameLayout(this);
+
+        // Пилюля с flip и flash слева
+        LinearLayout leftPill = new LinearLayout(this);
+        leftPill.setOrientation(LinearLayout.HORIZONTAL);
+        leftPill.setGravity(Gravity.CENTER_VERTICAL);
+        android.graphics.drawable.GradientDrawable pillBg =
+            new android.graphics.drawable.GradientDrawable();
+        pillBg.setCornerRadius(dp(24));
+        pillBg.setColor(0xCC1C1C1E);
+        leftPill.setBackground(pillBg);
+        leftPill.setPadding(dp(6), dp(6), dp(6), dp(6));
+
+        switchBtn = makePillIconBtn("⟳");
+        switchBtn.setOnClickListener(v -> switchCamera());
+        leftPill.addView(switchBtn,
+            new LinearLayout.LayoutParams(dp(44), dp(44)));
+
+        View flashBtn = makePillIconBtn("⚡");
+        leftPill.addView(flashBtn,
+            new LinearLayout.LayoutParams(dp(44), dp(44)));
+
+        FrameLayout.LayoutParams pillLp = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, dp(56));
+        pillLp.gravity = Gravity.START | Gravity.CENTER_VERTICAL;
+        pillLp.leftMargin = dp(12);
+        wrap.addView(leftPill, pillLp);
+
+        // Центральная пилюля: ● таймер  ‹ Влево — отмена
+        android.graphics.drawable.GradientDrawable centerBg =
+            new android.graphics.drawable.GradientDrawable();
+        centerBg.setCornerRadius(dp(24));
+        centerBg.setColor(0xCC1C1C1E);
+
+        LinearLayout centerPill = new LinearLayout(this);
+        centerPill.setOrientation(LinearLayout.HORIZONTAL);
+        centerPill.setGravity(Gravity.CENTER_VERTICAL);
+        centerPill.setBackground(centerBg);
+        centerPill.setPadding(dp(14), 0, dp(14), 0);
+
+        View dot = new View(this);
+        dot.setBackground(makeCircleDrawable(0xFFFF3B30));
+        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(8), dp(8));
+        dotLp.rightMargin = dp(8);
+        centerPill.addView(dot, dotLp);
+
+        timerText = new TextView(this);
+        timerText.setTextColor(0xFFFFFFFF);
+        timerText.setTextSize(15);
+        timerText.setTypeface(android.graphics.Typeface.MONOSPACE);
+        timerText.setText("0:00,0");
+        timerText.setPadding(0, 0, dp(14), 0);
+        centerPill.addView(timerText,
+            new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        TextView hintTv = new TextView(this);
+        hintTv.setTextColor(0xAAFFFFFF);
+        hintTv.setTextSize(13);
+        hintTv.setText("‹ Влево — отмена");
+        centerPill.addView(hintTv,
+            new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        FrameLayout.LayoutParams ctrLp = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, dp(44));
+        ctrLp.gravity = Gravity.CENTER;
+        wrap.addView(centerPill, ctrLp);
+
+        // Кнопка 📷 справа — большой серый круг
+        FrameLayout camBtn = new FrameLayout(this);
+        android.graphics.drawable.GradientDrawable camBg =
+            new android.graphics.drawable.GradientDrawable();
+        camBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        camBg.setColor(0xCC3A3A3C);
+        camBtn.setBackground(camBg);
+        camBtn.setClickable(true); camBtn.setFocusable(true);
+        TextView camIco = new TextView(this);
+        camIco.setText("📷");
+        camIco.setTextSize(22);
+        camIco.setGravity(Gravity.CENTER);
+        camBtn.addView(camIco, new FrameLayout.LayoutParams(dp(60), dp(60)));
+        camBtn.setOnClickListener(v -> stopRecordingAndSend());
+
+        FrameLayout.LayoutParams camLp = new FrameLayout.LayoutParams(dp(60), dp(60));
+        camLp.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        camLp.rightMargin = dp(12);
+        wrap.addView(camBtn, camLp);
+
+        return wrap;
+    }
+
+    private View makePillIconBtn(String emoji) {
+        TextView tv = new TextView(this);
+        tv.setText(emoji);
+        tv.setTextSize(20);
+        tv.setGravity(Gravity.CENTER);
+        tv.setTextColor(0xFFFFFFFF);
+        tv.setClickable(true); tv.setFocusable(true);
+        android.graphics.drawable.RippleDrawable rip =
+            new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x33FFFFFF),
+                null, makeCircleDrawable(0xFFFFFFFF));
+        tv.setBackground(rip);
+        return tv;
+    }
+
+    private View makeLockBtn() {
+        FrameLayout fl = new FrameLayout(this);
+        android.graphics.drawable.GradientDrawable bg =
+            new android.graphics.drawable.GradientDrawable();
+        bg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        bg.setColor(0xCC1C1C1E);
+        fl.setBackground(bg); fl.setClickable(true); fl.setFocusable(true);
+        TextView tv = new TextView(this);
+        tv.setText("🔒"); tv.setTextSize(18); tv.setGravity(Gravity.CENTER);
+        fl.addView(tv, new FrameLayout.LayoutParams(dp(44), dp(44)));
+        return fl;
     }
 
     private void startBgThread() {
@@ -337,7 +445,11 @@ public class CircleRecordActivity extends Activity {
                             isRecording = true;
                             AppLogger.get(CircleRecordActivity.this)
                                 .i("CircleRec","Recording STARTED OK");
-                            runOnUiThread(() -> onRecordingStarted());
+                            runOnUiThread(() -> {
+                                // Перепривязываем зеркало ПОСЛЕ старта сессии
+                                configureTransform(textureView.getWidth(), textureView.getHeight());
+                                onRecordingStarted();
+                            });
                         } catch (Exception e) {
                             AppLogger.get(CircleRecordActivity.this)
                                 .e("CircleRec","ses.configure error: "+e.getMessage());
@@ -408,21 +520,31 @@ public class CircleRecordActivity extends Activity {
     private void onRecordingStarted() {
         progressRing.setVisibility(View.VISIBLE);
         progressRing.setProgress(0f);
-        timerText.setVisibility(View.VISIBLE);
-        if (switchBtn != null) switchBtn.setVisibility(View.INVISIBLE);
+        // Показываем нижнюю панель с таймером
+        if (bottomBar != null) bottomBar.setVisibility(View.VISIBLE);
+        if (lockBtn   != null) lockBtn.setVisibility(View.VISIBLE);
+        // Скрываем переключение камеры во время записи (как в Telegram)
+        if (switchBtn != null) switchBtn.setEnabled(false);
 
         recordSeconds = 0;
+        // Тик каждые 100мс — для отображения десятых долей секунды
+        final int[] tenths = {0};
         timerRunnable = new Runnable() {
             @Override public void run() {
-                recordSeconds++;
-                timerText.setText(recordSeconds / 60 + ":"
-                    + String.format("%02d", recordSeconds % 60));
-                progressRing.setProgress((float) recordSeconds / MAX_SECONDS);
-                if (recordSeconds < MAX_SECONDS) uiHandler.postDelayed(this, 1000);
+                tenths[0]++;
+                int total = tenths[0];
+                int secs  = total / 10;
+                int dec   = total % 10;
+                if (timerText != null)
+                    timerText.setText(secs / 60 + ":"
+                        + String.format("%02d", secs % 60) + "," + dec);
+                progressRing.setProgress((float) secs / MAX_SECONDS);
+                recordSeconds = secs;
+                if (secs < MAX_SECONDS) uiHandler.postDelayed(this, 100);
                 else stopRecordingAndSend();
             }
         };
-        uiHandler.postDelayed(timerRunnable, 1000);
+        uiHandler.postDelayed(timerRunnable, 100);
     }
 
     private void stopRecordingAndSend() {
