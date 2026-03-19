@@ -2032,6 +2032,7 @@ const SCREEN_PARENTS = {
   's-settings':      {parent:'s-profile',        nav:'nav-profile'},
   's-themes':        {parent:'s-settings',       nav:null},
   's-teachers':      {parent:'s-home',           nav:'nav-home'},
+  's-shorts':        {parent:'s-home',           nav:'nav-home'},
   's-profile-edit':  {parent:'s-profile',        nav:'nav-profile'},
   's-online':        {parent:'s-profile',        nav:'nav-profile'},
   's-leaderboard':   {parent:'s-profile',        nav:'nav-profile'},
@@ -2650,13 +2651,7 @@ function showHomeState(type,msg){
 }
 function renderFileList(){
   const list=document.getElementById('file-list');list.innerHTML='';
-  // Ставим последний выбранный файл первым
-  const sorted = [...S.files].sort((a, b) => {
-    const aSelected = S.selectedFile?.name === a.name ? -1 : 0;
-    const bSelected = S.selectedFile?.name === b.name ? -1 : 0;
-    return aSelected - bSelected;
-  });
-  sorted.forEach(f=>{
+  S.files.forEach(f=>{
     const item=document.createElement('div');
     item.className='list-item'+(S.selectedFile?.name===f.name?' selected':'');
     item.innerHTML=`<span class="item-name">${f.name}</span>`;

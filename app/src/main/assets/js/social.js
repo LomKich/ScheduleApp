@@ -9734,9 +9734,20 @@ const YT_SHORTS = (() => {
     if (spinner) spinner.style.display = 'block';
 
     // Создаём iframe с YouTube embed
+    // Используем youtube-nocookie.com + несколько Invidious instances как fallback
+    // YouTube блокирует embeds с file:// origin (ошибка 153)
+    // Invidious — открытый фронтенд YouTube без этого ограничения
+    const _invidiousHosts = [
+      'https://inv.nadeko.net',
+      'https://invidious.nerdvpn.de',
+      'https://yt.artemislena.eu',
+      'https://invidious.privacydev.net',
+    ];
+    const _embedHost = _invidiousHosts[Math.floor(Math.random() * _invidiousHosts.length)];
     const iframe = document.createElement('iframe');
-    iframe.src = `https://www.youtube.com/embed/${v.id}?autoplay=1&mute=0&loop=1&playlist=${v.id}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(location.origin||'https://scheduleapp.local')}`;
-    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+    // Пробуем сначала YouTube nocookie (меньше ограничений), затем Invidious
+    iframe.src = `${_embedHost}/embed/${v.id}?autoplay=1&loop=1&rel=0&local=true`;
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
     iframe.allowFullscreen = false;
     iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;z-index:5';
     iframe.onload = () => {
