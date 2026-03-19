@@ -149,7 +149,7 @@ public class CircleRecordActivity extends Activity {
 
         // ── Root: чёрный фон на весь экран ──────────────────────
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(0xFF000000);
+        root.setBackgroundColor(0xCC000000); // ~80% затемнение, фон просвечивает
 
         // ── TextureView (кружок) — горизонтально центрирован, от верха ──
         textureView = new TextureView(this);
@@ -421,10 +421,12 @@ public class CircleRecordActivity extends Activity {
 
             SurfaceTexture st = textureView.getSurfaceTexture();
             st.setDefaultBufferSize(videoSize.getWidth(), videoSize.getHeight());
-            Surface previewSurface  = new Surface(st);
-            Surface recorderSurface = mediaRecorder.getSurface();
+            final Surface previewSurface  = new Surface(st);
+            final Surface recorderSurface = mediaRecorder.getSurface();
 
             if (captureSession != null) { captureSession.close(); captureSession = null; }
+
+            // Пробуем preview + recorder (основной путь)
             previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
             previewRequestBuilder.addTarget(previewSurface);
             previewRequestBuilder.addTarget(recorderSurface);
@@ -444,9 +446,8 @@ public class CircleRecordActivity extends Activity {
                             mediaRecorder.start();
                             isRecording = true;
                             AppLogger.get(CircleRecordActivity.this)
-                                .i("CircleRec","Recording STARTED OK");
+                                .i("CircleRec","Recording STARTED OK (preview+recorder)");
                             runOnUiThread(() -> {
-                                // Перепривязываем зеркало ПОСЛЕ старта сессии
                                 configureTransform(textureView.getWidth(), textureView.getHeight());
                                 onRecordingStarted();
                             });
@@ -456,11 +457,59 @@ public class CircleRecordActivity extends Activity {
                         }
                     }
                     @Override public void onConfigureFailed(@NonNull CameraCaptureSession s) {
-                        AppLogger.get(CircleRecordActivity.this).e("CircleRec","configure FAILED");
+                        // Некоторые устройства (vivo, OPPO) не поддерживают
+                        // одновременно preview + recorder → fallback: только recorder
+                        AppLogger.get(CircleRecordActivity.this)
+                            .w("CircleRec","preview+recorder FAILED, retrying recorder-only");
+                        startRecordingRecorderOnly(recorderSurface);
                     }
                 }, bgHandler);
         } catch (Exception e) {
             AppLogger.get(this).e("CircleRec","startRecording exc: "+e.getMessage());
+            runOnUiThread(this::finish);
+        }
+    }
+
+    /** Fallback для устройств, не поддерживающих одновременно preview+recorder */
+    private void startRecordingRecorderOnly(Surface recorderSurface) {
+        if (cameraDevice == null) return;
+        try {
+            if (captureSession != null) { captureSession.close(); captureSession = null; }
+            previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+            previewRequestBuilder.addTarget(recorderSurface);
+            // Скрываем TextureView — нет превью
+            runOnUiThread(() -> textureView.setVisibility(View.INVISIBLE));
+
+            cameraDevice.createCaptureSession(
+                Arrays.asList(recorderSurface),
+                new CameraCaptureSession.StateCallback() {
+                    @Override public void onConfigured(@NonNull CameraCaptureSession ses) {
+                        captureSession = ses;
+                        try {
+                            previewRequestBuilder.set(CaptureRequest.CONTROL_MODE,
+                                CaptureRequest.CONTROL_MODE_AUTO);
+                            ses.setRepeatingRequest(
+                                previewRequestBuilder.build(), null, bgHandler);
+                            mediaRecorder.start();
+                            isRecording = true;
+                            AppLogger.get(CircleRecordActivity.this)
+                                .i("CircleRec","Recording STARTED OK (recorder-only fallback)");
+                            runOnUiThread(CircleRecordActivity.this::onRecordingStarted);
+                        } catch (Exception e) {
+                            AppLogger.get(CircleRecordActivity.this)
+                                .e("CircleRec","recorder-only configure error: "+e.getMessage());
+                            runOnUiThread(CircleRecordActivity.this::finish);
+                        }
+                    }
+                    @Override public void onConfigureFailed(@NonNull CameraCaptureSession s) {
+                        AppLogger.get(CircleRecordActivity.this)
+                            .e("CircleRec","recorder-only configure FAILED — giving up");
+                        runOnUiThread(CircleRecordActivity.this::cancel);
+                    }
+                }, bgHandler);
+        } catch (Exception e) {
+            AppLogger.get(this).e("CircleRec","startRecordingRecorderOnly exc: "+e.getMessage());
+            runOnUiThread(this::cancel);
         }
     }
 
