@@ -459,6 +459,44 @@ public class MainActivity extends Activity {
                 }
                 return super.shouldInterceptRequest(view, req);
             }
+                    java.io.File patchFile = new java.io.File(
+                        new java.io.File(getFilesDir(), "hotpatch"), assetPath);
+                    if (patchFile.exists()) {
+                        try {
+                            String mime = "text/html";
+                            if (assetPath.endsWith(".js"))  mime = "application/javascript";
+                            if (assetPath.endsWith(".css")) mime = "text/css";
+                            if (assetPath.endsWith(".json"))mime = "application/json";
+                            log.i(TAG, "hotpatch serving: " + assetPath);
+                            return new WebResourceResponse(mime, "UTF-8",
+                                new java.io.FileInputStream(patchFile));
+                        } catch (Exception e) {
+                            log.w(TAG, "hotpatch read error: " + e.getMessage());
+                        }
+                    }
+                }
+                // Перехватываем twemoji CDN — исправляем MIME-тип (text/plain → application/javascript)
+                if (url.contains("twemoji")) {
+                    try {
+                        java.net.URL jurl = new java.net.URL(url);
+                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) jurl.openConnection();
+                        conn.setRequestMethod("GET");
+                        conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+                        conn.setConnectTimeout(10000);
+                        conn.setReadTimeout(15000);
+                        conn.connect();
+                        if (conn.getResponseCode() == 200) {
+                            java.io.InputStream is = conn.getInputStream();
+                            return new WebResourceResponse(
+                                "application/javascript", "UTF-8", is
+                            );
+                        }
+                    } catch (Exception e) {
+                        log.w(TAG, "intercept fetch failed for " + url + ": " + e.getMessage());
+                    }
+                }
+                return super.shouldInterceptRequest(view, req);
+            }
         });
     }
 
