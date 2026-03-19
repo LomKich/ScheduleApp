@@ -7358,39 +7358,6 @@ function _mcInChatSendingShow(fileType, label) {
   body.scrollTop = body.scrollHeight;
 }
 
-  const icons = {
-    voice: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`,
-    circle:`<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="9" stroke="white" stroke-width="2" fill="none"/><circle cx="12" cy="9" r="3" fill="white"/><path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="white"/></svg>`,
-    video: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`,
-    file:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`,
-    image: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
-  };
-  const ico = icons[fileType] || icons.file;
-  const displayLabel = label || { voice:'Голосовое', circle:'Видеосообщение', video:'Видео', file:'Файл', image:'Фото' }[fileType] || 'Файл';
-
-  el.innerHTML = `
-    <div class="mc-ics-bubble">
-      <div class="mc-ics-icon">
-        <svg class="mc-ics-spinner" viewBox="0 0 44 44">
-          <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="3.5"/>
-          <circle cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="3.5"
-            stroke-dasharray="28 85" stroke-linecap="round"
-            style="transform-origin:center;animation:mc-ics-spin .9s linear infinite"/>
-        </svg>
-        <div class="mc-ics-ico-inner">${ico}</div>
-      </div>
-      <div class="mc-ics-info">
-        <div class="mc-ics-label">${escHtml(displayLabel.slice(0,30))}</div>
-        <div class="mc-ics-sub" id="mc-ics-sub">Отправляю…</div>
-      </div>
-      <div class="mc-ics-dots">
-        <span></span><span></span><span></span>
-      </div>
-    </div>`;
-
-  body.appendChild(el);
-  body.scrollTop = body.scrollHeight;
-}
 
 /** Обновляет подпись под именем файла (например «⬆ 42%») */
 function _mcInChatSendingUpdate(fileType, subText) {
