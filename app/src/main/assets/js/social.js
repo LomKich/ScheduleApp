@@ -4833,10 +4833,11 @@ document.addEventListener('DOMContentLoaded', () => {
 let _EMOJI_BASE = 'file:///android_asset/emoji/'; // дефолт, перезаписывается ниже
 let _emojiPackReady = false;
 
-// EMOJI_PACK_ZIP_URL — прямая ссылка на ZIP-релиз в отдельном репозитории.
-// Формат ZIP: внутри папка emoji/ со структурой act/, food/, ppl/ и т.д.
-// Пример: https://github.com/LOMKICH/ScheduleApp-emoji/releases/latest/download/emoji.zip
-const EMOJI_PACK_ZIP_URL = 'https://github.com/LOMKICH/ScheduleApp-emoji/releases/latest/download/emoji.zip';
+// EMOJI_PACK_ZIP_URL — архив репозитория LomKich/emoji (main branch).
+// Работает без создания релиза — GitHub автоматически генерирует zip любой ветки.
+// Структура внутри: emoji-main/emoji/act/Fire.png, emoji-main/emoji/food/...
+// Java-экстрактор срезает префикс "emoji-main/" при распаковке.
+const EMOJI_PACK_ZIP_URL = 'https://github.com/LomKich/emoji/archive/refs/heads/main.zip';
 
 /**
  * Инициализация emoji-пака при старте приложения.

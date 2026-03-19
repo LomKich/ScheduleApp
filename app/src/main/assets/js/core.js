@@ -5238,9 +5238,9 @@ async function checkForUpdates(silent) {
       return;
     }
 
-    // Передаём управление в checkHotPatch — он сам покажет диалог и скачает
-    // Передаём уже готовый манифест чтобы не качать его повторно
-    await _applyHotPatch(manifest, toUpdate, latestVer, silent);
+    // Горячий патч: всегда показываем диалог — даже при автозапуске (silent=true).
+    // Пользователь должен сам подтвердить обновление файлов.
+    await _applyHotPatch(manifest, toUpdate, latestVer, false);
 
   } catch(e) {
     if (!silent) toast('❌ ' + e.message.slice(0, 80));

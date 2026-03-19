@@ -459,44 +459,6 @@ public class MainActivity extends Activity {
                 }
                 return super.shouldInterceptRequest(view, req);
             }
-                    java.io.File patchFile = new java.io.File(
-                        new java.io.File(getFilesDir(), "hotpatch"), assetPath);
-                    if (patchFile.exists()) {
-                        try {
-                            String mime = "text/html";
-                            if (assetPath.endsWith(".js"))  mime = "application/javascript";
-                            if (assetPath.endsWith(".css")) mime = "text/css";
-                            if (assetPath.endsWith(".json"))mime = "application/json";
-                            log.i(TAG, "hotpatch serving: " + assetPath);
-                            return new WebResourceResponse(mime, "UTF-8",
-                                new java.io.FileInputStream(patchFile));
-                        } catch (Exception e) {
-                            log.w(TAG, "hotpatch read error: " + e.getMessage());
-                        }
-                    }
-                }
-                // Перехватываем twemoji CDN — исправляем MIME-тип (text/plain → application/javascript)
-                if (url.contains("twemoji")) {
-                    try {
-                        java.net.URL jurl = new java.net.URL(url);
-                        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) jurl.openConnection();
-                        conn.setRequestMethod("GET");
-                        conn.setRequestProperty("User-Agent", "Mozilla/5.0");
-                        conn.setConnectTimeout(10000);
-                        conn.setReadTimeout(15000);
-                        conn.connect();
-                        if (conn.getResponseCode() == 200) {
-                            java.io.InputStream is = conn.getInputStream();
-                            return new WebResourceResponse(
-                                "application/javascript", "UTF-8", is
-                            );
-                        }
-                    } catch (Exception e) {
-                        log.w(TAG, "intercept fetch failed for " + url + ": " + e.getMessage());
-                    }
-                }
-                return super.shouldInterceptRequest(view, req);
-            }
         });
     }
 
@@ -2002,9 +1964,33 @@ public class MainActivity extends Activity {
                                 new java.io.FileInputStream(tmpZip)));
                     java.util.zip.ZipEntry entry;
                     int extracted = 0;
+                    // Определяем общий префикс верхнего уровня (напр. "emoji-main/")
+                    // GitHub archive генерирует zip вида: emoji-main/emoji/act/Fire.png
+                    // Нам нужно срезать "emoji-main/" чтобы получить "emoji/act/Fire.png"
+                    String stripPrefix = null;
+                    {
+                        java.util.zip.ZipInputStream sniffer =
+                            new java.util.zip.ZipInputStream(
+                                new java.io.BufferedInputStream(
+                                    new java.io.FileInputStream(tmpZip)));
+                        java.util.zip.ZipEntry snEntry;
+                        while ((snEntry = sniffer.getNextEntry()) != null) {
+                            String sn = snEntry.getName();
+                            if (sn.contains("/")) {
+                                stripPrefix = sn.substring(0, sn.indexOf('/') + 1);
+                                sniffer.closeEntry(); break;
+                            }
+                            sniffer.closeEntry();
+                        }
+                        sniffer.close();
+                    }
                     while ((entry = zis.getNextEntry()) != null) {
                         String name = entry.getName();
-                        if (name.contains("..") || name.startsWith("/")) {
+                        // Срезаем общий префикс верхнего уровня
+                        if (stripPrefix != null && name.startsWith(stripPrefix)) {
+                            name = name.substring(stripPrefix.length());
+                        }
+                        if (name.isEmpty() || name.contains("..") || name.startsWith("/")) {
                             zis.closeEntry(); continue;
                         }
                         java.io.File out = new java.io.File(emojiDir, name);
