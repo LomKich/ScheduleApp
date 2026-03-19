@@ -179,6 +179,40 @@ public class MainActivity extends Activity {
 
         log.i(TAG, "onCreate завершён");
         createNotificationChannel();
+        // Запрашиваем исключение из оптимизации батареи — один раз при первом запуске.
+        // Без этого Android убивает фоновый сервис и уведомления не приходят.
+        requestBatteryOptimizationExemption();
+    }
+
+    /** Предлагает пользователю добавить приложение в белый список батареи (один раз). */
+    private void requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+        if (prefs.getBoolean("battery_opt_asked", false)) return;
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null && pm.isIgnoringBatteryOptimizations(getPackageName())) return;
+            prefs.edit().putBoolean("battery_opt_asked", true).apply();
+            new AlertDialog.Builder(this)
+                .setTitle("🔔 Уведомления в фоне")
+                .setMessage("Для получения сообщений когда приложение закрыто — разрешите работу в фоне.\n\nНа следующем экране нажмите «Разрешить».")
+                .setPositiveButton("Настроить", (d, w) -> {
+                    try {
+                        android.content.Intent intent = new android.content.Intent(
+                            android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            android.net.Uri.parse("package:" + getPackageName()));
+                        startActivity(intent);
+                    } catch (Exception e) {
+                        try {
+                            startActivity(new android.content.Intent(
+                                android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                        } catch (Exception ignored) {}
+                    }
+                })
+                .setNegativeButton("Позже", null)
+                .show();
+        } catch (Exception e) {
+            log.w(TAG, "requestBatteryOptimizationExemption: " + e.getMessage());
+        }
     }
 
     private void createNotificationChannel() {
@@ -603,6 +637,19 @@ public class MainActivity extends Activity {
                 .putString(PREF_SB_USER, username != null ? username : "")
                 // Начинаем отслеживать с текущего момента (не уведомляем о старых)
                 .putLong(PREF_SB_LAST_TS, System.currentTimeMillis())
+                .apply();
+        }
+
+        /**
+         * JS вызывает при изменении списка групп пользователя.
+         * Сохраняем JSON-массив групп в SharedPreferences для фонового сервиса.
+         */
+        @JavascriptInterface
+        public void saveUserGroups(String username, String groupsJson) {
+            if (username == null || username.isEmpty() || groupsJson == null) return;
+            log.i(TAG, "saveUserGroups: " + username + " groups=" + groupsJson.length() + " chars");
+            prefs.edit()
+                .putString("user_groups_" + username, groupsJson)
                 .apply();
         }
 

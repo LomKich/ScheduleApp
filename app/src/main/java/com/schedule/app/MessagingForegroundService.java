@@ -128,19 +128,23 @@ public class MessagingForegroundService extends Service {
     // ── Restart on kill ───────────────────────────────────────────────────────
 
     private void scheduleRestart() {
-        // Используем AlarmManager для перезапуска через 3 секунды
         try {
             Intent restartIntent = new Intent(getApplicationContext(), MessagingForegroundService.class);
-            android.app.PendingIntent pi;
-            pi = android.app.PendingIntent.getService(
+            android.app.PendingIntent pi = android.app.PendingIntent.getService(
                     getApplicationContext(), 1, restartIntent,
                     android.app.PendingIntent.FLAG_ONE_SHOT | android.app.PendingIntent.FLAG_IMMUTABLE);
             android.app.AlarmManager am =
                 (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
             if (am != null) {
-                am.set(android.app.AlarmManager.RTC_WAKEUP,
-                    System.currentTimeMillis() + 3000, pi);
-                log.i(TAG, "Restart scheduled in 3s");
+                long triggerAt = System.currentTimeMillis() + 3000;
+                // setExactAndAllowWhileIdle работает даже в Doze-режиме (Android 6+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    am.setExactAndAllowWhileIdle(
+                        android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi);
+                } else {
+                    am.set(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi);
+                }
+                log.i(TAG, "Restart scheduled in 3s (Doze-safe)");
             }
         } catch (Exception e) {
             log.w(TAG, "scheduleRestart error: " + e.getMessage());
@@ -181,107 +185,159 @@ public class MessagingForegroundService extends Service {
                 log.w(TAG, "doPoll: username не задан, пропускаю");
                 return;
             }
-            // Читаем lastTs — если 0 (первый запуск), берём последние 60 секунд
             long lastTs = prefs.getLong(PREF_SB_LAST_TS, 0);
             if (lastTs == 0) lastTs = System.currentTimeMillis() - 60_000L;
 
-            String urlStr = SupabaseClient.URL
-                + "/rest/v1/messages?select=from_user,text,ts,extra,sticker"
+            // ── 1. Личные сообщения (to_user = username) ───────────────────
+            String urlPersonal = SupabaseClient.URL
+                + "/rest/v1/messages?select=from_user,text,ts,extra,sticker,chat_key"
                 + "&to_user=eq." + java.net.URLEncoder.encode(username, "UTF-8")
                 + "&ts=gt." + lastTs
                 + "&order=ts.asc"
                 + "&limit=50";
 
-            java.net.URL url = new java.net.URL(urlStr);
-            java.net.HttpURLConnection conn =
-                (java.net.HttpURLConnection) url.openConnection(java.net.Proxy.NO_PROXY);
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(8000);
-            conn.setReadTimeout(8000);
-            conn.setRequestProperty("apikey",        SupabaseClient.ANON_KEY);
-            conn.setRequestProperty("Authorization", "Bearer " + SupabaseClient.ANON_KEY);
-            conn.setRequestProperty("Accept",        "application/json");
+            // ── 2. Групповые сообщения (to_user = __broadcast__) ───────────
+            // Загружаем список групп пользователя из SharedPreferences
+            String groupsJson = prefs.getString("user_groups_" + username, "[]");
+            java.util.List<String> groupIds = parseGroupIds(groupsJson);
 
-            int status = conn.getResponseCode();
-            if (status != 200) {
-                log.w(TAG, "doPoll HTTP " + status);
-                conn.disconnect();
-                return;
-            }
-
-            java.io.InputStream is = conn.getInputStream();
-            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-            byte[] buf = new byte[4096]; int n;
-            while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
-            is.close(); conn.disconnect();
-
-            String body = baos.toString("UTF-8").trim();
-            if (body.isEmpty() || body.equals("[]")) return;
-
-            org.json.JSONArray arr = new org.json.JSONArray(body);
-            if (arr.length() == 0) return;
-
-            long maxTs = lastTs;
             java.util.LinkedHashMap<String, java.util.List<String>> byUser =
                 new java.util.LinkedHashMap<>();
+            long maxTs = lastTs;
 
-            for (int i = 0; i < arr.length(); i++) {
-                org.json.JSONObject msg = arr.getJSONObject(i);
-                String from = msg.optString("from_user", "?");
-                long   ts   = msg.optLong("ts", 0);
-                String text = msg.optString("text", "");
+            // Поллим личные сообщения
+            maxTs = pollEndpoint(urlPersonal, username, lastTs, maxTs, byUser, false);
 
-                // Пропускаем служебные сообщения (реакции, read_receipt)
-                String extra = msg.optString("extra", "");
-                if (!extra.isEmpty()) {
-                    try {
-                        org.json.JSONObject ex = new org.json.JSONObject(extra);
-                        String tp = ex.optString("type", "");
-                        if ("reaction".equals(tp) || "read_receipt".equals(tp)) {
-                            if (ts > maxTs) maxTs = ts;
-                            continue; // служебное — не уведомляем
-                        }
-                    } catch (Exception ignored) {}
-                }
-
-                // Зашифрованное сообщение — не показываем цифробред
-                if (text.startsWith("ENC:")) {
-                    text = "🔐 Зашифрованное сообщение";
-                } else if (text.isEmpty() || text.startsWith("{")) {
-                    // Медиа — читаем тип из extra
-                    if (!extra.isEmpty()) {
-                        try {
-                            org.json.JSONObject ex = new org.json.JSONObject(extra);
-                            String ft = ex.optString("fileType", "");
-                            String tp = ex.optString("type", "");
-                            if ("group_invite".equals(tp))      text = "👥 Добавил(а) в группу";
-                            else if ("voice".equals(ft))        text = "🎤 Голосовое";
-                            else if ("circle".equals(ft))       text = "⭕ Видеосообщение";
-                            else if ("video".equals(ft))        text = "🎬 Видео";
-                            else if (ex.has("image"))           text = "📷 Фото";
-                            else if ("file".equals(ft))         text = "📎 " + ex.optString("fileName", "Файл");
-                            else if (!ft.isEmpty())             text = "📎 Файл";
-                        } catch (Exception ignored) {}
-                    }
-                    // Стикер
-                    if (text.isEmpty()) {
-                        String sticker = msg.optString("sticker", "");
-                        text = sticker.isEmpty() ? "📎 Файл" : sticker + " Стикер";
-                    }
-                }
-
-                if (ts > maxTs) maxTs = ts;
-                byUser.computeIfAbsent(from, k -> new java.util.ArrayList<>()).add(text);
+            // Поллим каждую группу
+            for (String groupId : groupIds) {
+                String chatKey = "group_" + groupId;
+                String urlGroup = SupabaseClient.URL
+                    + "/rest/v1/messages?select=from_user,text,ts,extra,sticker,chat_key"
+                    + "&chat_key=eq." + java.net.URLEncoder.encode(chatKey, "UTF-8")
+                    + "&to_user=eq.__broadcast__"
+                    + "&from_user=neq." + java.net.URLEncoder.encode(username, "UTF-8")
+                    + "&ts=gt." + lastTs
+                    + "&order=ts.asc"
+                    + "&limit=20";
+                // groupId используем как ключ — уведомление будет «в группе X»
+                maxTs = pollEndpoint(urlGroup, groupId, lastTs, maxTs, byUser, true);
             }
 
-            // Сохраняем новый lastTs (+1 чтобы не показывать то же самое снова)
-            prefs.edit().putLong(PREF_SB_LAST_TS, maxTs + 1).apply();
+            if (maxTs > lastTs) {
+                prefs.edit().putLong(PREF_SB_LAST_TS, maxTs + 1).apply();
+            }
 
-            showMessageNotifications(byUser);
+            if (!byUser.isEmpty()) {
+                showMessageNotifications(byUser);
+            }
 
         } catch (Exception e) {
             log.w(TAG, "poll error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Загружает сообщения с одного endpoint и добавляет в byUser.
+     * @param chatId   для личных — username отправителя; для групп — groupId
+     * @param isGroup  true = сообщение из группы, в title покажем «Группа»
+     * @return новый maxTs
+     */
+    private long pollEndpoint(String urlStr, String chatId, long lastTs, long maxTs,
+            java.util.LinkedHashMap<String, java.util.List<String>> byUser,
+            boolean isGroup) throws Exception {
+
+        java.net.URL url = new java.net.URL(urlStr);
+        java.net.HttpURLConnection conn =
+            (java.net.HttpURLConnection) url.openConnection(java.net.Proxy.NO_PROXY);
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(8000);
+        conn.setReadTimeout(8000);
+        conn.setRequestProperty("apikey",        SupabaseClient.ANON_KEY);
+        conn.setRequestProperty("Authorization", "Bearer " + SupabaseClient.ANON_KEY);
+        conn.setRequestProperty("Accept",        "application/json");
+
+        int status = conn.getResponseCode();
+        if (status != 200) { conn.disconnect(); return maxTs; }
+
+        java.io.InputStream is = conn.getInputStream();
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[4096]; int n;
+        while ((n = is.read(buf)) != -1) baos.write(buf, 0, n);
+        is.close(); conn.disconnect();
+
+        String body = baos.toString("UTF-8").trim();
+        if (body.isEmpty() || body.equals("[]")) return maxTs;
+
+        org.json.JSONArray arr = new org.json.JSONArray(body);
+        if (arr.length() == 0) return maxTs;
+
+        for (int i = 0; i < arr.length(); i++) {
+            org.json.JSONObject msg = arr.getJSONObject(i);
+            String from  = msg.optString("from_user", "?");
+            long   ts    = msg.optLong("ts", 0);
+            String text  = msg.optString("text", "");
+            String extra = msg.optString("extra", "");
+
+            // Пропускаем служебные
+            if (!extra.isEmpty()) {
+                try {
+                    org.json.JSONObject ex = new org.json.JSONObject(extra);
+                    String tp = ex.optString("type", "");
+                    if ("reaction".equals(tp) || "read_receipt".equals(tp)) {
+                        if (ts > maxTs) maxTs = ts;
+                        continue;
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (text.startsWith("ENC:")) {
+                text = "🔐 Зашифрованное сообщение";
+            } else if (text.isEmpty() || text.startsWith("{")) {
+                if (!extra.isEmpty()) {
+                    try {
+                        org.json.JSONObject ex = new org.json.JSONObject(extra);
+                        String ft = ex.optString("fileType", "");
+                        String tp = ex.optString("type", "");
+                        if      ("group_invite".equals(tp)) text = "👥 Добавил(а) в группу";
+                        else if ("voice".equals(ft))        text = "🎤 Голосовое";
+                        else if ("circle".equals(ft))       text = "⭕ Видеосообщение";
+                        else if ("video".equals(ft))        text = "🎬 Видео";
+                        else if (ex.has("image"))           text = "📷 Фото";
+                        else if ("file".equals(ft))         text = "📎 " + ex.optString("fileName", "Файл");
+                        else if (!ft.isEmpty())             text = "📎 Файл";
+                    } catch (Exception ignored) {}
+                }
+                if (text.isEmpty()) {
+                    String sticker = msg.optString("sticker", "");
+                    text = sticker.isEmpty() ? "📎 Файл" : sticker + " Стикер";
+                }
+            }
+
+            if (ts > maxTs) maxTs = ts;
+
+            // Для групп ключ = "grp:groupId:from" чтобы объединять по группе+отправителю
+            String notifKey = isGroup ? "grp:" + chatId + ":" + from : from;
+            // Для групп показываем «from в группе», для личных — просто from
+            String displayKey = isGroup ? from + " в группе " + chatId : from;
+            byUser.computeIfAbsent(displayKey, k -> new java.util.ArrayList<>()).add(text);
+        }
+        return maxTs;
+    }
+
+    /** Достаёт список group id из JSON-строки формата [{id:"grp_...",…},…] */
+    private java.util.List<String> parseGroupIds(String json) {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                org.json.JSONObject g = arr.optJSONObject(i);
+                if (g == null) continue;
+                String id = g.optString("id", "");
+                // Включаем только обычные группы, не публичную
+                if (id.startsWith("grp_")) ids.add(id);
+            }
+        } catch (Exception ignored) {}
+        return ids;
     }
 
     // ── Notifications ─────────────────────────────────────────────────────────
