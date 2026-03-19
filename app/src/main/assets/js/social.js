@@ -4389,7 +4389,72 @@ function _mcUpdateMuteIcon() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 📌 ЗАКРЕПЛЁННЫЕ СООБЩЕНИЯ
+// 🔐 ПЕРЕКЛЮЧАТЕЛЬ ШИФРОВАНИЯ ЧАТА (Secret Chat, как в Telegram)
+// ══════════════════════════════════════════════════════════════════════
+// Хранит Set username'ов для которых включено шифрование
+const _SECRET_CHATS_KEY = 'sapp_secret_chats_v1';
+function _secretChatsLoad() {
+  try { return new Set(JSON.parse(localStorage.getItem(_SECRET_CHATS_KEY) || '[]')); }
+  catch(e) { return new Set(); }
+}
+function _secretChatsSave(set) {
+  localStorage.setItem(_SECRET_CHATS_KEY, JSON.stringify([...set]));
+}
+
+// Включено ли шифрование для данного чата
+function isChatEncrypted(username) {
+  return _secretChatsLoad().has(username);
+}
+
+// Обновить иконку кнопки шифрования
+function mcUpdateEncryptBtn() {
+  const btn = document.getElementById('mc-encrypt-btn');
+  if (!btn || !_msgCurrentChat) return;
+  // Скрываем для групп
+  const isGroup = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
+  if (isGroup) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  const enc = isChatEncrypted(_msgCurrentChat);
+  btn.textContent     = enc ? '🔐' : '🔓';
+  btn.style.opacity   = enc ? '1' : '0.45';
+  btn.style.transform = enc ? 'scale(1.15)' : 'scale(1)';
+  btn.title           = enc ? 'Секретный чат (выкл)' : 'Включить шифрование';
+}
+
+// Переключить шифрование для текущего чата
+function mcToggleEncrypt() {
+  if (!_msgCurrentChat) return;
+  const isGroup = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
+  if (isGroup) { toast('🔒 Шифрование недоступно в групповых чатах'); return; }
+
+  const set = _secretChatsLoad();
+  if (set.has(_msgCurrentChat)) {
+    set.delete(_msgCurrentChat);
+    toast('🔓 Обычный режим — шифрование выключено');
+  } else {
+    set.add(_msgCurrentChat);
+    toast('🔐 Секретный чат включён — сообщения шифруются');
+    // Убеждаемся что E2E ключи инициализированы
+    if (!_e2eEnabled) e2eInit().then(() => e2ePushMyKey && e2ePushMyKey());
+  }
+  _secretChatsSave(set);
+  mcUpdateEncryptBtn();
+  // Перерендерить шапку чтобы показать/убрать индикатор
+  const hdrSub = document.getElementById('mc-hdr-sub');
+  if (hdrSub && !isGroup) {
+    if (set.has(_msgCurrentChat)) {
+      hdrSub.textContent = '🔐 Секретный чат';
+    } else {
+      const peer = _profileOnlinePeers.find(u => u.username === _msgCurrentChat)
+                 || _allKnownUsers.find(u => u.username === _msgCurrentChat);
+      hdrSub.textContent = peer
+        ? (_profileOnlinePeers.find(u => u.username === _msgCurrentChat) ? '🟢 В сети' : '⚡ Не в сети')
+        : ('@' + _msgCurrentChat);
+    }
+  }
+}
+
+
 // ══════════════════════════════════════════════════════════════════════
 const PIN_KEY = 'sapp_pinned_v1';
 
@@ -4776,6 +4841,8 @@ function vipActivate(code) {
 
 // СБП реквизиты (замени на свои)
 const SBP_PHONE = '+79966219426';   // ↩ ЗАМЕНИ НА СВОЙ НОМЕР СБП
+// Прямая СБП-ссылка — открывается при нажатии кнопки оплаты
+const SBP_DIRECT_URL = 'https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=%2B79966219426&bankCode=100000000004';
 
 const DONATE_TIERS = [
   { amount: 20,  label: '⭐ VIP месяц',    desc: '+ VIP на 30 дней', vip: true  },
@@ -4976,29 +5043,23 @@ function _updateDonateBtn() {
 }
 
 function donateOpenBank() {
-  const tier = DONATE_TIERS[_selectedDoneTierIdx];
-  const bank = SBP_BANKS[_selectedBankIdx];
+  const tier   = DONATE_TIERS[_selectedDoneTierIdx];
   const amount = tier.amount;
 
-  // Сначала пробуем deep-link (открывает приложение банка)
-  const deeplink = bank.deeplink(SBP_PHONE, amount);
-  const webUrl   = bank.webUrl(SBP_PHONE, amount);
-
-  if (window.Android?.openBankDeeplink) {
-    // Android: пробуем deep-link с fallback на webUrl если приложение не установлено
-    window.Android.openBankDeeplink(deeplink, webUrl);
-  } else if (window.Android?.openUrl) {
-    window.Android.openUrl(deeplink);
+  // Открываем прямую СБП-ссылку
+  if (window.Android?.openUrl) {
+    window.Android.openUrl(SBP_DIRECT_URL);
   } else {
-    window.open(webUrl, '_blank', 'noopener');
+    window.open(SBP_DIRECT_URL, '_blank', 'noopener');
   }
+
   // Показываем подтверждение через 1.5с
   setTimeout(() => {
     const sec = document.getElementById('donate-confirm-section');
     if (sec) { sec.style.display = 'block'; sec.scrollIntoView({ behavior: 'smooth' }); }
   }, 1500);
 
-  toast(`💳 Открываю ${bank.name}... Переведи ${amount}₽ на ${SBP_PHONE}`);
+  toast(`💳 Переведи ${amount}₽ через СБП на ${SBP_PHONE}`);
 }
 
 
@@ -5797,9 +5858,12 @@ function messengerRenderList(filter) {
     const peer     = _profileOnlinePeers.find(u => u.username === username)
                    || _allKnownUsers.find(u => u.username === username);
     const isOnline = !!_profileOnlinePeers.find(u => u.username === username);
-    const name     = peer?.name || username;
-    const avatar   = peer?.avatar || '😊';
-    const color    = peer?.color || 'var(--surface3)';
+    // ── Группы: берём имя/аватар из groupGet, а не из users ──────────────────
+    const _isGroupChat = username === PUBLIC_GROUP_ID || username.startsWith('grp_');
+    const _groupData   = _isGroupChat ? groupGet(username) : null;
+    const name     = _groupData?.name  || peer?.name  || username;
+    const avatar   = _groupData?.avatar || peer?.avatar || '😊';
+    const color    = _groupData?.color  || peer?.color  || 'var(--surface3)';
     // ┄┄ Telegram-style preview ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
     const _prevText = _mcPreviewText(last);
     const _isMe     = last?.from === p?.username;
@@ -5850,7 +5914,7 @@ function messengerRenderList(filter) {
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(displayName)}${_localNick ? `<span style="font-size:10px;color:var(--muted);margin-left:4px">@${escHtml(username)}</span>` : ''}</div>
+          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(displayName)}${_localNick ? `<span style="font-size:10px;color:var(--muted);margin-left:4px">@${escHtml(username)}</span>` : ''}${isChatEncrypted(username) ? '<span style="font-size:11px;margin-left:4px" title="Секретный чат">🔐</span>' : ''}</div>
           <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
             ${_pinned && !_msgSelectMode ? `<button onclick="event.stopPropagation();togglePinChat('${username}')" style="background:none;border:none;padding:0 2px;cursor:pointer;font-size:12px;opacity:.55;line-height:1" title="Открепить">📌</button>` : ''}
             <span style="font-size:11px;color:${unread>0?'var(--accent)':'var(--muted)'}">${timeStr}</span>
@@ -5986,6 +6050,8 @@ function _doOpenChat(username) {
   if (hdrSub) {
     if (_openedGroup) {
       hdrSub.textContent = _openedGroup.members.length + ' участников';
+    } else if (isChatEncrypted(username)) {
+      hdrSub.textContent = '🔐 Секретный чат';
     } else {
       hdrSub.textContent = peer
         ? (_profileOnlinePeers.find(u => u.username === username) ? '🟢 В сети' : '⚡ Не в сети')
@@ -6006,6 +6072,7 @@ function _doOpenChat(username) {
   // Рендерим закреплённое сообщение и иконку mute
   mcRenderPinBar();
   _mcUpdateMuteIcon();
+  mcUpdateEncryptBtn(); // обновляем иконку шифрования
 
   // Fix: принудительно перезапускаем polling при открытии чата  
   // это гарантирует немедленный запрос к Supabase, не ждём следующего тика.
@@ -6445,9 +6512,19 @@ function messengerSend() {
 
   const chatKey = sbChatKey(p.username, _msgCurrentChat);
 
-  // Шифруем текст перед отправкой (E2E)
+  // Шифруем текст перед отправкой:
+  // — если чат помечен как секретный → всегда шифруем (e2eEncrypt форсированно)
+  // — иначе → e2eEncrypt сам решит на основе _e2eEnabled
   const _sendEncrypted = async () => {
-    const encText = await e2eEncrypt(text, _msgCurrentChat);
+    let encText;
+    if (isChatEncrypted(_msgCurrentChat)) {
+      // Форсируем шифрование: временно включаем E2E если не включён
+      const wasEnabled = _e2eEnabled;
+      if (!wasEnabled) { await e2eInit(); }
+      encText = await e2eEncrypt(text, _msgCurrentChat);
+    } else {
+      encText = await e2eEncrypt(text, _msgCurrentChat);
+    }
     const outboxItem = {
       id:        'txt_' + ts,
       type:      'message',
