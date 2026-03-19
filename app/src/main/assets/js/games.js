@@ -1156,23 +1156,27 @@ function tetDrawMsg(msg) {
 
 // ── SCREAMER (15% шанс на проигрыш в любой игре) ─────────────────
 // ── Кэш: загружаем кастомное изображение скримера 1 раз ──────────
-let _screamerCustomImg = null;      // null = не проверяли, false = нет файла, string = data-url
+let _screamerCustomImg = null;      // null = не проверяли, false = нет файла, string = путь к файлу
 let _screamerImgChecked = false;
 
 async function _loadScreamerImage() {
   if (_screamerImgChecked) return _screamerCustomImg;
   _screamerImgChecked = true;
-  const exts = ['jpg','jpeg','png','gif','webp'];
+  // Fetch API не поддерживает file:// в Android WebView — используем Image для проверки
+  const exts = ['gif','jpg','jpeg','png','webp'];
   for (const ext of exts) {
-    try {
-      const resp = await fetch('sounds/screamer.' + ext);
-      if (resp.ok) {
-        const blob = await resp.blob();
-        _screamerCustomImg = URL.createObjectURL(blob);
-        console.log('[SCREAMER] Custom image loaded: screamer.' + ext);
-        return _screamerCustomImg;
-      }
-    } catch(e) {}
+    const src = 'sounds/screamer.' + ext;
+    const exists = await new Promise(resolve => {
+      const img = new Image();
+      img.onload  = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = src;
+    });
+    if (exists) {
+      _screamerCustomImg = src;
+      console.log('[SCREAMER] Image found: ' + src);
+      return _screamerCustomImg;
+    }
   }
   _screamerCustomImg = false;
   return false;
@@ -2163,10 +2167,6 @@ function bbOnDragOver(e, canvas) {
 
 function bbOnTouchMove(e, canvas) {
   // handled by document-level bbDocTouchMove
-}
-
-function bbOnTouchEnd(e, canvas) {
-  // handled by document-level bbDocTouchEnd
 }
 
 function bbOnDrop(e, canvas) {

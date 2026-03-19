@@ -1496,7 +1496,7 @@ function _coverFit(iw, ih, dw, dh){
   return {fx, fy, fw, fh};
 }
 
-// Один кадр live blur
+// Один кадр live blur — рисуем однократно (фон статичный, rAF не нужен)
 function _liveBlurFrame(){
   if(!_liveBlurCvs || !_liveBlurOut || !_liveBlurImg) return;
 
@@ -1508,7 +1508,7 @@ function _liveBlurFrame(){
   ctx.clearRect(0, 0, CW, CH);
   ctx.drawImage(_liveBlurImg, fx, fy, fw, fh);
 
-  // 2) StackBlur radius=7 (точно как Telegram Utilities.blurBitmap(bmp, 7))
+  // 2) StackBlur radius=7
   const px = ctx.getImageData(0, 0, CW, CH);
   stackBlurRGB(px.data, CW, CH, 7);
   ctx.putImageData(px, 0, 0);
@@ -1516,17 +1516,18 @@ function _liveBlurFrame(){
   // 3) Копируем на видимый canvas
   _liveBlurOutCtx.drawImage(_liveBlurCvs, 0, 0);
 
-  // Показываем canvas при первом готовом кадре
+  // Один render — останавливаем rAF. Фон статичный, повторная отрисовка не нужна.
+  if(_liveBlurRaf){ cancelAnimationFrame(_liveBlurRaf); _liveBlurRaf = null; }
+
   if(!_liveBlurReady){
     _liveBlurReady = true;
     document.body.classList.add('liveblur-ready');
   }
-
-  _liveBlurRaf = requestAnimationFrame(_liveBlurFrame);
 }
 
 function startLiveBlur(){
-  if(_liveBlurRaf) return; // уже работает
+  if(_liveBlurReady) return; // уже нарисовано
+  if(_liveBlurRaf) return;   // уже в процессе
   if(!_liveBlurInit()) return;
 
   _liveBlurReady = false;
