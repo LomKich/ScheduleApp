@@ -5087,15 +5087,217 @@ showGreeting();
 
 // ── Автопроверка при запуске отключена — проверка вручную через кнопку в настройках ──
 
-// ── Автопроверка OTA при запуске (через 5 сек) ──
-setTimeout(()=>{
-  checkOtaUpdate(true); // silent=true — не показывает тост если всё актуально
-}, 5000);
+// ── Единая проверка обновлений при запуске (через 5 сек) ──
+// Читает patch-manifest.json из релиза и решает:
+//   все файлы — JS/HTML/CSS  →  горячий патч (без переустановки)
+//   есть Java/Manifest/res/  →  полный APK через OTA-диалог
+setTimeout(() => checkForUpdates(true), 5000);
 
-// ── Автопроверка горячего патча при запуске (через 5 сек, параллельно с OTA) ──
-setTimeout(()=>{
-  checkHotPatch(true); // silent=true — тихая проверка, диалог появится только если есть патч
-}, 5000);
+// ══════════════════════════════════════════════════════════════════════
+// 🔄 ЕДИНАЯ ПРОВЕРКА ОБНОВЛЕНИЙ
+// ══════════════════════════════════════════════════════════════════════
+
+// Расширения/пути которые нельзя обновить горячим патчем — нужен APK
+const _HOTPATCH_BLOCKED_RE = /\.(java|kt|so|aar|gradle|class|dex|xml)$/i;
+const _HOTPATCH_BLOCKED_PATHS = ['java/', 'res/', 'src/', 'app/src/'];
+const _HOTPATCH_ALLOWED_XML  = /^(index|[^/]+\.(html|svg))$/i; // xml в assets — ок
+
+/**
+ * Можно ли этот файл из манифеста обновить горячим патчем?
+ * Правило: всё что в assets (js/, html, css) — можно.
+ * Java, Manifest, res/, нативные библиотеки — только APK.
+ */
+function _canHotPatch(path) {
+  if (!path) return false;
+  const lower = path.toLowerCase();
+  // Запрещённые пути (Java, ресурсы Android)
+  if (_HOTPATCH_BLOCKED_PATHS.some(p => lower.startsWith(p))) return false;
+  // AndroidManifest — только APK
+  if (lower.includes('androidmanifest')) return false;
+  // .xml — разрешаем только если это HTML-like файл в корне assets
+  if (lower.endsWith('.xml')) {
+    const basename = lower.split('/').pop();
+    return _HOTPATCH_ALLOWED_XML.test(basename);
+  }
+  // Все остальные запрещённые расширения
+  if (_HOTPATCH_BLOCKED_RE.test(lower)) return false;
+  return true;
+}
+
+/**
+ * Единая точка проверки обновлений.
+ * Один запрос к GitHub → читает patch-manifest.json из релиза →
+ * решает: горячий патч или полный APK.
+ *
+ * @param {boolean} silent  true = без тоста если всё актуально
+ */
+async function checkForUpdates(silent) {
+  // Обновляем кнопки в настройках
+  const btnOta = document.querySelector('[onclick="checkOtaUpdate()"]');
+  const btnHot = document.querySelector('[onclick="checkHotPatch(false)"]');
+  if (!silent) {
+    if (btnOta) { btnOta.disabled = true; btnOta.textContent = '⏳'; }
+    if (btnHot) { btnHot.disabled = true; btnHot.textContent = '⏳'; }
+  }
+
+  try {
+    // ── Вспомогательные: fetch через GitHub зеркала ───────────────────────
+    async function ghApiFetch(path) {
+      const errs = [];
+      for (const base of GH_API_MIRRORS) {
+        try {
+          if (window.Android?.nativeFetch) {
+            const res = JSON.parse(window.Android.nativeFetch(base + path));
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return JSON.parse(res.body);
+          }
+          const r = await _fetchTimeout(fetch(base + path), 7000);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        } catch(e) { errs.push(e.message); }
+      }
+      throw new Error('GitHub недоступен (' + errs[0] + ')');
+    }
+
+    // ── 1. Последний релиз ────────────────────────────────────────────────
+    let release;
+    try { release = await ghApiFetch('/latest'); }
+    catch(e) {
+      const all = await ghApiFetch('?per_page=5');
+      if (!Array.isArray(all) || !all.length) {
+        if (!silent) toast('❌ В репозитории нет релизов');
+        return;
+      }
+      release = all[0];
+    }
+
+    const rawTag    = (release.tag_name || '').trim();
+    const latestVer = rawTag.replace(/^v/i, '');
+    if (!latestVer) { if (!silent) toast('❌ Не удалось определить версию'); return; }
+
+    const isNewer = compareVersions(latestVer, APP_VERSION) > 0;
+    if (!isNewer) {
+      if (!silent) toast('✅ Версия ' + APP_VERSION + ' актуальна');
+      return;
+    }
+
+    // ── 2. Ищем patch-manifest.json среди assets релиза ──────────────────
+    const manifestAsset = (release.assets || [])
+      .find(a => a.name === 'patch-manifest.json');
+
+    // ── 3. Нет манифеста → только APK (старый формат релиза) ─────────────
+    if (!manifestAsset) {
+      const apkAsset = (release.assets || []).find(a => a.name?.endsWith('.apk'));
+      if (apkAsset) {
+        otaOpen(latestVer, apkAsset.browser_download_url, release.body || '');
+      } else if (!silent) {
+        toast('🆕 v' + latestVer + ' — APK не прикреплён к релизу');
+      }
+      return;
+    }
+
+    // ── 4. Скачиваем манифест и проверяем файлы ───────────────────────────
+    const manifestText = await _hotFetchText(manifestAsset.browser_download_url);
+    const manifest = JSON.parse(manifestText);
+    // Манифест: { version, requiresApk?: bool, files: { "js/social.js": { sha, url } } }
+
+    // ── 5. Явный флаг requiresApk ─────────────────────────────────────────
+    if (manifest.requiresApk === true) {
+      const apkAsset = (release.assets || []).find(a => a.name?.endsWith('.apk'));
+      _showUpdateDecisionDialog(latestVer, release.body || '',
+        '⚠️ Это обновление изменяет системные компоненты приложения и требует переустановки.',
+        apkAsset?.browser_download_url || null);
+      return;
+    }
+
+    // ── 6. Смотрим список файлов — есть ли непатчабельные ─────────────────
+    const allFiles  = Object.keys(manifest.files || {});
+    const blockedFiles = allFiles.filter(f => !_canHotPatch(f));
+
+    if (blockedFiles.length > 0) {
+      // Есть Java/Manifest/нативные — нужен APK
+      const apkAsset = (release.assets || []).find(a => a.name?.endsWith('.apk'));
+      const reason = 'Изменены системные файлы:\n' +
+        blockedFiles.slice(0, 5).map(f => '• ' + f).join('\n') +
+        (blockedFiles.length > 5 ? '\n• …ещё ' + (blockedFiles.length - 5) : '');
+      _showUpdateDecisionDialog(latestVer, release.body || '', reason,
+        apkAsset?.browser_download_url || null);
+      return;
+    }
+
+    // ── 7. Все файлы — assets → горячий патч ─────────────────────────────
+    // Проверяем: а есть ли реально что обновлять (сравниваем sha)
+    const installed = _hotPatchLoad();
+    const installedFiles = installed?.files || {};
+    const toUpdate = allFiles.filter(f =>
+      installedFiles[f] !== (manifest.files[f]?.sha || manifest.files[f])
+    );
+
+    if (toUpdate.length === 0) {
+      if (!silent) toast('✅ Все файлы актуальны (v' + latestVer + ')');
+      return;
+    }
+
+    // Передаём управление в checkHotPatch — он сам покажет диалог и скачает
+    // Передаём уже готовый манифест чтобы не качать его повторно
+    await _applyHotPatch(manifest, toUpdate, latestVer, silent);
+
+  } catch(e) {
+    if (!silent) toast('❌ ' + e.message.slice(0, 80));
+  } finally {
+    if (!silent) {
+      if (btnOta) { btnOta.disabled = false; btnOta.textContent = '🔄 Проверить'; }
+      if (btnHot) { btnHot.disabled = false; btnHot.textContent = '🔥 Горячий патч (только файлы)'; }
+    }
+  }
+}
+
+/**
+ * Диалог когда нужен полный APK — объясняет причину и предлагает скачать.
+ */
+function _showUpdateDecisionDialog(version, notes, reason, apkUrl) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);' +
+    'display:flex;align-items:flex-end;justify-content:center';
+  d.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px
+      calc(24px + var(--safe-bot));max-width:480px;width:100%;
+      animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:22px;text-align:center;margin-bottom:8px">⬆️</div>
+      <div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:6px">
+        Доступно обновление v${escHtml(version)}
+      </div>
+      <div style="font-size:12px;color:var(--danger,#e05555);background:rgba(224,85,85,.1);
+        border-radius:10px;padding:10px 12px;margin:12px 0;white-space:pre-line;line-height:1.5">
+        ${escHtml(reason)}
+      </div>
+      ${notes.trim() ? `<div style="font-size:13px;color:var(--muted);max-height:80px;
+        overflow-y:auto;margin-bottom:14px;line-height:1.5">${escHtml(notes.trim())}</div>` : ''}
+      <div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:16px">
+        Горячий патч невозможен — требуется переустановка APK
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${apkUrl
+          ? `<button onclick="otaOpen('${escHtml(version)}','${escHtml(apkUrl)}','');this.closest('[style*=fixed]').remove()"
+              style="padding:14px;background:var(--accent);border:none;border-radius:14px;
+                color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+              ⬇ Скачать APK v${escHtml(version)}
+            </button>`
+          : `<div style="color:var(--muted);text-align:center;font-size:13px">APK не прикреплён к релизу</div>`
+        }
+        <button onclick="this.closest('[style*=fixed]').remove()"
+          style="padding:12px;background:var(--surface2);border:none;border-radius:14px;
+            color:var(--text);font-size:14px;cursor:pointer;font-family:inherit">
+          Позже
+        </button>
+      </div>
+    </div>`;
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+  document.body.appendChild(d);
+}
+
+
 
 // ── Состояние OTA ──
 // _otaApkUrl и _otaVersion объявлены в начале файла
@@ -5325,23 +5527,20 @@ async function _hotFetchText(url) {
 }
 
 // Основная функция проверки и применения горячего патча
+// Ручная проверка горячего патча (кнопка в настройках).
 async function checkHotPatch(silent) {
   if (!window.Android?.hotPatchSaveFile) {
     if (!silent) toast('ℹ️ Hot-patch не поддерживается этой версией');
     return { updated: false };
   }
-
   const statusEl = document.getElementById('hot-patch-status');
-  const setStatus = (t) => { if (statusEl) statusEl.textContent = t; };
-
+  const setStatus = t => { if (statusEl) statusEl.textContent = t; };
   try {
     setStatus('⏳ Проверяю обновления файлов...');
-
-    // 1. Получаем последний релиз чтобы найти URL манифеста
     async function ghFetch(path) {
       const errs = [];
       for (const base of GH_API_MIRRORS) {
-        try { return await (async () => {
+        try {
           if (window.Android?.nativeFetch) {
             const res = JSON.parse(window.Android.nativeFetch(base + path));
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -5350,11 +5549,10 @@ async function checkHotPatch(silent) {
           const r = await _fetchTimeout(fetch(base + path), 7000);
           if (!r.ok) throw new Error('HTTP ' + r.status);
           return r.json();
-        })(); } catch(e) { errs.push(e.message); }
+        } catch(e) { errs.push(e.message); }
       }
       throw new Error('GitHub недоступен (' + errs[0] + ')');
     }
-
     let release;
     try { release = await ghFetch('/latest'); }
     catch(e) {
@@ -5362,54 +5560,70 @@ async function checkHotPatch(silent) {
       if (!Array.isArray(all) || !all.length) throw new Error('Нет релизов');
       release = all[0];
     }
-
-    // 2. Ищем patch-manifest.json в assets релиза
     const manifestAsset = (release.assets || []).find(a => a.name === HOT_PATCH_MANIFEST);
     if (!manifestAsset) {
       if (!silent) toast('ℹ️ Манифест патчей не найден в релизе');
-      setStatus('');
-      return { updated: false };
+      setStatus(''); return { updated: false };
     }
-
-    // 3. Скачиваем манифест
-    const manifestText = await _hotFetchText(manifestAsset.browser_download_url);
-    const manifest = JSON.parse(manifestText);
-    // manifest = { version: "4.7.9", files: { "js/social.js": { sha: "abc...", url: "https://..." } } }
-
+    const manifest = JSON.parse(await _hotFetchText(manifestAsset.browser_download_url));
+    // Если в манифесте есть непатчабельные файлы — перенаправляем на OTA
+    const blocked = Object.keys(manifest.files || {}).filter(f => !_canHotPatch(f));
+    if (blocked.length > 0 || manifest.requiresApk) {
+      if (!silent) {
+        const reason = manifest.requiresApk
+          ? 'Флаг requiresApk в манифесте'
+          : 'Системные файлы: ' + blocked.slice(0, 3).join(', ');
+        toast('⚠️ Требуется полное обновление APK\n' + reason);
+      }
+      setStatus(''); return { updated: false };
+    }
     const installed = _hotPatchLoad();
     const installedFiles = installed?.files || {};
-
-    // 4. Определяем какие файлы изменились
-    const toUpdate = [];
-    for (const [path, info] of Object.entries(manifest.files || {})) {
-      if (installedFiles[path] !== info.sha) {
-        toUpdate.push({ path, ...info });
-      }
-    }
-
+    const toUpdate = Object.keys(manifest.files || {}).filter(
+      f => installedFiles[f] !== (manifest.files[f]?.sha || manifest.files[f])
+    );
     if (toUpdate.length === 0) {
       if (!silent) toast('✅ Все файлы актуальны (v' + manifest.version + ')');
-      setStatus('');
-      return { updated: false };
+      setStatus(''); return { updated: false };
     }
+    return await _applyHotPatch(manifest, toUpdate, manifest.version, silent);
+  } catch(e) {
+    setStatus('');
+    if (!silent) toast('❌ Hot-patch: ' + e.message.slice(0, 80));
+    return { updated: false, error: e.message };
+  }
+}
 
-    // 5. Показываем диалог подтверждения
+/**
+ * Применяет горячий патч — диалог подтверждения, скачивание, перезагрузка.
+ * Вызывается из checkHotPatch() и checkForUpdates().
+ */
+async function _applyHotPatch(manifest, toUpdate, version, silent) {
+  if (!window.Android?.hotPatchSaveFile) return { updated: false };
+  const statusEl = document.getElementById('hot-patch-status');
+  const setStatus = t => { if (statusEl) statusEl.textContent = t; };
+  const installed = _hotPatchLoad();
+  const installedFiles = { ...(installed?.files || {}) };
+  try {
+    // Диалог подтверждения
     if (!silent) {
-      const fileList = toUpdate.map(f => '• ' + f.path).join('\n');
+      const fileList = toUpdate.map(f => '• ' + f).join('\n');
       const confirmed = await new Promise(resolve => {
         const d = document.createElement('div');
-        d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
+        d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center';
         d.innerHTML = `
-          <div style="background:var(--surface);border-radius:20px;padding:24px;max-width:320px;margin:20px;width:100%">
-            <div style="font-size:20px;margin-bottom:8px">🔥 Горячий патч</div>
-            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">v${manifest.version} — изменено файлов: ${toUpdate.length}</div>
-            <div style="font-size:12px;color:var(--muted);white-space:pre-line;margin-bottom:16px;max-height:120px;overflow-y:auto">${fileList}</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Файлы обновятся без переустановки приложения</div>
+          <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + var(--safe-bot));max-width:480px;width:100%;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
+            <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+            <div style="font-size:22px;text-align:center;margin-bottom:8px">🔥</div>
+            <div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:4px">Горячий патч v${version}</div>
+            <div style="font-size:13px;color:var(--accent);text-align:center;margin-bottom:14px">Изменено файлов: ${toUpdate.length}</div>
+            <div style="font-size:12px;color:var(--muted);white-space:pre-line;max-height:120px;overflow-y:auto;background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:14px">${fileList}</div>
+            <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:16px">Обновление без переустановки APK</div>
             <div style="display:flex;gap:10px">
               <button onclick="this.closest('[style*=fixed]').remove();window._hpResolve(false)"
-                style="flex:1;padding:12px;background:var(--surface2);border:none;border-radius:12px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Позже</button>
+                style="flex:1;padding:13px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Позже</button>
               <button onclick="this.closest('[style*=fixed]').remove();window._hpResolve(true)"
-                style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Обновить</button>
+                style="flex:1;padding:13px;background:var(--accent);border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">🔥 Обновить</button>
             </div>
           </div>`;
         window._hpResolve = resolve;
@@ -5417,33 +5631,27 @@ async function checkHotPatch(silent) {
       });
       if (!confirmed) { setStatus(''); return { updated: false }; }
     }
-
-    // 6. Скачиваем и сохраняем каждый изменённый файл
+    // Скачиваем файлы
     let done = 0;
-    for (const file of toUpdate) {
-      setStatus(`⬇ Скачиваю ${file.path} (${++done}/${toUpdate.length})...`);
-      const content = await _hotFetchText(file.url);
-      const result = window.Android.hotPatchSaveFile(file.path, content);
-      if (!result.startsWith('ok')) throw new Error('Ошибка сохранения ' + file.path + ': ' + result);
-      installedFiles[file.path] = file.sha;
+    for (const path of toUpdate) {
+      const info = manifest.files[path];
+      const url  = info?.url || info;
+      setStatus(`⬇ Скачиваю ${path} (${++done}/${toUpdate.length})...`);
+      const content = await _hotFetchText(url);
+      const result  = window.Android.hotPatchSaveFile(path, content);
+      if (!result.startsWith('ok')) throw new Error('Ошибка сохранения ' + path + ': ' + result);
+      installedFiles[path] = info?.sha || info;
     }
-
-    // 7. Сохраняем состояние патчей
-    _hotPatchSave({ version: manifest.version, files: installedFiles });
+    _hotPatchSave({ version, files: installedFiles });
     setStatus('✅ Обновлено ' + toUpdate.length + ' файлов! Перезагружаю...');
-
-    // 8. Перезагружаем страницу чтобы применить патчи
     setTimeout(() => {
       if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
       location.reload(true);
     }, 1200);
-
     return { updated: true, count: toUpdate.length };
-
   } catch(e) {
-    const msg = '❌ Hot-patch: ' + e.message.slice(0, 80);
     setStatus('');
-    if (!silent) toast(msg);
+    if (!silent) toast('❌ Hot-patch: ' + e.message.slice(0, 80));
     return { updated: false, error: e.message };
   }
 }
@@ -5459,6 +5667,7 @@ function hotPatchRollback() {
     location.reload(true);
   }, 800);
 }
+
 
 
 

@@ -139,6 +139,13 @@ function profileBootstrap() {
     profileConnect(p);
     // Сообщаем Java username для фоновых уведомлений
     try { window.Android?.setCurrentUser?.(p.username); } catch(_) {}
+    // Синхронизируем список групп с Java для фонового поллинга
+    try {
+      if (window.Android?.saveUserGroups) {
+        const _grps = groupsLoad().filter(g => g.id && g.id.startsWith('grp_'));
+        window.Android.saveUserGroups(p.username, JSON.stringify(_grps));
+      }
+    } catch(_) {}
   }
 }
 
@@ -3371,7 +3378,16 @@ function groupsLoad() {
     return arr;
   } catch(e) { return [_publicGroupDef()]; }
 }
-function groupsSave(g) { localStorage.setItem(GROUPS_KEY, JSON.stringify(g)); }
+function groupsSave(g) {
+  localStorage.setItem(GROUPS_KEY, JSON.stringify(g));
+  // Синхронизируем список групп с Java-слоем — фоновый сервис поллит групповые сообщения
+  if (window.Android && typeof window.Android.saveUserGroups === 'function') {
+    try {
+      const p = profileLoad();
+      if (p) window.Android.saveUserGroups(p.username, JSON.stringify(g));
+    } catch(_) {}
+  }
+}
 
 function _publicGroupDef() {
   return {
