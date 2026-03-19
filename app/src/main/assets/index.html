@@ -1878,17 +1878,6 @@ body.on-home-screen #live-blur-canvas {
 }
 .coin-streak{font-size:12px;color:var(--muted);text-align:center;min-height:18px;margin-top:4px}
 
-/* ── Dice Lottie ── */
-.dice-lottie-wrap {
-  position: relative;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.dice-lottie-wrap.rolling {
-  pointer-events: none;
-}
-
 /* ── Tanks controls ── */
 .tanks-controls{
   display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:12px
@@ -3966,12 +3955,8 @@ html.notch-off #s-login {
   <div id="egg-dice" class="egg-game" style="display:none">
     <div class="egg-game-title">🎲 Кубик</div>
     <div class="egg-score" id="dice-score-label">Всего бросков: 0</div>
-    <!-- Контейнер для Lottie-стикеров кубика -->
-    <div id="dice-cubes-wrap" style="display:flex;gap:16px;justify-content:center;align-items:center;min-height:180px">
-      <!-- Lottie-контейнеры создаются динамически -->
-    </div>
-    <div class="dice-result" id="dice-result" style="font-size:28px;font-weight:800;color:var(--accent);min-height:42px;text-align:center;margin-top:8px"></div>
-    <div id="dice-history" style="font-size:12px;color:var(--muted);text-align:center;margin-top:4px;min-height:20px"></div>
+    <div id="dice-cubes-wrap" style="display:flex;gap:16px;justify-content:center;align-items:center;min-height:200px"></div>
+    <div id="dice-history" style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px;min-height:20px"></div>
     <div style="display:flex;gap:10px;margin-top:12px">
       <button class="btn btn-accent" style="flex:1" onclick="diceRoll(1)">🎲 Один кубик</button>
       <button class="btn btn-surface3" style="flex:1" onclick="diceRoll(2)">🎲🎲 Два</button>
@@ -4125,6 +4110,7 @@ if (typeof lottie === 'undefined') {
 </script>
 <script src="js/core.js"></script>
 <script src="js/games.js"></script>
+<script src="js/ios_emoji_map.js"></script>
 <script src="js/social.js"></script>
 
 </body>

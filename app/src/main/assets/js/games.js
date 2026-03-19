@@ -3620,139 +3620,113 @@ function coinUpdateScore(){
   el.textContent='Орёл: '+coinHeads+' • Решка: '+coinTails+(coinEdge?' • Ребро: '+coinEdge:'');
 }
 
+
 // ══════════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════════
-// ── 🎲 КУБИК (v5.0.0) — Telegram Lottie Stickers ─────────────────
+// ── 🎲 КУБИК (v7.0.0) — VP9/WebM с прозрачностью (Telegram-style)
 // ══════════════════════════════════════════════════════════════════
-// Использует анимации из стикерпака JustPlay_stickers (Telegram).
-// Файлы: assets/dice/dice_1.json … dice_6.json (Lottie JSON)
-// Lottie-web загружается через js/lottie.min.js (или CDN фолбэк).
+// Telegram использует ровно такой же подход для стикера-кубика:
+//   <video muted playsinline> с VP9+alpha webm-файлами.
+// Каждая грань — отдельный файл dice_1.webm … dice_6.webm (512×512).
+// При броске: play() → событие 'ended' → pause() + стоп на последнем кадре.
+// Фон прозрачный (VP9 alpha), кодек проверяется автоматически.
 
 let diceRolling = false, diceTotalRolls = 0, diceHistory = [];
-const _diceAnims = {};   // { slotId: lottie Animation instance }
-const _diceCache = {};   // { face: JSON data } — предзагруженные данные
 
-// ── Предзагрузка данных всех 6 граней ────────────────────────────
-async function _dicePreload() {
-  const base = window.Android
-    ? 'file:///android_asset/dice/'
-    : 'dice/';
-  for (let face = 1; face <= 6; face++) {
-    if (_diceCache[face]) continue;
-    try {
-      const resp = await fetch(base + 'dice_' + face + '.json');
-      _diceCache[face] = await resp.json();
-    } catch(e) {
-      console.warn('[dice] preload face', face, e);
-    }
-  }
+// Базовый путь к webm-файлам
+function _diceBase() {
+  return window.Android ? 'file:///android_asset/dice/' : 'dice/';
 }
 
-// ── Создаёт один слот для стикера кубика ─────────────────────────
-function _diceCreateSlot(id) {
-  const size = 160;
-  const el = document.createElement('div');
-  el.className = 'dice-lottie-wrap';
-  el.id = 'dice-slot-' + id;
-  el.style.cssText = `width:${size}px;height:${size}px`;
-  return el;
+// Создаёт <video> элемент для нужной грани (без autoplay, без loop)
+function _diceCreateVideo(face) {
+  const v = document.createElement('video');
+  v.src = _diceBase() + 'dice_' + face + '.webm';
+  v.muted = true;
+  v.playsInline = true;
+  v.setAttribute('playsinline', '');
+  v.setAttribute('webkit-playsinline', '');
+  v.loop = false;
+  v.style.cssText = 'width:180px;height:180px;display:block;background:transparent;';
+  // Прозрачный фон для VP9 alpha
+  v.style.mixBlendMode = 'normal';
+  return v;
 }
 
-// ── Загружает нужную грань в слот и воспроизводит анимацию ───────
-function _dicePlayFace(slotId, face, onDone) {
-  const container = document.getElementById('dice-slot-' + slotId);
-  if (!container) { onDone && onDone(); return; }
-  container.classList.add('rolling');
-
-  // Уничтожаем предыдущую анимацию если есть
-  if (_diceAnims[slotId]) {
-    try { _diceAnims[slotId].destroy(); } catch(_) {}
-    delete _diceAnims[slotId];
-  }
+// Играет анимацию грани в контейнер, вызывает onDone по окончанию
+function _dicePlayFace(container, face, onDone) {
   container.innerHTML = '';
+  const v = _diceCreateVideo(face);
 
-  const data = _diceCache[face];
-  if (!data || typeof lottie === 'undefined') {
-    // Фолбэк: просто цифра
-    container.innerHTML = `<div style="width:160px;height:160px;display:flex;align-items:center;justify-content:center;font-size:80px;font-weight:900;color:var(--accent)">${face}</div>`;
-    container.classList.remove('rolling');
+  v.addEventListener('ended', () => {
+    v.pause();
+    // Остаёмся на последнем кадре — Telegram делает то же самое
     onDone && onDone();
-    return;
-  }
+  }, { once: true });
 
-  const anim = lottie.loadAnimation({
-    container,
-    renderer: 'svg',
-    loop: false,
-    autoplay: true,
-    animationData: data,
-  });
-  _diceAnims[slotId] = anim;
+  // Guard: если 'ended' не пришёл за 4 секунды
+  const guard = setTimeout(() => { onDone && onDone(); }, 4000);
+  v.addEventListener('ended', () => clearTimeout(guard), { once: true });
 
-  anim.addEventListener('complete', () => {
-    container.classList.remove('rolling');
+  container.appendChild(v);
+  v.load();
+  const p = v.play();
+  if (p && p.catch) p.catch(() => {
+    // Автовоспроизведение заблокировано — показываем статику и завершаем
     onDone && onDone();
   });
-  // Timeout-guard: если событие complete не пришло
-  setTimeout(() => {
-    if (!container.classList.contains('rolling')) return;
-    container.classList.remove('rolling');
-    onDone && onDone();
-  }, 3500);
 }
 
-// ── Инициализация при открытии игры ──────────────────────────────
+// Инициализация при открытии игры
 function diceInit() {
   diceRolling = false; diceTotalRolls = 0; diceHistory = [];
   const wrap = document.getElementById('dice-cubes-wrap');
   if (wrap) {
     wrap.innerHTML = '';
-    wrap.appendChild(_diceCreateSlot(0));
+    // Превью: показываем случайную грань статично (первый кадр)
+    const face = Math.ceil(Math.random() * 6);
+    const v = _diceCreateVideo(face);
+    v.load(); // загружаем без play — будет на первом кадре
+    wrap.appendChild(v);
   }
-  document.getElementById('dice-result').textContent = '';
-  document.getElementById('dice-history').textContent = '';
-  document.getElementById('dice-score-label').textContent = 'Всего бросков: 0';
-  // Предзагрузка данных
-  _dicePreload();
-  // Показываем случайную грань как превью
-  const preview = Math.ceil(Math.random() * 6);
-  setTimeout(() => _dicePlayFace(0, preview, null), 100);
+  const hist = document.getElementById('dice-history');
+  if (hist) hist.textContent = '';
+  const score = document.getElementById('dice-score-label');
+  if (score) score.textContent = 'Всего бросков: 0';
 }
 
-// ── Бросок одного или двух кубиков ───────────────────────────────
+// Бросок одного или двух кубиков
 function diceRoll(count) {
   if (diceRolling) return;
   diceRolling = true;
   SFX.play && SFX.play('pongHit');
-  document.getElementById('dice-result').textContent = '';
 
   const wrap = document.getElementById('dice-cubes-wrap');
   wrap.innerHTML = '';
-  for (let i = 0; i < count; i++) wrap.appendChild(_diceCreateSlot(i));
 
   const results = Array.from({length: count}, () => Math.ceil(Math.random() * 6));
   let done = 0;
 
   results.forEach((face, i) => {
+    const slot = document.createElement('div');
+    slot.style.cssText = 'display:inline-block;';
+    wrap.appendChild(slot);
+
     setTimeout(() => {
-      _dicePlayFace(i, face, () => {
+      _dicePlayFace(slot, face, () => {
         done++;
         if (done === count) {
-          const sum = results.reduce((a, b) => a + b, 0);
-          const emoji = sum >= count * 5 ? '🔥' : sum <= count * 2 ? '😅' : '✨';
-          document.getElementById('dice-result').textContent =
-            emoji + ' ' + (count > 1 ? 'Сумма: ' + sum : results[0]);
           diceTotalRolls++;
           diceHistory.unshift(count === 1 ? results[0] : '(' + results.join('+') + ')');
           if (diceHistory.length > 8) diceHistory.pop();
-          document.getElementById('dice-history').textContent =
-            'История: ' + diceHistory.join(' · ');
-          document.getElementById('dice-score-label').textContent =
-            'Всего бросков: ' + diceTotalRolls;
+          const hist = document.getElementById('dice-history');
+          if (hist) hist.textContent = 'История: ' + diceHistory.join(' · ');
+          const score = document.getElementById('dice-score-label');
+          if (score) score.textContent = 'Всего бросков: ' + diceTotalRolls;
           diceRolling = false;
         }
       });
-    }, i * 200); // небольшая задержка между кубиками
+    }, i * 300); // небольшая задержка между двумя кубиками
   });
 }
 
