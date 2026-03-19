@@ -1431,6 +1431,48 @@ public class MainActivity extends Activity {
         }
 
         /**
+         * Открытие банковского deep-link с fallback на web-URL.
+         * Если приложение банка не установлено — открывает веб-версию в браузере.
+         */
+        @JavascriptInterface
+        public void openBankDeeplink(String deeplink, String webUrl) {
+            log.i(TAG, "openBankDeeplink: " + deeplink);
+            runOnUiThread(() -> {
+                // Сначала пробуем deep-link банка
+                boolean opened = false;
+                try {
+                    android.content.Intent intent = new android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(deeplink)
+                    );
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    // Проверяем, есть ли хоть одно приложение для этого intent
+                    if (intent.resolveActivity(getPackageManager()) != null) {
+                        startActivity(intent);
+                        opened = true;
+                        log.i(TAG, "openBankDeeplink: opened via deeplink");
+                    }
+                } catch (Exception e) {
+                    log.e(TAG, "openBankDeeplink deeplink error: " + e.getMessage());
+                }
+                // Fallback: открываем web-версию
+                if (!opened) {
+                    try {
+                        android.content.Intent webIntent = new android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(webUrl)
+                        );
+                        webIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(webIntent);
+                        log.i(TAG, "openBankDeeplink: fallback to webUrl");
+                    } catch (Exception e2) {
+                        log.e(TAG, "openBankDeeplink webUrl error: " + e2.getMessage());
+                    }
+                }
+            });
+        }
+
+        /**
          * OTA: диалог с предложением обновить приложение
          */
         @JavascriptInterface
