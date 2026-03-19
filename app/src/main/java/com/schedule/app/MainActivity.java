@@ -1481,85 +1481,9 @@ public class MainActivity extends Activity {
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT));
                 _browserOverlay.setBackgroundColor(0xFF0F0F0F);
 
-                android.widget.LinearLayout root = new android.widget.LinearLayout(ctx);
-                root.setOrientation(android.widget.LinearLayout.VERTICAL);
-                root.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
 
-                // ── Топ-бар ──────────────────────────────────────────────
-                android.widget.LinearLayout bar = new android.widget.LinearLayout(ctx);
-                bar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-                bar.setGravity(android.view.Gravity.CENTER_VERTICAL);
-                bar.setBackgroundColor(0xFF1A1A1A);
-                int barH = (int)(52 * ctx.getResources().getDisplayMetrics().density);
-                bar.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, barH));
-                int pad = (int)(10 * ctx.getResources().getDisplayMetrics().density);
-                bar.setPadding(pad, 0, pad, 0);
 
-                // Кнопка назад
-                android.widget.ImageButton btnBack = new android.widget.ImageButton(ctx);
-                btnBack.setImageDrawable(getSystemDrawable(ctx, android.R.drawable.ic_media_previous));
-                btnBack.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                btnBack.setColorFilter(0xFFCCCCCC);
-                android.widget.LinearLayout.LayoutParams btnLp =
-                    new android.widget.LinearLayout.LayoutParams(barH, barH);
-                btnBack.setLayoutParams(btnLp);
-
-                // Кнопка вперёд
-                android.widget.ImageButton btnFwd = new android.widget.ImageButton(ctx);
-                btnFwd.setImageDrawable(getSystemDrawable(ctx, android.R.drawable.ic_media_next));
-                btnFwd.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                btnFwd.setColorFilter(0xFFCCCCCC);
-                btnFwd.setLayoutParams(new android.widget.LinearLayout.LayoutParams(barH, barH));
-
-                // Кнопка обновить
-                android.widget.ImageButton btnRefresh = new android.widget.ImageButton(ctx);
-                btnRefresh.setImageDrawable(getSystemDrawable(ctx, android.R.drawable.stat_notify_sync));
-                btnRefresh.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                btnRefresh.setColorFilter(0xFFCCCCCC);
-                btnRefresh.setLayoutParams(new android.widget.LinearLayout.LayoutParams(barH, barH));
-
-                // URL label
-                android.widget.TextView urlLabel = new android.widget.TextView(ctx);
-                urlLabel.setText(urlStr);
-                urlLabel.setTextColor(0xFF999999);
-                urlLabel.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
-                urlLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                urlLabel.setSingleLine(true);
-                android.widget.LinearLayout.LayoutParams urlLp =
-                    new android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-                int urlPad = (int)(8 * ctx.getResources().getDisplayMetrics().density);
-                urlLabel.setPadding(urlPad, 0, urlPad, 0);
-                urlLabel.setLayoutParams(urlLp);
-
-                // Кнопка закрыть
-                android.widget.Button btnClose = new android.widget.Button(ctx);
-                btnClose.setText("✕");
-                btnClose.setTextColor(0xFFCCCCCC);
-                btnClose.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                btnClose.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
-                int closeSz = (int)(44 * ctx.getResources().getDisplayMetrics().density);
-                btnClose.setLayoutParams(new android.widget.LinearLayout.LayoutParams(closeSz, barH));
-
-                bar.addView(btnBack);
-                bar.addView(btnFwd);
-                bar.addView(btnRefresh);
-                bar.addView(urlLabel);
-                bar.addView(btnClose);
-
-                // ── Прогресс-бар ─────────────────────────────────────────
-                android.widget.ProgressBar progress = new android.widget.ProgressBar(ctx,
-                    null, android.R.attr.progressBarStyleHorizontal);
-                progress.setMax(100);
-                progress.setProgressTintList(android.content.res.ColorStateList.valueOf(0xFF6C91E6));
-                progress.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                int pbH = (int)(3 * ctx.getResources().getDisplayMetrics().density);
-                progress.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, pbH));
-
-                // ── Внутренний WebView ────────────────────────────────────
+                // ── Внутренний WebView (без панели — Back закрывает) ─────────
                 _browserWebView = new WebView(ctx);
                 android.webkit.WebSettings ws = _browserWebView.getSettings();
                 ws.setJavaScriptEnabled(true);
@@ -1572,47 +1496,40 @@ public class MainActivity extends Activity {
                 ws.setUserAgentString(
                     "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
                     "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
-                _browserWebView.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-
-                final WebView bwv = _browserWebView;
-
-                _browserWebView.setWebChromeClient(new android.webkit.WebChromeClient() {
-                    @Override
-                    public void onProgressChanged(android.webkit.WebView view, int newProgress) {
-                        progress.setProgress(newProgress);
-                        progress.setVisibility(newProgress == 100
-                            ? android.view.View.INVISIBLE : android.view.View.VISIBLE);
-                    }
-                    @Override
-                    public void onReceivedTitle(android.webkit.WebView view, String title) {
-                        urlLabel.setText(view.getUrl() != null ? view.getUrl() : title);
-                    }
-                });
+                _browserWebView.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
 
                 _browserWebView.setWebViewClient(new android.webkit.WebViewClient() {
                     @Override
-                    public void onPageFinished(android.webkit.WebView view, String url) {
-                        if (url != null) urlLabel.setText(url);
-                        btnBack.setAlpha(view.canGoBack() ? 1f : 0.35f);
-                        btnFwd.setAlpha(view.canGoForward() ? 1f : 0.35f);
+                    public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+                        String url = request.getUrl().toString();
+                        // intent:// и другие не-http схемы — пробуем открыть нативно
+                        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                            try {
+                                android.content.Intent intent;
+                                if (url.startsWith("intent://")) {
+                                    intent = android.content.Intent.parseUri(url,
+                                        android.content.Intent.URI_INTENT_SCHEME);
+                                } else {
+                                    intent = new android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse(url));
+                                }
+                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(intent);
+                            } catch (Exception e) {
+                                log.e(TAG, "browser intent error: " + e.getMessage());
+                            }
+                            return true; // не грузим в WebView
+                        }
+                        return false;
                     }
+                    @Override
+                    public void onPageFinished(android.webkit.WebView view, String url) {}
                 });
 
-                // Кнопки
-                btnBack.setOnClickListener(v -> { if (bwv.canGoBack()) bwv.goBack(); });
-                btnFwd.setOnClickListener(v -> { if (bwv.canGoForward()) bwv.goForward(); });
-                btnRefresh.setOnClickListener(v -> bwv.reload());
-                btnClose.setOnClickListener(v -> closeBrowser());
-
-                // Начальная прозрачность кнопок навигации
-                btnBack.setAlpha(0.35f);
-                btnFwd.setAlpha(0.35f);
-
-                root.addView(bar);
-                root.addView(progress);
-                root.addView(_browserWebView);
-                _browserOverlay.addView(root);
+                _browserOverlay.addView(_browserWebView);
 
                 // ── Добавляем поверх DecorView ───────────────────────────
                 android.view.ViewGroup decorView = (android.view.ViewGroup) getWindow().getDecorView();
@@ -1622,11 +1539,7 @@ public class MainActivity extends Activity {
             });
         }
 
-        /** Вспомогательный метод: системный drawable */
-        private android.graphics.drawable.Drawable getSystemDrawable(android.content.Context ctx, int res) {
-            return androidx.core.graphics.drawable.DrawableCompat.wrap(
-                androidx.core.content.ContextCompat.getDrawable(ctx, res)).mutate();
-        }
+
 
         /**
          * Открытие банковского deep-link с fallback на web-URL.
