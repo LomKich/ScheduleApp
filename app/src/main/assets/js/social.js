@@ -5697,30 +5697,40 @@ function messengerRenderMessages(animateLast) {
            </div>`;
           })()
 
-      // ── КРУЖОК (видеосообщение) — круглое превью + play ─────────────────
+      // ── КРУЖОК (видеосообщение) — inline плеер в чате (как Telegram) ────
       : isCircle
-        ? `<div data-no-menu style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
-               onclick="mcVideoOpen('${safeUrl}','Видеосообщение')">
-             ${msg.thumbData
-               ? `<img src="${escHtml(msg.thumbData)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
-               : `<div style="width:100%;height:100%;position:relative;background:#111">
-                 <div style="position:absolute;inset:0;background:linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 50%,#1a1a1a 75%);background-size:200% 100%;animation:skelShimmer 1.4s infinite"></div>
-                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                   <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.25);border-top-color:rgba(255,255,255,.75);border-radius:50%;animation:mvpSpin .8s linear infinite"></div>
-                 </div>
-               </div>`
-             }
-             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-               <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.48);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+        ? (() => {
+            const cid = 'circ_' + idx + '_' + msg.ts;
+            const circumference = 2 * Math.PI * 97; // ≈609.7
+            return `<div data-no-menu id="cw_${cid}"
+               style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
+               onclick="mcCircleToggle('${cid}','${safeUrl}')">
+             <div id="cposter_${cid}" style="position:absolute;inset:0">
+               ${msg.thumbData
+                 ? `<img src="${escHtml(msg.thumbData)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
+                 : `<div style="width:100%;height:100%;background:#1c1c1c;display:flex;align-items:center;justify-content:center">
+                     <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.2);border-top-color:rgba(255,255,255,.75);border-radius:50%;animation:mvpSpin .8s linear infinite"></div>
+                   </div>`}
+             </div>
+             <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden"></div>
+             <div id="cbtn_${cid}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+               <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
+                 <svg id="cico_${cid}" width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
                </div>
              </div>
+             <svg id="cring_${cid}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none" viewBox="0 0 200 200">
+               <circle cx="100" cy="100" r="97" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="3.5"/>
+               <circle id="cringp_${cid}" cx="100" cy="100" r="97" fill="none" stroke="#fff" stroke-width="3.5"
+                 stroke-dasharray="${circumference.toFixed(1)}" stroke-dashoffset="${circumference.toFixed(1)}"
+                 stroke-linecap="round" transform="rotate(-90 100 100)"
+                 style="transition:stroke-dashoffset .12s linear"/>
+             </svg>
              <div style="position:absolute;bottom:10px;right:10px;display:flex;align-items:center;gap:3px;pointer-events:none">
-               <span style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.7)">${msgFormatTime(msg.ts)}</span>
+               <span id="ctime_${cid}" style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.7)">${msgFormatTime(msg.ts)}</span>
                <span style="font-size:11px;color:rgba(255,255,255,.9)">${status}</span>
              </div>
-           </div>`
-
+           </div>`;
+          })()
       // ── ВИДЕО — превью + круглая play + duration badge ────────────────────
       : isVideo
         ? `<div data-no-menu style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;min-width:140px;cursor:pointer;background:#111"
@@ -7288,13 +7298,65 @@ const _IC_SEND_ID = 'mc-in-chat-sending';
  * label: имя файла (необязательно)
  */
 function _mcInChatSendingShow(fileType, label) {
-  _mcInChatSendingHide(); // убираем предыдущий
+  _mcInChatSendingHide();
   const body = document.getElementById('mc-messages');
-  if (!body) { _mcShowUploadToast(fileType, label); return; } // fallback если чат не открыт
+  if (!body) return;
 
+  const isCircle = fileType === 'circle';
+  const isVoice  = fileType === 'voice';
   const el = document.createElement('div');
   el.id = _IC_SEND_ID;
-  el.className = 'mc-ics-wrap';
+  el.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:4px;padding:0 12px';
+  const circumference = 2 * Math.PI * (isCircle ? 48 : 22);
+
+  if (isCircle) {
+    // Кружок: круглый превью-плейсхолдер с кольцом прогресса
+    el.innerHTML = `
+      <div style="position:relative;width:120px;height:120px;border-radius:50%;background:#1a1a1a;overflow:hidden;flex-shrink:0">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(255,255,255,.35)">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>
+            <circle cx="12" cy="9" r="3" fill="rgba(255,255,255,.35)"/>
+            <path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="rgba(255,255,255,.35)"/>
+          </svg>
+        </div>
+        <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="55" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="4"/>
+          <circle id="mc-ics-ring" cx="60" cy="60" r="55" fill="none" stroke="white" stroke-width="4"
+            stroke-dasharray="${(2*Math.PI*55).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*55).toFixed(1)}"
+            stroke-linecap="round" transform="rotate(-90 60 60)"
+            style="transition:stroke-dashoffset .2s linear"/>
+        </svg>
+      </div>`;
+  } else {
+    // Голосовое / файл: горизонтальный пузырь с прогресс-кольцом
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;background:var(--accent);padding:8px 14px 8px 8px;border-radius:18px 18px 4px 18px;min-width:180px;max-width:72%">
+        <div style="position:relative;width:44px;height:44px;flex-shrink:0">
+          <svg width="44" height="44" viewBox="0 0 44 44" style="position:absolute;inset:0">
+            <circle cx="22" cy="22" r="18" fill="rgba(255,255,255,.15)" stroke="none"/>
+            <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.5"/>
+            <circle id="mc-ics-ring" cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="2.5"
+              stroke-dasharray="${(2*Math.PI*18).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*18).toFixed(1)}"
+              stroke-linecap="round" transform="rotate(-90 22 22)"
+              style="transition:stroke-dashoffset .2s linear"/>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            ${isVoice
+              ? `<svg width="14" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`
+              : `<svg width="14" height="16" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`}
+          </div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((label||'').slice(0,30))}</div>
+          <div id="mc-ics-sub" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Отправляю…</div>
+        </div>
+      </div>`;
+  }
+
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+}
 
   const icons = {
     voice: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`,
@@ -7334,6 +7396,16 @@ function _mcInChatSendingShow(fileType, label) {
 function _mcInChatSendingUpdate(fileType, subText) {
   const sub = document.getElementById('mc-ics-sub');
   if (sub) sub.textContent = subText || 'Отправляю…';
+  // Обновляем кольцо прогресса если есть % в тексте
+  const pctMatch = (subText || '').match(/(\d+)%/);
+  if (pctMatch) {
+    const pct = parseInt(pctMatch[1], 10);
+    const ring = document.getElementById('mc-ics-ring');
+    if (ring) {
+      const total = parseFloat(ring.getAttribute('stroke-dasharray')) || 113.1;
+      ring.style.strokeDashoffset = (total * (1 - pct / 100)).toFixed(1);
+    }
+  }
 }
 
 /** Убирает in-chat bubble */
@@ -7416,8 +7488,14 @@ async function _catboxUpload(base64, fileName, mimeType, onProgress) {
       // Регистрируем глобальные колбэки
       window.onUploadProgress = (id, pct) => {
         if (id !== callbackId) return;
-        _mcUpdateUploadToastProgress(pct);
-        _mcInChatSendingUpdate(null, '⬆ ' + Math.round(pct) + '%');
+        // Обновляем inline ring прогресса
+        const ring = document.getElementById('mc-ics-ring');
+        if (ring) {
+          const total = parseFloat(ring.getAttribute('stroke-dasharray')) || 113.1;
+          ring.style.strokeDashoffset = (total * (1 - pct / 100)).toFixed(1);
+        }
+        const sub = document.getElementById('mc-ics-sub');
+        if (sub) sub.textContent = Math.round(pct) + '%';
         onProgress && onProgress(pct);
       };
       window.onUploadDone = (id, url) => {
@@ -7880,7 +7958,6 @@ function _mcVoiceStartRecording() {
   if (window.Android && typeof window.Android.startVoiceRecording === 'function') {
     console.log('[Voice] starting native recorder');
     _mcVoiceNative  = true;
-    _mcInChatSendingShow('voice', 'Голосовое сообщение');
     _mcVoiceSeconds = 0;
     _mcWaveBuf.fill(0.06); _mcWaveSmooth.fill(0.06); _mcWaveHead = 0; _mcWaveTick = 0;
     window.Android.startVoiceRecording();
@@ -7984,7 +8061,6 @@ function _mcVoiceSend() {
   if (_mcVoiceNative) {
     _mcVoiceNative = false;
     _mcVoiceHideUI();
-    _mcShowUploadToast('voice', 'Голосовое сообщение');
     if (window.Android) window.Android.stopVoiceRecording();
     return;
   }
@@ -8158,7 +8234,6 @@ async function _mcVoiceFinalize() {
   const dur  = _mcVoiceSeconds;
   _mcVoiceChunks = [];
   if (blob.size < 500) { toast('🎤 Слишком короткое'); return; }
-  _mcShowUploadToast('voice', 'Голосовое сообщение');
   try {
     const b64 = await new Promise((res, rej) => {
       const r = new FileReader();
@@ -8713,6 +8788,94 @@ function peerProfileOpen(username) {
   });
 
 })();
+
+// ── Inline-плеер кружков (как в Telegram — воспроизводится прямо в чате) ──
+const _circleState = {}; // cid → { video, playing, circumference }
+
+function mcCircleToggle(cid, url) {
+  const wrap = document.getElementById('cw_' + cid);
+  if (!wrap) return;
+
+  let state = _circleState[cid];
+
+  if (!state) {
+    // Первый тап — создаём video-элемент
+    const vid = document.createElement('video');
+    vid.src = url;
+    vid.playsInline = true;
+    vid.preload = 'auto';
+    vid.loop = false;
+    vid.muted = false;
+    vid.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+
+    const circumference = 2 * Math.PI * 97;
+    state = { video: vid, playing: false, circumference };
+    _circleState[cid] = state;
+
+    const vidWrap = document.getElementById('cvid_' + cid);
+    if (vidWrap) { vidWrap.style.display = 'block'; vidWrap.appendChild(vid); }
+
+    // Скрываем постер
+    const poster = document.getElementById('cposter_' + cid);
+    if (poster) poster.style.opacity = '0';
+
+    // Показываем кольцо прогресса
+    const ring = document.getElementById('cring_' + cid);
+    if (ring) ring.style.display = 'block';
+
+    // Обновляем кольцо в реальном времени
+    vid.addEventListener('timeupdate', () => {
+      if (!vid.duration) return;
+      const pct = vid.currentTime / vid.duration;
+      const ringProg = document.getElementById('cringp_' + cid);
+      if (ringProg) {
+        const offset = circumference * (1 - pct);
+        ringProg.style.strokeDashoffset = offset.toFixed(1);
+      }
+      // Таймер
+      const timeEl = document.getElementById('ctime_' + cid);
+      if (timeEl) {
+        const rem = Math.max(0, Math.ceil(vid.duration - vid.currentTime));
+        timeEl.textContent = rem + 's';
+      }
+    });
+
+    // По завершению — возврат в состояние "play"
+    vid.addEventListener('ended', () => {
+      state.playing = false;
+      _circleSetIcon(cid, false);
+      const ringProg = document.getElementById('cringp_' + cid);
+      if (ringProg) ringProg.style.strokeDashoffset = '0';
+    });
+
+    // Автоплей сразу
+    vid.play().then(() => {
+      state.playing = true;
+      _circleSetIcon(cid, true);
+    }).catch(() => {});
+    return;
+  }
+
+  // Последующие тапы — play/pause
+  if (state.playing) {
+    state.video.pause();
+    state.playing = false;
+    _circleSetIcon(cid, false);
+  } else {
+    state.video.play().then(() => {
+      state.playing = true;
+      _circleSetIcon(cid, true);
+    }).catch(() => {});
+  }
+}
+
+function _circleSetIcon(cid, playing) {
+  const ico = document.getElementById('cico_' + cid);
+  if (!ico) return;
+  ico.innerHTML = playing
+    ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
+    : '<path d="M8 5v14l11-7z"/>';
+}
 
 // ── Фуллскрин видеоплеер с Telegram-стилем ────────────────────────
 async function mcVideoOpen(url, name) {
