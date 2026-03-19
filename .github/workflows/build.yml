@@ -49,6 +49,48 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Версия: $VERSION"
 
+      # Генерируем patch-manifest.json — SHA256 хэши обновляемых файлов assets
+      # Приложение скачивает только файлы с изменившимся хэшем (горячий патч)
+      - name: Generate patch-manifest.json
+        id: gen_manifest
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          ASSETS_DIR="app/src/main/assets"
+          REPO="LomKich/ScheduleApp"
+          TAG="v${VERSION}"
+
+          # Файлы которые могут обновляться горячим патчем (без переустановки APK)
+          PATCH_FILES=(
+            "index.html"
+            "js/core.js"
+            "js/social.js"
+            "js/games.js"
+          )
+
+          echo "{" > patch-manifest.json
+          echo "  \"version\": \"${VERSION}\"," >> patch-manifest.json
+          echo "  \"files\": {" >> patch-manifest.json
+
+          FIRST=true
+          for FILE in "${PATCH_FILES[@]}"; do
+            FILEPATH="${ASSETS_DIR}/${FILE}"
+            if [ -f "$FILEPATH" ]; then
+              SHA=$(sha256sum "$FILEPATH" | awk '{print $1}')
+              # URL файла в релизе на GitHub (raw content)
+              RAW_URL="https://github.com/${REPO}/releases/download/${TAG}/patch_$(echo $FILE | tr '/' '_')"
+              if [ "$FIRST" = true ]; then FIRST=false; else echo "    ," >> patch-manifest.json; fi
+              echo "    \"${FILE}\": { \"sha\": \"${SHA}\", \"url\": \"${RAW_URL}\" }" >> patch-manifest.json
+              # Копируем файл с префиксом patch_ для прикрепления к релизу
+              cp "$FILEPATH" "patch_$(echo $FILE | tr '/' '_')"
+            fi
+          done
+
+          echo "  }" >> patch-manifest.json
+          echo "}" >> patch-manifest.json
+
+          echo "Манифест:"
+          cat patch-manifest.json
+
       # Собираем Release APK с постоянной подписью
       - name: Build Release APK
         env:
@@ -78,7 +120,7 @@ jobs:
           gh release delete "v${{ steps.get_version.outputs.version }}" --yes 2>/dev/null || true
           git push origin --delete "v${{ steps.get_version.outputs.version }}" 2>/dev/null || true
 
-      # Создаём GitHub Release с APK
+      # Создаём GitHub Release с APK + patch-файлами + манифестом
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -87,7 +129,15 @@ jobs:
           body: |
             Автосборка из ветки `${{ github.ref_name }}`
             Коммит: `${{ github.sha }}`
-          files: app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
+
+            **Горячий патч**: нажми 🔥 в настройках приложения — обновятся только изменённые файлы без переустановки APK.
+          files: |
+            app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
+            patch-manifest.json
+            patch_index.html
+            patch_js_core.js
+            patch_js_social.js
+            patch_js_games.js
           prerelease: false
           draft: false
         env:
