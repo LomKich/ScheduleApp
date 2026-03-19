@@ -2960,6 +2960,13 @@ html.notch-off #s-login {
 
     <!-- Стиль интерфейса -->
     <div class="section-label">Интерфейс</div>
+    <div class="settings-row" style="margin-bottom:8px" onclick="toggleEmojiStyle()">
+      <div>
+        <div style="font-size:14px;font-weight:600">😊 Стиль эмодзи</div>
+        <div class="settings-row-sub" id="emoji-style-sub">Системные эмодзи (по умолчанию)</div>
+      </div>
+      <div id="emoji-style-toggle" class="toggle-switch"></div>
+    </div>
     <div class="settings-row" style="margin-bottom:8px" onclick="toggleNotchMode()">
       <div>
         <div style="font-size:14px;font-weight:600">📷 Вырез камеры</div>
