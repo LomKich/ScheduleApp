@@ -26,6 +26,7 @@ public class MessagingForegroundService extends Service {
     public static final String CHANNEL_NAME    = "Фоновое соединение";
     public static final int    FG_NOTIF_ID     = 9001;
     public static final String PREF_BG_ENABLED = "bg_service_enabled";
+    // Используем те же ключи что и MainActivity чтобы читать из общего "schedule_prefs"
     public static final String PREF_SB_USER    = "sb_username";
     public static final String PREF_SB_LAST_TS = "sb_last_notif_ts";
 
@@ -45,7 +46,9 @@ public class MessagingForegroundService extends Service {
     public void onCreate() {
         super.onCreate();
         log   = AppLogger.get(this);
-        prefs = getSharedPreferences("sapp_prefs", MODE_PRIVATE);
+        // ВАЖНО: используем тот же файл настроек что и MainActivity ("schedule_prefs")
+        // чтобы username и lastTs были общими между сервисом и активити
+        prefs = getSharedPreferences("schedule_prefs", MODE_PRIVATE);
         log.i(TAG, "Service created");
         createNotificationChannel();
         // startForeground ОБЯЗАН быть вызван в течение 5 секунд от onCreate
@@ -174,12 +177,16 @@ public class MessagingForegroundService extends Service {
     private void doPoll() {
         try {
             String username = prefs.getString(PREF_SB_USER, "");
-            if (username == null || username.isEmpty()) return;
-            long lastTs = prefs.getLong(PREF_SB_LAST_TS, System.currentTimeMillis() - 60000);
+            if (username == null || username.isEmpty()) {
+                log.w(TAG, "doPoll: username не задан, пропускаю");
+                return;
+            }
+            // Читаем lastTs — если 0 (первый запуск), берём последние 60 секунд
+            long lastTs = prefs.getLong(PREF_SB_LAST_TS, 0);
+            if (lastTs == 0) lastTs = System.currentTimeMillis() - 60_000L;
 
             String urlStr = SupabaseClient.URL
-                + "/rest/v1/messages"
-                + "?select=from_user,text,ts,extra"
+                + "/rest/v1/messages?select=from_user,text,ts,extra,sticker"
                 + "&to_user=eq." + java.net.URLEncoder.encode(username, "UTF-8")
                 + "&ts=gt." + lastTs
                 + "&order=ts.asc"
@@ -196,7 +203,11 @@ public class MessagingForegroundService extends Service {
             conn.setRequestProperty("Accept",        "application/json");
 
             int status = conn.getResponseCode();
-            if (status != 200) { conn.disconnect(); return; }
+            if (status != 200) {
+                log.w(TAG, "doPoll HTTP " + status);
+                conn.disconnect();
+                return;
+            }
 
             java.io.InputStream is = conn.getInputStream();
             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
@@ -220,31 +231,52 @@ public class MessagingForegroundService extends Service {
                 long   ts   = msg.optLong("ts", 0);
                 String text = msg.optString("text", "");
 
-                if (text.isEmpty() || text.startsWith("{")) {
-                    String extra = msg.optString("extra", "");
+                // Пропускаем служебные сообщения (реакции, read_receipt)
+                String extra = msg.optString("extra", "");
+                if (!extra.isEmpty()) {
+                    try {
+                        org.json.JSONObject ex = new org.json.JSONObject(extra);
+                        String tp = ex.optString("type", "");
+                        if ("reaction".equals(tp) || "read_receipt".equals(tp)) {
+                            if (ts > maxTs) maxTs = ts;
+                            continue; // служебное — не уведомляем
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // Зашифрованное сообщение — не показываем цифробред
+                if (text.startsWith("ENC:")) {
+                    text = "🔐 Зашифрованное сообщение";
+                } else if (text.isEmpty() || text.startsWith("{")) {
+                    // Медиа — читаем тип из extra
                     if (!extra.isEmpty()) {
                         try {
                             org.json.JSONObject ex = new org.json.JSONObject(extra);
                             String ft = ex.optString("fileType", "");
                             String tp = ex.optString("type", "");
-                            if ("group_invite".equals(tp)) {
-                                text = "👥 Добавил(а) в группу";
-                            } else switch (ft) {
-                                case "voice":  text = "🎤 Голосовое"; break;
-                                case "circle": text = "⭕ Видеосообщение"; break;
-                                case "video":  text = "🎬 Видео"; break;
-                                case "file":   text = "📎 " + ex.optString("fileName","Файл"); break;
-                                default:       if (!ft.isEmpty()) text = "📎 Файл";
-                            }
+                            if ("group_invite".equals(tp))      text = "👥 Добавил(а) в группу";
+                            else if ("voice".equals(ft))        text = "🎤 Голосовое";
+                            else if ("circle".equals(ft))       text = "⭕ Видеосообщение";
+                            else if ("video".equals(ft))        text = "🎬 Видео";
+                            else if (ex.has("image"))           text = "📷 Фото";
+                            else if ("file".equals(ft))         text = "📎 " + ex.optString("fileName", "Файл");
+                            else if (!ft.isEmpty())             text = "📎 Файл";
                         } catch (Exception ignored) {}
                     }
-                    if (text.isEmpty()) text = "📎 Файл";
+                    // Стикер
+                    if (text.isEmpty()) {
+                        String sticker = msg.optString("sticker", "");
+                        text = sticker.isEmpty() ? "📎 Файл" : sticker + " Стикер";
+                    }
                 }
+
                 if (ts > maxTs) maxTs = ts;
                 byUser.computeIfAbsent(from, k -> new java.util.ArrayList<>()).add(text);
             }
 
+            // Сохраняем новый lastTs (+1 чтобы не показывать то же самое снова)
             prefs.edit().putLong(PREF_SB_LAST_TS, maxTs + 1).apply();
+
             showMessageNotifications(byUser);
 
         } catch (Exception e) {
@@ -264,13 +296,7 @@ public class MessagingForegroundService extends Service {
                     != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
         }
 
-        Intent tapIntent = new Intent(this, MainActivity.class);
-        tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        int piFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-            ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-            : PendingIntent.FLAG_UPDATE_CURRENT;
-        PendingIntent pi = PendingIntent.getActivity(this, 0, tapIntent, piFlags);
-
+        // Убеждаемся что канал создан (на случай если createNotificationChannel не вызвался)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel mc = new NotificationChannel(
                 "sapp_messages", "Сообщения", NotificationManager.IMPORTANCE_HIGH);
@@ -283,8 +309,19 @@ public class MessagingForegroundService extends Service {
             String from  = entry.getKey();
             java.util.List<String> texts = entry.getValue();
             String preview = texts.size() == 1 ? texts.get(0)
-                           : texts.size() + " новых сообщения";
+                           : texts.size() + " новых сообщений";
             if (preview.length() > 100) preview = preview.substring(0, 97) + "…";
+
+            // Intent открывает конкретный чат при тапе на уведомление
+            Intent tapIntent = new Intent(this, MainActivity.class);
+            tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            tapIntent.putExtra("open_chat", from);  // MainActivity.onNewIntent обработает
+            int piFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                : PendingIntent.FLAG_UPDATE_CURRENT;
+            // requestCode уникален по sender чтобы у каждого отправителя свой PendingIntent
+            PendingIntent pi = PendingIntent.getActivity(
+                this, Math.abs(from.hashCode()), tapIntent, piFlags);
 
             Notification notif = new NotificationCompat.Builder(this, "sapp_messages")
                 .setSmallIcon(android.R.drawable.ic_dialog_email)
@@ -296,9 +333,13 @@ public class MessagingForegroundService extends Service {
                 .setContentIntent(pi)
                 .setVibrate(new long[]{0, 200, 80, 200})
                 .setDefaults(NotificationCompat.DEFAULT_SOUND)
+                .setGroup("sapp_msg_group")
                 .build();
-            nm.notify(msgNotifCounter++, notif);
-            log.i(TAG, "Push от @" + from + " (" + texts.size() + " сообщ.)");
+
+            // Стабильный ID по sender: одно уведомление на человека (новое заменяет старое)
+            int notifId = 3000 + Math.abs(from.hashCode() % 1000);
+            nm.notify(notifId, notif);
+            log.i(TAG, "Push от @" + from + " (" + texts.size() + " сообщ.): " + preview);
         }
     }
 

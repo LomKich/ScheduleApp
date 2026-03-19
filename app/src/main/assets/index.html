@@ -47,8 +47,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--a
 }
 .chat-row:active { background: var(--surface2) !important; }
 .chat-selected {
-  background: color-mix(in srgb, var(--accent) 18%, var(--surface)) !important;
-  transition: background .22s cubic-bezier(.34,1.2,.64,1) !important;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface)) !important;
+  transition: background .18s ease !important;
 }
 @keyframes chat-row-select {
   0%  { transform: scale(1); }
@@ -65,6 +65,42 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--a
   animation: chat-row-delete .32s cubic-bezier(.4,0,.8,.6) forwards;
   overflow: hidden;
   pointer-events: none;
+}
+/* Telegram-style оверлей поверх аватара при выделении */
+.chat-av-sel-ov {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: transparent;
+  border: 2.5px solid rgba(255,255,255,.35);
+  transition: background .15s, border-color .15s;
+  pointer-events: none;
+}
+.chat-av-sel-ov::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: transparent;
+  transition: background .15s, opacity .15s;
+  opacity: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 22px;
+}
+@keyframes av-sel-pop {
+  0%   { transform: scale(.7); opacity: 0; }
+  60%  { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.chat-av-sel-ov.sel {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  animation: av-sel-pop .22s cubic-bezier(.34,1.3,.64,1);
+}
+.chat-av-sel-ov.sel::after {
+  opacity: 1;
 }
 .chat-select-circle {
   width:24px;height:24px;border-radius:50%;
@@ -608,76 +644,18 @@ body[data-theme="candy"] {--accent-text:#000}
 /* ══════════════════════════════════════════════════════════
    📤 IN-CHAT SENDING BUBBLE — Telegram-style
    ══════════════════════════════════════════════════════════ */
+/* ── Sending bubble — inline progress (Telegram style) ── */
 @keyframes mc-ics-in {
-  from { opacity:0; transform:translateY(12px) scale(.94); }
-  to   { opacity:1; transform:translateY(0)    scale(1);   }
+  from { opacity:0; transform:translateY(10px) scale(.95); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
 }
 @keyframes mc-ics-out {
-  to { opacity:0; transform:translateY(8px) scale(.96); }
-}
-@keyframes mc-ics-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes mc-ics-dot {
-  0%,80%,100%{ transform:scale(.6); opacity:.4; }
-  40%        { transform:scale(1);  opacity:1;  }
+  to { opacity:0; transform:translateY(6px) scale(.97); }
 }
 
-.mc-ics-wrap {
-  display: flex;
-  justify-content: flex-end;
-  padding: 2px 16px 6px;
-  animation: mc-ics-in .22s cubic-bezier(.34,1.2,.64,1) both;
+#mc-in-chat-sending {
+  animation: mc-ics-in .2s cubic-bezier(.34,1.2,.64,1) both;
 }
-.mc-ics-bubble {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--accent);
-  border-radius: 18px 18px 4px 18px;
-  padding: 9px 14px 9px 10px;
-  max-width: 230px;
-  min-width: 160px;
-  box-shadow: 0 2px 10px rgba(0,0,0,.25);
-}
-.mc-ics-icon {
-  position: relative;
-  width: 38px; height: 38px;
-  flex-shrink: 0;
-}
-.mc-ics-spinner {
-  position: absolute;
-  inset: 0;
-  width: 38px; height: 38px;
-}
-.mc-ics-ico-inner {
-  position: absolute;
-  inset: 0;
-  display: flex; align-items: center; justify-content: center;
-}
-.mc-ics-info {
-  flex: 1; min-width: 0;
-}
-.mc-ics-label {
-  font-size: 13px; font-weight: 600;
-  color: var(--btn-text, #fff);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.mc-ics-sub {
-  font-size: 11px;
-  color: rgba(255,255,255,.7);
-  margin-top: 1px;
-}
-.mc-ics-dots {
-  display: flex; gap: 3px; align-items: center; flex-shrink: 0;
-}
-.mc-ics-dots span {
-  width: 5px; height: 5px; border-radius: 50%;
-  background: rgba(255,255,255,.75);
-  animation: mc-ics-dot 1.2s ease-in-out infinite;
-}
-.mc-ics-dots span:nth-child(2) { animation-delay: .2s; }
-.mc-ics-dots span:nth-child(3) { animation-delay: .4s; }
 
 /* ══════════════════════════════════════════════════════════ */
 
@@ -709,7 +687,6 @@ body[data-theme="candy"] {--accent-text:#000}
   flex-shrink: 0;
   position: relative;
 }
-/* Круговой прогресс на иконке */
 #mc-upload-toast .tg-ut-ring {
   position: absolute; inset: 0;
   border-radius: 50%;
@@ -723,7 +700,6 @@ body[data-theme="candy"] {--accent-text:#000}
 #mc-upload-toast .tg-ut-sub {
   font-size: 11px; color: var(--muted); margin-top: 1px;
 }
-/* Пульсация иконки пока идёт загрузка */
 @keyframes tg-icon-pulse {
   0%,100% { transform: scale(1); }
   50%      { transform: scale(1.07); }
@@ -732,7 +708,7 @@ body[data-theme="candy"] {--accent-text:#000}
   animation: tg-icon-pulse 1.2s ease-in-out infinite;
 }
 
-/* ── VIP badge animated ── */
+
 @keyframes vip-glow {
   0%,100%{ filter:drop-shadow(0 0 4px #f5c518) drop-shadow(0 0 10px #e87722); }
   50%    { filter:drop-shadow(0 0 8px #fff8a0) drop-shadow(0 0 22px #f5c518); }
@@ -2173,22 +2149,48 @@ body.on-home-screen #live-blur-canvas {
   to   { transform: scale(1.18); }
 }
 
-/* ── Telegram-style UI записи — панель снизу ── */
+/* ── Telegram-style UI записи — встроен в input-bar ── */
 #mc-voice-ui {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  z-index: 9200;
-  background: var(--surface);
-  border-top: 1px solid rgba(255,255,255,.07);
-  padding-bottom: calc(var(--safe-bot,0px) + 6px);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
 }
 @keyframes mc-voice-in {
-  from { transform: translateY(100%); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+  from { transform: translateX(-20px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
 }
 @keyframes mc-voice-out {
-  from { transform: translateY(0);    opacity: 1; }
-  to   { transform: translateY(100%); opacity: 0; }
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(-20px); opacity: 0; }
+}
+
+/* ── Telegram-style выделение сообщений ── */
+@keyframes mc-sel-hdr-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mc-sel-pop {
+  0%   { transform: scale(.55); opacity: .4; }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* В режиме выделения — контейнер сообщений сдвигается чуть вправо чтобы кружок влез */
+#mc-messages.select-mode {
+  padding-left: 34px !important;
+}
+/* Кружок слева, выровнен по центру строки */
+.mc-sel-circle {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.38);
+  background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  align-self: center;
+  pointer-events: none;
+  transition: background .13s, border-color .13s, transform .14s cubic-bezier(.34,1.3,.64,1);
 }
 
 /* ── Красная точка записи — моргает плавно ── */
@@ -2739,6 +2741,13 @@ html.notch-off #s-login {
 #peer-profile-hdr {
   padding-top: max(var(--safe-top), env(safe-area-inset-top, 0px)) !important;
 }
+/* ══ YOUTUBE SHORTS ══════════════════════════════════════════════ */
+#s-shorts { padding: 0 !important; overflow: hidden !important; }
+#yt-webview-wrap iframe {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  border: none;
+}
 </style>
 <body>
 <div id="bg-layer"></div>
@@ -2768,18 +2777,11 @@ html.notch-off #s-login {
         <button class="mode-pill-btn" id="mode-btn-teacher" onclick="setMode('teacher')">Педагоги</button>
       </div>
     </div>
-    <div id="last-group-wrap" class="hidden">
-      <div class="section-label" id="last-group-label">Продолжить</div>
-      <button class="last-group-btn" id="last-group-btn" onclick="jumpToLastGroup()"></button>
-      <div style="height:14px"></div>
-    </div>
     <div class="status" id="home-status"></div>
     <div class="progress"><div class="progress-bar" id="home-bar"></div></div>
     <div id="file-section" class="hidden">
       <div class="section-label" id="file-section-label">Файлы</div>
       <div class="list" id="file-list"></div>
-      <div style="height:14px"></div>
-      <button class="btn btn-accent" id="go-to-groups-btn" onclick="goToGroups()">К группам →</button>
     </div>
     <div id="no-url-hint" class="hidden" style="text-align:center;padding:48px 20px">
       <div style="font-size:38px;margin-bottom:12px">⚙️</div>
@@ -2991,21 +2993,6 @@ html.notch-off #s-login {
     </div>
     <div class="sep"></div>
 
-    <!-- Диагностика -->
-    <div class="section-label">Диагностика</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">
-      Если что-то не работает — логи помогут найти причину.<br>
-      Файл: <span style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px">Download/ScheduleApp_logs.txt</span>
-    </div>
-    <button class="btn btn-surface" onclick="if(window.Android&&window.Android.showLogPath){window.Android.showLogPath();}else{alert('Лог: Download/ScheduleApp_logs.txt');}">
-      📋 Где лог-файл?
-    </button>
-    <div style="height:8px"></div>
-    <button class="btn btn-surface" onclick="var ok=window.Android&&window.Android.logMsg;if(ok){window.Android.logMsg('INFO','Ручная проверка логгера '+new Date().toISOString());toast('Строка записана в лог');}else{toast('Android bridge не найден');}">
-      🔬 Записать тест в лог
-    </button>
-    <div class="sep"></div>
-
     <!-- Стиль интерфейса -->
     <div class="section-label">Интерфейс</div>
     <div class="settings-row" style="margin-bottom:8px" onclick="toggleNotchMode()">
@@ -3030,9 +3017,13 @@ html.notch-off #s-login {
       </div>
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
-    <button class="btn btn-surface" onclick="clearCacheAndReload()" style="margin-bottom:4px">🧹 Очистить кэш и перезагрузить</button>
-    <div style="height:6px"></div>
-    <button class="btn btn-surface3" onclick="logOpen()" style="margin-bottom:4px">📋 Просмотр JS-логов</button>
+    <div style="height:4px"></div>
+    <!-- Hot-patch: обновление только изменённых файлов -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <button class="btn btn-surface" style="flex:1;margin-bottom:0" onclick="checkHotPatch(false)">🔥 Горячий патч (только файлы)</button>
+      <button class="btn btn-surface3" style="width:auto;padding:8px 10px;font-size:12px;flex-shrink:0" onclick="hotPatchRollback()" title="Откатить все патчи">↩</button>
+    </div>
+    <div id="hot-patch-status" style="font-size:11px;color:var(--muted);padding:0 2px 4px;min-height:16px"></div>
     <div style="height:24px"></div>
   </div>
 </div>
@@ -3317,13 +3308,29 @@ html.notch-off #s-login {
     <button class="hdr-back" onclick="SFX.play('screenBack');showScreen('s-profile','back')">‹</button>
     <div class="hdr-title">💬 Сообщения</div>
   </div>
-  <div class="hdr" id="msg-hdr-select" style="display:none">
-    <button style="background:none;border:none;color:var(--muted);font-size:14px;font-weight:600;padding:8px;cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="msgSelectCancel()">Отмена</button>
-    <div class="hdr-title" id="msg-select-count">Выбрано: 0</div>
-    <div style="display:flex;align-items:center;gap:4px">
-      <button style="background:none;border:none;color:var(--muted);font-size:18px;padding:6px 8px;cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="msgPinSelected()" title="Закрепить">📌</button>
-      <button style="background:none;border:none;color:var(--danger,#c94f4f);font-size:14px;font-weight:600;padding:8px;cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="msgDeleteSelected()">Удалить</button>
-    </div>
+  <div class="hdr" id="msg-hdr-select" style="display:none;padding:0 6px 0 10px;min-height:56px">
+    <!-- X закрыть -->
+    <button onclick="msgSelectCancel()" style="width:40px;height:40px;border-radius:50%;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <!-- Счётчик -->
+    <div id="msg-select-count" style="font-size:17px;font-weight:700;color:var(--text);flex:1;padding-left:4px">0</div>
+    <!-- Пин -->
+    <button onclick="msgPinSelected()" title="Закрепить" style="width:40px;height:40px;border-radius:50%;background:none;border:none;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+    </button>
+    <!-- Mute -->
+    <button onclick="msgMuteSelected()" title="Mute" style="width:40px;height:40px;border-radius:50%;background:none;border:none;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+    </button>
+    <!-- Удалить -->
+    <button onclick="msgDeleteSelected()" title="Удалить" style="width:40px;height:40px;border-radius:50%;background:none;border:none;color:var(--danger,#e05555);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+    </button>
+    <!-- Три точки -->
+    <button onclick="msgSelectMoreMenu()" title="Ещё" style="width:40px;height:40px;border-radius:50%;background:none;border:none;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+    </button>
   </div>
   <!-- Search bar -->
   <div style="padding:8px 16px 4px;flex-shrink:0">
@@ -3373,6 +3380,9 @@ html.notch-off #s-login {
       <div id="mc-hdr-name" style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">...</div>
       <div id="mc-hdr-sub" style="font-size:11px;color:var(--muted)"></div>
     </div>
+    <button id="mc-encrypt-btn" title="Секретный чат" onclick="event.stopPropagation();mcToggleEncrypt()"
+      style="background:none;border:none;font-size:18px;padding:8px;cursor:pointer;opacity:0.45;transition:opacity .2s,transform .2s"
+      >🔓</button>
     <button style="background:none;border:none;color:var(--muted);font-size:20px;padding:8px;cursor:pointer" onclick="event.stopPropagation();messengerShowMore()">⋮</button>
   </div>
   <!-- Pinned message bar (hidden by default) -->
@@ -3465,45 +3475,134 @@ html.notch-off #s-login {
 <canvas id="snow-canvas" style="display:none"></canvas>
 <div id="disco-overlay"></div>
 
+
+<!-- ══ YOUTUBE SHORTS ══════════════════════════════════════════════════ -->
+<div class="screen" id="s-shorts" style="background:#000;overflow:hidden;position:relative;display:flex;flex-direction:column">
+
+  <!-- Шапка: стрелка назад + логотип Shorts + поиск -->
+  <div id="yt-hdr" style="
+    position:absolute;top:0;left:0;right:0;z-index:100;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:calc(var(--safe-top,0px)+8px) 14px 10px;
+    background:linear-gradient(to bottom,rgba(0,0,0,.72) 0%,transparent 100%);
+    pointer-events:all">
+    <button onclick="SFX.play('screenBack');showScreen('s-home','back')"
+      style="background:none;border:none;color:#fff;font-size:26px;padding:4px 10px 4px 0;cursor:pointer;
+             -webkit-tap-highlight-color:transparent;line-height:1;font-weight:300">‹</button>
+    <!-- Shorts wordmark -->
+    <div style="display:flex;align-items:center;gap:6px">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect width="22" height="22" rx="6" fill="#FF0000"/>
+        <path d="M14.5 7.5L9 5v12l5.5-2.5V11l2.5 1.5v-3L14.5 11V7.5z" fill="white"/>
+      </svg>
+      <span style="font-size:18px;font-weight:700;color:#fff;letter-spacing:.3px">Shorts</span>
+    </div>
+    <button onclick="ytShortsSearch()"
+      style="background:none;border:none;color:#fff;padding:4px;cursor:pointer;
+             -webkit-tap-highlight-color:transparent;line-height:1">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </button>
+  </div>
+
+  <!-- Основная область: WebView через iframe поверх которого тянется YouTube mobile -->
+  <div id="yt-webview-wrap" style="position:absolute;inset:0;z-index:10">
+    <!-- iframe загружается при открытии Shorts -->
+  </div>
+
+  <!-- Нижняя панель навигации YouTube — точно как на скрине -->
+  <div id="yt-bottom-nav" style="
+    position:absolute;bottom:0;left:0;right:0;z-index:100;
+    background:rgba(0,0,0,.88);
+    padding:10px 0 calc(var(--safe-bot,0px)+8px);
+    display:flex;align-items:center;justify-content:space-around">
+    <button onclick="ytNavHome()" style="background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      <span style="font-size:9px;color:#fff;font-weight:500">Главная</span>
+    </button>
+    <button onclick="ytNavShorts()" style="background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+      <div style="background:#fff;border-radius:8px;padding:4px 8px;display:flex;align-items:center;gap:4px">
+        <svg width="14" height="16" viewBox="0 0 22 22" fill="none">
+          <path d="M14.5 7.5L9 5v12l5.5-2.5V11l2.5 1.5v-3L14.5 11V7.5z" fill="#FF0000"/>
+        </svg>
+        <span style="font-size:11px;font-weight:700;color:#000">Shorts</span>
+      </div>
+    </button>
+    <button onclick="ytNavSubscriptions()" style="background:none;border:none;color:#aaa;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M10 18v-2H4v-2h6v-2H4V8h6V6H3v12h7zm4 0h7V6h-7v2h6v2h-6v2h6v2h-6v2h6v2h-6v2zm-4-8H4"/></svg>
+      <span style="font-size:9px;color:#aaa;font-weight:500">Подписки</span>
+    </button>
+    <button onclick="ytNavLibrary()" style="background:none;border:none;color:#aaa;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2" stroke-linecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      <span style="font-size:9px;color:#aaa;font-weight:500">Библиотека</span>
+    </button>
+  </div>
+
+  <!-- Поиск оверлей -->
+  <div id="yt-search-overlay" style="
+    display:none;position:absolute;inset:0;z-index:200;
+    background:#0f0f0f;padding:calc(var(--safe-top,0px)+10px) 16px 16px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button onclick="document.getElementById('yt-search-overlay').style.display='none'"
+        style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px">‹</button>
+      <div style="flex:1;background:#272727;border-radius:8px;display:flex;align-items:center;gap:8px;padding:8px 14px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="yt-search-input" placeholder="Поиск Shorts..." autocomplete="off"
+          style="background:none;border:none;outline:none;color:#fff;font-size:15px;font-family:inherit;flex:1;caret-color:#ff0000"
+          onkeydown="if(event.key==='Enter')ytDoSearch(this.value)">
+      </div>
+      <button onclick="ytDoSearch(document.getElementById('yt-search-input').value)"
+        style="background:none;border:none;color:#3ea6ff;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap">Найти</button>
+    </div>
+    <!-- Быстрые запросы -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:13px;color:#aaa;margin-bottom:10px">Популярное</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${['funny','music','cooking','dance','gaming','science','animals'].map(q =>
+          `<button onclick="ytDoSearch('${q}')" style="background:#272727;border:none;color:#fff;border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;-webkit-tap-highlight-color:transparent">${q}</button>`
+        ).join('')}
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ГЛОБАЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ — вне .screen, чтобы backdrop-filter работал -->
 <nav class="bottom-nav tg-nav" id="global-bottom-nav">
   <div id="nav-pill"></div>
 
-  <!-- 1. Главная -->
-  <button class="nav-item active" id="nav-home" onclick="SFX.play('navHome');goHome()">
+  <!-- Главная -->
+  <button class="nav-item active" id="nav-home" onclick="SFX.play('btnClick');navTo('s-home','nav-home')">
     <div class="nav-icon-wrap">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5z"/>
-        <path d="M9 21V12h6v9"/>
+        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/>
+        <polyline points="9 21 9 13 15 13 15 21"/>
       </svg>
     </div>
     <span class="nav-label">Главная</span>
   </button>
 
-  <!-- 2. Звонки -->
-  <button class="nav-item" id="nav-bells" onclick="bellNavTap()">
-    <div class="nav-icon-wrap" style="position:relative">
+  <!-- Звонки -->
+  <button class="nav-item" id="nav-bells" onclick="SFX.play('btnClick');navTo('s-bells','nav-bells')">
+    <div class="nav-icon-wrap">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
         <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
       </svg>
-      <span class="nav-badge" id="nav-bells-badge" style="display:none"></span>
     </div>
     <span class="nav-label">Звонки</span>
   </button>
 
-  <!-- 3. Чаты -->
+  <!-- Чаты -->
   <button class="nav-item" id="nav-messenger" onclick="SFX.play('btnClick');navTo('s-messenger','nav-messenger')">
     <div class="nav-icon-wrap" style="position:relative">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
-      <span id="nav-msg-dot" style="display:none;position:absolute;top:0px;right:0px;min-width:16px;height:16px;border-radius:8px;background:#e05555;border:2px solid var(--surface);font-size:9px;font-weight:800;color:#fff;align-items:center;justify-content:center;padding:0 3px;line-height:1"></span>
+      <span id="nav-msg-dot" style="display:none;position:absolute;top:0px;right:0px;min-width:16px;height:16px;border-radius:8px;background:#e05555;border:2px solid var(--surface);font-size:9px;font-weight:800;color:#fff;display:none;align-items:center;justify-content:center;padding:0 3px;line-height:1"></span>
     </div>
     <span class="nav-label">Чаты</span>
   </button>
 
-  <!-- 4. Профиль -->
+  <!-- Профиль -->
   <button class="nav-item" id="nav-profile" onclick="SFX.play('btnClick');navTo('s-profile','nav-profile')">
     <div class="nav-icon-wrap" style="position:relative">
       <div id="nav-profile-avatar" style="width:26px;height:26px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;flex-shrink:0">

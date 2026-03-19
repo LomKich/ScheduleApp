@@ -1496,7 +1496,7 @@ function _coverFit(iw, ih, dw, dh){
   return {fx, fy, fw, fh};
 }
 
-// Один кадр live blur
+// Один кадр live blur — рисуем однократно (фон статичный, rAF не нужен)
 function _liveBlurFrame(){
   if(!_liveBlurCvs || !_liveBlurOut || !_liveBlurImg) return;
 
@@ -1508,7 +1508,7 @@ function _liveBlurFrame(){
   ctx.clearRect(0, 0, CW, CH);
   ctx.drawImage(_liveBlurImg, fx, fy, fw, fh);
 
-  // 2) StackBlur radius=7 (точно как Telegram Utilities.blurBitmap(bmp, 7))
+  // 2) StackBlur radius=7
   const px = ctx.getImageData(0, 0, CW, CH);
   stackBlurRGB(px.data, CW, CH, 7);
   ctx.putImageData(px, 0, 0);
@@ -1516,17 +1516,18 @@ function _liveBlurFrame(){
   // 3) Копируем на видимый canvas
   _liveBlurOutCtx.drawImage(_liveBlurCvs, 0, 0);
 
-  // Показываем canvas при первом готовом кадре
+  // Один render — останавливаем rAF. Фон статичный, повторная отрисовка не нужна.
+  if(_liveBlurRaf){ cancelAnimationFrame(_liveBlurRaf); _liveBlurRaf = null; }
+
   if(!_liveBlurReady){
     _liveBlurReady = true;
     document.body.classList.add('liveblur-ready');
   }
-
-  _liveBlurRaf = requestAnimationFrame(_liveBlurFrame);
 }
 
 function startLiveBlur(){
-  if(_liveBlurRaf) return; // уже работает
+  if(_liveBlurReady) return; // уже нарисовано
+  if(_liveBlurRaf) return;   // уже в процессе
   if(!_liveBlurInit()) return;
 
   _liveBlurReady = false;
@@ -2030,16 +2031,17 @@ const SCREEN_PARENTS = {
   's-schedule':      {parent:'s-groups',         nav:'nav-home'},
   's-bells':         {parent:'s-home',           nav:'nav-bells'},
   's-settings':      {parent:'s-profile',        nav:'nav-profile'},
-  's-messenger':     {parent:'s-home',           nav:'nav-messenger'},
-  's-messenger-chat':{parent:'s-messenger',      nav:'nav-messenger'},
-  's-groups-chat':   {parent:'s-profile',        nav:'nav-messenger'},
   's-themes':        {parent:'s-settings',       nav:null},
   's-teachers':      {parent:'s-home',           nav:'nav-home'},
+  's-shorts':        {parent:'s-home',           nav:'nav-home'},
   's-profile-edit':  {parent:'s-profile',        nav:'nav-profile'},
   's-online':        {parent:'s-profile',        nav:'nav-profile'},
   's-leaderboard':   {parent:'s-profile',        nav:'nav-profile'},
   's-peer-profile':  {parent:'s-messenger-chat', nav:null},
+  's-messenger':     {parent:'s-profile',        nav:'nav-profile'},
+  's-messenger-chat':{parent:'s-messenger',      nav:'nav-profile'},
   's-login':         {parent:'s-home',           nav:'nav-home'},
+  's-groups-chat':   {parent:'s-profile',        nav:'nav-profile'},
 };
 
 // Вызывается из Android (кнопка Back на телефоне)
@@ -2197,7 +2199,7 @@ function navTo(id, navId) {
 }
 
 function updateNavActive(aid) {
-  ['nav-home','nav-bells','nav-messenger','nav-profile'].forEach(id =>
+  ['nav-home','nav-bells','nav-settings','nav-profile'].forEach(id =>
     document.getElementById(id)?.classList.toggle('active', id === aid)
   );
   _navMovePill(aid);
@@ -2273,6 +2275,7 @@ showScreen = function(id, dir) {
     's-schedule':       's-groups',
     's-themes':         's-settings',
     's-teachers':       's-home',
+    's-shorts':         's-home',
     's-profile-edit':   's-profile',
     's-messenger':      's-profile',
     's-messenger-chat': 's-messenger',
@@ -2286,9 +2289,9 @@ showScreen = function(id, dir) {
     's-groups-chat':    's-profile',
   };
 
-  // Экраны где свайп вниз = назад (sub-screens типа выбора группы, расписания)
+  // Экраны где свайп вниз = назад (sub-screens типа расписания, тем)
   const SWIPE_DOWN_BACK = new Set([
-    's-groups', 's-schedule', 's-themes', 's-teachers', 's-login',
+    's-schedule', 's-themes', 's-login',
     's-profile-edit',
   ]);
   // Остальные sub-screens (messenger и соц.) = горизонтальный свайп вправо
@@ -2599,27 +2602,9 @@ showScreen = function(id, dir) {
 
 })();
 
-// ══ ПОСЛЕДНЯЯ ГРУППА ══
-function updateLastGroupBtn(){
-  const wrap=document.getElementById('last-group-wrap'),btn=document.getElementById('last-group-btn');
-  if(!wrap||!btn)return;
-  const val=(typeof S!=='undefined'&&S.mode==='teacher')?S.lastTeacher:S.lastGroup;
-  if(val){btn.textContent=val;wrap.classList.remove('hidden');}
-  else wrap.classList.add('hidden');
-}
-async function _jumpStudentLastGroup(){
-  if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
-  const btn=document.getElementById('last-group-btn');
-  const origText=btn.textContent;
-  btn.classList.add('loading');
-  btn.innerHTML=`<span class="loading-spinner"></span><span class="btn-label">Загружаю...</span>`;
-  try{
-    await loadSchedule(S.lastGroup);
-  } finally {
-    btn.classList.remove('loading');
-    btn.textContent=origText;
-  }
-}
+// ══ ПОСЛЕДНЯЯ ГРУППА — кнопка удалена, функция оставлена как заглушка ══
+function updateLastGroupBtn(){}
+function jumpToLastGroup(){}
 
 // ══ ЗАГРУЗКА ══
 function saveUrlAndLoad(){
@@ -2672,20 +2657,10 @@ function renderFileList(){
     item.className='list-item'+(S.selectedFile?.name===f.name?' selected':'');
     item.innerHTML=`<span class="item-name">${f.name}</span>`;
     item.onclick=()=>{
-      const wasSelected = S.selectedFile?.name === f.name;
       S.selectedFile=f;
       renderFileList();
-      // Предзагружаем файл в фоне сразу при выборе — убирает лаг при goToGroups
-      const key = f.path || f.name;
-      if (!FILE_CACHE[key]) {
-        appLog('info','preload: начинаю фоновую загрузку '+f.name);
-        getFileBuf().then(buf => {
-          appLog('ok','preload: '+f.name+' загружен в кэш ('+Math.round(buf.byteLength/1024)+'КБ)');
-        }).catch(e => {
-          appLog('warn','preload: не удалось загрузить '+f.name+': '+e.message);
-        });
-      }
-      toast('📄 Выбран: '+f.name);
+      // Сразу переходим к группам/педагогам без подтверждения
+      goToGroups();
     };
     list.appendChild(item);
   });
@@ -2752,7 +2727,13 @@ async function goToGroups(){
 }
 function renderGroupList(groups){
   const list=document.getElementById('group-list');list.innerHTML='';
-  groups.forEach(g=>{
+  // Последняя выбранная группа всегда первой
+  const sorted = [...groups].sort((a, b) => {
+    if(S.lastGroup && a === S.lastGroup) return -1;
+    if(S.lastGroup && b === S.lastGroup) return 1;
+    return 0;
+  });
+  sorted.forEach(g=>{
     const item=document.createElement('div');
     item.className='list-item'+(S.lastGroup===g?' selected':'');
     item.innerHTML=`<span class="item-name">${g}</span>`;
@@ -3199,6 +3180,21 @@ function cmdExec(raw){
   switch(cmd){
     case 'help': {
       cmdPrint('info','Введи команду и нажми Enter.');
+      cmdPrint('out', '');
+      cmdPrint('info','── Основные команды ──');
+      cmdPrint('out','  version             — версия приложения');
+      cmdPrint('out','  theme list/[name]   — темы оформления');
+      cmdPrint('out','  font list/[name]    — шрифты');
+      cmdPrint('out','  sound on/off        — звук');
+      cmdPrint('out','  snow on/off         — снег');
+      cmdPrint('out','  matrix on/off       — матрица');
+      cmdPrint('out','  disco on/off        — дискотека');
+      cmdPrint('out','  glass on/off        — liquid glass');
+      cmdPrint('out','  hiscores            — рекорды мини-игр');
+      cmdPrint('out','  shorts [запрос]     — YouTube Shorts');
+      cmdPrint('out','  tiktok              — открыть TikTok');
+      cmdPrint('out','  donate              — поддержать проект');
+      cmdPrint('out','  vip <код>           — активировать VIP');
     } break;
     case 'greeting': {
       const sec2=loadSecret();
@@ -3756,6 +3752,45 @@ function cmdExec(raw){
       }
     } break;
 
+    case 'shorts': {
+      const q = parts.slice(1).join(' ').trim();
+      cmdPrint('ok', '📱 Открываю YouTube Shorts...');
+      setTimeout(() => {
+        cmdClose();
+        ytShortsOpen(q || null);
+      }, 300);
+    } break;
+
+    case 'donate': {
+      cmdPrint('ok', '💝 Открываю страницу доната...');
+      setTimeout(() => { cmdClose(); showDonateSheet(); }, 300);
+    } break;
+
+    case 'tiktok': {
+      cmdPrint('ok', '🎵 Открываю TikTok...');
+      setTimeout(() => {
+        cmdClose();
+        if (window.Android?.openUrl) {
+          window.Android.openUrl('https://www.tiktok.com');
+        } else if (window.Android?.loadUrlInWebView) {
+          window.Android.loadUrlInWebView('https://www.tiktok.com');
+        } else {
+          // Fallback: открываем встроенный WebView
+          const overlay = document.createElement('div');
+          overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column';
+          const bar = document.createElement('div');
+          bar.style.cssText = 'background:#161823;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0';
+          bar.innerHTML = `<span style="font-size:18px">🎵</span><span style="color:#fff;font-size:16px;font-weight:700;flex:1">TikTok</span><button onclick="this.closest('[style*=z-index]').remove()" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer">✕ Закрыть</button>`;
+          const frame = document.createElement('iframe');
+          frame.src = 'https://www.tiktok.com';
+          frame.style.cssText = 'flex:1;border:none;width:100%';
+          overlay.appendChild(bar);
+          overlay.appendChild(frame);
+          document.body.appendChild(overlay);
+        }
+      }, 300);
+    } break;
+
     default:
       cmdPrint('err','"'+cmd+'" не найдена.');
   }
@@ -4036,51 +4071,6 @@ function renderTeacherSchedule(teacher, hdr, entries, filename){
 
 
 
-function loadNotes(){try{return JSON.parse(stor.get('pair_notes')||'{}');}catch(e){return{};}}
-function saveNote(key,text){const n=loadNotes();if(text.trim())n[key]=text.trim();else delete n[key];stor.set('pair_notes',JSON.stringify(n));}
-function openNote(pairRoman,groupOrTeacher){
-  closeNote(); // закрыть предыдущую если есть
-  const key=groupOrTeacher+'::'+pairRoman;
-  const notes=loadNotes();
-  const existing=notes[key]||'';
-  const overlay=document.createElement('div');
-  overlay.id='note-overlay';
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px';
-  // Закрытие по тапу на фон
-  overlay.addEventListener('click', e => { if(e.target===overlay) closeNote(); });
-  const sheet = document.createElement('div');
-  sheet.style.cssText='background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;border:1.5px solid var(--surface3)';
-  const title = document.createElement('div');
-  title.style.cssText='font-size:14px;font-weight:700;margin-bottom:12px;color:var(--accent)';
-  title.textContent='📝 Заметка — пара '+pairRoman;
-  const ta = document.createElement('textarea');
-  ta.id='note-ta';
-  ta.style.cssText='width:100%;height:120px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:10px;color:var(--text);font-family:inherit;font-size:13px;padding:10px;resize:none;outline:none;box-sizing:border-box';
-  ta.placeholder='Что-то важное к этой паре...';
-  ta.value=existing;
-  const btns = document.createElement('div');
-  btns.style.cssText='display:flex;gap:8px;margin-top:10px';
-  const saveBtn = document.createElement('button');
-  saveBtn.style.cssText='flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;cursor:pointer';
-  saveBtn.textContent='Сохранить';
-  saveBtn.onclick = () => { saveNote(key, ta.value); closeNote(); toast('💾 Заметка сохранена'); };
-  const closeBtn = document.createElement('button');
-  closeBtn.style.cssText='padding:12px 16px;background:var(--surface2);color:var(--muted);border:none;border-radius:10px;font-family:inherit;cursor:pointer;font-size:18px;font-weight:700';
-  closeBtn.textContent='✕';
-  closeBtn.onclick = closeNote;
-  btns.appendChild(saveBtn);
-  btns.appendChild(closeBtn);
-  sheet.appendChild(title);
-  sheet.appendChild(ta);
-  sheet.appendChild(btns);
-  overlay.appendChild(sheet);
-  document.body.appendChild(overlay);
-  _noteOverlay = overlay;
-  setTimeout(()=>ta.focus(),50);
-}
-function closeNote(){
-  if(_noteOverlay){ _noteOverlay.remove(); _noteOverlay=null; }
-}
 // Добавляем кнопку заметки к каждой паре в renderSchedule и renderTeacherSchedule
 
 // ══ СЧЁТЧИК ПОСЕЩЕНИЙ ══
@@ -4207,25 +4197,6 @@ async function loadTeacherSchedule(teacher){
 }
 
 // Обновляем updateLastGroupBtn — в режиме учителей показывает последнего учителя
-
-// jumpToLastGroup — в режиме учителей идёт к учителю
-async function jumpToLastGroup(){
-  if(S.mode==='teacher'){
-    if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
-    const btn=document.getElementById('last-group-btn');
-    const origText=btn.textContent;
-    btn.classList.add('loading');
-    btn.innerHTML=`<span class="loading-spinner"></span><span class="btn-label">Загружаю...</span>`;
-    try{
-      await loadTeacherSchedule(S.lastTeacher);
-    }finally{
-      btn.classList.remove('loading');
-      btn.innerHTML=origText;
-    }
-  } else {
-    await _jumpStudentLastGroup();
-  }
-}
 
 // s-schedule — кнопка назад должна идти на правильный список
 function schedBack(){
@@ -5307,7 +5278,184 @@ function clearCacheAndReload() {
   setTimeout(() => location.reload(true), 200);
 }
 
-// Функции прокси удалены
+// ══════════════════════════════════════════════════════════════════════
+// 🔥 HOT-PATCH: обновление только изменённых файлов без переустановки APK
+// ══════════════════════════════════════════════════════════════════════
+// Схема:
+//   1. При каждом релизе GitHub Actions публикует patch-manifest.json
+//      рядом с APK. В манифесте: { version, files: { "js/social.js": "sha256" } }
+//   2. Приложение скачивает манифест, сравнивает хэши с текущими
+//   3. Только изменённые файлы скачиваются и сохраняются через Android.hotPatchSaveFile
+//   4. После сохранения — reload страницы (без переустановки APK!)
+//   5. shouldInterceptRequest в Java отдаёт патченые файлы вместо assets
+
+const HOT_PATCH_MANIFEST = 'patch-manifest.json';
+const HOT_PATCH_INSTALLED_KEY = 'sapp_hotpatch_v1'; // { version, files: {path: sha} }
+
+function _hotPatchLoad() {
+  try { return JSON.parse(localStorage.getItem(HOT_PATCH_INSTALLED_KEY) || 'null'); } catch(e) { return null; }
+}
+function _hotPatchSave(d) { localStorage.setItem(HOT_PATCH_INSTALLED_KEY, JSON.stringify(d)); }
+
+// Скачать текстовый файл через нативный fetch (с зеркалами)
+async function _hotFetchText(url) {
+  const mirrors = [
+    url,
+    'https://ghproxy.com/' + url,
+    'https://mirror.ghproxy.com/' + url,
+    'https://ghfast.top/' + url,
+  ];
+  for (const u of mirrors) {
+    try {
+      if (window.Android?.nativeFetch) {
+        const res = JSON.parse(window.Android.nativeFetch(u));
+        if (res.ok) return res.body;
+      } else {
+        const r = await _fetchTimeout(fetch(u), 10000);
+        if (r.ok) return await r.text();
+      }
+    } catch(e) { /* пробуем следующее */ }
+  }
+  throw new Error('Не удалось скачать: ' + url);
+}
+
+// Основная функция проверки и применения горячего патча
+async function checkHotPatch(silent) {
+  if (!window.Android?.hotPatchSaveFile) {
+    if (!silent) toast('ℹ️ Hot-patch не поддерживается этой версией');
+    return { updated: false };
+  }
+
+  const statusEl = document.getElementById('hot-patch-status');
+  const setStatus = (t) => { if (statusEl) statusEl.textContent = t; };
+
+  try {
+    setStatus('⏳ Проверяю обновления файлов...');
+
+    // 1. Получаем последний релиз чтобы найти URL манифеста
+    async function ghFetch(path) {
+      const errs = [];
+      for (const base of GH_API_MIRRORS) {
+        try { return await (async () => {
+          if (window.Android?.nativeFetch) {
+            const res = JSON.parse(window.Android.nativeFetch(base + path));
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return JSON.parse(res.body);
+          }
+          const r = await _fetchTimeout(fetch(base + path), 7000);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })(); } catch(e) { errs.push(e.message); }
+      }
+      throw new Error('GitHub недоступен (' + errs[0] + ')');
+    }
+
+    let release;
+    try { release = await ghFetch('/latest'); }
+    catch(e) {
+      const all = await ghFetch('?per_page=1');
+      if (!Array.isArray(all) || !all.length) throw new Error('Нет релизов');
+      release = all[0];
+    }
+
+    // 2. Ищем patch-manifest.json в assets релиза
+    const manifestAsset = (release.assets || []).find(a => a.name === HOT_PATCH_MANIFEST);
+    if (!manifestAsset) {
+      if (!silent) toast('ℹ️ Манифест патчей не найден в релизе');
+      setStatus('');
+      return { updated: false };
+    }
+
+    // 3. Скачиваем манифест
+    const manifestText = await _hotFetchText(manifestAsset.browser_download_url);
+    const manifest = JSON.parse(manifestText);
+    // manifest = { version: "4.7.9", files: { "js/social.js": { sha: "abc...", url: "https://..." } } }
+
+    const installed = _hotPatchLoad();
+    const installedFiles = installed?.files || {};
+
+    // 4. Определяем какие файлы изменились
+    const toUpdate = [];
+    for (const [path, info] of Object.entries(manifest.files || {})) {
+      if (installedFiles[path] !== info.sha) {
+        toUpdate.push({ path, ...info });
+      }
+    }
+
+    if (toUpdate.length === 0) {
+      if (!silent) toast('✅ Все файлы актуальны (v' + manifest.version + ')');
+      setStatus('');
+      return { updated: false };
+    }
+
+    // 5. Показываем диалог подтверждения
+    if (!silent) {
+      const fileList = toUpdate.map(f => '• ' + f.path).join('\n');
+      const confirmed = await new Promise(resolve => {
+        const d = document.createElement('div');
+        d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
+        d.innerHTML = `
+          <div style="background:var(--surface);border-radius:20px;padding:24px;max-width:320px;margin:20px;width:100%">
+            <div style="font-size:20px;margin-bottom:8px">🔥 Горячий патч</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">v${manifest.version} — изменено файлов: ${toUpdate.length}</div>
+            <div style="font-size:12px;color:var(--muted);white-space:pre-line;margin-bottom:16px;max-height:120px;overflow-y:auto">${fileList}</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Файлы обновятся без переустановки приложения</div>
+            <div style="display:flex;gap:10px">
+              <button onclick="this.closest('[style*=fixed]').remove();window._hpResolve(false)"
+                style="flex:1;padding:12px;background:var(--surface2);border:none;border-radius:12px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Позже</button>
+              <button onclick="this.closest('[style*=fixed]').remove();window._hpResolve(true)"
+                style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Обновить</button>
+            </div>
+          </div>`;
+        window._hpResolve = resolve;
+        document.body.appendChild(d);
+      });
+      if (!confirmed) { setStatus(''); return { updated: false }; }
+    }
+
+    // 6. Скачиваем и сохраняем каждый изменённый файл
+    let done = 0;
+    for (const file of toUpdate) {
+      setStatus(`⬇ Скачиваю ${file.path} (${++done}/${toUpdate.length})...`);
+      const content = await _hotFetchText(file.url);
+      const result = window.Android.hotPatchSaveFile(file.path, content);
+      if (!result.startsWith('ok')) throw new Error('Ошибка сохранения ' + file.path + ': ' + result);
+      installedFiles[file.path] = file.sha;
+    }
+
+    // 7. Сохраняем состояние патчей
+    _hotPatchSave({ version: manifest.version, files: installedFiles });
+    setStatus('✅ Обновлено ' + toUpdate.length + ' файлов! Перезагружаю...');
+
+    // 8. Перезагружаем страницу чтобы применить патчи
+    setTimeout(() => {
+      if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
+      location.reload(true);
+    }, 1200);
+
+    return { updated: true, count: toUpdate.length };
+
+  } catch(e) {
+    const msg = '❌ Hot-patch: ' + e.message.slice(0, 80);
+    setStatus('');
+    if (!silent) toast(msg);
+    return { updated: false, error: e.message };
+  }
+}
+
+// Сброс горячих патчей (откат к встроенным файлам)
+function hotPatchRollback() {
+  if (!window.Android?.hotPatchClearAll) { toast('❌ Недоступно'); return; }
+  window.Android.hotPatchClearAll();
+  _hotPatchSave(null);
+  toast('🔄 Патчи сброшены, перезагружаю...');
+  setTimeout(() => {
+    if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
+    location.reload(true);
+  }, 800);
+}
+
+
 
 // ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║                    🤖 ИНСТРУКЦИЯ ДЛЯ CLAUDE (ЧИТАЙ ВНИМАТЕЛЬНО!)           ║

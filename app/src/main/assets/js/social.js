@@ -1,4 +1,4 @@
-// ── Логирование ──────────────────────────────────────────────────
+// ┄┄ Логирование ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function sLog(level, msg) {
   try {
     const tag = '[SOCIAL]';
@@ -37,7 +37,7 @@ const AVATAR_EMOJIS = [
   '🔥','💎','🌙','⭐','🌈','🎵','🎮','🏆',
 ];
 
-// ── Helpers ──────────────────────────────────────────────────────
+// ┄┄ Helpers ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function profileLoad()    { try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || null; } catch(e){ return null; } }
 function profileSave(p) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
@@ -57,7 +57,7 @@ function accountsSave(a)  { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)
 function friendsLoad()    { try { return JSON.parse(localStorage.getItem(FRIENDS_KEY)) || []; } catch(e){ return []; } }
 function friendsSave(f)   { localStorage.setItem(FRIENDS_KEY, JSON.stringify(f)); }
 
-// ── Локальные никнеймы (переименование пользователей, как в Telegram) ──
+// ┄┄ Локальные никнеймы (переименование пользователей, как в Telegram) ┄┄
 const LOCAL_NICKS_KEY = 'sapp_local_nicks_v1';
 function localNickLoad()         { try { return JSON.parse(localStorage.getItem(LOCAL_NICKS_KEY)) || {}; } catch(e) { return {}; } }
 function localNickGet(username)  { return localNickLoad()[username] || ''; }
@@ -76,7 +76,7 @@ function localNickEdit(username, currentName) {
   sheet.innerHTML = `
     <div style="background:var(--surface);border-radius:20px;padding:24px 20px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,.7)" onclick="event.stopPropagation()">
       <div style="font-size:17px;font-weight:700;margin-bottom:4px">Изменить имя</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Только у тебя — @${escHtml(username)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Только у тебя   @${escHtml(username)}</div>
       <input id="_nick-inp" value="${escHtml(current)}" placeholder="${escHtml(currentName)}"
         style="width:100%;padding:12px 14px;background:var(--surface2);border:1.5px solid rgba(255,255,255,.1);border-radius:12px;color:var(--text);font-family:inherit;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:6px"
         maxlength="32" autofocus>
@@ -117,7 +117,7 @@ function profileGetPeerId(username) {
   return 'sapp-' + username.toLowerCase().replace(/[^a-z0-9_]/g, '');
 }
 
-// ── Инициализация при старте ─────────────────────────────────────
+// ┄┄ Инициализация при старте ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function profileBootstrap() {
   const p = profileLoad();
   updateNavProfileIcon(p);
@@ -126,7 +126,7 @@ function profileBootstrap() {
       if (!profileLoad()) {
         profileInitLoginScreen();
         showScreen('s-login');
-        // Если есть сохранённые аккаунты — открываем вкладку входа
+        // Если есть сохранённые аккаунты   открываем вкладку входа
         const accounts = accountsLoad();
         const usernames = Object.keys(accounts);
         if (usernames.length > 0) {
@@ -142,7 +142,7 @@ function profileBootstrap() {
   }
 }
 
-// ── Обновить иконку в нав-баре ───────────────────────────────────
+// ┄┄ Обновить иконку в нав-баре ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function updateNavProfileIcon(p) {
   const btn = document.getElementById('nav-profile');
   const wrap = btn?.querySelector('.nav-icon-wrap');
@@ -173,7 +173,7 @@ function profileInitLoginScreen() {
   // Emoji grid removed - user inputs emoji via keyboard
 }
 
-// ── Валидация эмодзи ─────────────────────────────────────────────
+// ┄┄ Валидация эмодзи ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function isEmoji(str) {
   if (!str || str.trim() === '') return false;
   // Extract all emoji-like segments using the Unicode emoji regex
@@ -203,12 +203,12 @@ function isEmoji(str) {
     (cp >= 0x1F100 && cp <= 0x1F1FF) || // Enclosed Alphanumeric Supplement
     (cp >= 0x1F200 && cp <= 0x1F2FF) || // Enclosed Ideographic Supplement
     (cp === 0x00A9 || cp === 0x00AE)  || // © ®
-    (cp >= 0x203C  && cp <= 0x2049)  || // ‼ ⁉
+    (cp >= 0x203C  && cp <= 0x2049)  || //   /
     (cp >= 0x20D0  && cp <= 0x20FF)     // Combining Enclosing Keycap etc.
   );
 }
 
-// ── Рандомный эмодзи ──────────────────────────────────────────────
+// ┄┄ Рандомный эмодзи ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 const _ALL_EMOJI = [
   // Смайлики и люди
   '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩',
@@ -219,48 +219,48 @@ const _ALL_EMOJI = [
   '😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩',
   '🤡','👹','👺','👻','👽','👾','🤖','😺','😸','😹','😻','😼','😽','🙀','😿','😾',
   // Жесты и тело
-  '👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆',
-  '🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️',
-  '💅','🤳','💪','🦾','🦵','🦶','👂','🦻','👃','🧠','🦷','🦴','👀','👁️','👅','👄',
+  '👋','🤚','🖐','✅','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆',
+  '🖕','👇','☝️','👍','👎','✅','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️',
+  '💅','🤳','💪','🦾','🦵','🦶','👂','🦻','👃','🧠','🦷','🦴','👀','👁','👅','👄',
   // Люди
   '👶','🧒','👦','👧','🧑','👱','👨','🧔','👩','🧓','👴','👵','🙍','🙎','🙅','🙆',
-  '💁','🙋','🧏','🙇','🤦','🤷','👮','🕵️','💂','🥷','👷','🤴','👸','👳','👲','🧕',
+  '💁','🙋','🧏','🙇','🤦','🤷','👮','🕵','💂','🥷','👷','🤴','👸','👳','👲','🧕',
   '🤵','👰','🤰','🤱','👼','🎅','🤶','🦸','🦹','🧙','🧚','🧛','🧜','🧝','🧞','🧟',
-  '💆','💇','🚶','🧍','🧎','🏃','💃','🕺','🕴️','👯','🧖','🧗','🏌️','🏇','🧘','🏄',
+  '💆','💇','🚶','🧍','🧎','🏃','💃','🕺','🕴','👯','🧖','🧗','🏌','🏇','🧘','🏄',
   // Животные
   '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈',
   '🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱',
-  '🐛','🦋','🐌','🐞','🐜','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑',
+  '🐛','🦋','🐌','🐞','🐜','🦟','🦗','🕷','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑',
   '🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧',
   '🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑',
-  '🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇',
-  '🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔',
+  '🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊','🐇',
+  '🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿','🦔',
   // Еда
   '🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝',
-  '🍅','🥑','🍆','🥔','🥕','🌽','🌶️','🫑','🥒','🥬','🥦','🧄','🧅','🍄','🥜','🌰',
+  '🍅','🥑','🍆','🥔','🥕','🌽','🌶','🫑','🥒','🥬','🥦','🧄','🧅','🍄','🥜','🌰',
   '🍞','🥐','🥖','🥨','🧀','🍳','🥚','🍔','🍟','🌭','🍕','🌮','🌯','🫔','🥙','🧆',
   '🍜','🍝','🍛','🍣','🍱','🍤','🍙','🍘','🍥','🥮','🍢','🧁','🍰','🎂','🍮','🍭',
   '🍬','🍫','🍿','🧂','🍩','🍪','🌰','🍯','🧃','🥤','🧋','☕','🍵','🧉','🍺','🍻',
   // Природа
   '🌸','🌺','🌻','🌹','🪷','🌷','🌼','🌱','🌿','☘️','🍀','🎍','🪴','🍁','🍂','🍃',
   '🍄','🌾','💐','🌵','🎋','🌲','🌳','🌴','🪵','🪨','🌊','💧','🔥','🌈','⭐','🌟',
-  '✨','💫','⚡','🌙','☀️','🌤️','⛅','🌦️','🌧️','⛈️','🌩️','❄️','💨','🌀','🌈',
+  '✅','💫','⚡','🌙','☕','🌤','❄️','🌦','🌧','⛈️','🌩','❄️','💨','🌀','🌈',
   // Предметы
-  '⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🥊','🥋','🎯',
-  '⛸️','🎿','🛷','🎮','🎲','🧩','🧸','🪁','🎭','🎨','🖼️','🎪','🎤','🎧','🎵','🎶',
-  '🎸','🎹','🎷','🎺','🎻','🪘','🥁','📱','💻','⌨️','🖥️','🖨️','📷','📸','📹','🎥',
-  '📺','📻','🎙️','⏰','⌛','⏳','📡','🔋','💡','🔦','🕯️','💎','🔮','🪄','🧲','🔑',
-  '🗝️','🔒','🔓','🔨','🪛','🔧','⚙️','🪤','🧰','🗡️','🛡️','🪝','🧲','🎁','🎀',
+  '⚡','🏀','🏈','⚡','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🥊','🥋','🎯',
+  '⛸️','🎿','🛷','🎮','🎲','🧩','🧸','🪁','🎭','🎨','🖼','🎪','🎤','🎧','🎵','🎶',
+  '🎸','🎹','🎷','🎺','🎻','🪘','🥁','📱','💻','⌨️','🖥','🖨','📷','📸','📹','🎥',
+  '📺','📻','🎙','⏳','⌄','⏳','📡','🔋','💡','🔦','🕯','💎','🔮','🪄','🧲','🔑',
+  '🗝','🔒','🔓','🔨','🪛','🔧','⚙️','🪤','🧰','🗡','🛡','🪝','🧲','🎁','🎀',
   '🎈','🎉','🎊','🎏','🎐','🎑','🎃','🎄','🎆','🎇','✉️','📦','🏆','🥇','🥈','🥉',
   // Места и символы
   '🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏪','🏫','🏬','🏭','🏯','🏰','🗼','🗽',
-  '⛪','🕌','🛕','⛩️','🕍','🗾','🏔️','⛰️','🌋','🗻','🏕️','🏖️','🏜️','🏝️','🌅',
-  '🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍️',
-  '🛵','🚲','🛴','🛺','🚁','🛸','✈️','🚀','🛩️','⛵','🚢','🚂','🚃','🚄','🚅',
+  '❄️','🕌','🛕','⛩️','🕍','🗾','🏔','⛰️','🌋','🗻','🏕','🏖','🏜','🏝','🌅',
+  '🚗','🚕','🚙','🚌','🚎','🏎','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍',
+  '🛵','🚲','🛴','🛺','🚁','🛸','✈️','🚀','🛩','❄️','🚢','🚂','🚃','🚄','🚅',
   // Флаги/символы
   '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖',
   '💘','💝','💟','☮️','✝️','☯️','🆒','🆓','🆕','🆙','🆚','🈵','🔴','🟠','🟡','🟢',
-  '🔵','🟣','⚫','⚪','🟤','🔺','🔻','💠','🔷','🔶','🔹','🔸','▪️','▫️','🔲','🔳',
+  '🔵','🟣','⚡','⚡','🟤','🔺','🔻','💠','🔷','🔶','🔹','🔸','▪️','▫️','🔲','🔳',
 ];
 
 function randomEmojiPick(ctx) {
@@ -327,7 +327,7 @@ function loginCustomEmojiInput(el) {
     // Deselect preset grid
     document.querySelectorAll('#login-emoji-grid button').forEach(b => b.style.borderColor = 'var(--surface3)');
   } else {
-    if (errEl) errEl.textContent = 'Это не эмодзи — вставь символ с клавиатуры';
+    if (errEl) errEl.textContent = 'Это не эмодзи   вставь символ с клавиатуры';
     if (preview) preview.textContent = '';
     el.style.borderColor = 'var(--danger,#c94f4f)';
   }
@@ -356,7 +356,7 @@ function editCustomEmojiInput(el) {
     // Deselect preset grid
     document.querySelectorAll('#edit-emoji-grid button').forEach(b => b.style.borderColor = 'var(--surface3)');
   } else {
-    if (errEl) errEl.textContent = 'Это не эмодзи — вставь символ с клавиатуры';
+    if (errEl) errEl.textContent = 'Это не эмодзи   вставь символ с клавиатуры';
     if (preview) preview.textContent = '';
     el.style.borderColor = 'var(--danger,#c94f4f)';
   }
@@ -384,7 +384,7 @@ function loginCheckUsername(val) {
   clearTimeout(_loginCheckTimer);
   _loginCheckTimer = setTimeout(async () => {
     if (!sbReady()) {
-      if(status){status.textContent='✓ Отлично!'; status.style.color='#4caf7d';}
+      if(status){status.textContent='✅ Отлично!'; status.style.color='#4caf7d';}
       if(btn)btn.disabled=false; return;
     }
     try {
@@ -398,11 +398,11 @@ function loginCheckUsername(val) {
         if(status){status.textContent='❌ Ник уже занят'; status.style.color='var(--danger,#c94f4f)';}
         if(btn)btn.disabled=true;
       } else {
-        if(status){status.textContent='✓ Ник свободен!'; status.style.color='#4caf7d';}
+        if(status){status.textContent='✅ Ник свободен!'; status.style.color='#4caf7d';}
         if(btn)btn.disabled=false;
       }
     } catch(e) {
-      if(status){status.textContent='✓ Отлично!'; status.style.color='#4caf7d';}
+      if(status){status.textContent='✅ Отлично!'; status.style.color='#4caf7d';}
       if(btn)btn.disabled=false;
     }
   }, 900); // увеличен дебаунс с 600 до 900ms
@@ -516,7 +516,7 @@ function loginDoAuth() {
     return;
   }
 
-  // 2) Аккаунта нет локально — ищем в Supabase
+  // 2) Аккаунта нет локально   ищем в Supabase
   if (!sbReady()) {
     if(errEl) errEl.textContent = 'Аккаунт не найден на устройстве и Supabase недоступен';
     return;
@@ -525,7 +525,7 @@ function loginDoAuth() {
   if(btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Вход...'; }
 
   // Сначала ищем в таблице users (полный профиль с паролем)
-  // Если нет — fallback в presence (для старых аккаунтов)
+  // Если нет   fallback в presence (для старых аккаунтов)
   sbLoadUser(username)
     .then(async row => {
       if (!row) {
@@ -682,7 +682,7 @@ function profileRenderScreen() {
       ${badgeObj ? `<div style="display:inline-block;margin-top:8px;font-size:12px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${badgeObj.emoji} ${badgeObj.label}</div>` : ''}
     </div>
 
-    <!-- Кнопки действий: Telegram-style — три кнопки в ряд -->
+    <!-- Кнопки действий: Telegram-style   три кнопки в ряд -->
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <button onclick="profilePickPhoto()"
         style="flex:1;padding:12px 6px 10px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:7px;-webkit-tap-highlight-color:transparent;transition:background .15s"
@@ -718,7 +718,7 @@ function profileRenderScreen() {
           <div style="font-size:14px;font-weight:700">Таблица лидеров</div>
           <div style="font-size:12px;color:var(--muted)">Рекорды в играх</div>
         </div>
-        <span style="color:var(--muted);font-size:18px">›</span>
+        <span style="color:var(--muted);font-size:18px"> </span>
       </div>
       <div onclick="profileRenderOnline();showScreen('s-online')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
         <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span>
@@ -733,7 +733,7 @@ function profileRenderScreen() {
           <div style="font-size:14px;font-weight:700">Группы</div>
           <div style="font-size:12px;color:var(--muted)">${groupsLoad().length} ${groupsLoad().length === 1 ? 'группа' : groupsLoad().length < 5 ? 'группы' : 'групп'}</div>
         </div>
-        <span style="color:var(--muted);font-size:18px">›</span>
+        <span style="color:var(--muted);font-size:18px"> </span>
       </div>
     </div>
 
@@ -787,7 +787,7 @@ function profileRenderScreen() {
   _bgServiceUpdateUI();
 }
 
-// ── Фоновый сервис: управление и UI ──────────────────────────────────────────
+// ┄┄ Фоновый сервис: управление и UI ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 
 function _bgServiceUpdateUI() {
   const toggle = document.getElementById('bg-service-toggle');
@@ -802,7 +802,7 @@ function _bgServiceUpdateUI() {
   toggle.style.background = enabled ? 'var(--accent)' : '#ccc';
   if (knob) knob.style.left = enabled ? '22px' : '2px';
   if (status) status.textContent = enabled
-    ? '🟢 Работает — сообщения приходят в фоне'
+    ? '🟢 Работает   сообщения приходят в фоне'
     : '🔴 Выключено';
 }
 
@@ -825,14 +825,14 @@ function escHtml(s) {
   return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── profileInitEditScreen полностью переписан — без monkey-patch ──
+// ┄┄ profileInitEditScreen полностью переписан   без monkey-patch ┄┄
 // Вызывается из кнопки "Изменить" вверху профиля через profileToggleEdit()
 function profileInitEditScreen() {
   const p = profileLoad();
   if (!p) return;
   const isVip = typeof vipCheck === 'function' ? vipCheck() : false;
 
-  // ── Основные поля ──
+  // ┄┄ Основные поля ┄┄
   const nameEl = document.getElementById('edit-name');
   const unEl   = document.getElementById('edit-username');
   const bioEl  = document.getElementById('edit-bio');
@@ -848,7 +848,7 @@ function profileInitEditScreen() {
     if (cnt) cnt.textContent = (p.bio||'').length;
   }
 
-  // ── Аватар превью ──
+  // ┄┄ Аватар превью ┄┄
   _editSelectedEmoji  = p.avatar || '😊';
   _editSelectedColor  = p.color  || PROFILE_COLORS[0];
   _editSelectedStatus = p.status || 'online';
@@ -865,7 +865,7 @@ function profileInitEditScreen() {
     }
   }
 
-  // ── Эмодзи-пикер (только ввод с клавиатуры) ──
+  // ┄┄ Эмодзи-пикер (только ввод с клавиатуры) ┄┄
   // Grid removed - emoji selected via keyboard input only
   const custIn = document.getElementById('edit-custom-emoji-input');
   const custPrev = document.getElementById('edit-custom-emoji-preview');
@@ -879,7 +879,7 @@ function profileInitEditScreen() {
   if (custPrev) custPrev.textContent = isPreset ? _editSelectedEmoji : _editSelectedEmoji;
   if (custErr) custErr.textContent = '';
 
-  // ── Статусы ──
+  // ┄┄ Статусы ┄┄
   const statusPicker = document.getElementById('edit-status-picker');
   if (statusPicker) {
     statusPicker.innerHTML = '';
@@ -901,7 +901,7 @@ function profileInitEditScreen() {
     });
   }
 
-  // ── Цвета ──
+  // ┄┄ Цвета ┄┄
   const colorPicker = document.getElementById('edit-color-picker');
   if (colorPicker) {
     colorPicker.innerHTML = '';
@@ -919,7 +919,7 @@ function profileInitEditScreen() {
     });
   }
 
-  // ── VIP-секции (рамки, значки, баннер, фото) ──
+  // ┄┄ VIP-секции (рамки, значки, баннер, фото) ┄┄
   document.getElementById('vip-edit-section')?.remove();
 
   if (typeof PROFILE_FRAMES === 'undefined') return; // VIP скрипт ещё не загружен
@@ -930,13 +930,30 @@ function profileInitEditScreen() {
   const vipSec = document.createElement('div');
   vipSec.id = 'vip-edit-section';
 
-  // Фото-аватар
+  // ┄┄ Кнопка доната (всегда видна) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+  const donateRow = document.createElement('div');
+  donateRow.innerHTML = `<div class="sep"></div>`;
+  const donateBtn = document.createElement('button');
+  donateBtn.className = 'btn btn-accent';
+  donateBtn.style.cssText = 'margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px';
+  donateBtn.innerHTML = `<span style="font-size:18px">💝</span> Поддержать проект   VIP`;
+  donateBtn.onclick = showDonateSheet;
+  donateRow.appendChild(donateBtn);
+  if (!isVip) {
+    const subNote = document.createElement('div');
+    subNote.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:14px;text-align:center';
+    subNote.textContent = 'Донат через СБП   VIP активируется автоматически';
+    donateRow.appendChild(subNote);
+  }
+  vipSec.appendChild(donateRow);
+
+
   const photoRow = document.createElement('div');
   photoRow.innerHTML = `<div class="sep"></div>
     <div class="section-label" style="display:flex;align-items:center;gap:8px">
       📷 Фото аватара
       ${isVip
-        ? '<span style="font-size:10px;color:#4caf7d;font-weight:700">✓ VIP</span>'
+        ? '<span style="font-size:10px;color:#4caf7d;font-weight:700">✅ VIP</span>'
         : '<span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>'}
     </div>`;
   if (isVip) {
@@ -1025,7 +1042,7 @@ function profileInitEditScreen() {
         <span style="font-size:13px;color:${hasPhotoBanner ? 'var(--accent)' : 'var(--muted)'};">${hasPhotoBanner ? 'Фото-баннер установлен' : 'Загрузить фото как баннер'}</span>
         <input type="file" accept="image/*" style="display:none" onchange="profileUploadPhotoBanner(this)">
       </label>
-      ${hasPhotoBanner ? '<button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="profileSetBanner(\'none\')">✕ Убрать</button>' : ''}
+      ${hasPhotoBanner ? '<button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="profileSetBanner(\'none\')">✅ Убрать</button>' : ''}
     `;
     bannersDiv.appendChild(uploadRow);
   } else {
@@ -1069,7 +1086,7 @@ function profileCheckUsername(val) {
   if (clean.length < 3) {
     status.textContent = 'Минимум 3 символа'; status.style.color = 'var(--danger,#c94f4f)';
   } else {
-    status.textContent = '✓ Ок'; status.style.color = '#4caf7d';
+    status.textContent = '✅ Ок'; status.style.color = '#4caf7d';
   }
 }
 
@@ -1121,13 +1138,13 @@ function openImageCrop(dataUrl, options) {
     </div>
     <div class="img-crop-hint">Перетащи пальцем · Масштаб ниже</div>
     <div class="img-crop-controls">
-      <label>−</label>
+      <label>⏱</label>
       <input type="range" id="crop-zoom" min="100" max="400" value="100" step="1">
       <label>+</label>
     </div>
     <div class="img-crop-actions">
       <button class="btn btn-surface" onclick="closeCrop()">Отмена</button>
-      <button class="btn" style="background:var(--accent);color:var(--btn-text,#fff)" onclick="applyCrop()">✓ Применить</button>
+      <button class="btn" style="background:var(--accent);color:var(--btn-text,#fff)" onclick="applyCrop()">✅ Применить</button>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -1161,7 +1178,7 @@ function openImageCrop(dataUrl, options) {
   };
   tmpImg.src = dataUrl;
 
-  // ── Pointer drag ──────────────────────────────────────────────
+  // ┄┄ Pointer drag ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   function onDown(e) {
     e.preventDefault();
     st.dragging = true;
@@ -1211,7 +1228,7 @@ function openImageCrop(dataUrl, options) {
     window.removeEventListener('touchend',  onUp);
   };
 
-  // ── Zoom slider ───────────────────────────────────────────────
+  // ┄┄ Zoom slider ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   zoomEl.addEventListener('input', () => {
     st.scale = parseFloat(zoomEl.value) / 100;
     _cropClamp();
@@ -1274,10 +1291,10 @@ function applyCrop() {
 // ═════════════════════════════════════════════════════════════════
 
 function profilePickPhoto() {
-  // Кнопка «Выбрать фото» на главном экране профиля — только VIP
+  // Кнопка «Выбрать фото» на главном экране профиля   только VIP
   const onEditScreen = document.getElementById('s-profile-edit')?.classList.contains('active');
   if (!onEditScreen && !vipCheck()) {
-    toast('👑 Фото профиля — только для VIP');
+    toast('👑 Фото профиля   только для VIP');
     return;
   }
   _profileWaitingForPhoto = true;
@@ -1309,7 +1326,7 @@ function _profileHandleAvatarDataUrl(dataUrl) {
         const inner = document.getElementById('edit-avatar-inner');
         if (inner) inner.innerHTML = `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
       } else {
-        // Сохраняем сразу — пользователь нажал "Выбрать фото" с экрана профиля
+        // Сохраняем сразу   пользователь нажал "Выбрать фото" с экрана профиля
         const p = profileLoad();
         if (!p) return;
         p.avatarType = 'photo';
@@ -1363,7 +1380,7 @@ async function profileSaveEdit() {
     delete p.avatarData;
   }
 
-  // ── Миграция данных при смене username ────────────────────────────
+  // ┄┄ Миграция данных при смене username ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   if (usernameChanged) {
     toast('⏳ Переименовываем аккаунт...');
 
@@ -1387,10 +1404,10 @@ async function profileSaveEdit() {
     });
     msgSave(newMsgs);
 
-    // 3. friends — не меняются (это список ДРУГИХ пользователей)
+    // 3. friends   не меняются (это список ДРУГИХ пользователей)
 
     // 4. Supabase: обновляем messages
-    //    Для каждого чата: fetch → delete old → insert new с новыми ключами
+    //    Для каждого чата: fetch ↩ delete old ↩ insert new с новыми ключами
     if (sbReady()) {
       const chats = chatsLoad();
       for (const otherUser of chats) {
@@ -1451,7 +1468,7 @@ async function profileSaveEdit() {
     _fbMsgStreams = {};
   }
 
-  // Если изменилось только имя — обновляем в presence через profileConnect
+  // Если изменилось только имя   обновляем в presence через profileConnect
   profileSave(p);
   sbSaveUser(p); // синхронизируем полный профиль в облако
   profileConnect(p);
@@ -1460,7 +1477,7 @@ async function profileSaveEdit() {
 
   showScreen('s-profile', 'back');
   setTimeout(profileRenderScreen, 100);
-  toast(usernameChanged ? '✅ Юзернейм изменён — чаты сохранены' : '✅ Профиль сохранён');
+  toast(usernameChanged ? '✅ Юзернейм изменён   чаты сохранены' : '✅ Профиль сохранён');
 }
 
 async function profileDeleteAccount() {
@@ -1545,7 +1562,7 @@ function sbUrl()  { return (sbConfig()?.url || SB_DEFAULT_URL).replace(/\/$/, ''
 function sbKey()  { return sbConfig()?.key || SB_DEFAULT_KEY; }
 function sbReady(){ return true; }
 
-// ── Прямое подключение к Supabase (P2P удалён) ──────────────────
+// ┄┄ Прямое подключение к Supabase (P2P удалён) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 async function _sbFetch(method, path, body, extraHeaders) {
   const url = `${sbUrl()}${path}`;
   const r = await fetch(url, {
@@ -1558,7 +1575,183 @@ async function _sbFetch(method, path, body, extraHeaders) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 📭 OFFLINE QUEUE — Telegram-style отложенная отправка
+// ══════════════════════════════════════════════════════════════════════════
+// 🔐 E2E ШИФРОВАНИЕ   ECDH + AES-GCM (WebCrypto API)
+//
+// Схема:
+//     Каждый пользователь имеет пару ECDH ключей (P-256)
+//     Публичный ключ хранится в Supabase users.pubkey (base64)
+//     Приватный ключ   только в localStorage (никогда не уходит с устройства)
+//     При отправке: ECDH shared secret ↩ HKDF ↩ AES-256-GCM
+//     В Supabase хранится: зашифрованный текст + IV (оба base64, разделитель '.')
+//     Формат в поле text: 'ENC:BASE64_IV.BASE64_CIPHERTEXT'
+//     Если расшифровка не удалась   показывается '🔒 [зашифровано]'
+// ══════════════════════════════════════════════════════════════════════════
+
+const E2E_PRIVKEY_KEY = 'sapp_e2e_priv_v1'; // localStorage ключ
+const E2E_PUBKEY_KEY  = 'sapp_e2e_pub_v1';
+const E2E_PREFIX      = 'ENC:';
+
+// Кэш: username ↩ CryptoKey (публичный ECDH)
+const _e2ePeerPubKeys = {};
+// Кэш: chatKey ↩ CryptoKey (AES-GCM, производный от ECDH shared secret)
+const _e2eAesCache = {};
+
+let _e2ePrivKey = null;  // CryptoKey   наш приватный ECDH
+let _e2ePubKey  = null;  // CryptoKey   наш публичный ECDH
+let _e2eEnabled = false;
+
+// ┄┄ Инициализация: генерация или загрузка ключей ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+async function e2eInit() {
+  try {
+    const storedPriv = localStorage.getItem(E2E_PRIVKEY_KEY);
+    const storedPub  = localStorage.getItem(E2E_PUBKEY_KEY);
+
+    if (storedPriv && storedPub) {
+      // Загружаем существующие ключи
+      _e2ePrivKey = await crypto.subtle.importKey(
+        'jwk', JSON.parse(storedPriv),
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false, ['deriveKey', 'deriveBits']
+      );
+      _e2ePubKey = await crypto.subtle.importKey(
+        'jwk', JSON.parse(storedPub),
+        { name: 'ECDH', namedCurve: 'P-256' },
+        true, []
+      );
+    } else {
+      // Генерируем новую пару
+      const pair = await crypto.subtle.generateKey(
+        { name: 'ECDH', namedCurve: 'P-256' },
+        true, ['deriveKey', 'deriveBits']
+      );
+      _e2ePrivKey = pair.privateKey;
+      _e2ePubKey  = pair.publicKey;
+      // Сохраняем
+      const privJwk = await crypto.subtle.exportKey('jwk', _e2ePrivKey);
+      const pubJwk  = await crypto.subtle.exportKey('jwk', _e2ePubKey);
+      localStorage.setItem(E2E_PRIVKEY_KEY, JSON.stringify(privJwk));
+      localStorage.setItem(E2E_PUBKEY_KEY,  JSON.stringify(pubJwk));
+    }
+    _e2eEnabled = true;
+  } catch(e) {
+    console.warn('[E2E] init failed:', e.message);
+    _e2eEnabled = false;
+  }
+}
+
+// ┄┄ Получить публичный ключ в виде base64 для отправки на сервер ┄┄┄┄┄┄┄┄┄┄
+async function e2eGetMyPubKeyB64() {
+  if (!_e2ePubKey) return null;
+  try {
+    const raw = await crypto.subtle.exportKey('raw', _e2ePubKey);
+    return btoa(String.fromCharCode(...new Uint8Array(raw)));
+  } catch(e) { return null; }
+}
+
+// ┄┄ Загрузить публичный ключ собеседника из Supabase ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+async function e2eLoadPeerKey(username) {
+  if (_e2ePeerPubKeys[username]) return _e2ePeerPubKeys[username];
+  try {
+    const rows = await sbGet('users', `select=pubkey&username=eq.${encodeURIComponent(username)}&limit=1`);
+    if (!Array.isArray(rows) || !rows[0]?.pubkey) return null;
+    const raw = Uint8Array.from(atob(rows[0].pubkey), c => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey(
+      'raw', raw,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      false, []
+    );
+    _e2ePeerPubKeys[username] = key;
+    return key;
+  } catch(e) { return null; }
+}
+
+// ┄┄ Вывести AES ключ из ECDH shared secret (HKDF-SHA-256) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+async function e2eDeriveAES(peerPubKey) {
+  const shared = await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: peerPubKey },
+    _e2ePrivKey, 256
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('ScheduleAppE2E') },
+    await crypto.subtle.importKey('raw', shared, 'HKDF', false, ['deriveKey']),
+    { name: 'AES-GCM', length: 256 },
+    false, ['encrypt', 'decrypt']
+  );
+}
+
+// ┄┄ Получить или кэшировать AES ключ для чата ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+async function e2eGetAES(otherUsername) {
+  if (_e2eAesCache[otherUsername]) return _e2eAesCache[otherUsername];
+  const peerKey = await e2eLoadPeerKey(otherUsername);
+  if (!peerKey) return null;
+  const aes = await e2eDeriveAES(peerKey);
+  _e2eAesCache[otherUsername] = aes;
+  return aes;
+}
+
+// ┄┄ Зашифровать текст ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+async function e2eEncrypt(text, otherUsername) {
+  if (!_e2eEnabled || !text) return text;
+  try {
+    const aes = await e2eGetAES(otherUsername);
+    if (!aes) return text; // нет ключа   шлём открыто
+    const iv  = crypto.getRandomValues(new Uint8Array(12));
+    const enc = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      aes, new TextEncoder().encode(text)
+    );
+    const ivB64  = btoa(String.fromCharCode(...iv));
+    const encB64 = btoa(String.fromCharCode(...new Uint8Array(enc)));
+    return E2E_PREFIX + ivB64 + '.' + encB64;
+  } catch(e) {
+    console.warn('[E2E] encrypt failed:', e.message);
+    return text;
+  }
+}
+
+// ┄┄ Расшифровать текст ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+async function e2eDecrypt(ciphertext, otherUsername) {
+  if (!ciphertext || !ciphertext.startsWith(E2E_PREFIX)) return ciphertext;
+  if (!_e2eEnabled) return '🔒 [зашифровано]';
+  try {
+    const payload = ciphertext.slice(E2E_PREFIX.length);
+    const dotIdx  = payload.indexOf('.');
+    if (dotIdx < 0) return '🔒 [зашифровано]';
+    const iv  = Uint8Array.from(atob(payload.slice(0, dotIdx)), c => c.charCodeAt(0));
+    const enc = Uint8Array.from(atob(payload.slice(dotIdx + 1)),  c => c.charCodeAt(0));
+    const aes = await e2eGetAES(otherUsername);
+    if (!aes) return '🔒 [зашифровано]';
+    const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aes, enc);
+    return new TextDecoder().decode(dec);
+  } catch(e) {
+    return '🔒 [зашифровано]';
+  }
+}
+
+// ┄┄ Синхронизировать публичный ключ на сервер при входе ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+async function e2eSyncPubKey(username) {
+  if (!_e2eEnabled || !username) return;
+  try {
+    const pubB64 = await e2eGetMyPubKeyB64();
+    if (!pubB64) return;
+    // Проверяем: нужно ли обновить
+    const rows = await sbGet('users', `select=pubkey&username=eq.${encodeURIComponent(username)}&limit=1`);
+    if (Array.isArray(rows) && rows[0]?.pubkey === pubB64) return; // уже актуальный
+    await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
+      { pubkey: pubB64 },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+    console.log('[E2E] pubkey synced to server');
+  } catch(e) {}
+}
+
+// ┄┄ Инициализация при старте ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+e2eInit().then(() => {
+  console.log('[E2E] ready, enabled=' + _e2eEnabled);
+});
+
+// 📭 OFFLINE QUEUE   Telegram-style отложенная отправка
 // Сообщение сохраняется локально с pending:true, отправляется при появлении сети
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -1579,7 +1772,7 @@ function outboxRemove(id) {
   outboxSave(outboxLoad().filter(x => x.id !== id));
 }
 
-// ── Проверка сети ─────────────────────────────────────────────────────────
+// ┄┄ Проверка сети ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _netOnline = navigator.onLine !== false; // оптимистично true если API нет
 
 async function _checkOnline() {
@@ -1595,7 +1788,7 @@ async function _checkOnline() {
   } catch(e) { return false; }
 }
 
-// ── Сброс очереди (вызывается при восстановлении сети) ───────────────────
+// ┄┄ Сброс очереди (вызывается при восстановлении сети) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _outboxFlushing = false;
 
 async function outboxFlush() {
@@ -1631,7 +1824,7 @@ async function outboxFlush() {
         }
       } catch(e) { /* оставляем в очереди, попробуем позже */ }
     }
-    // Если очередь опустела — обновляем UI
+    // Если очередь опустела   обновляем UI
     if (!outboxLoad().length) {
       messengerRenderMessages && messengerRenderMessages();
     }
@@ -1640,7 +1833,7 @@ async function outboxFlush() {
   }
 }
 
-// ── Слушатели сети ────────────────────────────────────────────────────────
+// ┄┄ Слушатели сети ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 window.addEventListener('online',  () => { _netOnline = true;  setTimeout(outboxFlush, 600); });
 window.addEventListener('offline', () => { _netOnline = false; });
 
@@ -1649,7 +1842,7 @@ setInterval(() => {
   if (outboxLoad().length > 0) outboxFlush();
 }, 12000);
 
-// ── Кнопка показа статуса очереди (появляется когда есть pending) ────────
+// ┄┄ Кнопка показа статуса очереди (появляется когда есть pending) ┄┄┄┄┄┄┄┄
 function _outboxUpdateStatusBar() {
   const q = outboxLoad();
   let bar = document.getElementById('mc-offline-bar');
@@ -1690,7 +1883,7 @@ function p2pIsDisabled()     { return false; }
 function p2pStartHealthCheck() {}
 function p2pStopHealthCheck()  {}
 
-// ── Supabase REST helpers ───────────────────────────────────────────
+// ┄┄ Supabase REST helpers ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 async function sbGet(table, query = '') {
   if (!sbReady()) return null;
   try {
@@ -1731,8 +1924,8 @@ async function sbDelete(table, query) {
   } catch(e) {}
 }
 
-// ── Инициализация при старте ──────────────────────────────────────
-// Запускается в фоне — НЕ блокирует старт приложения
+// ┄┄ Инициализация при старте ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// Запускается в фоне   НЕ блокирует старт приложения
 
 function supabaseSaveConfig() {
   const url = document.getElementById('sb-url-input')?.value?.trim();
@@ -1742,7 +1935,7 @@ function supabaseSaveConfig() {
   localStorage.setItem(SB_CONFIG_KEY, JSON.stringify({ url, key }));
   if(st) st.textContent = '⏳ Проверяем подключение...';
   sbTestConnection().then(ok => {
-    if(st) st.textContent = ok ? '🟢 Подключено!' : '🔴 Ошибка — проверь URL и ключ';
+    if(st) st.textContent = ok ? '🟢 Подключено!' : '🔴 Ошибка   проверь URL и ключ';
     if(ok) { toast('✅ Supabase подключён!'); profileConnect(profileLoad()); }
   });
 }
@@ -1767,7 +1960,7 @@ function sbFillSettings() {
 // Устаревший sbStream (заглушка)
 function sbStream(table, query, onData) { return null; }
 
-// ── Переменные состояния ──────────────────────────────────────────
+// ┄┄ Переменные состояния ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _profileOnlinePeers  = [];
 let _allKnownUsers       = [];
 let _profilePeerReady    = false;
@@ -1787,13 +1980,13 @@ function _inboxTsSave(ts) {
 }
 let _fbInboxLastTs = _inboxTsLoad();
 let _superPoller         = null; // единый таймер вместо всех отдельных
-// ── Watchdog: следит что соединение реально живо ──────────────────
+// ┄┄ Watchdog: следит что соединение реально живо ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _watchdogTimer      = null;
 let _lastSuccessfulPoll = 0;     // ts последнего успешного запроса к Supabase
 const WATCHDOG_INTERVAL = 30000; // проверяем каждые 30 сек
-const WATCHDOG_TIMEOUT  = 75000; // если > 75 сек без ответа — переподключаемся
+const WATCHDOG_TIMEOUT  = 75000; // если > 75 сек без ответа   переподключаемся
 
-// ── Watchdog: детектирует смерть соединения и переподключается ──────
+// ┄┄ Watchdog: детектирует смерть соединения и переподключается ┄┄┄┄┄┄
 function _startWatchdog(p) {
   clearInterval(_watchdogTimer);
   _lastSuccessfulPoll = Date.now();
@@ -1801,19 +1994,19 @@ function _startWatchdog(p) {
     if (!_profilePeerReady) return; // уже переподключаемся
     const silent = Date.now() - _lastSuccessfulPoll;
     if (silent > WATCHDOG_TIMEOUT) {
-      console.warn('[Watchdog] Нет ответа ' + Math.round(silent/1000) + 'с — переподключаюсь');
+      console.warn('[Watchdog] Нет ответа ' + Math.round(silent/1000) + 'с   переподключаюсь');
       profileConnect(p);
     }
   }, WATCHDOG_INTERVAL);
 }
 
-// ── Инициализируем таблицы Supabase при первом подключении ────────
+// ┄┄ Инициализируем таблицы Supabase при первом подключении ┄┄┄┄┄┄┄┄
 async function sbInitTables() {
   if (!sbReady()) return;
 }
 
-// ── Подключение ───────────────────────────────────────────────────
-// ── Сохранение/загрузка полного профиля в таблице users ─────────
+// ┄┄ Подключение ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ┄┄ Сохранение/загрузка полного профиля в таблице users ┄┄┄┄┄┄┄┄┄
 async function sbSaveUser(p) {
   if (!sbReady() || !p) return;
   const payload = {
@@ -1849,7 +2042,7 @@ async function sbLoadUser(username) {
   return null;
 }
 
-// Хелпер: ждать N миллисекунд с проверкой sessionId — прерывается если пришёл новый connect
+// Хелпер: ждать N миллисекунд с проверкой sessionId   прерывается если пришёл новый connect
 function _delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 async function _delayOrCancel(ms, sessionId) {
   await _delay(ms);
@@ -1925,6 +2118,8 @@ async function profileConnect(p) {
     }
     // Синхронизируем VIP/badge/frame с сервера (server source of truth)
     vipSyncFromServer(p.username).catch(()=>{});
+    // Синхронизируем публичный E2E ключ на сервер
+    e2eSyncPubKey(p.username).catch(()=>{});
     // Сбрасываем очередь отложенных сообщений (появился интернет)
     if (outboxLoad().length > 0) {
       outboxFlush().then(_outboxUpdateStatusBar).catch(()=>{});
@@ -1938,7 +2133,7 @@ async function profileConnect(p) {
     syncChatsFromServer(p.username).catch(()=>{});
   } catch(e) {
     if (sessionId === _connectSessionId) {
-      profileUpdateP2PStatus('🔴 Ошибка подключения — повтор через 5с');
+      profileUpdateP2PStatus('🔴 Ошибка подключения   повтор через 5с');
       setTimeout(() => { if (sessionId === _connectSessionId) profileConnect(p); }, 5000);
     }
   }
@@ -1970,7 +2165,7 @@ document.addEventListener('visibilitychange', () => {
       }
       profileConnect(p);
     } else {
-      // Были в фоне мало — Java Handler уже опрашивает, просто форс-тик
+      // Были в фоне мало   Java Handler уже опрашивает, просто форс-тик
       if (window.Android && typeof Android.log === 'function') {
         Android.log('[CONNECT] Быстрый форс-тик (был в фоне ' + Math.round(hiddenMs/1000) + 'с)');
       }
@@ -1983,12 +2178,12 @@ document.addEventListener('visibilitychange', () => {
 async function _sbForcePollAllChats(p) {
   if (!p || !sbReady()) return;
 
-  // Синхронизируем Java-side lastTs → JS (Java мог обновить его пока мы были в фоне)
+  // Синхронизируем Java-side lastTs ↩ JS (Java мог обновить его пока мы были в фоне)
   try {
     if (window.Android && typeof Android.getJavaSbLastTs === 'function') {
       const javaTs = parseInt(Android.getJavaSbLastTs()) || 0;
       if (javaTs > _fbInboxLastTs) {
-        // Java видел сообщения которые JS ещё не обработал → откатываемся назад
+        // Java видел сообщения которые JS ещё не обработал ↩ откатываемся назад
         // чтобы гарантированно получить их (небольшой overlap не страшен)
         _fbInboxLastTs = Math.max(0, javaTs - 60000);
         _inboxTsSave(_fbInboxLastTs);
@@ -2002,7 +2197,7 @@ async function _sbForcePollAllChats(p) {
     ? _fbInboxLastTs
     : (Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  // 1. Inbox — все сообщения адресованные МНЕ после sinceTs
+  // 1. Inbox   все сообщения адресованные МНЕ после sinceTs
   try {
     const data = await sbGet('messages',
       `select=*&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
@@ -2033,8 +2228,8 @@ async function _sbForcePollAllChats(p) {
   sbStartInboxPolling(p);
 }
 
-// ── Java-tick: вызывается из MainActivity каждые 2-4 сек ──────────
-// Это главный механизм доставки сообщений — работает даже когда
+// ┄┄ Java-tick: вызывается из MainActivity каждые 2-4 сек ┄┄┄┄┄┄┄┄┄┄
+// Это главный механизм доставки сообщений   работает даже когда
 // Android заморозил JS setInterval в WebView
 let _javaTickCount = 0;
 window._javaTick = async function() {
@@ -2047,7 +2242,7 @@ window._javaTick = async function() {
   if (_javaTickCount === 1 && window.Android && typeof Android.getJavaSbLastTs === 'function') {
     try {
       const javaTs = parseInt(Android.getJavaSbLastTs()) || 0;
-      // Если Java видела сообщения позже нашего lastTs → откатываемся назад чтобы
+      // Если Java видела сообщения позже нашего lastTs ↩ откатываемся назад чтобы
       // гарантированно получить их при следующем inbox-запросе
       if (javaTs > _fbInboxLastTs) {
         _fbInboxLastTs = Math.max(0, javaTs - 120000); // 2 минуты overlap
@@ -2082,7 +2277,7 @@ window._javaTick = async function() {
     try {
       const _isGroupTick = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
       if (_isGroupTick) {
-        // Группа — поллим по groupChatKey без фильтра to_user
+        // Группа   поллим по groupChatKey без фильтра to_user
         const gChatKey = groupChatKey(_msgCurrentChat);
         const gStreamKey = 'GRP:' + _msgCurrentChat;
         const gLastTs = _fbLastMsgTs[gStreamKey] || 0;
@@ -2142,18 +2337,18 @@ window._javaTick = async function() {
 };
 // Каждые 2 сек: inbox + открытый чат
 // Каждые 10 сек: presence heartbeat + список онлайн
-// Android убивает кучу мелких таймеров, но один активный — живёт
+// Android убивает кучу мелких таймеров, но один активный   живёт
 let _superPollerTick = 0;
 function _startSuperPoller(p, sessionId) {
-  // Отключён — всю работу делает Java Handler через window._javaTick()
+  // Отключён   всю работу делает Java Handler через window._javaTick()
   // Java Handler не замораживается Android в отличие от JS setInterval
   clearInterval(_superPoller);
   _superPoller = null;
 }
 
-// ── Удаление медиа-сообщений старше 3 дней из Supabase ───────────
-// Фото хранятся как base64 в extra — тяжёлые, удаляем через 3 дня.
-// Видео/файлы/ГС — ссылки лёгкие, но тоже чистим для порядка.
+// ┄┄ Удаление медиа-сообщений старше 3 дней из Supabase ┄┄┄┄┄┄┄┄┄┄┄
+// Фото хранятся как base64 в extra   тяжёлые, удаляем через 3 дня.
+// Видео/файлы/ГС   ссылки лёгкие, но тоже чистим для порядка.
 async function _mcCleanupOldMedia() {
   if (!sbReady()) return;
   const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
@@ -2162,7 +2357,7 @@ async function _mcCleanupOldMedia() {
   // Удаляем только сообщения с медиа-контентом (extra содержит image/fileLink)
   // Используем два запроса: один для фото (есть extra с "image":), один для файлов
   try {
-    // Фото: extra содержит "image": — это base64, самое тяжёлое
+    // Фото: extra содержит "image":   это base64, самое тяжёлое
     await sbDelete('messages',
       `ts=lt.${cutoffTs}&extra=like.*"image":*`
     );
@@ -2185,7 +2380,7 @@ async function _mcCleanupOldMedia() {
       if (changed) msgSave(msgs);
     } catch(_) {}
   } catch(e) {
-    // Молча — не критично
+    // Молча   не критично
   }
 }
 
@@ -2204,7 +2399,7 @@ function profileDisconnect() {
   _profileOnlinePeers = [];
 }
 
-// ── Присутствие ───────────────────────────────────────────────────
+// ┄┄ Присутствие ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 // Первый раз делаем DELETE+INSERT чтобы аккаунт гарантированно появился в поиске
 let _presenceFirstPut = true;
 async function sbPresencePut(p) {
@@ -2277,7 +2472,7 @@ async function sbPollPresence() {
   const now = Date.now();
   const myUsername = p?.username;
 
-  // Дедуплицируем по username — берём самую свежую строку на пользователя
+  // Дедуплицируем по username   берём самую свежую строку на пользователя
   const seen = new Set();
   const unique = [];
   for (const u of data) {
@@ -2343,12 +2538,12 @@ async function sbEnrichUsersFromUsersTable() {
 function profileUpdateOnlineCount() {
   const count = _profileOnlinePeers.length + 1;
   profileUpdateP2PStatus(
-    '🟢 Онлайн • ' + count + ' ' +
+    '🟢 Онлайн   ' + count + ' ' +
     (count === 1 ? 'пользователь' : count < 5 ? 'пользователя' : 'пользователей')
   );
 }
 
-// ── Сообщения ─────────────────────────────────────────────────────
+// ┄┄ Сообщения ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function sbChatKey(a, b) { return [a, b].sort().join('__'); }
 
 function sbStartMsgPolling(p) {
@@ -2362,7 +2557,7 @@ function sbPollChat(myUsername, otherUsername) {
   const doCheck = async () => {
     if (!sbReady()) return;
     const lastTs = _fbLastMsgTs[key] || 0;
-    // Если ts=0 (кэш очищен) — подтягиваем историю за последние 30 дней
+    // Если ts=0 (кэш очищен)   подтягиваем историю за последние 30 дней
     const sinceTs = lastTs > 0 ? lastTs : (Date.now() - 30 * 24 * 60 * 60 * 1000);
     const data = await sbGet('messages',
       `select=*&chat_key=eq.${key}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
@@ -2375,7 +2570,7 @@ function sbPollChat(myUsername, otherUsername) {
 }
 
 // Принудительно сбросить и перезапустить polling конкретного чата.
-// Используется при открытии чата — немедленно запрашивает свежие сообщения из Supabase.
+// Используется при открытии чата   немедленно запрашивает свежие сообщения из Supabase.
 function sbForceRecheckChat(myUsername, otherUsername) {
   const key = sbChatKey(myUsername, otherUsername);
   if (_fbMsgStreams[key]) {
@@ -2388,7 +2583,7 @@ function sbForceRecheckChat(myUsername, otherUsername) {
 function sbStartInboxPolling(p) {
   clearInterval(_fbInboxTimer);
   // Используем сохранённый ts из localStorage (не сбрасывается при перезапуске).
-  // Fallback: 30 дней назад — чтобы не пропустить оффлайн-сообщения.
+  // Fallback: 30 дней назад   чтобы не пропустить оффлайн-сообщения.
   // При первом запуске _fbInboxLastTs=0, берём 30 дней чтобы подтянуть историю.
   if (!_fbInboxLastTs) {
     _fbInboxLastTs = _inboxTsLoad() || (Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -2408,14 +2603,14 @@ function sbStartInboxPolling(p) {
       bySender[msg.from_user].push(msg);
       _fbInboxLastTs = Math.max(_fbInboxLastTs, msg.ts); _inboxTsSave(_fbInboxLastTs);
     });
-    // Для каждого нового отправителя — запускаем полноценный poll и обрабатываем
+    // Для каждого нового отправителя   запускаем полноценный poll и обрабатываем
     Object.entries(bySender).forEach(([sender, msgs]) => {
       sbPollChat(p.username, sender); // запускает постоянный poll
       sbHandleIncomingMessages(p.username, sender, msgs);
     });
   };
   doInboxCheck();
-  _fbInboxTimer = setInterval(doInboxCheck, 2000); // 2 сек — быстрее получаем сообщения
+  _fbInboxTimer = setInterval(doInboxCheck, 2000); // 2 сек   быстрее получаем сообщения
 }
 
 function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
@@ -2426,14 +2621,14 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
 
   rows.forEach(msg => {
     if (msg.from_user === myUsername) {
-      // Своё сообщение — обновляем delivered или восстанавливаем если кэш был очищен
+      // Своё сообщение   обновляем delivered или восстанавливаем если кэш был очищен
       // Пропускаем служебные reaction_update и read_receipt сообщения
       if (msg.extra) {
         try {
           const ep = JSON.parse(msg.extra);
           if (ep?.type === 'reaction' || ep?.type === 'read_receipt') {
             _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
-            return; // служебное — не восстанавливаем
+            return; // служебное   не восстанавливаем
           }
         } catch(_) {}
       }
@@ -2442,7 +2637,7 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       if (local) {
         if (!local.delivered) { local.delivered = true; hasNew = true; }
       } else {
-        // Кэш был очищен — восстанавливаем своё сообщение из Supabase
+        // Кэш был очищен   восстанавливаем своё сообщение из Supabase
         // Пропускаем пустые (могут быть артефакты)
         if (!msg.text && !msg.sticker) {
           _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
@@ -2466,13 +2661,28 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
     }
     if (!msgs[otherUsername]) msgs[otherUsername] = [];
     const exists = msgs[otherUsername].some(m => m.ts === msg.ts && m.from === msg.from_user);
-    // ВСЕГДА обновляем ts — даже если сообщение уже есть локально,
+    // ВСЕГДА обновляем ts   даже если сообщение уже есть локально,
     // иначе _fbLastMsgTs застревает на 0 и мы вечно тянем одно и то же
     _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
     if (!exists) {
       const alreadyRead = _msgCurrentChat === otherUsername;
+      // Расшифровываем E2E если текст зашифрован
+      let rawText = msg.text || '';
+      if (rawText.startsWith(E2E_PREFIX)) {
+        // Асинхронная расшифровка   обновим сообщение после
+        e2eDecrypt(rawText, msg.from_user).then(decrypted => {
+          if (!msgs[otherUsername]) return;
+          const stored = msgs[otherUsername].find(m => m.ts === msg.ts && m.from === msg.from_user);
+          if (stored && stored.text === '🔒 [расшифровываю...]') {
+            stored.text = decrypted;
+            msgSave(msgs);
+            if (_msgCurrentChat === otherUsername) messengerRenderMessages();
+          }
+        }).catch(() => {});
+        rawText = '🔒 [расшифровываю...]';
+      }
       // Parse sticker: single emoji-only messages stored as sticker field
-      let inText = msg.text || '';
+      let inText = rawText;
       let inSticker = msg.sticker || null;
       if (!inSticker) {
         const emojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,2}$/u;
@@ -2486,7 +2696,7 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
       if (extraParsed?.replyTo)  inReplyTo = extraParsed.replyTo;
       if (extraParsed?.image)    inImage   = extraParsed.image;
 
-      // Обрабатываем group_deleted — удаляем группу локально
+      // Обрабатываем group_deleted   удаляем группу локально
       if (extraParsed?.type === 'group_deleted' && extraParsed?.groupId) {
         const gid = extraParsed.groupId;
         const groups = groupsLoad().filter(g => g.id !== gid);
@@ -2503,7 +2713,7 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         return;
       }
 
-      // Обрабатываем group_invite — добавляем группу локально
+      // Обрабатываем group_invite   добавляем группу локально
       if (extraParsed?.type === 'group_invite' && extraParsed?.group) {
         const inviteGroup = extraParsed.group;
         const groups = groupsLoad();
@@ -2520,7 +2730,7 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         return; // не показываем как обычное сообщение
       }
 
-      // Обрабатываем read_receipt — получатель прочитал наши сообщения
+      // Обрабатываем read_receipt   получатель прочитал наши сообщения
       if (extraParsed?.type === 'read_receipt' && extraParsed?.upToTs) {
         const upTo = extraParsed.upToTs;
         const allMsgs = msgs[otherUsername] || [];
@@ -2538,7 +2748,7 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         return;
       }
 
-      // Обрабатываем reaction_update — служебное сообщение синхронизации реакций
+      // Обрабатываем reaction_update   служебное сообщение синхронизации реакций
       if (extraParsed?.type === 'reaction' && extraParsed?.msgTs && extraParsed?.reactions !== undefined) {
         const targetTs = extraParsed.msgTs;
         const allMsgs = msgs[otherUsername] || [];
@@ -2551,7 +2761,7 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
         return; // не добавляем как обычное сообщение
       }
 
-      // Обрабатываем delete_msg — собеседник удалил сообщение у всех
+      // Обрабатываем delete_msg   собеседник удалил сообщение у всех
       if (extraParsed?.type === 'delete_msg' && extraParsed?.msgTs) {
         const targetTs = extraParsed.msgTs;
         if (msgs[otherUsername]) {
@@ -2585,7 +2795,7 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
   });
 
   if (hasNew) {
-    // Сортируем по времени — важно после восстановления из Supabase
+    // Сортируем по времени   важно после восстановления из Supabase
     if (msgs[otherUsername]) {
       msgs[otherUsername].sort((a, b) => (a.ts || 0) - (b.ts || 0));
     }
@@ -2621,7 +2831,7 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
 // Отправка сообщений
 
 // ══ PUSH УВЕДОМЛЕНИЯ (нативный мост Android) ══════════════
-// Если Android-мост доступен — используем его; иначе — веб-Notification API
+// Если Android-мост доступен   используем его; иначе   веб-Notification API
 const _isAndroidApp = typeof window.Android === 'object' && typeof window.Android.showNotification === 'function';
 
 function pushGetPermission() {
@@ -2637,13 +2847,13 @@ function pushGetStatusText() {
   const p = pushGetPermission();
   if (p === 'unsupported') return '⚠️ Не поддерживается браузером';
   if (p === 'granted')     return '🟢 Включены';
-  if (p === 'denied')      return '🔴 Заблокированы (разреши в настройках → Приложения)';
+  if (p === 'denied')      return '🔴 Заблокированы (разреши в настройках ↩ Приложения)';
   return '⚪️ Не настроены';
 }
 
 function pushGetBtnText() {
   const p = pushGetPermission();
-  if (p === 'granted')     return 'Включены ✓';
+  if (p === 'granted')     return 'Включены ✅';
   if (p === 'denied')      return 'Заблокированы';
   if (p === 'unsupported') return 'Недоступно';
   return 'Включить';
@@ -2666,7 +2876,7 @@ function onNativeNotifPermissionResult(result) {
 function pushRequestPermission() {
   const p = pushGetPermission();
   if (p === 'granted') { toast('✅ Уведомления уже включены'); return; }
-  if (p === 'denied')  { toast('🔴 Заблокированы — открой Настройки → Приложения → Уведомления'); return; }
+  if (p === 'denied')  { toast('🔴 Заблокированы   открой Настройки ↩ Приложения ↩ Уведомления'); return; }
   if (_isAndroidApp) {
     // Нативный запрос разрешения Android 13+
     try { window.Android.requestNotificationPermission(); } catch(e) {}
@@ -2679,7 +2889,7 @@ function pushRequestPermission() {
 
 function pushSend(title, body) {
   if (pushGetPermission() !== 'granted') return;
-  if (document.visibilityState === 'visible') return; // приложение видно — не дублируем
+  if (document.visibilityState === 'visible') return; // приложение видно   не дублируем
   if (_isAndroidApp) {
     try { window.Android.showNotification(title, body); } catch(e) {}
     return;
@@ -2748,7 +2958,7 @@ function _iosNotifDismiss(el) {
   el.classList.add('ios-hide');
   setTimeout(function() { el.remove(); setTimeout(_iosNotifNext, 250); }, 350);
 }
-// ── Splash публичной группы ─────────────────────────────────────────────────
+// ┄┄ Splash публичной группы ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function _showPublicGroupSplash(onAgree) {
   if (document.getElementById('pub-group-splash')) { onAgree(); return; }
   const ov = document.createElement('div');
@@ -2796,9 +3006,9 @@ function _showPublicGroupSplash(onAgree) {
   btn.addEventListener('touchend',  ()=>{btn.style.transform='';btn.style.opacity='';},{passive:true});
 }
 
-// messengerSend и остальные функции мессенджера — в блоке ниже
+// messengerSend и остальные функции мессенджера   в блоке ниже
 
-// ── Broadcast (профиль, лидерборд) ───────────────────────────────
+// ┄┄ Broadcast (профиль, лидерборд) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function profileBroadcast(data) {
   if (data.type === 'profile_update') {
     const p = profileLoad();
@@ -2828,7 +3038,7 @@ function profileUpdateP2PStatus(msg) {
   const sEl = document.getElementById('profile-p2p-strategy');
   if (sEl) {
     if (p2pIsDisabled()) {
-      sEl.textContent = '🔒 P2P выключен — только прямое подключение';
+      sEl.textContent = '🔒 P2P выключен   только прямое подключение';
     } else {
       const s = p2pActiveStrategy();
       sEl.textContent = s.emoji + ' Канал: ' + s.label;
@@ -2859,7 +3069,7 @@ async function onlineRefresh() {
     await sbPollPresence();
   } catch(e) {}
   profileRenderOnline();
-  if (btn) { btn.textContent = '↻ Обновить'; btn.disabled = false; }
+  if (btn) { btn.textContent = '↩ Обновить'; btn.disabled = false; }
 }
 
 let _onlineSearchTimer = null;
@@ -2894,7 +3104,7 @@ function profileRenderOnline() {
       const known = _allKnownUsers.find(x => x.username === username)
                   || _profileOnlinePeers.find(x => x.username === username);
       if (known) return known;
-      // Друг есть в списке, но данных о нём нет — возвращаем заглушку
+      // Друг есть в списке, но данных о нём нет   возвращаем заглушку
       return { username, name: username, avatar: '😊', color: 'var(--surface3)', _online: false };
     });
     // Сортируем: онлайн сначала
@@ -2905,13 +3115,13 @@ function profileRenderOnline() {
     });
     peers = friendUsers;
   } else if (isAtSearch) {
-    // @поиск — по username среди всех (не только друзей)
+    // @поиск   по username среди всех (не только друзей)
     peers = _allKnownUsers.filter(u =>
       u.username !== p?.username &&
       u.username?.toLowerCase().includes(searchVal)
     );
   } else {
-    // Обычный поиск — по имени только среди друзей
+    // Обычный поиск   по имени только среди друзей
     peers = _allKnownUsers.filter(u =>
       friends.includes(u.username) &&
       (u.name?.toLowerCase().includes(searchVal) || u.username?.toLowerCase().includes(searchVal))
@@ -2968,7 +3178,7 @@ function profileRenderOnline() {
     }, 400);
   }
 
-  // При пустом списке, но есть друзья без данных — подгружаем с сервера
+  // При пустом списке, но есть друзья без данных   подгружаем с сервера
   if (!raw && friends.length && sbReady()) {
     const unknownFriends = friends.filter(u => !_allKnownUsers.some(x => x.username === u));
     if (unknownFriends.length) {
@@ -3015,7 +3225,7 @@ function profileRenderOnline() {
             ${badgeObj ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${badgeObj.color}22;color:${badgeObj.color}">${badgeObj.emoji} ${badgeObj.label}</span>` : ''}
           </div>
           <div style="font-size:12px;color:var(--muted)">@${escHtml(u.username)}</div>
-          <div style="font-size:11px;color:${isOnline?statusObj.color:'var(--muted)'};margin-top:2px">${isOnline ? statusObj.emoji+' '+statusObj.label : '⚫ Не в сети'}</div>
+          <div style="font-size:11px;color:${isOnline?statusObj.color:'var(--muted)'};margin-top:2px">${isOnline ? statusObj.emoji+' '+statusObj.label : '⚡ Не в сети'}</div>
         </div>
         ${!isMe && !isFriend ? `<button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:11px;flex-shrink:0" onclick="event.stopPropagation();profileAddFriend('${escHtml(u.username)}')">+ Друг</button>` : ''}
         ${isFriend && !isMe ? '<span style="font-size:18px;flex-shrink:0">👥</span>' : ''}
@@ -3074,7 +3284,7 @@ async function syncFriendsFromServer(username) {
     const local   = friendsLoad();
     const merged  = [...new Set([...local, ...serverFriends])];
     friendsSave(merged);
-    // Если изменилось — запускаем polling для новых чатов
+    // Если изменилось   запускаем polling для новых чатов
     serverFriends.forEach(u => { if (!local.includes(u)) sbPollChat(username, u); });
   } catch(e) {}
 }
@@ -3082,12 +3292,12 @@ async function syncFriendsFromServer(username) {
 // ══ ХУКИ: показ экрана профиля ═══════════════════════════════════
 const _origShowScreen = window.showScreen;
 window.showScreen = function(id, dir) {
-  // Набор всех экранов чата — если уходим с любого из них, чистим меню
+  // Набор всех экранов чата   если уходим с любого из них, чистим меню
   const CHAT_SCREENS = new Set(['s-messenger-chat', 's-groups-chat']);
   const prevActive = document.querySelector('.screen.active');
   const prevId = prevActive ? prevActive.id : null;
 
-  // При уходе из чата (не в другой чат) — закрываем ВСЕ меню и оверлеи
+  // При уходе из чата (не в другой чат)   закрываем ВСЕ меню и оверлеи
   if (!CHAT_SCREENS.has(id)) {
     // Меню действий с сообщением
     const menu = document.getElementById('mc-msg-menu');
@@ -3104,7 +3314,7 @@ window.showScreen = function(id, dir) {
     _mcStickerPanelOpen = false;
     // Бар ответа
     mcCancelReply && mcCancelReply();
-    // Скрываем клавиатуру — blur + фокус на body чтобы гарантированно закрыть
+    // Скрываем клавиатуру   blur + фокус на body чтобы гарантированно закрыть
     const inp = document.getElementById('mc-input');
     if (inp) {
       inp.blur();
@@ -3119,12 +3329,12 @@ window.showScreen = function(id, dir) {
   if (id === 's-online')      profileRenderOnline();
   if (id === 's-leaderboard') leaderboardRender();
   if (id === 's-messenger')   messengerRenderList();
-  // При заходе в чат — сразу скроллим вниз, клавиатуру НЕ открываем
+  // При заходе в чат   сразу скроллим вниз, клавиатуру НЕ открываем
   if (id === 's-messenger-chat') {
     // Убеждаемся что фокус НЕ на поле ввода при входе
     const inp = document.getElementById('mc-input');
     if (inp && document.activeElement === inp) inp.blur();
-    // Скролл вниз — сразу после рендера
+    // Скролл вниз   сразу после рендера
     requestAnimationFrame(() => {
       const body = document.getElementById('mc-messages');
       if (body) body.scrollTop = body.scrollHeight;
@@ -3167,7 +3377,7 @@ function _publicGroupDef() {
   return {
     id: PUBLIC_GROUP_ID, name: '💡 Баги и идеи', avatar: '💡',
     members: ['__all__'], createdBy: '__system__', ts: 0, isPublic: true,
-    description: 'Чат для сообщений об ошибках и идей. Лимит — 1 сообщение в час.'
+    description: 'Чат для сообщений об ошибках и идей. Лимит   1 сообщение в час.'
   };
 }
 function _publicGroupCooldown(username) {
@@ -3219,8 +3429,8 @@ async function groupCreate(name, members) {
     { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
 
   // Уведомляем каждого участника двумя способами:
-  // 1) Патчим users.groups — они получат при следующем syncGroupsFromServer
-  // 2) Шлём им системное сообщение в inbox — они получат НЕМЕДЛЕННО через inbox-поллинг
+  // 1) Патчим users.groups   они получат при следующем syncGroupsFromServer
+  // 2) Шлём им системное сообщение в inbox   они получат НЕМЕДЛЕННО через inbox-поллинг
   for (const member of allMembers.filter(u => u !== p.username)) {
     try {
       // Способ 1: патчим users.groups
@@ -3254,8 +3464,7 @@ async function syncGroupsFromServer(username) {
     const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(username)}&limit=1`);
     if (!Array.isArray(rows) || !rows.length) return;
     const raw = rows[0].groups;
-    if (!raw) return;
-    const serverGroups = JSON.parse(raw);
+    const serverGroups = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(serverGroups)) return;
     const local  = groupsLoad();
     // Merge: добавляем серверные группы которых нет локально
@@ -3264,6 +3473,23 @@ async function syncGroupsFromServer(username) {
       if (!merged.find(g => g.id === sg.id)) merged.push(sg);
     });
     groupsSave(merged);
+
+    // ┄┄ Авто-вступление в публичную группу ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+    // Проверяем: есть ли пользователь в members публичной группы на сервере
+    const pgInServer = serverGroups.find(g => g.id === PUBLIC_GROUP_ID);
+    const pgLocal    = merged.find(g => g.id === PUBLIC_GROUP_ID);
+    const alreadyMember = pgInServer?.members?.includes(username) || pgLocal?.members?.includes('__all__');
+    if (!alreadyMember) {
+      // Добавляем пользователя в публичную группу на сервере
+      const pubGroup = _publicGroupDef();
+      pubGroup.members = [username]; // сервер хранит реальный список
+      const newServerGroups = [...serverGroups.filter(g => g.id !== PUBLIC_GROUP_ID), pubGroup];
+      // PATCH users.groups
+      await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
+        { groups: JSON.stringify(newServerGroups) },
+        { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+      ).catch(() => {});
+    }
   } catch(e) {}
 }
 
@@ -3272,7 +3498,7 @@ function groupGet(id) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// ⚙️ НАСТРОЙКИ ГРУППЫ — Telegram-style
+// ⚙️ НАСТРОЙКИ ГРУППЫ   Telegram-style
 // ══════════════════════════════════════════════════════════════════════
 
 /** Открывает экран настроек группы (как в Telegram) */
@@ -3296,7 +3522,7 @@ function showGroupSettings(groupId) {
   const memberCount = group.members.length;
   const memberWord  = memberCount===1?'участник':memberCount<5?'участника':'участников';
 
-  // Аватар группы — кликабельный для смены (только создатель)
+  // Аватар группы   кликабельный для смены (только создатель)
   const avatarClick = (!isPublic && isCreator) ? `onclick="groupPickAvatar('${groupId}')"` : '';
   const avatarCursor = (!isPublic && isCreator) ? 'cursor:pointer' : '';
 
@@ -3312,7 +3538,7 @@ function showGroupSettings(groupId) {
     <!-- Шапка с кнопкой назад -->
     <div style="display:flex;align-items:center;gap:0;padding:calc(var(--safe-top,44px) + 4px) 8px 0;flex-shrink:0;min-height:56px">
       <button onclick="document.getElementById('group-settings-screen').remove()"
-        style="background:none;border:none;color:var(--accent);font-size:16px;padding:8px 12px;cursor:pointer;font-family:inherit;font-weight:600">‹ Назад</button>
+        style="background:none;border:none;color:var(--accent);font-size:16px;padding:8px 12px;cursor:pointer;font-family:inherit;font-weight:600">  Назад</button>
       <div style="flex:1;text-align:center;font-size:17px;font-weight:700;margin-right:60px">Настройки группы</div>
     </div>
 
@@ -3327,7 +3553,7 @@ function showGroupSettings(groupId) {
         <div style="margin-top:12px;font-size:20px;font-weight:700;color:var(--text);text-align:center" id="gs-name-display">${escHtml(group.name)}</div>
         <div style="font-size:13px;color:var(--muted);margin-top:4px">${memberCount} ${memberWord}</div>
         ${isPublic ? '<div style="font-size:11px;color:var(--accent);margin-top:4px;font-weight:600">Публичная группа</div>' : ''}
-        ${isCreator && !isPublic ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">Вы — создатель</div>' : ''}
+        ${isCreator && !isPublic ? '<div style="font-size:11px;color:var(--muted);margin-top:4px">Вы   создатель</div>' : ''}
       </div>
 
       <!-- Описание группы (если есть) -->
@@ -3344,7 +3570,7 @@ function showGroupSettings(groupId) {
             <div>Изменить название</div>
             <div style="font-size:12px;color:var(--muted)">${escHtml(group.name)}</div>
           </div>
-          <span style="color:var(--muted)">›</span>
+          <span style="color:var(--muted)"> </span>
         </button>
         <div class="gs-sep"></div>
         <button class="gs-btn" onclick="groupEditDescription('${groupId}')">
@@ -3353,9 +3579,9 @@ function showGroupSettings(groupId) {
           </span>
           <div style="flex:1">
             <div>Описание</div>
-            <div style="font-size:12px;color:var(--muted)">${group.description ? escHtml(group.description.slice(0,40)) + (group.description.length>40?'…':'') : 'Добавить описание'}</div>
+            <div style="font-size:12px;color:var(--muted)">${group.description ? escHtml(group.description.slice(0,40)) + (group.description.length>40?' ':'') : 'Добавить описание'}</div>
           </div>
-          <span style="color:var(--muted)">›</span>
+          <span style="color:var(--muted)"> </span>
         </button>
       </div>` : ''}
 
@@ -3380,7 +3606,7 @@ function showGroupSettings(groupId) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="${isMuted(groupId)?'M11 7.17V4.06c-.38.05-.75.14-1.1.27L7.81 2.24A9.9 9.9 0 0 1 12 1.5c4.97 0 9 4.03 9 9 0 1.46-.35 2.83-.97 4.04l-1.68-1.68A6.97 6.97 0 0 0 19 10.5c0-3.97-3.18-7.2-8-7.33zm7.26 14.09L17 19.85V20H7l-2-2v-1l-2-2v-1l16 16-1.74-1.74zM11 7.17L13 9.17V10.5c0 .55-.45 1-1 1H9.83l1.17 1.17V10.5c0 1.38-.56 2.63-1.46 3.54L7 15.83V17l2 2h8.17l2 2H5.17l-.88-.88-2.84-2.84L0 14.56l1.41-1.41L2 13.97V10.5C2 7.15 4.85 4.47 8.6 4.06L11 6.46v.71z':'M11 3.07V2.05A10.003 10.003 0 0 0 2 12c0 5.52 4.48 10 10 10s10-4.48 10-10c0-4.93-3.55-9.02-8.25-9.84v2.04C16.74 5.05 20 8.31 20 12c0 4.42-3.58 8-8 8s-8-3.58-8-8c0-3.69 3.26-6.95 7-7.93zM12 8v5l4.28 2.54.72-1.21-3.5-2.08V8H12zm-1-5.07V5h2V2.93c-.33-.05-.66-.08-1-.08-.34 0-.67.03-1 .08z'}"/></svg>
           </span>
           <div style="flex:1">${isMuted(groupId) ? 'Включить уведомления' : 'Отключить уведомления'}</div>
-          <span style="color:var(--muted)">›</span>
+          <span style="color:var(--muted)"> </span>
         </button>
       </div>
 
@@ -3437,7 +3663,7 @@ function _gsRenderMembers(group, p, isCreator) {
   }).join('');
 }
 
-// ── Переименование группы ─────────────────────────────────────────
+// ┄┄ Переименование группы ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function groupRenameDialog(groupId) {
   const group = groupGet(groupId);
   if (!group) return;
@@ -3504,7 +3730,7 @@ async function groupRenameSubmit(groupId) {
   toast('✅ Название изменено');
 }
 
-// ── Описание группы ───────────────────────────────────────────────
+// ┄┄ Описание группы ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function groupEditDescription(groupId) {
   const group = groupGet(groupId);
   if (!group) return;
@@ -3542,9 +3768,9 @@ function groupSaveDescription(groupId) {
   showGroupSettings(groupId); // перерендерим
 }
 
-// ── Смена аватара (эмодзи) ────────────────────────────────────────
+// ┄┄ Смена аватара (эмодзи) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function groupPickAvatar(groupId) {
-  const EMOJIS = ['👥','🎮','📚','🎵','🏆','🔥','💡','🚀','🌟','🎯','💪','🎉','🌈','🐉','⚡','🎭','🏠','🌍','🎨','🤝','💼','🎓','🏋️','🎤','🌺'];
+  const EMOJIS = ['👥','🎮','📚','🎵','🏆','🔥','💡','🚀','🌟','🎯','💪','🎉','🌈','🐉','⚡','🎭','🏠','🌍','🎨','🤝','💼','🎓','🏋','🎤','🌺'];
   const sheet = document.createElement('div');
   sheet.style.cssText = 'position:fixed;inset:0;z-index:9700;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
   sheet.innerHTML = `
@@ -3578,7 +3804,7 @@ function groupSetAvatar(groupId, emoji) {
   }
 }
 
-// ── Добавление участника ──────────────────────────────────────────
+// ┄┄ Добавление участника ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function groupAddMemberDialog(groupId) {
   const group = groupGet(groupId);
   if (!group) return;
@@ -3652,7 +3878,7 @@ async function groupAddMember(groupId, username) {
   if (screen) showGroupSettings(groupId);
 }
 
-// ── Исключить участника (только создатель) ───────────────────────
+// ┄┄ Исключить участника (только создатель) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 async function groupKickMember(groupId, username) {
   const group = groupGet(groupId);
   const p = profileLoad();
@@ -3685,7 +3911,7 @@ async function groupKickMember(groupId, username) {
   showGroupSettings(groupId);
 }
 
-// ── Покинуть группу ───────────────────────────────────────────────
+// ┄┄ Покинуть группу ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function groupLeaveConfirm(groupId) {
   const group = groupGet(groupId);
   const p = profileLoad();
@@ -3747,7 +3973,7 @@ async function groupLeave(groupId) {
   } catch(e) {}
 }
 
-// ── Удалить группу для всех (только создатель) ───────────────────
+// ┄┄ Удалить группу для всех (только создатель) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function groupDeleteForAll(groupId) {
   const group = groupGet(groupId);
   if (!group) return;
@@ -3816,13 +4042,13 @@ async function groupDeleteForAllConfirmed(groupId) {
 
 
 
-// ── Поллинг входящих сообщений группы ────────────────────────────
-// Поллинг группы — один общий канал без фильтра to_user
+// ┄┄ Поллинг входящих сообщений группы ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// Поллинг группы   один общий канал без фильтра to_user
 // Каждый участник читает все сообщения с chat_key = 'group_<id>'
 function sbPollGroupChat(myUsername, group) {
   if (!group || !group.id) return;
   const chatKey = groupChatKey(group.id);
-  // Единый ключ для группы (не per-user) — экономим интервалы
+  // Единый ключ для группы (не per-user)   экономим интервалы
   const streamKey = 'GRP:' + group.id;
   if (_fbMsgStreams[streamKey]) return;
 
@@ -3830,7 +4056,7 @@ function sbPollGroupChat(myUsername, group) {
     if (!sbReady()) return;
     const lastTs = _fbLastMsgTs[streamKey] || 0;
     const sinceTs = lastTs > 0 ? lastTs : (Date.now() - 30 * 24 * 60 * 60 * 1000);
-    // Тянем ВСЕ сообщения группы — без фильтра to_user
+    // Тянем ВСЕ сообщения группы   без фильтра to_user
     const data = await sbGet('messages',
       `select=*&chat_key=eq.${encodeURIComponent(chatKey)}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
     ).catch(() => null);
@@ -3888,7 +4114,7 @@ function sbStartGroupPolling(myUsername) {
   });
 }
 
-// ── Поллинг публичной группы (баги/идеи) — показываем всем ───────
+// ┄┄ Поллинг публичной группы (баги/идеи)   показываем всем ┄┄┄┄┄┄┄
 function sbPollPublicGroup(myUsername, group) {
   const chatKey = groupChatKey(group.id);
   const streamKey = 'PUBGRP:' + group.id;
@@ -3898,7 +4124,7 @@ function sbPollPublicGroup(myUsername, group) {
     if (!sbReady()) return;
     const lastTs = _fbLastMsgTs[streamKey] || 0;
     const sinceTs = lastTs > 0 ? lastTs : (Date.now() - 7 * 24 * 60 * 60 * 1000);
-    // Публичная — тянем все сообщения с этим chat_key (без фильтра to_user)
+    // Публичная   тянем все сообщения с этим chat_key (без фильтра to_user)
     const data = await sbGet('messages',
       `select=*&chat_key=eq.${encodeURIComponent(chatKey)}&ts=gt.${sinceTs}&order=ts.asc&limit=200`
     ).catch(() => null);
@@ -3966,11 +4192,11 @@ async function groupSendMessage(groupId, text, extra) {
   const group = groupGet(groupId);
   if (!p || !group) return;
   const ts = Date.now();
-  // ВСЕГДА используем groupChatKey — не sbChatKey
+  // ВСЕГДА используем groupChatKey   не sbChatKey
   const chatKey = groupChatKey(groupId);
 
   // Одна запись на всю группу с to_user='__broadcast__'
-  // Все участники поллят chat_key без фильтра to_user → получают её
+  // Все участники поллят chat_key без фильтра to_user ↩ получают её
   const row = {
     chat_key: chatKey,
     from_user: p.username,
@@ -4036,7 +4262,7 @@ function showCreateGroupDialog() {
       const selected = box.classList.toggle('selected');
       box.style.background = selected ? 'var(--accent)' : 'var(--surface2)';
       box.style.borderColor = selected ? 'var(--accent)' : 'var(--surface3)';
-      box.innerHTML = selected ? '✓' : '';
+      box.innerHTML = selected ? '✅' : '';
       box.style.color = '#fff';
       box.style.fontSize = '14px';
       box.style.fontWeight = '700';
@@ -4085,7 +4311,7 @@ function isMuted(username) {
   if (data[username] === 'forever') return true;
   // untilTs
   if (Date.now() < data[username]) return true;
-  // истёк — чистим
+  // истёк   чистим
   delete data[username];
   muteSave(data);
   return false;
@@ -4094,7 +4320,7 @@ function isMuted(username) {
 function muteGetLabel(username) {
   const data = muteLoad();
   if (!data[username]) return null;
-  if (data[username] === 'forever') return '∞';
+  if (data[username] === 'forever') return '⏱';
   const remain = data[username] - Date.now();
   if (remain <= 0) return null;
   const h = Math.ceil(remain / 3600000);
@@ -4163,7 +4389,72 @@ function _mcUpdateMuteIcon() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 📌 ЗАКРЕПЛЁННЫЕ СООБЩЕНИЯ
+// 🔐 ПЕРЕКЛЮЧАТЕЛЬ ШИФРОВАНИЯ ЧАТА (Secret Chat, как в Telegram)
+// ══════════════════════════════════════════════════════════════════════
+// Хранит Set username'ов для которых включено шифрование
+const _SECRET_CHATS_KEY = 'sapp_secret_chats_v1';
+function _secretChatsLoad() {
+  try { return new Set(JSON.parse(localStorage.getItem(_SECRET_CHATS_KEY) || '[]')); }
+  catch(e) { return new Set(); }
+}
+function _secretChatsSave(set) {
+  localStorage.setItem(_SECRET_CHATS_KEY, JSON.stringify([...set]));
+}
+
+// Включено ли шифрование для данного чата
+function isChatEncrypted(username) {
+  return _secretChatsLoad().has(username);
+}
+
+// Обновить иконку кнопки шифрования
+function mcUpdateEncryptBtn() {
+  const btn = document.getElementById('mc-encrypt-btn');
+  if (!btn || !_msgCurrentChat) return;
+  // Скрываем для групп
+  const isGroup = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
+  if (isGroup) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  const enc = isChatEncrypted(_msgCurrentChat);
+  btn.textContent     = enc ? '🔐' : '🔓';
+  btn.style.opacity   = enc ? '1' : '0.45';
+  btn.style.transform = enc ? 'scale(1.15)' : 'scale(1)';
+  btn.title           = enc ? 'Секретный чат (выкл)' : 'Включить шифрование';
+}
+
+// Переключить шифрование для текущего чата
+function mcToggleEncrypt() {
+  if (!_msgCurrentChat) return;
+  const isGroup = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
+  if (isGroup) { toast('🔒 Шифрование недоступно в групповых чатах'); return; }
+
+  const set = _secretChatsLoad();
+  if (set.has(_msgCurrentChat)) {
+    set.delete(_msgCurrentChat);
+    toast('🔓 Обычный режим — шифрование выключено');
+  } else {
+    set.add(_msgCurrentChat);
+    toast('🔐 Секретный чат включён — сообщения шифруются');
+    // Убеждаемся что E2E ключи инициализированы
+    if (!_e2eEnabled) e2eInit().then(() => e2ePushMyKey && e2ePushMyKey());
+  }
+  _secretChatsSave(set);
+  mcUpdateEncryptBtn();
+  // Перерендерить шапку чтобы показать/убрать индикатор
+  const hdrSub = document.getElementById('mc-hdr-sub');
+  if (hdrSub && !isGroup) {
+    if (set.has(_msgCurrentChat)) {
+      hdrSub.textContent = '🔐 Секретный чат';
+    } else {
+      const peer = _profileOnlinePeers.find(u => u.username === _msgCurrentChat)
+                 || _allKnownUsers.find(u => u.username === _msgCurrentChat);
+      hdrSub.textContent = peer
+        ? (_profileOnlinePeers.find(u => u.username === _msgCurrentChat) ? '🟢 В сети' : '⚡ Не в сети')
+        : ('@' + _msgCurrentChat);
+    }
+  }
+}
+
+
 // ══════════════════════════════════════════════════════════════════════
 const PIN_KEY = 'sapp_pinned_v1';
 
@@ -4261,7 +4552,7 @@ function peerNoCopyToggle(username) {
 }
 
 function peerSendGift(username) {
-  const gifts = ['🎁','🌹','💎','🍫','🎂','🎀','🌟','💐','🎊','✨'];
+  const gifts = ['🎁','🌹','💎','🍫','🎂','🎀','🌟','💐','🎊','✅'];
   const gift = gifts[Math.floor(Math.random() * gifts.length)];
   const p = profileLoad();
   if (!p) return;
@@ -4308,7 +4599,7 @@ function peerSaveAvatar(username) {
   }
 }
 
-// ── Меню «три точки» профиля пользователя ────────────────────────
+// ┄┄ Меню «три точки» профиля пользователя ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function peerShowMenu(username) {
   const existing = document.getElementById('peer-menu-sheet');
   if (existing) { existing.remove(); return; }
@@ -4357,7 +4648,7 @@ function peerShowMenu(username) {
   document.body.appendChild(sheet);
 }
 
-// ── messengerMarkRead ─────────────────────────────────────────────
+// ┄┄ messengerMarkRead ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function messengerMarkRead() {
   if (!_msgCurrentChat) return;
   const p = profileLoad();
@@ -4399,7 +4690,7 @@ async function _sbSendReadReceipt(toUser, upToTs) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 👑 VIP — выдача другим пользователям
+// 👑 VIP   выдача другим пользователям
 // ══════════════════════════════════════════════════════════════════════
 const VIP_GRANTED_KEY = 'sapp_vip_granted_v1';
 function vipGrantedLoad() { try { return JSON.parse(localStorage.getItem(VIP_GRANTED_KEY)||'{}'); } catch(e) { return {}; } }
@@ -4457,7 +4748,7 @@ function _twemojiParse(node) {
     ext: '.svg',
     base: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/',
     // Apple emoji: берём PNG из emoji-datasource-apple через jsDelivr
-    // Важно: фильтруем fe0f (variation selector-16) — он не входит в имена файлов Apple CDN
+    // Важно: фильтруем fe0f (variation selector-16)   он не входит в имена файлов Apple CDN
     callback: (icon) => {
       const cleaned = icon.split('-').filter(p => p.toLowerCase() !== 'fe0f').join('-') || icon;
       return `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/${cleaned}.png`;
@@ -4530,7 +4821,6 @@ function vipActivate(code) {
   const p = profileLoad();
   if (p) {
     p.vip = true; profileSave(p);
-    // Сохраняем на сервер немедленно
     if (sbReady()) {
       _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
         { vip: true }, { 'Content-Type':'application/json', 'Prefer':'return=minimal' }).catch(()=>{});
@@ -4539,8 +4829,303 @@ function vipActivate(code) {
   return true;
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 💳 ДОНАТ / СБП   поддержи проект и получи VIP
+// Схема:
+//   1. Пользователь выбирает сумму ↩ открывается QR/ссылка СБП
+//   2. После оплаты жмёт «Я оплатил» ↩ вводит номер транзакции
+//   3. Запись сохраняется в таблицу donations (Supabase)
+//   4. Владелец вручную подтверждает ↩ vipGrantTo(username)
+//      ИЛИ   авто-верификация через webhook если настроен
+// ══════════════════════════════════════════════════════════════════════
+
+// СБП реквизиты (замени на свои)
+const SBP_PHONE = '+79966219426';   // ↩ ЗАМЕНИ НА СВОЙ НОМЕР СБП
+// Прямая СБП-ссылка — открывается при нажатии кнопки оплаты
+const SBP_DIRECT_URL = 'https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=%2B79966219426&bankCode=100000000004';
+
+const DONATE_TIERS = [
+  { amount: 20,  label: '⭐ VIP месяц',    desc: '+ VIP на 30 дней', vip: true  },
+  { amount: 30,  label: '👑 VIP 3 месяца', desc: '+ VIP на 90 дней', vip: true  },
+  { amount: 100, label: '🚀 VIP навсегда', desc: '+ VIP навсегда',   vip: true  },
+];
+
+// Банки с реальными deep-link схемами перевода по номеру телефона СБП
+const SBP_BANKS = [
+  {
+    id:    'sber',
+    name:  'Сбер',
+    icon:  '🟢',
+    bg:    '#21A038',
+    // Sberbank Online deep link перевода по телефону
+    deeplink: (phone, amount) =>
+      `sberbankonline://payment/transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+    webUrl: (phone, amount) =>
+      `https://online.sberbank.ru/CSAFront/index.do#/transfer/phone?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+  },
+  {
+    id:    'tinkoff',
+    name:  'Т-Банк',
+    icon:  '🟡',
+    bg:    '#FFDD2D',
+    textColor: '#000',
+    deeplink: (phone, amount) =>
+      `tinkoff://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}&comment=ScheduleApp`,
+    webUrl: (phone, amount) =>
+      `https://www.tbank.ru/payment/transfer/phone/${phone.replace(/\D/g,'')}/?amount=${amount}`,
+  },
+  {
+    id:    'vtb',
+    name:  'ВТБ',
+    icon:  '🔵',
+    bg:    '#003087',
+    deeplink: (phone, amount) =>
+      `vtbconnect://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+    webUrl: (phone, amount) =>
+      `https://online.vtb.ru/transfers/by-phone?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+  },
+  {
+    id:    'alfa',
+    name:  'Альфа',
+    icon:  '🔴',
+    bg:    '#EF3124',
+    deeplink: (phone, amount) =>
+      `alfabank://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+    webUrl: (phone, amount) =>
+      `https://alfabank.ru/everyday/p2p/?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+  },
+  {
+    id:    'sbp',
+    name:  'СБП',
+    icon:  '💳',
+    bg:    '#7B3FBE',
+    // Универсальная СБП ссылка   система сама выберет банк пользователя
+    deeplink: (phone, amount) =>
+      `https://qr.nspk.ru/redirect?type=01&sum=${amount * 100}&cur=RUB`,
+    webUrl: (phone, amount) =>
+      `https://qr.nspk.ru/redirect?type=01&sum=${amount * 100}&cur=RUB`,
+  },
+];
+
+function showDonateSheet() {
+  const existing = document.getElementById('donate-sheet');
+  if (existing) existing.remove();
+
+  const sheet = document.createElement('div');
+  sheet.id = 'donate-sheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
+
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:24px 24px 0 0;padding:14px 0 calc(20px + var(--safe-bot,0px));max-height:92vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)"
+         onclick="event.stopPropagation()">
+      <div style="width:44px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 18px"></div>
+
+      <!-- Заголовок -->
+      <div style="text-align:center;padding:0 20px 16px">
+        <div style="font-size:32px;margin-bottom:6px">💝</div>
+        <div style="font-size:19px;font-weight:800;color:var(--text)">Поддержи проект</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px;line-height:1.5">
+          Перевод по СБП   мгновенно, без комиссии.<br>VIP активируется после подтверждения.
+        </div>
+      </div>
+
+      <!-- Тарифы -->
+      <div style="padding:0 16px;display:grid;gap:10px">
+        ${DONATE_TIERS.map((t, i) => `
+          <div onclick="donateSelectTier(${i})" id="donate-tier-${i}"
+            style="display:flex;align-items:center;gap:14px;padding:14px 16px;
+                   border-radius:16px;border:2px solid var(--accent);
+                   background:color-mix(in srgb,var(--accent) 8%,var(--surface));
+                   cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent">
+            <div style="font-size:26px;flex-shrink:0">${t.label.split(' ')[0]}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:15px;font-weight:700;color:var(--text)">${t.label.slice(t.label.indexOf(' ')+1)}</div>
+              <div style="font-size:12px;color:var(--muted)">${t.desc}</div>
+            </div>
+            <div style="font-size:20px;font-weight:800;color:var(--accent);flex-shrink:0">${t.amount}₽</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Выбор банка -->
+      <div style="padding:16px 16px 0">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px">Выбери банк:</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px" id="donate-banks-grid">
+          ${SBP_BANKS.map((b, i) => `
+            <div onclick="donateSelectBank(${i})" id="donate-bank-${i}"
+              style="display:flex;flex-direction:column;align-items:center;gap:5px;
+                     padding:10px 4px;border-radius:14px;border:2px solid transparent;
+                     background:var(--surface2);cursor:pointer;transition:all .15s;
+                     -webkit-tap-highlight-color:transparent">
+              <div style="width:38px;height:38px;border-radius:50%;background:${b.bg};
+                          display:flex;align-items:center;justify-content:center;font-size:18px">${b.icon}</div>
+              <div style="font-size:10px;font-weight:600;color:var(--text);text-align:center">${b.name}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Кнопка оплаты -->
+      <div style="padding:16px 16px 0">
+        <button id="donate-pay-btn" onclick="donateOpenBank()"
+          style="width:100%;padding:16px;background:var(--accent);border:none;border-radius:16px;
+                 color:#fff;font-family:inherit;font-size:16px;font-weight:800;
+                 cursor:pointer;-webkit-tap-highlight-color:transparent">
+          Перейти в Сбер · 20₽
+        </button>
+        <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted)">
+          Номер получателя: <b style="color:var(--text)">${SBP_PHONE}</b>
+        </div>
+      </div>
+
+      <!-- Подтверждение -->
+      <div id="donate-confirm-section" style="display:none;padding:14px 16px 0">
+        <div style="background:var(--surface2);border-radius:14px;padding:14px 16px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">✅ Я оплатил</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+            Введи последние 4 цифры суммы перевода или номер операции из уведомления банка:
+          </div>
+          <input id="donate-txn-input" placeholder="Номер операции / последние 4 цифры"
+            maxlength="20" inputmode="numeric"
+            style="width:100%;padding:10px 14px;background:var(--surface);
+                   border:1.5px solid rgba(255,255,255,.12);border-radius:10px;
+                   color:var(--text);font-size:15px;font-family:inherit;
+                   outline:none;box-sizing:border-box;caret-color:var(--accent)">
+          <button onclick="donateConfirm()"
+            style="width:100%;margin-top:10px;padding:13px;background:var(--accent);
+                   border:none;border-radius:10px;color:#fff;font-family:inherit;
+                   font-size:14px;font-weight:700;cursor:pointer">
+            Отправить на проверку
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  sheet.addEventListener('click', () => sheet.remove());
+  document.body.appendChild(sheet);
+
+  donateSelectTier(0);
+  donateSelectBank(0);
+}
+
+let _selectedDoneTierIdx = 0;
+let _selectedBankIdx     = 0;
+
+function donateSelectTier(i) {
+  _selectedDoneTierIdx = i;
+  DONATE_TIERS.forEach((t, idx) => {
+    const el = document.getElementById(`donate-tier-${idx}`);
+    if (!el) return;
+    el.style.opacity     = idx === i ? '1'    : '0.55';
+    el.style.borderColor = idx === i ? 'var(--accent)' : 'transparent';
+    el.style.transform   = idx === i ? 'scale(1.02)' : 'scale(1)';
+  });
+  _updateDonateBtn();
+}
+
+function donateSelectBank(i) {
+  _selectedBankIdx = i;
+  SBP_BANKS.forEach((b, idx) => {
+    const el = document.getElementById(`donate-bank-${idx}`);
+    if (!el) return;
+    el.style.borderColor = idx === i ? 'var(--accent)' : 'transparent';
+    el.style.background  = idx === i
+      ? 'color-mix(in srgb,var(--accent) 15%,var(--surface2))'
+      : 'var(--surface2)';
+  });
+  _updateDonateBtn();
+}
+
+function _updateDonateBtn() {
+  const btn  = document.getElementById('donate-pay-btn');
+  if (!btn) return;
+  const tier = DONATE_TIERS[_selectedDoneTierIdx];
+  const bank = SBP_BANKS[_selectedBankIdx];
+  btn.textContent = `Перейти в ${bank.name} · ${tier.amount}₽`;
+}
+
+function donateOpenBank() {
+  const tier   = DONATE_TIERS[_selectedDoneTierIdx];
+  const amount = tier.amount;
+
+  // Открываем прямую СБП-ссылку
+  if (window.Android?.openUrl) {
+    window.Android.openUrl(SBP_DIRECT_URL);
+  } else {
+    window.open(SBP_DIRECT_URL, '_blank', 'noopener');
+  }
+
+  // Показываем подтверждение через 1.5с
+  setTimeout(() => {
+    const sec = document.getElementById('donate-confirm-section');
+    if (sec) { sec.style.display = 'block'; sec.scrollIntoView({ behavior: 'smooth' }); }
+  }, 1500);
+
+  toast(`💳 Переведи ${amount}₽ через СБП на ${SBP_PHONE}`);
+}
+
+
+async function donateConfirm() {
+  const txn = document.getElementById('donate-txn-input')?.value?.trim();
+  if (!txn || txn.length < 4) { toast('❌ Введи номер транзакции'); return; }
+
+  const p    = DONATE_TIERS[_selectedDoneTierIdx];
+  const prof = profileLoad();
+  if (!prof) { toast('❌ Войди в аккаунт'); return; }
+
+  const btn = document.querySelector('#donate-confirm-section button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Отправляю...'; }
+
+  try {
+    // Сохраняем в таблицу donations (создай в Supabase: username, amount, txn, ts, status)
+    const res = await _sbFetch('POST', '/rest/v1/donations',
+      {
+        username:  prof.username,
+        amount:    DONATE_TIERS[_selectedDoneTierIdx].amount,
+        txn_id:    txn,
+        ts:        Date.now(),
+        status:    'pending',
+        tier:      DONATE_TIERS[_selectedDoneTierIdx].label,
+        vip_tier:  DONATE_TIERS[_selectedDoneTierIdx].vip,
+      },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+
+    if (res.ok || res.status === 201) {
+      document.getElementById('donate-sheet')?.remove();
+      // Показываем благодарность
+      const thanks = document.createElement('div');
+      thanks.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;animation:mcFadeIn .2s ease';
+      thanks.innerHTML = `
+        <div style="background:var(--surface);border-radius:24px;padding:32px 24px;text-align:center;max-width:300px;margin:20px;animation:mc-sel-pop .3s cubic-bezier(.34,1.3,.64,1)">
+          <div style="font-size:48px;margin-bottom:12px">🙏</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">Спасибо!</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px">
+            Платёж получен на проверку.<br>
+            ${DONATE_TIERS[_selectedDoneTierIdx].vip
+              ? 'VIP будет активирован в течение <b style="color:var(--accent)">24 часов</b> после подтверждения оплаты.'
+              : 'Ты поддержал развитие проекта ❤️'}
+          </div>
+          <button onclick="this.closest('[style*=fixed]').remove()"
+            style="background:var(--accent);border:none;color:var(--btn-text,#fff);
+                   padding:12px 28px;border-radius:12px;font-size:15px;font-weight:700;
+                   cursor:pointer;font-family:inherit">Отлично!</button>
+        </div>`;
+      thanks.addEventListener('click', e => { if (e.target === thanks) thanks.remove(); });
+      document.body.appendChild(thanks);
+      SFX.play('success');
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = 'Отправить на проверку'; }
+      toast('❌ Ошибка сохранения. Напиши в поддержку.');
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Отправить на проверку'; }
+    toast('❌ ' + (e.message || 'Ошибка'));
+  }
+}
+
+
+
 // CMD команда /vip
-// Добавляем в cmdExec — патч через хук
+// Добавляем в cmdExec   патч через хук
 const _origCmdExecForVip = window.cmdExec;
 if (typeof cmdExec === 'function') {
   // Вставим /vip перед default кейсом через monkey-patch
@@ -4566,7 +5151,7 @@ if (typeof cmdExec === 'function') {
 const PROFILE_FRAMES = {
   'none':     { cls: '',          style: '',                                               label: 'Нет',         vip: false },
   'accent':   { cls: '',          style: 'box-shadow:0 0 0 3px var(--accent)',              label: '🔶 Акцент',   vip: false },
-  'glow':     { cls: '',          style: 'box-shadow:0 0 16px 4px var(--accent)',           label: '✨ Свечение', vip: true  },
+  'glow':     { cls: '',          style: 'box-shadow:0 0 16px 4px var(--accent)',           label: '✅ Свечение', vip: true  },
   'rainbow':  { cls: 'frame-rainbow', style: '',                                           label: '🌈 Радуга',   vip: true  },
   'gold':     { cls: '',          style: 'box-shadow:0 0 0 3px #f5c518,0 0 12px #f5c51866', label: '🥇 Золото',  vip: true  },
   'neon':     { cls: '',          style: 'box-shadow:0 0 0 3px #00e5ff,0 0 20px #00e5ff88', label: '💠 Неон',    vip: true  },
@@ -4593,7 +5178,7 @@ const PROFILE_BANNERS = [
   { id: 'matrix',  label: '💚 Матрица',   style: 'background:linear-gradient(135deg,#0d0d0d,#0a3d0a,#00ff41)',   vip: true  },
 ];
 
-// ── CSS для спец-рамок и мессенджера ────────────────────────────
+// ┄┄ CSS для спец-рамок и мессенджера ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 (function injectFrameCSS() {
   const style = document.createElement('style');
   style.textContent = `
@@ -4780,7 +5365,7 @@ function _leaderboardDrawLocal() {
   const myInfoHtml = p && myHi > 0 ? `
     <div style="background:var(--surface2);border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;margin-bottom:12px;font-size:13px">
       <span style="color:var(--muted)">Твой рекорд:</span>
-      <span style="font-weight:700;color:var(--accent)">${myHi}${myRank > 0 ? ` • #${myRank}` : ' • не в топе'}</span>
+      <span style="font-weight:700;color:var(--accent)">${myHi}${myRank > 0 ? `   #${myRank}` : '   не в топе'}</span>
     </div>` : '';
 
   container.innerHTML = `
@@ -4792,7 +5377,7 @@ function _leaderboardDrawLocal() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// 💬 МЕССЕНДЖЕР v2 — Telegram стиль
+// 💬 МЕССЕНДЖЕР v2   Telegram стиль
 // ══════════════════════════════════════════════════════════════════
 const MSG_STORE_KEY = 'sapp_messages_v2';
 const MSG_CHATS_KEY = 'sapp_chats_v1';
@@ -4806,17 +5391,17 @@ function chatsSave(d) { localStorage.setItem(MSG_CHATS_KEY, JSON.stringify(d)); 
 
 function messengerOpen() { showScreen('s-messenger'); }
 
-// ── Список чатов ─────────────────────────────────────────────────
-// ── Мультиселект чатов ────────────────────────────────────────────
+// ┄┄ Список чатов ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ┄┄ Мультиселект чатов ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 const PINNED_CHATS_KEY = 'sapp_pinned_chats_v1';
 function pinnedChatsLoad() { try { return JSON.parse(localStorage.getItem(PINNED_CHATS_KEY)||'[]'); } catch(e) { return []; } }
 function pinnedChatsSave(d) { localStorage.setItem(PINNED_CHATS_KEY, JSON.stringify(d)); }
 
-// ── Удалённые чаты — синхронизируются с Supabase (колонка hidden_chats) ──────
+// ┄┄ Удалённые чаты   синхронизируются с Supabase (колонка hidden_chats) ┄┄┄┄┄┄
 const DELETED_CHATS_KEY = 'sapp_deleted_chats_v1';
 
 // ══════════════════════════════════════════════════════════════════
-// 🎨 CHAT WALLPAPER — VIP-only per-chat background
+// 🎨 CHAT WALLPAPER   VIP-only per-chat background
 // ══════════════════════════════════════════════════════════════════
 const CHAT_WALLS_KEY = 'sapp_chat_walls_v2';
 function chatWallsLoad() { try { return JSON.parse(localStorage.getItem(CHAT_WALLS_KEY)||'{}'); } catch(e) { return {}; } }
@@ -4859,10 +5444,10 @@ function chatWallSet(chatId, value) {
   chatWallApply(chatId);
 }
 
-/** Открывает диалог выбора фона чата — только VIP */
+/** Открывает диалог выбора фона чата   только VIP */
 function showChatWallpaperPicker(chatId) {
   if (!vipCheck()) {
-    toast('🔒 Фон чата — только для VIP');
+    toast('🔒 Фон чата   только для VIP');
     return;
   }
   const current = chatWallGet(chatId);
@@ -5016,9 +5601,14 @@ const _msgSelected = new Set();
 function msgSelectEnter(username) {
   _msgSelectMode = true;
   _msgSelected.clear();
-  // Не добавляем автоматически — первый элемент должен tap-ом выбираться
+  if (username) _msgSelected.add(username); // сразу выделяем тот чат, что зажали
   document.getElementById('msg-hdr-normal').style.display = 'none';
   document.getElementById('msg-hdr-select').style.display = '';
+  // Скрываем поиск и FAB в режиме выделения
+  const searchBar = document.querySelector('#s-messenger > [style*="padding:8px"]');
+  if (searchBar) searchBar.style.display = 'none';
+  const fab = document.getElementById('msg-fab-container');
+  if (fab) { fab.style.opacity = '0'; fab.style.pointerEvents = 'none'; }
   messengerRenderList();
   _msgUpdateSelectCount();
   try { window.Android?.vibrate?.(35); } catch(_) {}
@@ -5030,6 +5620,11 @@ function msgSelectCancel() {
   _msgSelected.clear();
   document.getElementById('msg-hdr-normal').style.display = '';
   document.getElementById('msg-hdr-select').style.display = 'none';
+  // Восстанавливаем поиск и FAB
+  const searchBar = document.querySelector('#s-messenger > [style*="padding:8px"]');
+  if (searchBar) searchBar.style.display = '';
+  const fab = document.getElementById('msg-fab-container');
+  if (fab) { fab.style.opacity = ''; fab.style.pointerEvents = ''; }
   messengerRenderList();
 }
 
@@ -5037,13 +5632,17 @@ function msgToggleSelect(username, e) {
   e.stopPropagation();
   if (_msgSelected.has(username)) _msgSelected.delete(username);
   else _msgSelected.add(username);
+  // Авто-выход если ничего не выделено
+  if (_msgSelected.size === 0) { msgSelectCancel(); return; }
   _msgUpdateSelectCount();
   // Обновить визуал конкретной строки с анимацией
   const row = document.querySelector(`[data-chat-user="${CSS.escape(username)}"]`);
   if (row) {
     row.classList.toggle('chat-selected', _msgSelected.has(username));
+    // Обновляем оверлей аватара
+    _msgUpdateAvatarOverlay(row, _msgSelected.has(username));
     row.classList.remove('chat-row-selecting');
-    void row.offsetWidth; // reflow
+    void row.offsetWidth;
     row.classList.add('chat-row-selecting');
     row.addEventListener('animationend', () => row.classList.remove('chat-row-selecting'), { once: true });
   }
@@ -5051,7 +5650,12 @@ function msgToggleSelect(username, e) {
 
 function _msgUpdateSelectCount() {
   const el = document.getElementById('msg-select-count');
-  if (el) el.textContent = 'Выбрано: ' + _msgSelected.size;
+  if (el) el.textContent = String(_msgSelected.size);
+}
+
+function _msgUpdateAvatarOverlay(row, selected) {
+  const ov = row.querySelector('.chat-av-sel-ov');
+  if (ov) ov.classList.toggle('sel', selected);
 }
 
 function msgDeleteSelected() {
@@ -5111,7 +5715,48 @@ function msgPinSelected() {
   msgSelectCancel();
 }
 
-// ── Удаление одного чата изнутри ─────────────────────────────────
+function msgMuteSelected() {
+  if (_msgSelected.size === 0) return;
+  _msgSelected.forEach(u => {
+    const muted = JSON.parse(localStorage.getItem('muted_chats') || '[]');
+    const idx = muted.indexOf(u);
+    if (idx === -1) muted.push(u); else muted.splice(idx, 1);
+    localStorage.setItem('muted_chats', JSON.stringify(muted));
+    _mcUpdateMuteIcon && _mcUpdateMuteIcon();
+  });
+  toast('🔇 Изменено для ' + _msgSelected.size + ' чат(ов)');
+  msgSelectCancel();
+}
+
+function msgSelectMoreMenu() {
+  const sh = document.createElement('div');
+  sh.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.45);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
+  sh.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:10px 0 calc(16px + var(--safe-bot,0px));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 12px"></div>
+      <button onclick="this.closest('[style*=fixed]').remove();msgReadSelected()"
+        style="width:100%;padding:14px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:16px;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:20px">✅</span> Отметить как прочитанное
+      </button>
+    </div>`;
+  sh.addEventListener('click', () => sh.remove());
+  document.body.appendChild(sh);
+}
+
+function msgReadSelected() {
+  if (_msgSelected.size === 0) return;
+  const msgs = msgLoad();
+  const p = profileLoad();
+  _msgSelected.forEach(u => {
+    if (msgs[u]) msgs[u].forEach(m => { if (m.from !== p?.username) m.read = true; });
+  });
+  msgSave(msgs);
+  messengerUpdateBadge();
+  toast('✅ Прочитано');
+  msgSelectCancel();
+}
+
+// ┄┄ Удаление одного чата изнутри ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function messengerDeleteCurrentChat() {
   const username = _msgCurrentChat;
   if (!username) return;
@@ -5136,7 +5781,7 @@ function messengerDeleteCurrentChat() {
   toast('🗑 Чат удалён');
 }
 
-// ── Telegram-style превью последнего сообщения в списке чатов ───────────────
+// ┄┄ Telegram-style превью последнего сообщения в списке чатов ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function _mcPreviewText(msg) {
   if (!msg) return '';
 
@@ -5161,7 +5806,7 @@ function _mcPreviewText(msg) {
     const ext  = (name.split('.').pop() || '').toLowerCase();
     const audioExts = ['mp3','ogg','wav','flac','aac','m4a','opus','wma'];
     if (audioExts.includes(ext)) {
-      // Музыкальный файл — показываем имя без расширения
+      // Музыкальный файл   показываем имя без расширения
       const cleanName = name.replace(/\.[^.]+$/, '');
       return '🎵 ' + (cleanName || 'Аудио');
     }
@@ -5213,15 +5858,18 @@ function messengerRenderList(filter) {
     const peer     = _profileOnlinePeers.find(u => u.username === username)
                    || _allKnownUsers.find(u => u.username === username);
     const isOnline = !!_profileOnlinePeers.find(u => u.username === username);
-    const name     = peer?.name || username;
-    const avatar   = peer?.avatar || '😊';
-    const color    = peer?.color || 'var(--surface3)';
-    // ── Telegram-style preview ───────────────────────────────────────────────
+    // ── Группы: берём имя/аватар из groupGet, а не из users ──────────────────
+    const _isGroupChat = username === PUBLIC_GROUP_ID || username.startsWith('grp_');
+    const _groupData   = _isGroupChat ? groupGet(username) : null;
+    const name     = _groupData?.name  || peer?.name  || username;
+    const avatar   = _groupData?.avatar || peer?.avatar || '😊';
+    const color    = _groupData?.color  || peer?.color  || 'var(--surface3)';
+    // ┄┄ Telegram-style preview ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
     const _prevText = _mcPreviewText(last);
     const _isMe     = last?.from === p?.username;
     const _prevIcon = (() => {
       if (!last) return '';
-      if (last.sticker)               return '';   // стикер — сам эмодзи
+      if (last.sticker)               return '';   // стикер   сам эмодзи
       if (last.image)                 return '📷 ';
       if (last.fileType === 'voice')  return '';   // уже содержит 🎤
       if (last.fileType === 'video')  return '';   // уже содержит 🎬
@@ -5261,11 +5909,12 @@ function messengerRenderList(filter) {
       ${_pinned && !_msgSelectMode ? '<span style="font-size:13px;opacity:.5;flex-shrink:0;transform:rotate(45deg);display:inline-block">📌</span>' : ''}
       <div style="position:relative;flex-shrink:0">
         <div style="width:52px;height:52px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;overflow:hidden">${avatarHtml}</div>
-        ${isOnline ? '<div style="position:absolute;bottom:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#4caf7d;border:2.5px solid var(--bg)"></div>' : ''}
+        ${isOnline && !_msgSelectMode ? '<div style="position:absolute;bottom:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#4caf7d;border:2.5px solid var(--bg)"></div>' : ''}
+        ${_msgSelectMode ? `<div class="chat-av-sel-ov${isSel?' sel':''}"></div>` : ''}
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(displayName)}${_localNick ? `<span style="font-size:10px;color:var(--muted);margin-left:4px">@${escHtml(username)}</span>` : ''}</div>
+          <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">${escHtml(displayName)}${_localNick ? `<span style="font-size:10px;color:var(--muted);margin-left:4px">@${escHtml(username)}</span>` : ''}${isChatEncrypted(username) ? '<span style="font-size:11px;margin-left:4px" title="Секретный чат">🔐</span>' : ''}</div>
           <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
             ${_pinned && !_msgSelectMode ? `<button onclick="event.stopPropagation();togglePinChat('${username}')" style="background:none;border:none;padding:0 2px;cursor:pointer;font-size:12px;opacity:.55;line-height:1" title="Открепить">📌</button>` : ''}
             <span style="font-size:11px;color:${unread>0?'var(--accent)':'var(--muted)'}">${timeStr}</span>
@@ -5275,7 +5924,7 @@ function messengerRenderList(filter) {
           <div style="font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%;display:flex;align-items:center;gap:3px">
             ${(() => {
               if (!last) return preview;
-              // Медиа — иконка крупнее + label
+              // Медиа   иконка крупнее + label
               if (last.fileType === 'voice') {
                 const dur = last.duration;
                 const durStr = dur ? ` ${Math.floor(dur/60)}:${String(dur%60).padStart(2,'0')}` : '';
@@ -5321,7 +5970,7 @@ function messengerRenderList(filter) {
 }
 
 
-// Long-press для мобильного — с защитой от свайпа
+// Long-press для мобильного   с защитой от свайпа
 let _msgLongPressTimer = null;
 let _msgTouchStartX = 0, _msgTouchStartY = 0;
 let _msgTouchMoved = false;
@@ -5332,12 +5981,14 @@ function msgRowTouchStart(el, username) {
   _msgTouchStartX = t?.clientX || 0;
   _msgTouchStartY = t?.clientY || 0;
   _msgTouchMoved  = false;
-  // В режиме выделения — НЕ обрабатываем здесь, обработчик onclick сам вызовет msgToggleSelect
   if (_msgSelectMode) return;
   el.style.background = 'rgba(255,255,255,.04)';
   _msgLongPressTimer = setTimeout(() => {
     el.style.background = '';
-    if (!_msgTouchMoved) showChatContextMenu(username);
+    if (!_msgTouchMoved) {
+      // Telegram-style: сразу входим в режим выделения с этим чатом
+      msgSelectEnter(username);
+    }
   }, 480);
 }
 
@@ -5360,7 +6011,7 @@ function msgRowTouchEnd() {
 }
 function messengerFilterChats(q) { messengerRenderList(q); }
 
-// ── Открытие чата ─────────────────────────────────────────────────
+// ┄┄ Открытие чата ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function messengerOpenChat(username) {
   if (username === PUBLIC_GROUP_ID) {
     _showPublicGroupSplash(() => _doOpenChat(username));
@@ -5378,7 +6029,7 @@ function _doOpenChat(username) {
   const p = profileLoad();
   messengerUpdateBadge();
 
-  // Слушатель скролла — помечаем прочитанными только когда прокрутили до конца
+  // Слушатель скролла   помечаем прочитанными только когда прокрутили до конца
   const msgBody = document.getElementById('mc-messages');
   if (msgBody && !msgBody._readListener) {
     msgBody._readListener = true;
@@ -5388,7 +6039,7 @@ function _doOpenChat(username) {
     }, { passive: true });
   }
 
-  // Обновляем шапку — ищем и онлайн и оффлайн пользователей
+  // Обновляем шапку   ищем и онлайн и оффлайн пользователей
   const peer = _profileOnlinePeers.find(u => u.username === username)
              || _allKnownUsers.find(u => u.username === username);
   const hdrName = document.getElementById('mc-hdr-name');
@@ -5399,9 +6050,11 @@ function _doOpenChat(username) {
   if (hdrSub) {
     if (_openedGroup) {
       hdrSub.textContent = _openedGroup.members.length + ' участников';
+    } else if (isChatEncrypted(username)) {
+      hdrSub.textContent = '🔐 Секретный чат';
     } else {
       hdrSub.textContent = peer
-        ? (_profileOnlinePeers.find(u => u.username === username) ? '🟢 В сети' : '⚫ Не в сети')
+        ? (_profileOnlinePeers.find(u => u.username === username) ? '🟢 В сети' : '⚡ Не в сети')
         : ('@' + username);
     }
   }
@@ -5419,20 +6072,21 @@ function _doOpenChat(username) {
   // Рендерим закреплённое сообщение и иконку mute
   mcRenderPinBar();
   _mcUpdateMuteIcon();
+  mcUpdateEncryptBtn(); // обновляем иконку шифрования
 
-  // Fix: принудительно перезапускаем polling при открытии чата —
+  // Fix: принудительно перезапускаем polling при открытии чата  
   // это гарантирует немедленный запрос к Supabase, не ждём следующего тика.
   // Решает проблему "нужно перезаходить чтобы увидеть новые сообщения".
   if (p) {
     sbForceRecheckChat(p.username, username);
-    // Сообщаем нативному Worker'у — сдвигаем окно чтобы не дублировать уведомления
+    // Сообщаем нативному Worker'у   сдвигаем окно чтобы не дублировать уведомления
     if (window.Android && typeof window.Android.updateLastMsgTs === 'function') {
       try { window.Android.updateLastMsgTs(Date.now()); } catch(_){}
     }
   }
 
   // Запустить polling для этого чата (таймер-сторож, 2 сек)
-  // Если стрим по какой-то причине умер — перезапускаем его немедленно
+  // Если стрим по какой-то причине умер   перезапускаем его немедленно
   clearInterval(_mcPollTimer);
   _mcPollTimer = setInterval(() => {
     const p2 = profileLoad();
@@ -5442,7 +6096,7 @@ function _doOpenChat(username) {
   }, 2000);
 } // end _doOpenChat
 
-// ── Рендер сообщений ──────────────────────────────────────────────
+// ┄┄ Рендер сообщений ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function messengerRenderMessages(animateLast) {
   const body = document.getElementById('mc-messages');
   if (!body || !_msgCurrentChat) return;
@@ -5477,7 +6131,7 @@ function messengerRenderMessages(animateLast) {
     const peer = _profileOnlinePeers.find(u => u.username === msg.from)
               || _allKnownUsers.find(u => u.username === msg.from);
 
-    // Определяем — это групповой чат?
+    // Определяем   это групповой чат?
     const _isGroupChat = _msgCurrentChat && (
       _msgCurrentChat === PUBLIC_GROUP_ID ||
       _msgCurrentChat.startsWith('grp_')
@@ -5494,10 +6148,10 @@ function messengerRenderMessages(animateLast) {
       ? `<div style="width:28px;height:28px;border-radius:50%;background:${_peerColor};display:flex;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-end;overflow:hidden;cursor:pointer" onclick="peerProfileOpen('${msg.from}')">${_peerAvatar}</div>`
       : `<div style="width:${_isGroupChat ? '28' : '0'}px;flex-shrink:0"></div>`;
 
-    // Telegram-style статус: ⏰ pending → ✓ sent → ✓✓ delivered (gray) → ✓✓ read (blue)
+    // Telegram-style статус: ⏳ pending ↩ ✅ sent ↩ ✓✓ delivered (gray) ↩ ✓✓ read (blue)
     const status = isMe ? (() => {
       if (msg.pending) {
-        // Часы — сообщение в очереди (нет сети)
+        // Часы   сообщение в очереди (нет сети)
         return `<span style="display:inline-flex;align-items:center;margin-left:3px;opacity:.6">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
             <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
@@ -5505,7 +6159,7 @@ function messengerRenderMessages(animateLast) {
         </span>`;
       }
       if (msg.read) {
-        // Двойная синяя галочка — прочитано (точно как Telegram)
+        // Двойная синяя галочка   прочитано (точно как Telegram)
         return `<span style="display:inline-flex;align-items:center;margin-left:3px">
           <svg width="16" height="11" viewBox="0 0 16 11" fill="none" stroke="#4fc3f7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="1,5.5 4.5,9 10,2"/>
@@ -5514,7 +6168,7 @@ function messengerRenderMessages(animateLast) {
         </span>`;
       }
       if (msg.delivered) {
-        // Двойная серая галочка — доставлено, не прочитано
+        // Двойная серая галочка   доставлено, не прочитано
         return `<span style="display:inline-flex;align-items:center;margin-left:3px;opacity:.65">
           <svg width="16" height="11" viewBox="0 0 16 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="1,5.5 4.5,9 10,2"/>
@@ -5522,7 +6176,7 @@ function messengerRenderMessages(animateLast) {
           </svg>
         </span>`;
       }
-      // Одинарная серая галочка — отправлено на сервер
+      // Одинарная серая галочка   отправлено на сервер
       return `<span style="display:inline-flex;align-items:center;margin-left:3px;opacity:.6">
         <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="1,4.5 4,7.5 10,1"/>
@@ -5561,8 +6215,8 @@ function messengerRenderMessages(animateLast) {
     const safeUrl   = escHtml(msg.fileLink || '');
     const safeName  = escHtml(msg.fileName || '');
     const voiceId   = 'voice_' + idx;
-    // ── Telegram-style waveform generator ─────────────────────────────────
-    // Генерирует псевдослучайные бары на основе seed — детерминировано
+    // ┄┄ Telegram-style waveform generator ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+    // Генерирует псевдослучайные бары на основе seed   детерминировано
     function _tgWave(seed, bars) {
       let s = seed | 0;
       const rnd = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 16) / 65535; };
@@ -5572,7 +6226,7 @@ function messengerRenderMessages(animateLast) {
       });
     }
 
-    // ── SVG waveform (голосовые) ───────────────────────────────────────────
+    // ┄┄ SVG waveform (голосовые) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
     function _tgWaveSVG(id, seed, isMe) {
       const bars   = 40, W = 160, H = 30, bw = 2, gap = 2;
       const levels = _tgWave(seed, bars);
@@ -5595,7 +6249,7 @@ function messengerRenderMessages(animateLast) {
     const msgContent = isSticker
       ? `<div class="mc-sticker-wrap" style="font-size:56px;line-height:1.1;text-align:center">${escHtml(msg.sticker)}</div>`
 
-      // ── ФОТО — скруглённые углы, gradient overlay, время поверх ──────────
+      // ┄┄ ФОТО   скруглённые углы, gradient overlay, время поверх ┄┄┄┄┄┄┄┄┄┄
       : isImage
         ? `<div style="position:relative;border-radius:14px;overflow:hidden;max-width:240px;min-width:100px;cursor:pointer"
                onclick="photoZoomOpen('${msg.image.replace(/'/g,"\\'")}','Фото')">
@@ -5607,7 +6261,7 @@ function messengerRenderMessages(animateLast) {
              </div>
            </div>`
 
-      // ── ГОЛОСОВОЕ — Telegram: 46px кнопка + waveform bars + countdown ─────
+      // ┄┄ ГОЛОСОВОЕ   Telegram: 46px кнопка + waveform bars + countdown ┄┄┄┄┄
       : isVoice
         ? (() => {
             const wv = _tgWaveSVG(voiceId, (msg.ts|0) ^ (idx*7919), isMe);
@@ -5634,31 +6288,41 @@ function messengerRenderMessages(animateLast) {
            </div>`;
           })()
 
-      // ── КРУЖОК (видеосообщение) — круглое превью + play ─────────────────
+      // ┄┄ КРУЖОК (видеосообщение)   inline плеер в чате (как Telegram) ┄┄┄┄
       : isCircle
-        ? `<div data-no-menu style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
-               onclick="mcVideoOpen('${safeUrl}','Видеосообщение')">
-             ${msg.thumbData
-               ? `<img src="${escHtml(msg.thumbData)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
-               : `<div style="width:100%;height:100%;position:relative;background:#111">
-                 <div style="position:absolute;inset:0;background:linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 50%,#1a1a1a 75%);background-size:200% 100%;animation:skelShimmer 1.4s infinite"></div>
-                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                   <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.25);border-top-color:rgba(255,255,255,.75);border-radius:50%;animation:mvpSpin .8s linear infinite"></div>
-                 </div>
-               </div>`
-             }
-             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-               <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.48);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+        ? (() => {
+            const cid = 'circ_' + idx + '_' + msg.ts;
+            const circumference = 2 * Math.PI * 97; // ≈609.7
+            return `<div data-no-menu id="cw_${cid}"
+               style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
+               onclick="mcCircleToggle('${cid}','${safeUrl}')">
+             <div id="cposter_${cid}" style="position:absolute;inset:0">
+               ${msg.thumbData
+                 ? `<img src="${escHtml(msg.thumbData)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
+                 : `<div style="width:100%;height:100%;background:#1c1c1c;display:flex;align-items:center;justify-content:center">
+                     <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.2);border-top-color:rgba(255,255,255,.75);border-radius:50%;animation:mvpSpin .8s linear infinite"></div>
+                   </div>`}
+             </div>
+             <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden"></div>
+             <div id="cbtn_${cid}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+               <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
+                 <svg id="cico_${cid}" width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
                </div>
              </div>
+             <svg id="cring_${cid}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none" viewBox="0 0 200 200">
+               <circle cx="100" cy="100" r="97" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="3.5"/>
+               <circle id="cringp_${cid}" cx="100" cy="100" r="97" fill="none" stroke="#fff" stroke-width="3.5"
+                 stroke-dasharray="${circumference.toFixed(1)}" stroke-dashoffset="${circumference.toFixed(1)}"
+                 stroke-linecap="round" transform="rotate(-90 100 100)"
+                 style="transition:stroke-dashoffset .12s linear"/>
+             </svg>
              <div style="position:absolute;bottom:10px;right:10px;display:flex;align-items:center;gap:3px;pointer-events:none">
-               <span style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.7)">${msgFormatTime(msg.ts)}</span>
+               <span id="ctime_${cid}" style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.7)">${msgFormatTime(msg.ts)}</span>
                <span style="font-size:11px;color:rgba(255,255,255,.9)">${status}</span>
              </div>
-           </div>`
-
-      // ── ВИДЕО — превью + круглая play + duration badge ────────────────────
+           </div>`;
+          })()
+      // ┄┄ ВИДЕО   превью + круглая play + duration badge ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
       : isVideo
         ? `<div data-no-menu style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;min-width:140px;cursor:pointer;background:#111"
                onclick="mcVideoOpen('${safeUrl}','${safeName}')">
@@ -5684,7 +6348,7 @@ function messengerRenderMessages(animateLast) {
              </div>
            </div>`
 
-      // ── АУДИО ФАЙЛ — иконка + название + прогресс-бар ─────────────────────
+      // ┄┄ АУДИО ФАЙЛ   иконка + название + прогресс-бар ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
       : isAudio
         ? `<div data-no-menu style="display:flex;align-items:center;gap:11px;padding:2px 0;min-width:220px;max-width:270px">
              <button id="vbtn_aud_${idx}" onclick="mcVoicePlay('${safeUrl}','aud_${idx}')"
@@ -5699,12 +6363,12 @@ function messengerRenderMessages(animateLast) {
                </div>
                <div style="display:flex;align-items:center;justify-content:space-between">
                  <span style="font-size:11px;color:${tgMuted}">${_fmtSize(msg.fileSize)||'аудио'}</span>
-                 <span id="vtime_aud_${idx}" style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${tgMuted};font-weight:600">—:——</span>
+                 <span id="vtime_aud_${idx}" style="font-size:11px;font-family:'JetBrains Mono',monospace;color:${tgMuted};font-weight:600"> :—</span>
                </div>
              </div>
            </div>`
 
-      // ── ФАЙЛ — иконка типа + имя + размер + SVG кнопка скачать ───────────
+      // ┄┄ ФАЙЛ   иконка типа + имя + размер + SVG кнопка скачать ┄┄┄┄┄┄┄┄┄┄┄
       : isFile
         ? `<div style="display:flex;align-items:center;gap:12px;padding:4px 0;min-width:200px;max-width:270px">
              <div style="width:46px;height:46px;min-width:46px;border-radius:13px;background:${isMe?'rgba(255,255,255,.18)':'rgba(255,255,255,.08)'};display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">${_gdFileEmoji(msg.fileName)}</div>
@@ -5744,7 +6408,7 @@ function messengerRenderMessages(animateLast) {
       ondblclick="mcBubbleDblClick(event,${idx})"
       onclick="mcBubbleClick(event,${idx})">
       ${isMe ? '' : avatarEl}
-      <!-- Swipe reply-arrow hint (свайп вправо→влево, стрелка всегда слева от пузыря) -->
+      <!-- Swipe reply-arrow hint (свайп вправо→влев, стрелка всегда слева от пузыря) -->
       <div class="mc-reply-hint" style="position:absolute;left:-24px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .12s;font-size:18px;pointer-events:none;z-index:1">↩</div>
       <div style="display:flex;flex-direction:column;max-width:78%">
         ${senderNameHtml}
@@ -5774,7 +6438,7 @@ function messengerRenderMessages(animateLast) {
   });
 }
 
-// ── Отправка ──────────────────────────────────────────────────────
+// ┄┄ Отправка ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function messengerSend() {
   const inp = document.getElementById('mc-input');
   if (!inp || !_msgCurrentChat) return;
@@ -5826,10 +6490,10 @@ function messengerSend() {
     setTimeout(() => _sendBtn.classList.remove('mc-send-bounce'), 300);
   }
 
-  // Лимит 200 сообщений — удаляем старые и с сервера
+  // Лимит 200 сообщений   удаляем старые и с сервера
   mcEnforceMessageLimit(_msgCurrentChat);
 
-  // ── Групповой чат: используем groupSendMessage (broadcast) ────────
+  // ┄┄ Групповой чат: используем groupSendMessage (broadcast) ┄┄┄┄┄┄┄┄
   const _isGroupSend = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
   if (_isGroupSend) {
     groupSendMessage(_msgCurrentChat, text).then(() => {
@@ -5843,35 +6507,51 @@ function messengerSend() {
     return;
   }
 
-  // ── Личный чат ────────────────────────────────────────────────────
+  // ┄┄ Личный чат ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   sbPollChat(p.username, _msgCurrentChat);
 
   const chatKey = sbChatKey(p.username, _msgCurrentChat);
-  const outboxItem = {
-    id:        'txt_' + ts,
-    type:      'message',
-    localChat: _msgCurrentChat,
-    ts,
-    data: { chat_key: chatKey, from_user: p.username, to_user: _msgCurrentChat, text, ts,
-            extra: replyTo ? JSON.stringify({ replyTo }) : null }
-  };
 
-  sbInsert('messages', outboxItem.data).then(res => {
-    if (res) {
-      msg.delivered = true; msg.pending = false;
-      msgSave(msgs); messengerRenderMessages(); _outboxUpdateStatusBar();
+  // Шифруем текст перед отправкой:
+  // — если чат помечен как секретный → всегда шифруем (e2eEncrypt форсированно)
+  // — иначе → e2eEncrypt сам решит на основе _e2eEnabled
+  const _sendEncrypted = async () => {
+    let encText;
+    if (isChatEncrypted(_msgCurrentChat)) {
+      // Форсируем шифрование: временно включаем E2E если не включён
+      const wasEnabled = _e2eEnabled;
+      if (!wasEnabled) { await e2eInit(); }
+      encText = await e2eEncrypt(text, _msgCurrentChat);
     } else {
+      encText = await e2eEncrypt(text, _msgCurrentChat);
+    }
+    const outboxItem = {
+      id:        'txt_' + ts,
+      type:      'message',
+      localChat: _msgCurrentChat,
+      ts,
+      data: { chat_key: chatKey, from_user: p.username, to_user: _msgCurrentChat,
+              text: encText, ts,
+              extra: replyTo ? JSON.stringify({ replyTo }) : null }
+    };
+    sbInsert('messages', outboxItem.data).then(res => {
+      if (res) {
+        msg.delivered = true; msg.pending = false;
+        msgSave(msgs); messengerRenderMessages(); _outboxUpdateStatusBar();
+      } else {
+        msg.pending = true; msgSave(msgs);
+        outboxPush(outboxItem); messengerRenderMessages(); _outboxUpdateStatusBar();
+      }
+    }).catch(() => {
       msg.pending = true; msgSave(msgs);
       outboxPush(outboxItem); messengerRenderMessages(); _outboxUpdateStatusBar();
-    }
-  }).catch(() => {
-    msg.pending = true; msgSave(msgs);
-    outboxPush(outboxItem); messengerRenderMessages(); _outboxUpdateStatusBar();
-  });
+    });
+  };
+  _sendEncrypted();
 }
 
 
-// ── Reply ─────────────────────────────────────────────────────────
+// ┄┄ Reply ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _mcReplyTo = null;
 
 function mcSetReply(idx) {
@@ -5895,17 +6575,17 @@ function mcCancelReply() {
   if (bar) bar.style.display = 'none';
 }
 
-// ── Reactions ─────────────────────────────────────────────────────
-// ── Реакции ───────────────────────────────────────────────────────
+// ┄┄ Reactions ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ┄┄ Реакции ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 // Бесплатные (первые 7) + VIP-эксклюзивные (остальные, как в Telegram Premium)
 const MC_REACTIONS_FREE = ['❤️','😂','👍','👎','🔥','😮','😢'];
 const MC_REACTIONS_VIP  = [
   '🤩','🎉','💯','😈','🤯','🤮','😴','🥰','😤','🫡',
   '👀','💀','🫠','🤡','🦄','💎','⚡','🌊','🍀','🎭',
-  '🔮','🌈','☄️','🏆','🫧','🧨','🌸','🐉','🎪','✨'
+  '🔮','🌈','☄️','🏆','🫧','🧨','🌸','🐉','🎪','✅'
 ];
 const MC_REACTIONS_ALL  = [...MC_REACTIONS_FREE, ...MC_REACTIONS_VIP];
-const MC_FREE_REACTION_LIMIT = 2; // без VIP — макс 2 реакции на одно сообщение
+const MC_FREE_REACTION_LIMIT = 2; // без VIP   макс 2 реакции на одно сообщение
 
 function mcToggleReaction(idx, emoji) {
   console.log('[Reaction] toggle:', emoji, 'on msg idx:', idx);
@@ -5924,14 +6604,14 @@ function mcToggleReaction(idx, emoji) {
 
   if (!msg.reactions) msg.reactions = {};
 
-  // Проверка лимита реакций (без VIP — не более 2 разных на сообщение)
+  // Проверка лимита реакций (без VIP   не более 2 разных на сообщение)
   const myReactionsOnMsg = Object.entries(msg.reactions)
     .filter(([, users]) => users.includes(p.username))
     .map(([em]) => em);
   const alreadyReacted = myReactionsOnMsg.includes(emoji);
 
   if (!alreadyReacted && !isVip && myReactionsOnMsg.length >= MC_FREE_REACTION_LIMIT) {
-    toast('🔒 Более ' + MC_FREE_REACTION_LIMIT + ' реакций — только VIP');
+    toast('🔒 Более ' + MC_FREE_REACTION_LIMIT + ' реакций   только VIP');
     return;
   }
 
@@ -5965,11 +6645,11 @@ function mcToggleReaction(idx, emoji) {
   }
 }
 
-// ── Bubble interaction ────────────────────────────────────────────
-// Свайп (touch + mouse) → меню
-// Одиночный клик        → меню  (если не свайп)
-// Двойной клик/тап      → ответить
-// Долгое нажатие        → меню
+// ┄┄ Bubble interaction ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// Свайп (touch + mouse) ↩ меню
+// Одиночный клик        ↩ меню  (если не свайп)
+// Двойной клик/тап      ↩ ответить
+// Долгое нажатие        ↩ меню
 
 const MC_SWIPE_THRESHOLD = 52;  // px для открытия меню
 const MC_SWIPE_MAX       = 75;  // px максимальный ход пузыря
@@ -5979,13 +6659,13 @@ let _mcLongPressTimer = null;
 let _mcDragStartX     = 0;
 let _mcDragStartY     = 0;
 let _mcDragging       = false;
-let _mcDragTriggered  = false; // свайп уже открыл меню — блокируем click
+let _mcDragTriggered  = false; // свайп уже открыл меню   блокируем click
 
-// ── Режим выделения сообщений (Telegram-style) ──────────────────────
+// ┄┄ Режим выделения сообщений (Telegram-style) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _mcMultiSelect    = false;           // активен ли режим выделения
 const _mcSelectedIdxs = new Set();       // индексы выделенных сообщений
 
-// ── Touch (мобайл + Android WebView) ──────────────────────────────
+// ┄┄ Touch (мобайл + Android WebView) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcBubbleTouchStart(e, row, idx) {
   // Не открываем меню если касание на интерактивном элементе плеера
   if (e.target.closest('[data-no-menu]')) return;
@@ -5995,7 +6675,7 @@ function mcBubbleTouchStart(e, row, idx) {
   _mcDragging = false;
   _mcDragTriggered = false;
 
-  // В режиме выделения — toggle будет в touchEnd (там проверим что не был свайп)
+  // В режиме выделения   toggle будет в touchEnd (там проверим что не был свайп)
   if (_mcMultiSelect) return;
 
   _mcLongPressTimer = setTimeout(() => {
@@ -6008,6 +6688,7 @@ function mcBubbleTouchStart(e, row, idx) {
 }
 
 function mcBubbleTouchMove(e, row, idx) {
+  if (_mcMultiSelect) { clearTimeout(_mcLongPressTimer); return; }
   const t  = e.touches[0];
   const dx = t.clientX - _mcDragStartX;
   const dy = Math.abs(t.clientY - _mcDragStartY);
@@ -6054,7 +6735,7 @@ function mcBubbleTouchEnd(e, row, idx) {
   }
 }
 
-// ── Mouse (веб-браузер на ПК) ──────────────────────────────────────
+// ┄┄ Mouse (веб-браузер на ПК) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcBubbleMouseDown(e, row, idx) {
   if (e.button !== 0) return;
   _mcDragStartX = e.clientX;
@@ -6091,7 +6772,7 @@ function mcBubbleMouseDown(e, row, idx) {
   document.addEventListener('mouseup', onUp);
 }
 
-// ── Визуал свайпа (справа налево для всех) ──────────────────────────
+// ┄┄ Визуал свайпа (справа налево для всех) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function _mcApplySwipeVisual(row, travel) {
   const bubble = row.querySelector('.mc-bubble-inner');
   const hint   = row.querySelector('.mc-reply-hint');
@@ -6109,7 +6790,7 @@ function _mcReturnBubble(row) {
   if (hint)   hint.style.opacity = '0';
 }
 
-// ── Click / dblclick ──────────────────────────────────────────────
+// ┄┄ Click / dblclick ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcBubbleClick(e, idx) {
   if (_mcDragTriggered) { _mcDragTriggered = false; return; }
   if (_mcDragging) return;
@@ -6121,6 +6802,7 @@ function mcBubbleClick(e, idx) {
 
 function mcBubbleDblClick(e, idx) {
   e.preventDefault(); e.stopPropagation();
+  if (_mcMultiSelect) return;
   _mcDragTriggered = true; // блокируем click после dblclick
   mcCloseMenu();
   const bubble = e.currentTarget.querySelector('.mc-bubble-inner');
@@ -6135,17 +6817,20 @@ function mcBubbleDblClick(e, idx) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// ✅ ВЫДЕЛЕНИЕ СООБЩЕНИЙ — Telegram-style (1–50 штук)
+// ✅ ВЫДЕЛЕНИЕ СООБЩЕНИЙ   Telegram-style (1 50 штук)
 // ══════════════════════════════════════════════════════════════════════
 
 function _mcEnterSelectMode(row, idx) {
   if (_mcMultiSelect) return;
   _mcMultiSelect = true;
   _mcSelectedIdxs.clear();
-  _mcSelectedIdxs.add(idx);
+  if (idx !== null && idx !== undefined) _mcSelectedIdxs.add(idx);
   mcCloseMenu();
+  // Добавляем отступ слева под кружки
+  document.getElementById('mc-messages')?.classList.add('select-mode');
   _mcRenderSelectBar();
   _mcRefreshBubbleStates();
+  try { window.Android?.vibrate?.(28); } catch(_) {}
   SFX.play && SFX.play('btnClick');
 }
 
@@ -6153,6 +6838,17 @@ function _mcExitSelectMode() {
   _mcMultiSelect = false;
   _mcSelectedIdxs.clear();
   document.getElementById('mc-select-bar')?.remove();
+  // Убираем отступ
+  document.getElementById('mc-messages')?.classList.remove('select-mode');
+  // Восстанавливаем обычную шапку
+  const normalHdr = document.querySelector('#s-messenger-chat .hdr');
+  if (normalHdr) normalHdr.style.display = '';
+  // Восстанавливаем input-bar и reply-bar
+  const inputBar = document.getElementById('mc-input-bar');
+  if (inputBar) inputBar.style.display = '';
+  const replyBar = document.getElementById('mc-reply-bar');
+  // reply-bar восстанавливаем только если есть активный reply
+  if (replyBar && window._mcReplyTo) replyBar.style.display = '';
   _mcRefreshBubbleStates();
 }
 
@@ -6178,93 +6874,157 @@ function _mcRefreshBubbleStates() {
   body.querySelectorAll('[data-msg-bubble]').forEach(row => {
     const idx = parseInt(row.getAttribute('data-msg-idx'), 10);
     const sel = _mcMultiSelect && _mcSelectedIdxs.has(idx);
-    // Overlay-кружок
+    const isMe = row.dataset.msgMe === '1';
+
+    // ┄┄ 1. Кружок слева от пузыря ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
     let circle = row.querySelector('.mc-sel-circle');
     if (_mcMultiSelect) {
       if (!circle) {
         circle = document.createElement('div');
         circle.className = 'mc-sel-circle';
         circle.style.cssText = [
-          'position:absolute;left:0;top:50%;transform:translateY(-50%);',
-          'width:24px;height:24px;border-radius:50%;border:2px solid var(--accent);',
-          'background:transparent;display:flex;align-items:center;justify-content:center;',
-          'flex-shrink:0;transition:background .1s,transform .12s cubic-bezier(.34,1.3,.64,1);',
-          'z-index:2;pointer-events:none;margin-left:2px;'
+          'flex-shrink:0;width:22px;height:22px;border-radius:50%;',
+          'border:2px solid rgba(255,255,255,.38);background:transparent;',
+          'display:flex;align-items:center;justify-content:center;',
+          'align-self:center;',
+          'transition:background .13s,border-color .13s,transform .14s cubic-bezier(.34,1.3,.64,1);',
+          'pointer-events:none;'
         ].join('');
-        row.style.position = 'relative';
-        row.appendChild(circle);
+        // Вставляем В НАЧАЛО строки (перед аватаром / пузырём)
+        row.insertBefore(circle, row.firstChild);
       }
-      circle.style.background   = sel ? 'var(--accent)' : 'transparent';
-      circle.style.borderColor  = sel ? 'var(--accent)' : 'rgba(255,255,255,.45)';
-      circle.style.transform    = sel ? 'translateY(-50%) scale(1.1)' : 'translateY(-50%) scale(1)';
-      circle.innerHTML          = sel
-        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>'
-        : '';
+      if (sel) {
+        circle.style.background  = 'var(--accent)';
+        circle.style.borderColor = 'var(--accent)';
+        circle.style.transform   = 'scale(1.08)';
+        circle.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>';
+        // pop-анимация
+        circle.style.animation = 'mc-sel-pop .18s cubic-bezier(.34,1.3,.64,1)';
+        setTimeout(() => { circle.style.animation = ''; }, 200);
+      } else {
+        circle.style.background  = 'transparent';
+        circle.style.borderColor = 'rgba(255,255,255,.38)';
+        circle.style.transform   = 'scale(1)';
+        circle.innerHTML = '';
+      }
     } else {
       circle?.remove();
     }
-    // Подсветка выделенного фона
+
+    // ┄┄ 2. Подсветка всей строки при выделении ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+    row.style.background = (_mcMultiSelect && sel)
+      ? 'rgba(var(--accent-rgb,32,138,240), .15)'
+      : '';
+    row.style.transition = 'background .13s';
+
+    // ┄┄ 3. Сдвиг пузыря при входе/выходе из режима выделения ┄┄┄
     const inner = row.querySelector('.mc-bubble-inner');
     if (inner) {
-      inner.style.transition = 'background .12s';
-      if (sel) inner.style.outline = '2px solid var(--accent)';
-      else     inner.style.outline = '';
+      inner.style.transition = 'transform .18s cubic-bezier(.34,1.1,.64,1), outline .12s';
+      inner.style.outline = '';
     }
   });
 }
 
-// Рисует нижний тулбар выделения
+// Рисует Telegram-style шапку выделения (меняет обычную шапку)
 function _mcRenderSelectBar() {
+  // Скрываем обычную шапку
+  const normalHdr = document.querySelector('#s-messenger-chat .hdr');
+  if (normalHdr) { normalHdr.style.display = 'none'; normalHdr._wasVisible = true; }
+  // Скрываем reply-bar и input-bar
+  const replyBar = document.getElementById('mc-reply-bar');
+  const inputBar = document.getElementById('mc-input-bar');
+  if (replyBar) replyBar.style.display = 'none';
+  if (inputBar) inputBar.style.display = 'none';
+
   let bar = document.getElementById('mc-select-bar');
   if (bar) bar.remove();
   bar = document.createElement('div');
   bar.id = 'mc-select-bar';
   bar.style.cssText = [
-    'position:fixed;bottom:0;left:0;right:0;z-index:9050;',
-    'background:var(--surface);border-top:1px solid rgba(255,255,255,.07);',
-    'display:flex;align-items:center;justify-content:space-between;',
-    'padding:10px 16px calc(10px + var(--safe-bot,0px));',
-    'animation:mcSlideUp .22s cubic-bezier(.34,1.1,.64,1);',
-    'gap:8px;'
+    'position:sticky;top:0;left:0;right:0;z-index:9050;',
+    'background:var(--surface);',
+    'display:flex;align-items:center;',
+    'padding:0 4px;min-height:56px;flex-shrink:0;',
+    'border-bottom:1px solid rgba(255,255,255,.06);',
+    'animation:mc-sel-hdr-in .18s cubic-bezier(.34,1.1,.64,1);'
   ].join('');
+
+  // Telegram-style: ✅ | N | copy | forward | delete
   bar.innerHTML = `
     <button id="mc-sel-cancel"
-      style="background:none;border:none;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;padding:8px 4px;font-family:inherit;">
-      Отмена
+      style="width:44px;height:44px;border-radius:50%;background:none;border:none;color:var(--text);
+             cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+             -webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
     </button>
     <div id="mc-sel-count"
-      style="flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text);">
-      Выделено: 1
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button id="mc-sel-forward"
-        style="width:40px;height:40px;border-radius:50%;background:var(--surface2);border:none;color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;"
-        title="Переслать">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 8V4l8 8-8 8v-4H4V8z"/>
-        </svg>
-      </button>
-      <button id="mc-sel-delete"
-        style="width:40px;height:40px;border-radius:50%;background:var(--surface2);border:none;color:var(--danger,#e05555);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;"
-        title="Удалить">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-        </svg>
-      </button>
-    </div>
+      style="flex:1;font-size:17px;font-weight:700;color:var(--text);padding-left:2px">1</div>
+    <button id="mc-sel-copy"
+      title="Копировать"
+      style="width:44px;height:44px;border-radius:50%;background:none;border:none;color:var(--text);
+             cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+             -webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+      </svg>
+    </button>
+    <button id="mc-sel-forward"
+      title="Переслать"
+      style="width:44px;height:44px;border-radius:50%;background:none;border:none;color:var(--text);
+             cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+             -webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 10 20 15 15 20"/>
+        <path d="M4 4v7a4 4 0 0 0 4 4h12"/>
+      </svg>
+    </button>
+    <button id="mc-sel-delete"
+      title="Удалить"
+      style="width:44px;height:44px;border-radius:50%;background:none;border:none;color:var(--danger,#e05555);
+             cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+             -webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6l-1 14H6L5 6"/>
+        <path d="M10 11v6M14 11v6"/>
+        <path d="M9 6V4h6v2"/>
+      </svg>
+    </button>
   `;
-  document.body.appendChild(bar);
+
+  // Вставляем В НАЧАЛО экрана чата (сверху)
+  const chatScreen = document.getElementById('s-messenger-chat');
+  chatScreen.insertBefore(bar, chatScreen.firstChild);
+
   bar.querySelector('#mc-sel-cancel').addEventListener('click', _mcExitSelectMode);
+  bar.querySelector('#mc-sel-copy').addEventListener('click', _mcSelectionCopy);
   bar.querySelector('#mc-sel-forward').addEventListener('click', _mcSelectionForward);
   bar.querySelector('#mc-sel-delete').addEventListener('click', _mcSelectionDelete);
 }
 
 function _mcUpdateSelectBar() {
   const count = document.getElementById('mc-sel-count');
-  if (count) count.textContent = 'Выделено: ' + _mcSelectedIdxs.size;
+  if (count) count.textContent = String(_mcSelectedIdxs.size);
 }
 
 // Пересылка выделенных сообщений
+function _mcSelectionCopy() {
+  if (!_mcSelectedIdxs.size) return;
+  const msgs   = msgLoad()[_msgCurrentChat] || [];
+  const sorted = [..._mcSelectedIdxs].sort((a, b) => a - b);
+  const text   = sorted.map(i => msgs[i])
+    .filter(Boolean)
+    .map(m => m.text || m.sticker || (m.image ? '[Фото]' : '[Медиа]'))
+    .join('\n');
+  navigator.clipboard?.writeText(text).catch(() => {});
+  toast('📋 Скопировано');
+  _mcExitSelectMode();
+}
+
 function _mcSelectionForward() {
   if (!_mcSelectedIdxs.size) return;
   const msgs   = msgLoad()[_msgCurrentChat] || [];
@@ -6311,7 +7071,7 @@ function mcDoForwardMulti(toUsername) {
     const ts  = Date.now() + Math.random(); // уникальный ts
     const fwd = {
       from: p.username, to: toUsername,
-      text: orig.text ? '↪ ' + orig.text : '',
+      text: orig.text ? '↩ ' + orig.text : '',
       image: orig.image || null,
       fileLink: orig.fileLink || null, fileName: orig.fileName || null,
       fileType: orig.fileType || null, fileSize: orig.fileSize || null,
@@ -6322,7 +7082,7 @@ function mcDoForwardMulti(toUsername) {
     sbInsert('messages', {
       chat_key: sbChatKey(p.username, toUsername),
       from_user: p.username, to_user: toUsername,
-      text: fwd.text || '↪ Медиа', ts,
+      text: fwd.text || '↩ Медиа', ts,
       ...(orig.image ? { extra: JSON.stringify({ image: orig.image }) } : {}),
     });
   });
@@ -6404,8 +7164,8 @@ async function _mcDoDeleteSelected(forAll) {
 function mcShowBubbleMenu(el, idx) { mcShowMsgMenu(idx); }
 function mcShowReactionPicker(idx) { mcShowMsgMenu(idx); }
 
-// ── Telegram-style: единое меню (реакции + действия) ──────────────
-// Тап на стрелку → полная сетка эмодзи выезжает снизу вверх
+// ┄┄ Telegram-style: единое меню (реакции + действия) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// Тап на стрелку ↩ полная сетка эмодзи выезжает снизу вверх
 function mcShowMsgMenu(idx) {
   console.log('[Menu] mcShowMsgMenu idx:', idx);
   SFX.play && SFX.play('btnClick');
@@ -6419,7 +7179,7 @@ function mcShowMsgMenu(idx) {
   if (!msg) return;
   const isMe   = msg.from === p?.username;
 
-  // ── CSS animation keyframes (добавляем один раз) ──
+  // ┄┄ CSS animation keyframes (добавляем один раз) ┄┄
   if (!document.getElementById('mc-menu-style')) {
     const st = document.createElement('style');
     st.id = 'mc-menu-style';
@@ -6467,7 +7227,7 @@ function mcShowMsgMenu(idx) {
   overlay.id = 'mc-msg-menu';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,.45);animation:mcFadeIn .15s ease';
 
-  // Reaction row — 7 бесплатных + кнопка «развернуть»
+  // Reaction row   7 бесплатных + кнопка «развернуть»
   const freeButtons = MC_REACTIONS_FREE.map((em, i) =>
     `<button class="mc-reaction-btn"
       style="animation:mcEmojiIn .22s cubic-bezier(.34,1.3,.64,1) ${i*25}ms both"
@@ -6507,7 +7267,7 @@ function mcShowMsgMenu(idx) {
       <div id="mc-emoji-grid" style="margin:0 12px 6px;background:var(--surface);border-radius:16px;
         padding:6px 6px 4px;box-shadow:0 4px 24px rgba(0,0,0,.45);overflow:hidden">
         ${vipButtons}
-        ${!isVip ? '<div style="grid-column:1/-1;font-size:10px;color:var(--muted);text-align:center;padding:4px 0 6px">🔒 Тёмные — <b style=\"color:var(--accent)\">VIP</b></div>' : ''}
+        ${!isVip ? '<div style="grid-column:1/-1;font-size:10px;color:var(--muted);text-align:center;padding:4px 0 6px">🔒 Тёмные   <b style=\"color:var(--accent)\">VIP</b></div>' : ''}
       </div>
 
       <!-- Action sheet -->
@@ -6525,7 +7285,7 @@ function mcShowMsgMenu(idx) {
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcForwardMsg(${idx});mcCloseMenu()">
-          <span style="font-size:20px">↪</span> Переслать
+          <span style="font-size:20px">↩</span> Переслать
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
@@ -6556,7 +7316,7 @@ function mcShowMsgMenu(idx) {
   document.body.appendChild(overlay);
 }
 
-// ── Закрытие меню с анимацией slide-down ──────────────────────────
+// ┄┄ Закрытие меню с анимацией slide-down ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcCloseMenu() {
   const overlay = document.getElementById('mc-msg-menu');
   if (!overlay) return;
@@ -6568,7 +7328,7 @@ function mcCloseMenu() {
   setTimeout(() => overlay.remove(), 200);
 }
 
-// ── Fallback: закрываем меню при свайп-навигации (экран теряет .active без showScreen) ──
+// ┄┄ Fallback: закрываем меню при свайп-навигации (экран теряет .active без showScreen) ┄┄
 (function _watchChatScreens() {
   const CHAT_IDS = ['s-messenger-chat', 's-groups-chat'];
   function _closeAllMenus() {
@@ -6618,7 +7378,7 @@ function mcCopyMsg(idx) {
   toast('📋 Скопировано');
 }
 
-// ── Удаление сообщения: анимация + сервер + синхронизация для всех ──
+// ┄┄ Удаление сообщения: анимация + сервер + синхронизация для всех ┄┄
 async function mcDeleteMsg(idx) {
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) return;
@@ -6651,7 +7411,7 @@ async function mcDeleteMsg(idx) {
   }
 }
 
-// ── Подтверждение удаления (Telegram-style) ───────────────────────
+// ┄┄ Подтверждение удаления (Telegram-style) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcConfirmDelete(idx) {
   const existing = document.getElementById('mc-delete-confirm');
   if (existing) existing.remove();
@@ -6683,7 +7443,7 @@ function mcConfirmDelete(idx) {
   document.body.appendChild(overlay);
 }
 
-// ── Сохранить изображение из сообщения ────────────────────────────
+// ┄┄ Сохранить изображение из сообщения ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcSaveImage(idx) {
   const msgs = msgLoad();
   const msg  = (msgs[_msgCurrentChat] || [])[idx];
@@ -6730,7 +7490,7 @@ async function mcEnforceMessageLimit(username) {
   }
 }
 
-// ── Forward ───────────────────────────────────────────────────────
+// ┄┄ Forward ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _mcForwardText = null;
 
 function mcForwardMsg(idx) {
@@ -6769,7 +7529,7 @@ function mcDoForward(toUsername) {
   const p = profileLoad();
   if (!p) return;
   const ts = Date.now();
-  const msg = { from: p.username, to: toUsername, text: '↪ ' + _mcForwardText, ts, delivered: false, read: false };
+  const msg = { from: p.username, to: toUsername, text: '↩ ' + _mcForwardText, ts, delivered: false, read: false };
   const msgs = msgLoad();
   if (!msgs[toUsername]) msgs[toUsername] = [];
   msgs[toUsername].push(msg);
@@ -6781,19 +7541,19 @@ function mcDoForward(toUsername) {
   toast('↪️ Переслано');
 }
 
-// ── Stickers ──────────────────────────────────────────────────────
+// ┄┄ Stickers ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 const MC_STICKER_PACKS = [
   { id: 'basic', name: '😊 Базовые', vip: false, stickers: [
     '😂','😭','😍','🥹','😎','🤩','😡','😴','🥳','😱',
     '🤡','💀','👻','🎉','🔥','💔','❤️','🤝','🫡','🫠'
   ]},
-  { id: 'vip1', name: '✨ Премиум', vip: true, stickers: [
+  { id: 'vip1', name: '✅ Премиум', vip: true, stickers: [
     '🦋','🌊','⚡','🍀','🎭','🧨','💎','🫧','🌈','🎪',
     '🦄','🐉','🌸','🎯','🏆','💫','🌙','☄️','🎆','🎇'
   ]},
   { id: 'vip2', name: '🎨 Арт', vip: true, stickers: [
-    '🖼️','🎨','🖌️','✏️','📝','🗿','🏛️','🎭','🎪','🎠',
-    '🎡','🎢','🎪','🌅','🌄','🌃','🏙️','🌆','🌇','🌉'
+    '🖼','🎨','🖌','✏️','📝','🗿','🏛','🎭','🎪','🎠',
+    '🎡','🎢','🎪','🌅','🌄','🌃','🏙','🌆','🌇','🌉'
   ]},
 ];
 
@@ -6841,7 +7601,7 @@ function mcSendSticker(emoji) {
   messengerRenderMessages(true);
   SFX.play && SFX.play('msgSend');
   sbInsert('messages', { chat_key: sbChatKey(p.username, _msgCurrentChat), from_user: p.username, to_user: _msgCurrentChat, text: emoji, ts });
-  // Панель остаётся открытой для удобства — пользователь закрывает сам
+  // Панель остаётся открытой для удобства   пользователь закрывает сам
 }
 
 function mcAutoResize(el) {
@@ -6849,7 +7609,7 @@ function mcAutoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
-// ── Telegram-style медиа-меню ──────────────────────────────────────
+// ┄┄ Telegram-style медиа-меню ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcPickMedia() {
   console.log('[AttachMenu] opening');
   const existing = document.getElementById('mc-media-sheet');
@@ -6900,7 +7660,7 @@ function mcPickMedia() {
   console.log('[AttachMenu] opened');
 }
 
-// ── Отправка аудиофайла ────────────────────────────────────────────
+// ┄┄ Отправка аудиофайла ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcPickAudio() {
   const inp = document.createElement('input');
   inp.type = 'file';
@@ -6929,7 +7689,7 @@ function mcPickAudio() {
   inp.click();
 }
 
-// ── Отправка изображения ──────────────────────────────────────────
+// ┄┄ Отправка изображения ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcPickImage() {
   console.log('[Attach] picking image');
   const inp = document.createElement('input');
@@ -6972,7 +7732,7 @@ window.mcVoiceRetryAfterPermission = function() {
   setTimeout(() => mcVoiceTouchStart({ preventDefault: () => {} }), 300);
 };
 
-// ── Колбэки нативного рекордера (вызываются из Java) ─────────────
+// ┄┄ Колбэки нативного рекордера (вызываются из Java) ┄┄┄┄┄┄┄┄┄┄┄┄┄
 window.onNativeVoiceTick = function(sec) {
   // Обновляем таймер в UI
   _mcVoiceSeconds = sec;
@@ -7062,7 +7822,7 @@ async function mcCacheGet(url) {
       req.onsuccess = (e) => {
         const rec = e.target.result;
         if (!rec) { resolve(null); return; }
-        // Если запись протухла — возвращаем null и удаляем
+        // Если запись протухла   возвращаем null и удаляем
         if (Date.now() - rec.ts > _MC_MAX_AGE_MS) {
           _mcCacheDelete(url);
           resolve(null);
@@ -7102,7 +7862,7 @@ async function _mcCacheCleanup() {
       if (now - rec.ts > _MC_MAX_AGE_MS) toDelete.push(rec.url);
       else totalSize += rec.size || 0;
     }
-    // 2. Если превышен лимит — удаляем самые старые
+    // 2. Если превышен лимит   удаляем самые старые
     const fresh = all.filter(r => now - r.ts <= _MC_MAX_AGE_MS);
     let sz = fresh.reduce((s,r) => s + (r.size||0), 0);
     for (const rec of fresh) {
@@ -7120,9 +7880,9 @@ async function _mcCacheCleanup() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// ── Загрузка файла на catbox.moe через Java-бридж ─────────────────
-// base64 — без data:… префикса. Возвращает Promise<string> с URL или бросает ошибку.
-// ── Telegram-style upload progress toast ────────────────────────────────────
+// ┄┄ Загрузка файла на catbox.moe через Java-бридж ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// base64   без data:  префикса. Возвращает Promise<string> с URL или бросает ошибку.
+// ┄┄ Telegram-style upload progress toast ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 const _uploadIcons = {
   voice: '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>',
   video: '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>',
@@ -7131,7 +7891,7 @@ const _uploadIcons = {
 };
 
 // ══════════════════════════════════════════════════════════════════
-// 📤 IN-CHAT SENDING BUBBLE — Telegram-стиль
+// 📤 IN-CHAT SENDING BUBBLE   Telegram-стиль
 // Пузырь отправки показывается ВНУТРИ чата, а не в глобальном тосте.
 // Выглядит как реальное сообщение с иконкой типа + спиннер + прогресс.
 // ══════════════════════════════════════════════════════════════════
@@ -7139,58 +7899,87 @@ const _uploadIcons = {
 const _IC_SEND_ID = 'mc-in-chat-sending';
 
 /**
- * Показывает в нижней части чата пузырь «отправляется…»
+ * Показывает в нижней части чата пузырь «отправляется…
  * точно такого же вида как настоящий пузырь, но с анимацией загрузки.
  * fileType: 'voice' | 'circle' | 'video' | 'file' | 'image'
  * label: имя файла (необязательно)
  */
 function _mcInChatSendingShow(fileType, label) {
-  _mcInChatSendingHide(); // убираем предыдущий
+  _mcInChatSendingHide();
   const body = document.getElementById('mc-messages');
-  if (!body) { _mcShowUploadToast(fileType, label); return; } // fallback если чат не открыт
+  if (!body) return;
 
+  const isCircle = fileType === 'circle';
+  const isVoice  = fileType === 'voice';
   const el = document.createElement('div');
   el.id = _IC_SEND_ID;
-  el.className = 'mc-ics-wrap';
+  el.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:4px;padding:0 12px';
+  const circumference = 2 * Math.PI * (isCircle ? 48 : 22);
 
-  const icons = {
-    voice: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`,
-    circle:`<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="9" stroke="white" stroke-width="2" fill="none"/><circle cx="12" cy="9" r="3" fill="white"/><path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="white"/></svg>`,
-    video: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>`,
-    file:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`,
-    image: `<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
-  };
-  const ico = icons[fileType] || icons.file;
-  const displayLabel = label || { voice:'Голосовое', circle:'Видеосообщение', video:'Видео', file:'Файл', image:'Фото' }[fileType] || 'Файл';
-
-  el.innerHTML = `
-    <div class="mc-ics-bubble">
-      <div class="mc-ics-icon">
-        <svg class="mc-ics-spinner" viewBox="0 0 44 44">
-          <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="3.5"/>
-          <circle cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="3.5"
-            stroke-dasharray="28 85" stroke-linecap="round"
-            style="transform-origin:center;animation:mc-ics-spin .9s linear infinite"/>
+  if (isCircle) {
+    // Кружок: круглый превью-плейсхолдер с кольцом прогресса
+    el.innerHTML = `
+      <div style="position:relative;width:120px;height:120px;border-radius:50%;background:#1a1a1a;overflow:hidden;flex-shrink:0">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(255,255,255,.35)">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>
+            <circle cx="12" cy="9" r="3" fill="rgba(255,255,255,.35)"/>
+            <path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="rgba(255,255,255,.35)"/>
+          </svg>
+        </div>
+        <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="55" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="4"/>
+          <circle id="mc-ics-ring" cx="60" cy="60" r="55" fill="none" stroke="white" stroke-width="4"
+            stroke-dasharray="${(2*Math.PI*55).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*55).toFixed(1)}"
+            stroke-linecap="round" transform="rotate(-90 60 60)"
+            style="transition:stroke-dashoffset .2s linear"/>
         </svg>
-        <div class="mc-ics-ico-inner">${ico}</div>
-      </div>
-      <div class="mc-ics-info">
-        <div class="mc-ics-label">${escHtml(displayLabel.slice(0,30))}</div>
-        <div class="mc-ics-sub" id="mc-ics-sub">Отправляю…</div>
-      </div>
-      <div class="mc-ics-dots">
-        <span></span><span></span><span></span>
-      </div>
-    </div>`;
+      </div>`;
+  } else {
+    // Голосовое / файл: горизонтальный пузырь с прогресс-кольцом
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;background:var(--accent);padding:8px 14px 8px 8px;border-radius:18px 18px 4px 18px;min-width:180px;max-width:72%">
+        <div style="position:relative;width:44px;height:44px;flex-shrink:0">
+          <svg width="44" height="44" viewBox="0 0 44 44" style="position:absolute;inset:0">
+            <circle cx="22" cy="22" r="18" fill="rgba(255,255,255,.15)" stroke="none"/>
+            <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.5"/>
+            <circle id="mc-ics-ring" cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="2.5"
+              stroke-dasharray="${(2*Math.PI*18).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*18).toFixed(1)}"
+              stroke-linecap="round" transform="rotate(-90 22 22)"
+              style="transition:stroke-dashoffset .2s linear"/>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            ${isVoice
+              ? `<svg width="14" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`
+              : `<svg width="14" height="16" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`}
+          </div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((label||'').slice(0,30))}</div>
+          <div id="mc-ics-sub" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Отправляю </div>
+        </div>
+      </div>`;
+  }
 
   body.appendChild(el);
   body.scrollTop = body.scrollHeight;
 }
 
+
 /** Обновляет подпись под именем файла (например «⬆ 42%») */
 function _mcInChatSendingUpdate(fileType, subText) {
   const sub = document.getElementById('mc-ics-sub');
-  if (sub) sub.textContent = subText || 'Отправляю…';
+  if (sub) sub.textContent = subText || 'Отправляю ';
+  // Обновляем кольцо прогресса если есть % в тексте
+  const pctMatch = (subText || '').match(/(\d+)%/);
+  if (pctMatch) {
+    const pct = parseInt(pctMatch[1], 10);
+    const ring = document.getElementById('mc-ics-ring');
+    if (ring) {
+      const total = parseFloat(ring.getAttribute('stroke-dasharray')) || 113.1;
+      ring.style.strokeDashoffset = (total * (1 - pct / 100)).toFixed(1);
+    }
+  }
 }
 
 /** Убирает in-chat bubble */
@@ -7201,7 +7990,7 @@ function _mcInChatSendingHide() {
   setTimeout(() => el.remove(), 200);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
+// ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 
 let _uploadToastTimer = null;
 
@@ -7243,7 +8032,7 @@ function _mcHideUploadToast(success) {
   // Показываем результат на секунду, потом исчезаем
   el.classList.remove('uploading');
   const sub = document.getElementById('tg-ut-sub');
-  if (sub) sub.textContent = success ? '✓ Отправлено' : '✕ Ошибка';
+  if (sub) sub.textContent = success ? '✅ Отправлено' : '✅ Ошибка';
   const ring = document.querySelector('#mc-upload-toast .tg-ut-ring');
   if (ring) ring.style.background = success
     ? 'conic-gradient(rgba(255,255,255,.9) 100%, transparent 100%)'
@@ -7265,7 +8054,7 @@ let _pendingUploadMime = null;
 async function _catboxUpload(base64, fileName, mimeType, onProgress) {
   if (!window.Android?.nativeUploadFile) throw new Error('nativeUploadFile недоступен');
 
-  // Если есть асинхронная версия — используем её (не блокирует UI)
+  // Если есть асинхронная версия   используем её (не блокирует UI)
   if (typeof window.Android.nativeUploadFileAsync === 'function') {
     return new Promise((resolve, reject) => {
       const callbackId = 'up_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
@@ -7273,8 +8062,14 @@ async function _catboxUpload(base64, fileName, mimeType, onProgress) {
       // Регистрируем глобальные колбэки
       window.onUploadProgress = (id, pct) => {
         if (id !== callbackId) return;
-        _mcUpdateUploadToastProgress(pct);
-        _mcInChatSendingUpdate(null, '⬆ ' + Math.round(pct) + '%');
+        // Обновляем inline ring прогресса
+        const ring = document.getElementById('mc-ics-ring');
+        if (ring) {
+          const total = parseFloat(ring.getAttribute('stroke-dasharray')) || 113.1;
+          ring.style.strokeDashoffset = (total * (1 - pct / 100)).toFixed(1);
+        }
+        const sub = document.getElementById('mc-ics-sub');
+        if (sub) sub.textContent = Math.round(pct) + '%';
         onProgress && onProgress(pct);
       };
       window.onUploadDone = (id, url) => {
@@ -7334,9 +8129,9 @@ async function _catboxUpload(base64, fileName, mimeType, onProgress) {
   }
 }
 
-// ── Отправка файла/видео/голоса как сообщения ──────────────────────
+// ┄┄ Отправка файла/видео/голоса как сообщения ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbData, _blob, _mime }) {
-  // Немедленно кэшируем blob локально — файл доступен без сети
+  // Немедленно кэшируем blob локально   файл доступен без сети
   if (_blob && url) {
     mcCacheSave(url, _blob, _mime || 'application/octet-stream').catch(() => {});
     console.log('[MediaCache] immediate save for', fileType, fileName);
@@ -7378,7 +8173,7 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
   const _sb3 = document.getElementById('mc-action-btn');
   if (_sb3) { _sb3.classList.remove('mc-send-bounce'); void _sb3.offsetWidth; _sb3.classList.add('mc-send-bounce'); setTimeout(()=>_sb3.classList.remove('mc-send-bounce'),300); }
   setTimeout(() => { const b = document.getElementById('mc-messages'); if(b) b.scrollTop = b.scrollHeight; }, 80);
-  // В Supabase — только текст + URL (не base64!)
+  // В Supabase   только текст + URL (не base64!)
   const labelMap = { video: '🎬', file: '📎', voice: '🎤' };
   const _mediaOutboxData2 = {
     chat_key: sbChatKey(p.username, _msgCurrentChat),
@@ -7415,7 +8210,7 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
   });
 }
 
-// ── Генерация превью видео (первый кадр) ──────────────────────────
+// ┄┄ Генерация превью видео (первый кадр) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function _mcVideoThumb(file) {
   return new Promise(resolve => {
     const video = document.createElement('video');
@@ -7443,7 +8238,7 @@ function _mcVideoThumb(file) {
   });
 }
 
-// ── Отправка видео ──────────────────────────────────────────────────
+// ┄┄ Отправка видео ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcPickVideo() {
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'video/*'; inp.style.display = 'none';
@@ -7474,7 +8269,7 @@ function mcPickVideo() {
   inp.click();
 }
 
-// ── Отправка файла ──────────────────────────────────────────────────
+// ┄┄ Отправка файла ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcPickFile() {
   console.log('[Attach] picking file');
   const inp = document.createElement('input');
@@ -7504,10 +8299,10 @@ function mcPickFile() {
 
 
 // ══════════════════════════════════════════════════════════════════
-// ⭕ ЗАПИСЬ КРУЖКА — нативный Camera2 Activity (Telegram-стиль)
-// Вызывает Android.startCircleRecord() → CircleRecordActivity
+// ⭐ ЗАПИСЬ КРУЖКА   нативный Camera2 Activity (Telegram-стиль)
+// Вызывает Android.startCircleRecord() ↩ CircleRecordActivity
 // ══════════════════════════════════════════════════════════════════
-// ⭕ КРУЖОК — нативный Camera2 + зажатие как у голосового
+// ⭐ КРУЖОК   нативный Camera2 + зажатие как у голосового
 // ══════════════════════════════════════════════════════════════════
 
 // Активна ли сейчас запись кружка
@@ -7518,20 +8313,20 @@ function mcStartCircleRecord() {
   if (_mcCircleActive) return;
   if (window.Android && typeof Android.startCircleRecord === 'function') {
     _mcCircleActive = true;
-    _mcInChatSendingShow('circle', null);
     Android.startCircleRecord();
     return;
   }
-  // Fallback — галерея/камера
+  // Fallback   галерея/камера
   _mcCircleFallbackSheet();
 }
 
 /**
- * Java → JS: Java загрузила видео на CDN, передаёт готовый URL.
- * Не передаёт base64 — он слишком большой для evaluateJavascript.
+ * Java ↩ JS: Java загрузила видео на CDN, передаёт готовый URL.
+ * Не передаёт base64   он слишком большой для evaluateJavascript.
  */
 window.onNativeCircleUploading = function() {
   console.log('[Circle] uploading...');
+  _mcInChatSendingShow('circle', 'Видеосообщение');
   _mcInChatSendingUpdate('circle', '⬆ Загружаю...');
 };
 
@@ -7556,7 +8351,7 @@ window.onNativeCircleError = function(msg) {
   toast('❌ Ошибка камеры: ' + (msg || ''));
 };
 
-// onNativeCircleDone — legacy, на случай старых версий Java (не используется)
+// onNativeCircleDone   legacy, на случай старых версий Java (не используется)
 window.onNativeCircleDone = function() {};
 
 /** Генерирует превью кружка из base64-видео. */
@@ -7591,7 +8386,7 @@ async function _mcVideoThumbFromB64(b64, mime) {
   });
 }
 
-// ── Fallback: выбор из галереи ──────────────────────────────────────
+// ┄┄ Fallback: выбор из галереи ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 
 function _mcCircleFallbackSheet() {
   const sheet = document.createElement('div');
@@ -7599,7 +8394,7 @@ function _mcCircleFallbackSheet() {
   sheet.innerHTML = `
     <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px calc(20px + var(--safe-bot));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="font-size:15px;font-weight:700;margin-bottom:14px;text-align:center">⭕ Видеосообщение</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:14px;text-align:center">⭐ Видеосообщение</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <button onclick="this.closest('[style*=fixed]').remove();_mcPickCircleFile()"
           style="padding:16px 10px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px">
@@ -7625,7 +8420,7 @@ function _mcPickCircleFile() {
     const file = e.target.files[0]; inp.remove();
     if (!file) return;
     if (file.size > 100 * 1024 * 1024) { toast('❌ Видео слишком большое (макс. 100 МБ)'); return; }
-    _mcInChatSendingShow('circle', '⭕ Видеосообщение');
+    _mcInChatSendingShow('circle', '⭐ Видеосообщение');
     try {
       const [b64, thumbData] = await Promise.all([
         new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }),
@@ -7661,7 +8456,7 @@ function _mcPickCircleCameraActual() {
   inp.onchange = async (e) => {
     const file = e.target.files[0]; inp.remove();
     if (!file) return;
-    _mcInChatSendingShow('circle', '⭕ Видеосообщение');
+    _mcInChatSendingShow('circle', '⭐ Видеосообщение');
     try {
       const [b64, thumbData] = await Promise.all([
         new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }),
@@ -7674,9 +8469,9 @@ function _mcPickCircleCameraActual() {
   };
   inp.click();
 }
-// 🎤 ГОЛОСОВЫЕ СООБЩЕНИЯ — Telegram-стиль
-// Зажать 🎤 → запись. Вверх → заблокировать (не надо держать).
-// Влево → отмена. Отпустить → отправить.
+// 🎤 ГОЛОСОВЫЕ СООБЩЕНИЯ   Telegram-стиль
+// Зажать 🎤 ↩ запись. Вверх ↩ заблокировать (не надо держать).
+// Влево ↩ отмена. Отпустить ↩ отправить.
 // ══════════════════════════════════════════════════════════════════
 let _mcVoiceRecorder  = null;
 let _mcVoiceChunks    = [];
@@ -7688,12 +8483,12 @@ let _mcVoiceAnalyser  = null;
 let _mcVoiceAnimFrame = null;
 const MC_VOICE_MAX    = 60;
 
-// ── Старт: вызывается при touchstart/mousedown на кнопке ──────────
+// ┄┄ Старт: вызывается при touchstart/mousedown на кнопке ┄┄┄┄┄┄┄┄┄┄
 let _mcVoiceNative    = false; // true = идёт нативная запись через Java
 let _mcVoiceStartX    = 0;     // начальная X-координата касания для swipe-cancel
 let _mcVoiceStartY    = 0;
 
-// Время нажатия — для различия короткого тапа от зажатия
+// Время нажатия   для различия короткого тапа от зажатия
 let _mcVoiceTouchTs = 0;
 
 let _mcVoiceHoldTimer = null; // таймер задержки перед началом записи
@@ -7708,11 +8503,11 @@ function mcVoiceTouchStart(e) {
   _mcVoiceStartX = _vt.clientX || _vt.pageX || 0;
   _mcVoiceStartY = _vt.clientY || _vt.pageY || 0;
 
-  // Режим кружка — ЗАЖАТИЕ запускает CircleRecordActivity напрямую
+  // Режим кружка   ЗАЖАТИЕ запускает CircleRecordActivity напрямую
   // Никаких промежуточных шитов, как голосовое сообщение
   if (_mcVoiceMode === 'circle') {
-    console.log('[Voice] circle hold — starting native recorder');
-    // Короткий тап (< 280мс) → переключаемся обратно на голосовой
+    console.log('[Voice] circle hold   starting native recorder');
+    // Короткий тап (< 280мс) ↩ переключаемся обратно на голосовой
     clearTimeout(_mcVoiceHoldTimer);
     _mcVoiceHoldTimer = setTimeout(() => {
       if (_mcVoiceCancelled) return;
@@ -7721,7 +8516,7 @@ function mcVoiceTouchStart(e) {
     return;
   }
 
-  // Telegram-стиль: ждём 280мс — если отпустили раньше, это тап (переключение режима)
+  // Telegram-стиль: ждём 280мс   если отпустили раньше, это тап (переключение режима)
   clearTimeout(_mcVoiceHoldTimer);
   _mcVoiceHoldTimer = setTimeout(() => {
     if (_mcVoiceCancelled) return;
@@ -7732,12 +8527,11 @@ function mcVoiceTouchStart(e) {
 
 function _mcVoiceStartRecording() {
   if (_mcVoiceRecorder || _mcVoiceNative) return;
-  // Используем нативный рекордер (Java MediaRecorder) как основной —
+  // Используем нативный рекордер (Java MediaRecorder) как основной  
   // getUserMedia в file:// WebView часто недоступен из-за ограничений контекста
   if (window.Android && typeof window.Android.startVoiceRecording === 'function') {
     console.log('[Voice] starting native recorder');
     _mcVoiceNative  = true;
-    _mcInChatSendingShow('voice', 'Голосовое сообщение');
     _mcVoiceSeconds = 0;
     _mcWaveBuf.fill(0.06); _mcWaveSmooth.fill(0.06); _mcWaveHead = 0; _mcWaveTick = 0;
     window.Android.startVoiceRecording();
@@ -7782,9 +8576,9 @@ function _mcVoiceStartRecording() {
   }).catch(() => toast('🎤 Нет доступа к микрофону'));
 }
 
-// ── Движение: swipe left = отмена (Telegram hold-to-record стиль) ─────────
+// ┄┄ Движение: swipe left = отмена (Telegram hold-to-record стиль) ┄┄┄┄┄┄┄┄┄
 function mcVoiceTouchMove(e) {
-  // Если двинули палец до начала записи — отменяем hold-таймер
+  // Если двинули палец до начала записи   отменяем hold-таймер
   if (_mcVoiceHoldTimer) {
     const _vt = e.touches?.[0] || e;
     const dx = Math.abs((_vt.clientX || 0) - _mcVoiceStartX);
@@ -7796,12 +8590,12 @@ function mcVoiceTouchMove(e) {
   const dx = (touch.clientX || touch.pageX) - _mcVoiceStartX;
   // Отмена: свайп влево > 80px
   if (dx < -80) { _mcVoiceCancel(); return; }
-  // Визуальная подсказка — сдвигаем UI вслед за пальцем
+  // Визуальная подсказка   сдвигаем UI вслед за пальцем
   const hint = document.getElementById('mc-voice-hint');
   if (hint) {
     const progress = Math.min(1, Math.abs(Math.min(0, dx)) / 80);
     hint.style.opacity = String(0.4 + progress * 0.6);
-    hint.textContent   = dx < -20 ? '✖ Отпустить → отмена' : 'Свайп для отмены';
+    hint.textContent   = dx < -20 ? '✅ Отпустить ↩ отмена' : 'Свайп для отмены';
   }
   const ui = document.getElementById('mc-voice-ui');
   if (ui && dx < 0) {
@@ -7811,9 +8605,9 @@ function mcVoiceTouchMove(e) {
   }
 }
 
-// ── Отпустить: отправить (Telegram hold-to-record) ──────────────────────
+// ┄┄ Отпустить: отправить (Telegram hold-to-record) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function mcVoiceTouchEnd(e) {
-  // Отменяем таймер задержки — если отпустили до начала записи
+  // Отменяем таймер задержки   если отпустили до начала записи
   clearTimeout(_mcVoiceHoldTimer);
   _mcVoiceHoldTimer = null;
 
@@ -7823,7 +8617,7 @@ function mcVoiceTouchEnd(e) {
   const hint = document.getElementById('mc-voice-hint');
   if (hint) { hint.style.opacity = '1'; hint.textContent = 'Свайп для отмены'; }
 
-  // Короткий тап (< 280мс) без активной записи → переключаем mic↔circle
+  // Короткий тап (< 280мс) без активной записи ↩ переключаем mic↔circle
   const tapDur = Date.now() - _mcVoiceTouchTs;
   if (!_mcVoiceRecorder && !_mcVoiceNative) {
     if (tapDur < 280) {
@@ -7832,7 +8626,7 @@ function mcVoiceTouchEnd(e) {
     }
     return;
   }
-  // Запись активна — отправляем
+  // Запись активна   отправляем
   console.log('[Voice] touchEnd, sending');
   _mcVoiceSend();
 }
@@ -7841,7 +8635,6 @@ function _mcVoiceSend() {
   if (_mcVoiceNative) {
     _mcVoiceNative = false;
     _mcVoiceHideUI();
-    _mcShowUploadToast('voice', 'Голосовое сообщение');
     if (window.Android) window.Android.stopVoiceRecording();
     return;
   }
@@ -7870,29 +8663,36 @@ function _mcVoiceCancel() {
   toast('🗑 Запись отменена');
 }
 
-// ── UI ────────────────────────────────────────────────────────────
+// ┄┄ UI ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function _mcVoiceShowUI() {
+  // Прячем поле ввода   как в Telegram
+  const wrap = document.getElementById('mc-input-wrap');
+  if (wrap) { wrap.style.transition = 'opacity .15s'; wrap.style.opacity = '0'; wrap.style.pointerEvents = 'none'; setTimeout(() => { if (wrap.style.opacity === '0') wrap.style.display = 'none'; }, 150); }
+
   let ui = document.getElementById('mc-voice-ui');
   if (ui) ui.remove();
   ui = document.createElement('div');
   ui.id = 'mc-voice-ui';
-  ui.style.cssText = 'animation:mc-voice-in .28s cubic-bezier(.34,1.1,.64,1) both';
+  ui.style.cssText = 'flex:1;display:flex;align-items:center;gap:8px;padding:0 6px 0 14px;min-width:0;overflow:hidden;animation:mc-voice-in .22s cubic-bezier(.34,1.1,.64,1) both';
   ui.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;padding:11px 16px 4px;width:100%;box-sizing:border-box">
-      <div class="mc-rec-dot"></div>
-      <div style="flex:1;position:relative;overflow:hidden;height:36px">
-        <canvas id="mc-voice-wave" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
-      </div>
-      <div id="mc-voice-timer"
-        style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--text);min-width:44px;text-align:right;flex-shrink:0;transition:color .3s">0:00</div>
+    <div class="mc-rec-dot"></div>
+    <div id="mc-voice-timer"
+      style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--text);min-width:40px;flex-shrink:0;transition:color .3s">0:00</div>
+    <div style="flex:1;position:relative;overflow:hidden;height:34px;min-width:0">
+      <canvas id="mc-voice-wave" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
     </div>
-    <div id="mc-voice-hint-row"
-      style="display:flex;align-items:center;justify-content:center;gap:6px;padding:0 16px 10px;width:100%;box-sizing:border-box;transition:transform .2s ease,opacity .15s">
-      <span class="mc-swipe-hint-arrow" style="font-size:16px;color:var(--muted)">←</span>
-      <span id="mc-voice-hint" style="font-size:12px;font-weight:500;color:var(--muted);transition:color .15s,opacity .15s">Свайп для отмены</span>
+    <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;overflow:hidden;max-width:110px;transition:transform .2s ease,opacity .15s">
+      <span class="mc-swipe-hint-arrow" style="font-size:14px;color:var(--muted)">↩</span>
+      <span id="mc-voice-hint" style="font-size:11px;font-weight:500;color:var(--muted);white-space:nowrap;transition:color .15s,opacity .15s">Свайп для отмены</span>
     </div>
   `;
-  document.body.appendChild(ui);
+
+  // Вставляем ПЕРЕД кнопкой действия   внутри mc-input-bar
+  const bar = document.getElementById('mc-input-bar');
+  const actionBtn = document.getElementById('mc-action-btn');
+  if (bar && actionBtn) bar.insertBefore(ui, actionBtn);
+  else document.body.appendChild(ui);
+
   const btn = document.getElementById('mc-action-btn');
   if (btn) {
     btn.classList.add('recording');
@@ -7901,7 +8701,7 @@ function _mcVoiceShowUI() {
   }
   requestAnimationFrame(() => {
     const canvas = document.getElementById('mc-voice-wave');
-    if (canvas) { canvas.width = canvas.offsetWidth || 200; canvas.height = canvas.offsetHeight || 36; }
+    if (canvas) { canvas.width = canvas.offsetWidth || 160; canvas.height = canvas.offsetHeight || 34; }
   });
 }
 
@@ -7909,8 +8709,16 @@ function _mcVoiceHideUI() {
   cancelAnimationFrame(_mcVoiceAnimFrame);
   const ui = document.getElementById('mc-voice-ui');
   if (ui) {
-    ui.style.animation = 'mc-voice-out .2s cubic-bezier(.4,0,.8,.6) forwards';
-    setTimeout(() => ui.remove(), 210);
+    ui.style.animation = 'mc-voice-out .18s cubic-bezier(.4,0,.8,.6) forwards';
+    setTimeout(() => ui.remove(), 200);
+  }
+  // Восстанавливаем поле ввода
+  const wrap = document.getElementById('mc-input-wrap');
+  if (wrap) {
+    wrap.style.display = '';
+    wrap.style.pointerEvents = '';
+    requestAnimationFrame(() => { wrap.style.opacity = '1'; });
+    setTimeout(() => { wrap.style.transition = ''; }, 200);
   }
   const btn = document.getElementById('mc-action-btn');
   if (btn) {
@@ -8000,7 +8808,6 @@ async function _mcVoiceFinalize() {
   const dur  = _mcVoiceSeconds;
   _mcVoiceChunks = [];
   if (blob.size < 500) { toast('🎤 Слишком короткое'); return; }
-  _mcShowUploadToast('voice', 'Голосовое сообщение');
   try {
     const b64 = await new Promise((res, rej) => {
       const r = new FileReader();
@@ -8011,17 +8818,17 @@ async function _mcVoiceFinalize() {
     const fileName = 'voice_' + Date.now() + '.' + ext;
     _pendingUploadBlob = blob; _pendingUploadMime = mimeType;
     const url = await _catboxUpload(b64, fileName, mimeType);
-    // Кэшируем blob — _catboxUpload мог сбросить _pendingUploadBlob через onUploadDone
+    // Кэшируем blob   _catboxUpload мог сбросить _pendingUploadBlob через onUploadDone
     _mcSendMediaMsg({ url, fileName, fileType: 'voice', fileSize: blob.size, duration: dur,
       _blob: blob, _mime: mimeType });
     _mcHideUploadToast(true);
   } catch(err) { _mcHideUploadToast(false); toast('❌ ' + (err.message || 'Ошибка отправки')); }
 }
 
-// ── Воспроизведение голосового прямо в пузыре ─────────────────────
+// ┄┄ Воспроизведение голосового прямо в пузыре ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 const _mcAudios = {};
 
-// SVG иконки play/pause — Telegram-style
+// SVG иконки play/pause   Telegram-style
 function _tgSetPlayState(id, playing) {
   const ico = document.getElementById('vico_' + id);
   if (!ico) return;
@@ -8049,7 +8856,7 @@ async function mcVoicePlay(url, id) {
   const _cachedVoice = await mcCacheGet(url).catch(() => null);
   if (_cachedVoice) { console.log('[VoicePlay] cache hit:', id); url = _cachedVoice; }
 
-  // Если URL внешний — пробуем загрузить через Java (обходит SSL-блокировки без VPN)
+  // Если URL внешний   пробуем загрузить через Java (обходит SSL-блокировки без VPN)
   // catbox.moe и pixeldrain дают ERR_SSL_PROTOCOL_ERROR в WebView без VPN/прокси
   const isExternal = url.startsWith('https://files.catbox.moe') ||
                      url.startsWith('https://pixeldrain.com') ||
@@ -8060,7 +8867,7 @@ async function mcVoicePlay(url, id) {
       const btn = document.getElementById('vbtn_' + id);
       if (btn) btn.style.opacity = '0.5';
       const raw = await new Promise((res) => {
-        // nativeDownloadBase64 блокирующий — запускаем в setTimeout чтобы не фризить UI
+        // nativeDownloadBase64 блокирующий   запускаем в setTimeout чтобы не фризить UI
         setTimeout(() => res(Android.nativeDownloadBase64(url)), 0);
       });
       if (btn) btn.style.opacity = '';
@@ -8080,10 +8887,10 @@ async function mcVoicePlay(url, id) {
         mcCacheSave(url.replace('blob:','__blob:'), blob, mime).catch(() => {});
         console.log('[VoicePlay] Java download OK, blobUrl created, size=', blob.size);
       } else {
-        console.warn('[VoicePlay] Java download failed:', parsed.error, '— пробуем WebView напрямую');
+        console.warn('[VoicePlay] Java download failed:', parsed.error, '  пробуем WebView напрямую');
       }
     } catch(e) {
-      console.warn('[VoicePlay] Java download exception:', e, '— пробуем WebView напрямую');
+      console.warn('[VoicePlay] Java download exception:', e, '  пробуем WebView напрямую');
       const btn = document.getElementById('vbtn_' + id);
       if (btn) btn.style.opacity = '';
     }
@@ -8147,8 +8954,8 @@ function _gdFileEmoji(name) {
   if (!name) return '📄';
   const ext = (name.split('.').pop() || '').toLowerCase();
   const map = { pdf:'📕', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', ppt:'📊', pptx:'📊',
-    zip:'🗜️', rar:'🗜️', '7z':'🗜️', txt:'📃', mp3:'🎵', ogg:'🎵', wav:'🎵',
-    mp4:'🎬', mov:'🎬', avi:'🎬', mkv:'🎬', png:'🖼️', jpg:'🖼️', jpeg:'🖼️', gif:'🖼️',
+    zip:'🗜', rar:'🗜', '7z':'🗜', txt:'📃', mp3:'🎵', ogg:'🎵', wav:'🎵',
+    mp4:'🎬', mov:'🎬', avi:'🎬', mkv:'🎬', png:'🖼', jpg:'🖼', jpeg:'🖼', gif:'🖼',
     apk:'📦', exe:'⚙️', js:'💻', py:'💻', html:'💻', json:'💻' };
   return map[ext] || '📄';
 }
@@ -8198,8 +9005,8 @@ function mcSendImage(dataUrl) {
   });
 }
 
-// ── Хедер чата: компенсируем системный сдвиг окна при клавиатуре ──
-// Android сам поднимает WebView вверх — offsetTop показывает на сколько.
+// ┄┄ Хедер чата: компенсируем системный сдвиг окна при клавиатуре ┄┄
+// Android сам поднимает WebView вверх   offsetTop показывает на сколько.
 // Мы двигаем хедер вниз на то же значение чтобы он остался на экране.
 (function() {
   function _syncHdr() {
@@ -8221,12 +9028,12 @@ function mcSendImage(dataUrl) {
   }, { passive: true });
 })();
 
-// ── Доп функции ───────────────────────────────────────────────────
+// ┄┄ Доп функции ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function messengerShowMore() {
   const username = _msgCurrentChat;
   if (!username) return;
 
-  // Если это групповой чат — открываем настройки группы
+  // Если это групповой чат   открываем настройки группы
   if (username === PUBLIC_GROUP_ID || username.startsWith('grp_')) {
     showGroupSettings(username);
     return;
@@ -8291,24 +9098,24 @@ function messengerShowInfo() {
   peerProfileOpen(username);
 }
 
-// ── Открытие профиля другого пользователя ─────────────────────────
+// ┄┄ Открытие профиля другого пользователя ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function peerProfileOpen(username) {
   const peer = _profileOnlinePeers.find(u => u.username === username)
              || _allKnownUsers.find(u => u.username === username);
   const body = document.getElementById('peer-profile-body');
 
-  // Настраиваем шапку: прозрачная, ‹ слева и ⋯ справа
+  // Настраиваем шапку: прозрачная,   слева и ◆ справа
   const hdr = document.querySelector('#s-peer-profile .hdr');
   if (hdr) {
     hdr.style.cssText = 'position:absolute;top:0;left:0;right:0;z-index:10;background:transparent;border:none;box-shadow:none';
     hdr.innerHTML = `
       <button class="hdr-back" style="background:rgba(0,0,0,.35);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)"
-        onclick="SFX.play('screenBack');showScreen('s-messenger-chat','back')">‹</button>
+        onclick="SFX.play('screenBack');showScreen('s-messenger-chat','back')"> </button>
       <div style="flex:1"></div>
       <button onclick="peerShowMenu('${username}')"
         style="background:rgba(0,0,0,.35);border:none;border-radius:50%;width:36px;height:36px;
           display:flex;align-items:center;justify-content:center;cursor:pointer;
-          font-size:18px;color:#fff;backdrop-filter:blur(4px)">⋯</button>`;
+          font-size:18px;color:#fff;backdrop-filter:blur(4px)">◆</button>`;
   }
 
   if (!peer) {
@@ -8330,7 +9137,7 @@ function peerProfileOpen(username) {
   const blocked   = isBlocked(username);
   const noCopy    = isCopyBlocked(username);
 
-  // Баннер/фон — тот же подход что и у своего профиля
+  // Баннер/фон   тот же подход что и у своего профиля
   const hasPhoto  = peer.avatarType === 'photo' && peer.avatarData;
   const peerBannerStyle = peer.banner
     ? (peer.banner.startsWith('background:') ? peer.banner : `background:${peer.banner}`)
@@ -8354,7 +9161,7 @@ function peerProfileOpen(username) {
     </div>
     <div style="height:60px"></div>
 
-    <!-- Имя, статус, bio — центрировано как в своём профиле -->
+    <!-- Имя, статус, bio   центрировано как в своём профиле -->
     <div style="text-align:center;padding:0 16px 16px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(peer.name||username)}</span>
@@ -8362,12 +9169,12 @@ function peerProfileOpen(username) {
       </div>
       <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(username)}</div>
       <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${isOnline?'#4caf7d22':'rgba(255,255,255,.08)'};color:${isOnline?'#4caf7d':'var(--muted)'}">
-        ${isOnline ? '🟢 В сети' : '⚫ Не в сети'}
+        ${isOnline ? '🟢 В сети' : '⚡ Не в сети'}
       </div>
       ${peer.bio ? `<div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5">${escHtml(peer.bio)}</div>` : ''}
     </div>
 
-    <!-- Кнопки действий — такие же как в своём профиле -->
+    <!-- Кнопки действий   такие же как в своём профиле -->
     <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
       <button onclick="messengerOpenChatFrom('${username}');showScreen('s-messenger-chat')"
         style="width:100%;padding:14px 16px;background:none;border:none;border-bottom:1px solid var(--surface3);cursor:pointer;display:flex;align-items:center;gap:12px;color:var(--text);font-family:inherit;-webkit-tap-highlight-color:transparent">
@@ -8423,13 +9230,13 @@ function peerProfileOpen(username) {
 
 
 // ══════════════════════════════════════════════════════════════════
-// 📷 МЕДИАПРОСМОТРЩИК — Telegram-стиль
+// 📷 МЕДИАПРОСМОТРЩИК   Telegram-стиль
 // Фото: pinch-zoom, двойной тап, свайп вниз = закрыть
 // Видео: нативный плеер, свайп вниз = закрыть
 // ══════════════════════════════════════════════════════════════════
 (function() {
 
-  // ── Состояние ─────────────────────────────────────────────────
+  // ┄┄ Состояние ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   const _pz = {
     scale:1, px:0, py:0,
     startDist:0, startScale:1,
@@ -8476,7 +9283,7 @@ function peerProfileOpen(username) {
   }
   window.photoZoomClose = photoZoomClose;
 
-  // ── Touch события ─────────────────────────────────────────────
+  // ┄┄ Touch события ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   document.addEventListener('DOMContentLoaded', () => {
     const ov = document.getElementById('photo-zoom-overlay');
     if (!ov) return;
@@ -8495,7 +9302,7 @@ function peerProfileOpen(username) {
         _pz.swipeDy     = 0;
         _pz.panStartX   = t.clientX - _pz.px;
         _pz.panStartY   = t.clientY - _pz.py;
-        // Двойной тап — zoom in/out
+        // Двойной тап   zoom in/out
         if (now - _pz.lastTap < 280) {
           e.preventDefault();
           if (_pz.scale > 1.2) {
@@ -8556,7 +9363,95 @@ function peerProfileOpen(username) {
 
 })();
 
-// ── Фуллскрин видеоплеер с Telegram-стилем ────────────────────────
+// ┄┄ Inline-плеер кружков (как в Telegram   воспроизводится прямо в чате) ┄┄
+const _circleState = {}; // cid ↩ { video, playing, circumference }
+
+function mcCircleToggle(cid, url) {
+  const wrap = document.getElementById('cw_' + cid);
+  if (!wrap) return;
+
+  let state = _circleState[cid];
+
+  if (!state) {
+    // Первый тап   создаём video-элемент
+    const vid = document.createElement('video');
+    vid.src = url;
+    vid.playsInline = true;
+    vid.preload = 'auto';
+    vid.loop = false;
+    vid.muted = false;
+    vid.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+
+    const circumference = 2 * Math.PI * 97;
+    state = { video: vid, playing: false, circumference };
+    _circleState[cid] = state;
+
+    const vidWrap = document.getElementById('cvid_' + cid);
+    if (vidWrap) { vidWrap.style.display = 'block'; vidWrap.appendChild(vid); }
+
+    // Скрываем постер
+    const poster = document.getElementById('cposter_' + cid);
+    if (poster) poster.style.opacity = '0';
+
+    // Показываем кольцо прогресса
+    const ring = document.getElementById('cring_' + cid);
+    if (ring) ring.style.display = 'block';
+
+    // Обновляем кольцо в реальном времени
+    vid.addEventListener('timeupdate', () => {
+      if (!vid.duration) return;
+      const pct = vid.currentTime / vid.duration;
+      const ringProg = document.getElementById('cringp_' + cid);
+      if (ringProg) {
+        const offset = circumference * (1 - pct);
+        ringProg.style.strokeDashoffset = offset.toFixed(1);
+      }
+      // Таймер
+      const timeEl = document.getElementById('ctime_' + cid);
+      if (timeEl) {
+        const rem = Math.max(0, Math.ceil(vid.duration - vid.currentTime));
+        timeEl.textContent = rem + 's';
+      }
+    });
+
+    // По завершению   возврат в состояние "play"
+    vid.addEventListener('ended', () => {
+      state.playing = false;
+      _circleSetIcon(cid, false);
+      const ringProg = document.getElementById('cringp_' + cid);
+      if (ringProg) ringProg.style.strokeDashoffset = '0';
+    });
+
+    // Автоплей сразу
+    vid.play().then(() => {
+      state.playing = true;
+      _circleSetIcon(cid, true);
+    }).catch(() => {});
+    return;
+  }
+
+  // Последующие тапы   play/pause
+  if (state.playing) {
+    state.video.pause();
+    state.playing = false;
+    _circleSetIcon(cid, false);
+  } else {
+    state.video.play().then(() => {
+      state.playing = true;
+      _circleSetIcon(cid, true);
+    }).catch(() => {});
+  }
+}
+
+function _circleSetIcon(cid, playing) {
+  const ico = document.getElementById('cico_' + cid);
+  if (!ico) return;
+  ico.innerHTML = playing
+    ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
+    : '<path d="M8 5v14l11-7z"/>';
+}
+
+// ┄┄ Фуллскрин видеоплеер с Telegram-стилем ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 async function mcVideoOpen(url, name) {
   console.log('[VideoPlayer] opening:', name, url?.substring(0,60));
   // Останавливаем предыдущий плеер
@@ -8707,7 +9602,7 @@ async function mcVideoOpen(url, name) {
 
   document.body.appendChild(ov);
 
-  // ── Refs ──────────────────────────────────────────────────────────
+  // ┄┄ Refs ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   const video      = ov.querySelector('#mvp-video');
   const header     = ov.querySelector('#mvp-header');
   const controls   = ov.querySelector('#mvp-controls');
@@ -8727,7 +9622,7 @@ async function mcVideoOpen(url, name) {
   const fsIco      = ov.querySelector('#mvp-fs-ico');
   const closeBtn   = ov.querySelector('#mvp-close');
 
-  // ── State ─────────────────────────────────────────────────────────
+  // ┄┄ State ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   let _controlsVisible = true;
   let _controlsTimer   = null;
   let _fullscreen      = false;
@@ -8798,7 +9693,7 @@ async function mcVideoOpen(url, name) {
     curEl.textContent   = _fmtT(video.currentTime);
   }
 
-  // ── Video events ──────────────────────────────────────────────────
+  // ┄┄ Video events ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   video.addEventListener('loadedmetadata', () => {
     durEl.textContent = _fmtT(video.duration);
   });
@@ -8817,14 +9712,14 @@ async function mcVideoOpen(url, name) {
   });
   video.addEventListener('error',    () => { spinner.style.opacity = '0'; toast('❌ Ошибка видео'); });
 
-  // ── Play/pause button ─────────────────────────────────────────────
+  // ┄┄ Play/pause button ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   playBtn.addEventListener('click', () => {
     if (video.paused) { video.play(); } else { video.pause(); }
     _flashCenter();
     _showControls(!video.paused);
   });
 
-  // ── Tap on video area = toggle controls + play/pause ─────────────
+  // ┄┄ Tap on video area = toggle controls + play/pause ┄┄┄┄┄┄┄┄┄┄┄┄┄
   const area = ov.querySelector('#mvp-area');
   let _tapTimer = null;
   area.addEventListener('click', (e) => {
@@ -8841,7 +9736,7 @@ async function mcVideoOpen(url, name) {
     }
   });
 
-  // ── Progress bar touch/click ──────────────────────────────────────
+  // ┄┄ Progress bar touch/click ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   progWrap.addEventListener('click', e => { _setProgress(e.clientX); _showControls(true); });
   progWrap.addEventListener('touchstart', e => {
     _seeking = true;
@@ -8856,7 +9751,7 @@ async function mcVideoOpen(url, name) {
     _showControls(true);
   }, { passive: true });
 
-  // ── Speed button ──────────────────────────────────────────────────
+  // ┄┄ Speed button ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   speedBtn.addEventListener('click', () => {
     _speedIdx = (_speedIdx + 1) % SPEEDS.length;
     const sp = SPEEDS[_speedIdx];
@@ -8865,7 +9760,7 @@ async function mcVideoOpen(url, name) {
     _showControls(true);
   });
 
-  // ── Fullscreen ────────────────────────────────────────────────────
+  // ┄┄ Fullscreen ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   fsBtn.addEventListener('click', () => {
     _fullscreen = !_fullscreen;
     if (_fullscreen) {
@@ -8881,7 +9776,7 @@ async function mcVideoOpen(url, name) {
     _showControls(true);
   });
 
-  // ── Close ─────────────────────────────────────────────────────────
+  // ┄┄ Close ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   function _close() {
     video.pause();
     try { screen.orientation?.unlock(); } catch(_) {}
@@ -8891,7 +9786,7 @@ async function mcVideoOpen(url, name) {
   }
   closeBtn.addEventListener('click', _close);
 
-  // ── Swipe down = close ────────────────────────────────────────────
+  // ┄┄ Swipe down = close ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   let _swY = 0, _swDy = 0, _swActive = false;
   area.addEventListener('touchstart', e => {
     if (e.touches.length > 1) return;
@@ -8911,7 +9806,7 @@ async function mcVideoOpen(url, name) {
     else { ov.style.transform = ''; ov.style.opacity = ''; }
   }, { passive: true });
 
-  // ── Keyboard (ПК) ─────────────────────────────────────────────────
+  // ┄┄ Keyboard (ПК) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   const _onKey = (e) => {
     if (e.key === 'Escape')      { _close(); }
     if (e.key === ' ')           { video.paused ? video.play() : video.pause(); e.preventDefault(); }
@@ -8922,22 +9817,22 @@ async function mcVideoOpen(url, name) {
   document.addEventListener('keydown', _onKey);
   ov.addEventListener('remove', () => document.removeEventListener('keydown', _onKey));
 
-  // ── Autoplay ──────────────────────────────────────────────────────
+  // ┄┄ Autoplay ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
   video.play().then(() => {
     _showControls(true);
   }).catch(() => {
-    // autoplay заблокирован — показываем контролы
+    // autoplay заблокирован   показываем контролы
     _showControls(false);
   });
 }
 
 window.mcVideoOpen = mcVideoOpen;
 
-// ── Переключение кнопки действия: 🎤 ↔ ➤ / кружок ────────────────
-// ── Состояние кнопки: 'voice' | 'send' | 'circle' ────────────────
-// Тап по mic → circle, тап по circle → mic (как в Telegram)
+// ┄┄ Переключение кнопки действия: 🎤 ↩ ➤ / кружок ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ┄┄ Состояние кнопки: 'voice' | 'send' | 'circle' ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// Тап по mic ↩ circle, тап по circle ↩ mic (как в Telegram)
 let _mcActionState = 'voice';
-let _mcVoiceMode   = 'voice'; // 'voice' | 'circle' — текущий суб-режим когда нет текста
+let _mcVoiceMode   = 'voice'; // 'voice' | 'circle'   текущий суб-режим когда нет текста
 
 function mcUpdateActionBtn() {
   const inp = document.getElementById('mc-input');
@@ -8976,7 +9871,7 @@ function _mcRenderActionIcon(state) {
   }
 }
 
-/** Тап по кнопке без текста — переключаем mic ↔ circle */
+/** Тап по кнопке без текста   переключаем mic ↩ circle */
 function mcToggleVoiceMode() {
   const inp = document.getElementById('mc-input');
   const hasText = inp && inp.value.trim().length > 0;
@@ -8984,7 +9879,7 @@ function mcToggleVoiceMode() {
   _mcVoiceMode = _mcVoiceMode === 'voice' ? 'circle' : 'voice';
   _mcActionState = ''; // сбрасываем чтобы mcUpdateActionBtn применил новое состояние
   mcUpdateActionBtn();
-  toast(_mcVoiceMode === 'circle' ? '⭕ Режим кружка' : '🎤 Режим голосового', 1200);
+  toast(_mcVoiceMode === 'circle' ? '⭐ Режим кружка' : '🎤 Режим голосового', 1200);
 }
 
 function _mcInitActionBtn() {
@@ -9067,10 +9962,10 @@ if (typeof cmdExec !== 'undefined') {
     if (cmd === '/vip') {
       if (!arg) {
         cmdPrint('info', '👑 Использование:');
-        cmdPrint('info', '  /vip <КОД>          — активировать себе VIP');
-        cmdPrint('info', '  /vip give @ник      — выдать VIP пользователю');
-        cmdPrint('info', '  /vip revoke @ник    — забрать VIP у пользователя');
-        cmdPrint('info', '  /vip list           — список VIP пользователей');
+        cmdPrint('info', '  /vip <КОД>            активировать себе VIP');
+        cmdPrint('info', '  /vip give @ник        выдать VIP пользователю');
+        cmdPrint('info', '  /vip revoke @ник      забрать VIP у пользователя');
+        cmdPrint('info', '  /vip list             список VIP пользователей');
         return;
       }
       // /vip give @username
@@ -9101,7 +9996,7 @@ if (typeof cmdExec !== 'undefined') {
         list.forEach(u => cmdPrint('out', `  @${u}`));
         return;
       }
-      // /vip КОД — активировать себе
+      // /vip КОД   активировать себе
       if (vipActivate(arg)) {
         cmdPrint('ok','👑 VIP активирован! Доступны: фото-аватар, рамки, значки, баннеры');
         toast('👑 Добро пожаловать в VIP клуб!');
@@ -9129,8 +10024,8 @@ function msgFabToggle() {
     menu.style.display = 'flex';
     if (btn) {
       btn.style.transform = 'rotate(45deg)';
-      // Не используем textContent — twemoji уже заменил emoji на <img>
-      btn.innerHTML = '<img src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/274c.svg" width="20" height="20" style="pointer-events:none;vertical-align:middle" alt="✕">';
+      // Не используем textContent   twemoji уже заменил emoji на <img>
+      btn.innerHTML = '<img src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/274c.svg" width="20" height="20" style="pointer-events:none;vertical-align:middle" alt="✅">';
     }
   } else { msgFabClose(); }
 }
@@ -9141,7 +10036,7 @@ function msgFabClose() {
   if (menu) menu.style.display = 'none';
   if (btn) {
     btn.style.transform = '';
-    // Используем img twemoji напрямую — надёжнее чем twemoji.parse
+    // Используем img twemoji напрямую   надёжнее чем twemoji.parse
     btn.innerHTML = '<img src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/270f.svg" width="22" height="22" style="pointer-events:none;vertical-align:middle" alt="✏️">';
   }
 }
@@ -9203,10 +10098,7 @@ function _renderNotchToggle(mode) {
   );
 })();
 
-// ── Stub для _mcUpdateMuteIcon (кнопка удалена из хедера) ─────────────
-function _mcUpdateMuteIcon() {}
-
-// ── Анимация кнопки ⋮ в чате ─────────────────────────────────────────
+// ┄┄ Анимация кнопки ◆ в чате ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 (function patchShowMore() {
   const orig = window.messengerShowMore;
   if (typeof orig !== 'function') return;
@@ -9235,7 +10127,7 @@ function _closeSheet(sheetEl) {
   setTimeout(() => sheetEl?.remove(), 200);
 }
 
-// ── Патч peerShowMenu: добавляем анимацию закрытия через _closeSheet ──
+// ┄┄ Патч peerShowMenu: добавляем анимацию закрытия через _closeSheet ┄┄
 (function() {
   const orig = window.peerShowMenu;
   if (typeof orig !== 'function') return;
@@ -9246,7 +10138,7 @@ function _closeSheet(sheetEl) {
   };
 })();
 
-// ── Патч forward sheet: добавляем анимацию и slide-up ──
+// ┄┄ Патч forward sheet: добавляем анимацию и slide-up ┄┄
 (function() {
   const orig = window.mcForwardMsg;
   if (typeof orig !== 'function') return;
@@ -9271,8 +10163,8 @@ function _closeSheet(sheetEl) {
   };
 })();
 
-// ── Мотивация ──────────────────────────────────────────────────────
-// mcEmojiIn используется в mute sheet — убедимся что анимация определена
+// ┄┄ Мотивация ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// mcEmojiIn используется в mute sheet   убедимся что анимация определена
 (function ensureMcAnimations() {
   if (document.getElementById('mc-menu-style')) return; // уже добавлены
   const st = document.createElement('style');
@@ -9340,4 +10232,55 @@ function renderGroupsList() {
       </div>
     </div>`;
   }).join('');
+}
+
+
+// ════════════════════════════════════════════════════════════════════════
+// 📱 YOUTUBE SHORTS   встроенный плеер через YouTube Mobile Web
+// Команда в CMD: shorts [поисковый запрос]
+// ════════════════════════════════════════════════════════════════════════
+
+const YT_SHORTS_URL  = 'https://m.youtube.com/shorts';
+const YT_SEARCH_BASE = 'https://m.youtube.com/results?search_query=';
+
+function ytShortsOpen(query) {
+  // YouTube блокирует iframe (X-Frame-Options: sameorigin)
+  // Открываем нативно   браузер или YouTube-приложение
+  const url = query
+    ? (YT_SEARCH_BASE + encodeURIComponent(query) + '&sp=EgIYAQ%3D%3D')
+    : YT_SHORTS_URL;
+
+  if (window.Android?.openInAppBrowser) {
+    window.Android.openInAppBrowser(url);
+  } else if (window.Android?.openUrl) {
+    window.Android.openUrl(url);
+  } else {
+    window.open(url, '_blank', 'noopener');
+  }
+}
+
+function _ytLoadUrl(url) {
+  if (window.Android?.openInAppBrowser) {
+    window.Android.openInAppBrowser(url);
+  } else if (window.Android?.openUrl) {
+    window.Android.openUrl(url);
+  } else {
+    window.open(url, '_blank', 'noopener');
+  }
+}
+
+function ytNavHome()          { _ytLoadUrl('https://m.youtube.com/'); }
+function ytNavShorts()        { _ytLoadUrl(YT_SHORTS_URL); }
+function ytNavSubscriptions() { _ytLoadUrl('https://m.youtube.com/feed/subscriptions'); }
+function ytNavLibrary()       { _ytLoadUrl('https://m.youtube.com/feed/library'); }
+
+function ytShortsSearch() {
+  document.getElementById('yt-search-overlay').style.display = 'block';
+  setTimeout(() => document.getElementById('yt-search-input')?.focus(), 100);
+}
+
+function ytDoSearch(q) {
+  if (!q?.trim()) return;
+  document.getElementById('yt-search-overlay').style.display = 'none';
+  _ytLoadUrl(YT_SEARCH_BASE + encodeURIComponent(q.trim()) + '&sp=EgIYAQ%3D%3D');
 }

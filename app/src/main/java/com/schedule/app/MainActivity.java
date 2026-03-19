@@ -66,6 +66,10 @@ public class MainActivity extends Activity {
     private static final int    NOTIF_ID          = 42;
 
     private WebView                webView;
+
+    // ── Встроенный браузер ──────────────────────────────────────────────
+    private android.widget.FrameLayout _browserOverlay = null;
+    private WebView                    _browserWebView = null;
     private SharedPreferences      prefs;
     private DnsVpnService          vpnService;
     private boolean                vpnBound = false;
@@ -365,6 +369,25 @@ public class MainActivity extends Activity {
                 if (!url.startsWith("file://") && !url.contains("fonts.googleapis")) {
                     log.i(TAG, "fetch → " + url);
                 }
+                // ── Hot-patch: если файл был обновлён — отдаём из filesDir ────────────
+                if (url.startsWith("file:///android_asset/")) {
+                    String assetPath = url.substring("file:///android_asset/".length());
+                    java.io.File patchFile = new java.io.File(
+                        new java.io.File(getFilesDir(), "hotpatch"), assetPath);
+                    if (patchFile.exists()) {
+                        try {
+                            String mime = "text/html";
+                            if (assetPath.endsWith(".js"))  mime = "application/javascript";
+                            if (assetPath.endsWith(".css")) mime = "text/css";
+                            if (assetPath.endsWith(".json"))mime = "application/json";
+                            log.i(TAG, "hotpatch serving: " + assetPath);
+                            return new WebResourceResponse(mime, "UTF-8",
+                                new java.io.FileInputStream(patchFile));
+                        } catch (Exception e) {
+                            log.w(TAG, "hotpatch read error: " + e.getMessage());
+                        }
+                    }
+                }
                 // Перехватываем twemoji CDN — исправляем MIME-тип (text/plain → application/javascript)
                 if (url.contains("twemoji")) {
                     try {
@@ -472,23 +495,48 @@ public class MainActivity extends Activity {
                 new java.util.LinkedHashMap<>();
             for (int i = 0; i < arr.length(); i++) {
                 org.json.JSONObject msg = arr.getJSONObject(i);
-                String from = msg.optString("from_user", "?");
-                long   ts   = msg.optLong("ts", 0);
-                String text = msg.optString("text", "");
-                // Медиа-сообщение — читаем тип из extra
-                if (text.isEmpty() || text.startsWith("{")) {
-                    String extra = msg.optString("extra", "");
+                String from  = msg.optString("from_user", "?");
+                long   ts    = msg.optLong("ts", 0);
+                String text  = msg.optString("text", "");
+                String extra = msg.optString("extra", "");
+
+                // Пропускаем служебные (реакции, read_receipt)
+                if (!extra.isEmpty()) {
+                    try {
+                        org.json.JSONObject ex = new org.json.JSONObject(extra);
+                        String tp = ex.optString("type", "");
+                        if ("reaction".equals(tp) || "read_receipt".equals(tp)) {
+                            if (ts > maxTs) maxTs = ts;
+                            continue;
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // Зашифрованное сообщение
+                if (text.startsWith("ENC:")) {
+                    text = "🔐 Зашифрованное сообщение";
+                } else if (text.isEmpty() || text.startsWith("{")) {
+                    // Медиа-сообщение — читаем тип из extra
                     if (!extra.isEmpty()) {
                         try {
                             org.json.JSONObject ex = new org.json.JSONObject(extra);
                             String ft = ex.optString("fileType", "");
-                            if ("voice".equals(ft))  text = "🎤 Голосовое";
-                            else if ("video".equals(ft)) text = "🎬 Видео";
-                            else text = "📎 " + ex.optString("fileName", "Файл");
+                            String tp = ex.optString("type", "");
+                            if ("group_invite".equals(tp))  text = "👥 Добавил(а) в группу";
+                            else if ("voice".equals(ft))    text = "🎤 Голосовое";
+                            else if ("circle".equals(ft))   text = "⭕ Видеосообщение";
+                            else if ("video".equals(ft))    text = "🎬 Видео";
+                            else if (ex.has("image"))       text = "📷 Фото";
+                            else if ("file".equals(ft))     text = "📎 " + ex.optString("fileName", "Файл");
+                            else if (!ft.isEmpty())         text = "📎 Файл";
                         } catch (Exception ignored) {}
                     }
-                    if (text.isEmpty()) text = "📎 Файл";
+                    if (text.isEmpty()) {
+                        String sticker = msg.optString("sticker", "");
+                        text = sticker.isEmpty() ? "📎 Файл" : sticker + " Стикер";
+                    }
                 }
+
                 if (ts > maxTs) maxTs = ts;
                 byUser.computeIfAbsent(from, k -> new java.util.ArrayList<>()).add(text);
             }
@@ -516,9 +564,18 @@ public class MainActivity extends Activity {
                 java.util.List<String> texts = entry.getValue();
                 String preview = texts.size() == 1
                     ? texts.get(0)
-                    : texts.size() + " новых сообщения";
-                // Обрезаем длинные тексты
+                    : texts.size() + " новых сообщений";
                 if (preview.length() > 100) preview = preview.substring(0, 97) + "…";
+
+                // Уникальный intent на каждого отправителя — открывает его чат
+                Intent tapIntent = new Intent(this, MainActivity.class);
+                tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                tapIntent.putExtra("open_chat", from);
+                int piFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                    ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                    : PendingIntent.FLAG_UPDATE_CURRENT;
+                PendingIntent pi = PendingIntent.getActivity(
+                    this, Math.abs(from.hashCode()), tapIntent, piFlags);
 
                 NotificationCompat.Builder nb = new NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_dialog_email)
@@ -529,8 +586,11 @@ public class MainActivity extends Activity {
                     .setAutoCancel(true)
                     .setContentIntent(pi)
                     .setVibrate(new long[]{0, 200, 80, 200})
-                    .setDefaults(NotificationCompat.DEFAULT_SOUND);
-                nm.notify(_notifIdCounter++, nb.build());
+                    .setDefaults(NotificationCompat.DEFAULT_SOUND)
+                    .setGroup("sapp_msg_group");
+                // Стабильный ID: одно уведомление на отправителя (новое заменяет старое)
+                int notifId = 1000 + Math.abs(from.hashCode() % 1000);
+                nm.notify(notifId, nb.build());
                 log.i(TAG, "_bgPollSupabase: показано уведомление от @" + from + " (" + texts.size() + " сообщ.)");
             }
         } catch (Exception e) {
@@ -864,6 +924,15 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        // Встроенный браузер: Back = история или закрыть
+        if (_browserOverlay != null) {
+            if (_browserWebView != null && _browserWebView.canGoBack()) {
+                _browserWebView.goBack();
+            } else {
+                closeBrowser();
+            }
+            return;
+        }
         // Спрашиваем JS: можно ли перейти назад внутри приложения
         webView.evaluateJavascript(
             "(function(){ return typeof nativeBack==='function' ? (nativeBack() ? 'handled' : 'exit') : 'exit'; })()",
@@ -876,15 +945,37 @@ public class MainActivity extends Activity {
         );
     }
 
+    /** Закрыть встроенный браузер */
+    private void closeBrowser() {
+        if (_browserOverlay == null) return;
+        android.view.ViewGroup root = (android.view.ViewGroup) getWindow().getDecorView();
+        root.removeView(_browserOverlay);
+        if (_browserWebView != null) {
+            _browserWebView.stopLoading();
+            _browserWebView.destroy();
+            _browserWebView = null;
+        }
+        _browserOverlay = null;
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
         appInForeground = false;
         log.i(TAG, "onPause — переключаю поллер в фоновый режим (" + POLL_INTERVAL_BG + "мс)");
-        // Переключаемся на медленный интервал в фоне — JS заморожен, но Java нет
-        if (pollHandler != null && pollRunnable != null) {
-            pollHandler.removeCallbacks(pollRunnable);
-            pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_BG);
+        // Если фоновый сервис включён — он сам поллит, Java-поллер в MainActivity не нужен
+        boolean svcEnabled = prefs.getBoolean(MessagingForegroundService.PREF_BG_ENABLED, false);
+        if (svcEnabled) {
+            // Останавливаем дублирующий поллер в MainActivity
+            if (pollHandler != null && pollRunnable != null) {
+                pollHandler.removeCallbacks(pollRunnable);
+            }
+        } else {
+            // Сервис выключен — MainActivity сам поллит в фоне
+            if (pollHandler != null && pollRunnable != null) {
+                pollHandler.removeCallbacks(pollRunnable);
+                pollHandler.postDelayed(pollRunnable, POLL_INTERVAL_BG);
+            }
         }
     }
 
@@ -893,10 +984,34 @@ public class MainActivity extends Activity {
         super.onResume();
         appInForeground = true;
         log.i(TAG, "onResume — переключаю поллер в активный режим (" + POLL_INTERVAL_FG + "мс)");
+        // Снимаем все уведомления когда пользователь вернулся в приложение
+        NotificationManager nm2 = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm2 != null) nm2.cancelAll();
+        prefs.edit().putLong(PREF_SB_LAST_TS, System.currentTimeMillis()).apply();
         // Ускоряем интервал — приложение на экране
         if (pollHandler != null && pollRunnable != null) {
             pollHandler.removeCallbacks(pollRunnable);
             pollHandler.post(pollRunnable); // немедленный тик + восстановление
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        // Открываем конкретный чат если пришли из уведомления
+        if (intent != null && intent.hasExtra("open_chat")) {
+            String chatUser = intent.getStringExtra("open_chat");
+            if (chatUser != null && !chatUser.isEmpty() && webView != null) {
+                // Небольшая задержка чтобы WebView успел инициализироваться
+                webView.postDelayed(() -> {
+                    String js = "if(typeof messengerOpenChat==='function'){" +
+                                "  messengerOpenChat('" + chatUser.replace("'", "\\'") + "');" +
+                                "}";
+                    webView.evaluateJavascript(js, null);
+                }, 600);
+                log.i(TAG, "onNewIntent: открываю чат @" + chatUser);
+            }
         }
     }
 
@@ -1416,6 +1531,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void openUrl(String urlStr) {
             log.i(TAG, "openUrl: " + urlStr);
+            // http/https → встроенный браузер; остальные схемы → внешнее приложение
+            if (urlStr != null && (urlStr.startsWith("http://") || urlStr.startsWith("https://"))) {
+                openInAppBrowser(urlStr);
+                return;
+            }
             runOnUiThread(() -> {
                 try {
                     android.content.Intent intent = new android.content.Intent(
@@ -1426,6 +1546,128 @@ public class MainActivity extends Activity {
                     startActivity(intent);
                 } catch (Exception e) {
                     log.e(TAG, "openUrl error: " + e.getMessage());
+                }
+            });
+        }
+
+        /**
+         * Открыть URL во встроенном браузере (оверлей поверх приложения).
+         * Вызывается из JS: Android.openInAppBrowser(url)
+         */
+        @JavascriptInterface
+        public void openInAppBrowser(String urlStr) {
+            log.i(TAG, "openInAppBrowser: " + urlStr);
+            runOnUiThread(() -> {
+                // Закрываем предыдущий если был
+                if (_browserOverlay != null) closeBrowser();
+
+                android.content.Context ctx = MainActivity.this;
+
+                // ── Корневой контейнер ───────────────────────────────────
+                _browserOverlay = new android.widget.FrameLayout(ctx);
+                _browserOverlay.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+                _browserOverlay.setBackgroundColor(0xFF0F0F0F);
+
+
+
+                // ── Внутренний WebView (без панели — Back закрывает) ─────────
+                _browserWebView = new WebView(ctx);
+                android.webkit.WebSettings ws = _browserWebView.getSettings();
+                ws.setJavaScriptEnabled(true);
+                ws.setDomStorageEnabled(true);
+                ws.setLoadWithOverviewMode(true);
+                ws.setUseWideViewPort(true);
+                ws.setBuiltInZoomControls(true);
+                ws.setDisplayZoomControls(false);
+                ws.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                ws.setUserAgentString(
+                    "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
+                    "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+                _browserWebView.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+
+                _browserWebView.setWebViewClient(new android.webkit.WebViewClient() {
+                    @Override
+                    public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+                        String url = request.getUrl().toString();
+                        // intent:// и другие не-http схемы — пробуем открыть нативно
+                        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                            try {
+                                android.content.Intent intent;
+                                if (url.startsWith("intent://")) {
+                                    intent = android.content.Intent.parseUri(url,
+                                        android.content.Intent.URI_INTENT_SCHEME);
+                                } else {
+                                    intent = new android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse(url));
+                                }
+                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(intent);
+                            } catch (Exception e) {
+                                log.e(TAG, "browser intent error: " + e.getMessage());
+                            }
+                            return true; // не грузим в WebView
+                        }
+                        return false;
+                    }
+                    @Override
+                    public void onPageFinished(android.webkit.WebView view, String url) {}
+                });
+
+                _browserOverlay.addView(_browserWebView);
+
+                // ── Добавляем поверх DecorView ───────────────────────────
+                android.view.ViewGroup decorView = (android.view.ViewGroup) getWindow().getDecorView();
+                decorView.addView(_browserOverlay);
+
+                _browserWebView.loadUrl(urlStr);
+            });
+        }
+
+
+
+        /**
+         * Открытие банковского deep-link с fallback на web-URL.
+         * Если приложение банка не установлено — открывает веб-версию в браузере.
+         */
+        @JavascriptInterface
+        public void openBankDeeplink(String deeplink, String webUrl) {
+            log.i(TAG, "openBankDeeplink: " + deeplink);
+            runOnUiThread(() -> {
+                // Сначала пробуем deep-link банка
+                boolean opened = false;
+                try {
+                    android.content.Intent intent = new android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(deeplink)
+                    );
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    // Проверяем, есть ли хоть одно приложение для этого intent
+                    if (intent.resolveActivity(getPackageManager()) != null) {
+                        startActivity(intent);
+                        opened = true;
+                        log.i(TAG, "openBankDeeplink: opened via deeplink");
+                    }
+                } catch (Exception e) {
+                    log.e(TAG, "openBankDeeplink deeplink error: " + e.getMessage());
+                }
+                // Fallback: открываем web-версию
+                if (!opened) {
+                    try {
+                        android.content.Intent webIntent = new android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(webUrl)
+                        );
+                        webIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(webIntent);
+                        log.i(TAG, "openBankDeeplink: fallback to webUrl");
+                    } catch (Exception e2) {
+                        log.e(TAG, "openBankDeeplink webUrl error: " + e2.getMessage());
+                    }
                 }
             });
         }
@@ -1467,6 +1709,86 @@ public class MainActivity extends Activity {
                 webView.clearCache(true);
                 webView.clearHistory();
             });
+        }
+
+        /**
+         * Горячий патч: сохраняет файл в filesDir/hotpatch/<assetPath>.
+         * JS вызывает это после скачивания изменённого файла.
+         * shouldInterceptRequest подхватит его при следующей загрузке.
+         * @param assetPath  относительный путь, напр. "js/social.js" или "index.html"
+         * @param content    содержимое файла (UTF-8 строка)
+         * @return "ok" или сообщение об ошибке
+         */
+        @JavascriptInterface
+        public String hotPatchSaveFile(String assetPath, String content) {
+            try {
+                // Безопасность: запрещаем path traversal
+                if (assetPath.contains("..") || assetPath.startsWith("/")) {
+                    return "err: invalid path";
+                }
+                java.io.File dir = new java.io.File(getFilesDir(), "hotpatch");
+                java.io.File target = new java.io.File(dir, assetPath);
+                target.getParentFile().mkdirs();
+                java.io.FileWriter fw = new java.io.FileWriter(target, false);
+                fw.write(content);
+                fw.close();
+                log.i(TAG, "hotPatchSaveFile: saved " + assetPath + " (" + content.length() + " chars)");
+                return "ok";
+            } catch (Exception e) {
+                log.e(TAG, "hotPatchSaveFile error: " + e.getMessage());
+                return "err: " + e.getMessage();
+            }
+        }
+
+        /**
+         * Горячий патч: возвращает список установленных патчей (JSON массив путей).
+         */
+        @JavascriptInterface
+        public String hotPatchList() {
+            try {
+                java.io.File dir = new java.io.File(getFilesDir(), "hotpatch");
+                if (!dir.exists()) return "[]";
+                org.json.JSONArray arr = new org.json.JSONArray();
+                listFilesRecursive(dir, dir, arr);
+                return arr.toString();
+            } catch (Exception e) {
+                return "[]";
+            }
+        }
+
+        private void listFilesRecursive(java.io.File root, java.io.File current, org.json.JSONArray arr) {
+            java.io.File[] files = current.listFiles();
+            if (files == null) return;
+            for (java.io.File f : files) {
+                if (f.isDirectory()) {
+                    listFilesRecursive(root, f, arr);
+                } else {
+                    String rel = root.toURI().relativize(f.toURI()).getPath();
+                    arr.put(rel);
+                }
+            }
+        }
+
+        /**
+         * Горячий патч: удалить все патчи (откат к assets).
+         */
+        @JavascriptInterface
+        public void hotPatchClearAll() {
+            try {
+                java.io.File dir = new java.io.File(getFilesDir(), "hotpatch");
+                deleteRecursive(dir);
+                log.i(TAG, "hotPatchClearAll: done");
+            } catch (Exception e) {
+                log.e(TAG, "hotPatchClearAll error: " + e.getMessage());
+            }
+        }
+
+        private void deleteRecursive(java.io.File f) {
+            if (f.isDirectory()) {
+                java.io.File[] ch = f.listFiles();
+                if (ch != null) for (java.io.File c : ch) deleteRecursive(c);
+            }
+            f.delete();
         }
 
         /**
@@ -2787,7 +3109,6 @@ public class MainActivity extends Activity {
         public void startCircleRecord() {
             log.i(TAG, "startCircleRecord called");
             runOnUiThread(() -> {
-                // Проверяем разрешение на камеру
                 boolean camOk = ContextCompat.checkSelfPermission(
                     MainActivity.this, android.Manifest.permission.CAMERA)
                     == PackageManager.PERMISSION_GRANTED;
@@ -2803,9 +3124,26 @@ public class MainActivity extends Activity {
                         }, CAMERA_PERM_CODE);
                     return;
                 }
+                // Сбрасываем флаги перед открытием
+                CircleRecordActivity.shouldStop   = false;
+                CircleRecordActivity.shouldCancel = false;
                 Intent intent = new Intent(MainActivity.this, CircleRecordActivity.class);
                 startActivityForResult(intent, CIRCLE_RECORD_CODE);
             });
+        }
+
+        /** JS → отпустил палец → остановить запись и отправить */
+        @JavascriptInterface
+        public void stopCircleRecord() {
+            log.i(TAG, "stopCircleRecord called");
+            CircleRecordActivity.shouldStop = true;
+        }
+
+        /** JS → свайп отмены → отменить запись */
+        @JavascriptInterface
+        public void cancelCircleRecord() {
+            log.i(TAG, "cancelCircleRecord called");
+            CircleRecordActivity.shouldCancel = true;
         }
 
         // ─── Фоновый сервис (Telegram-style keep-alive) ───────────────────────
