@@ -3159,7 +3159,7 @@ const _PROFANITY = [
 
 // Компилируем один RegExp для скорости
 const _PROFANITY_RE = new RegExp(
-  __PROFANITY.map(w => w.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')).join('|'),
+  _PROFANITY.map(w => w.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')).join('|'),
   'giu'
 );
 
@@ -6260,7 +6260,7 @@ const MC_STICKER_PACKS = [
   ]},
 ];
 
-let _mcStickerPanelOpen = false;
+var _mcStickerPanelOpen = false;
 
 function mcToggleStickerPanel() {
   const panel = document.getElementById('mc-sticker-panel');

@@ -234,9 +234,15 @@ const SFX = (() => {
     try {
       const ctx = ac();
       if (!ctx) return;
-      const resp = await fetch('sounds/' + file);
-      if (!resp.ok) return;
-      const ab = await resp.arrayBuffer();
+      const ab = await new Promise((res, rej) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', 'sounds/' + file, true);
+        xhr.responseType = 'arraybuffer';
+        xhr.onload = () => res(xhr.response);
+        xhr.onerror = () => rej(new Error('XHR error'));
+        xhr.send();
+      });
+      if (!ab) return;
       const buf = await new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
       _extBuffers[name] = buf;
     } catch(e) {}
