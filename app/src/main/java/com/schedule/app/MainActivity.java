@@ -1874,8 +1874,17 @@ public class MainActivity extends Activity {
          */
         @JavascriptInterface
         public boolean isEmojiPackReady() {
-            java.io.File marker = new java.io.File(
-                new java.io.File(getFilesDir(), "emoji"), ".ready");
+            java.io.File emojiDir = new java.io.File(getFilesDir(), "emoji");
+            java.io.File marker   = new java.io.File(emojiDir, ".ready");
+            // Обнаруживаем старую структуру (emoji/emoji/act/...) — сбрасываем маркер
+            // чтобы при следующем запуске пак переразвернулся с правильными путями
+            java.io.File staleSubdir = new java.io.File(emojiDir, "emoji");
+            if (staleSubdir.exists() && staleSubdir.isDirectory()) {
+                log.w(TAG, "isEmojiPackReady: обнаружена старая структура emoji/emoji/, сброс маркера для переразвёртки");
+                marker.delete();
+                deleteRecursive(emojiDir);
+                emojiDir.mkdirs();
+            }
             boolean ready = marker.exists();
             log.i(TAG, "isEmojiPackReady: " + ready);
             return ready;
@@ -2003,9 +2012,16 @@ public class MainActivity extends Activity {
                     }
                     while ((entry = zis.getNextEntry()) != null) {
                         String name = entry.getName();
-                        // Срезаем общий префикс верхнего уровня
+                        // Срезаем общий префикс верхнего уровня (напр. "emoji-main/")
                         if (stripPrefix != null && name.startsWith(stripPrefix)) {
                             name = name.substring(stripPrefix.length());
+                        }
+                        // GitHub archive: emoji-main/emoji/act/Fire.png
+                        // После срезания emoji-main/ остаётся emoji/act/Fire.png
+                        // Срезаем ещё один уровень "emoji/" чтобы файлы легли в
+                        // filesDir/emoji/act/Fire.png (а не filesDir/emoji/emoji/act/...)
+                        if (name.startsWith("emoji/")) {
+                            name = name.substring("emoji/".length());
                         }
                         if (name.isEmpty() || name.contains("..") || name.startsWith("/")) {
                             zis.closeEntry(); continue;
