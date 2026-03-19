@@ -2273,6 +2273,7 @@ showScreen = function(id, dir) {
     's-schedule':       's-groups',
     's-themes':         's-settings',
     's-teachers':       's-home',
+    's-shorts':         's-home',
     's-profile-edit':   's-profile',
     's-messenger':      's-profile',
     's-messenger-chat': 's-messenger',
@@ -2286,9 +2287,9 @@ showScreen = function(id, dir) {
     's-groups-chat':    's-profile',
   };
 
-  // Экраны где свайп вниз = назад (sub-screens типа выбора группы, расписания)
+  // Экраны где свайп вниз = назад (sub-screens типа расписания, тем)
   const SWIPE_DOWN_BACK = new Set([
-    's-groups', 's-schedule', 's-themes', 's-teachers', 's-login',
+    's-schedule', 's-themes', 's-login',
     's-profile-edit',
   ]);
   // Остальные sub-screens (messenger и соц.) = горизонтальный свайп вправо
@@ -2599,27 +2600,9 @@ showScreen = function(id, dir) {
 
 })();
 
-// ══ ПОСЛЕДНЯЯ ГРУППА ══
-function updateLastGroupBtn(){
-  const wrap=document.getElementById('last-group-wrap'),btn=document.getElementById('last-group-btn');
-  if(!wrap||!btn)return;
-  const val=(typeof S!=='undefined'&&S.mode==='teacher')?S.lastTeacher:S.lastGroup;
-  if(val){btn.textContent=val;wrap.classList.remove('hidden');}
-  else wrap.classList.add('hidden');
-}
-async function _jumpStudentLastGroup(){
-  if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
-  const btn=document.getElementById('last-group-btn');
-  const origText=btn.textContent;
-  btn.classList.add('loading');
-  btn.innerHTML=`<span class="loading-spinner"></span><span class="btn-label">Загружаю...</span>`;
-  try{
-    await loadSchedule(S.lastGroup);
-  } finally {
-    btn.classList.remove('loading');
-    btn.textContent=origText;
-  }
-}
+// ══ ПОСЛЕДНЯЯ ГРУППА — кнопка удалена, функция оставлена как заглушка ══
+function updateLastGroupBtn(){}
+function jumpToLastGroup(){}
 
 // ══ ЗАГРУЗКА ══
 function saveUrlAndLoad(){
@@ -2667,25 +2650,21 @@ function showHomeState(type,msg){
 }
 function renderFileList(){
   const list=document.getElementById('file-list');list.innerHTML='';
-  S.files.forEach(f=>{
+  // Ставим последний выбранный файл первым
+  const sorted = [...S.files].sort((a, b) => {
+    const aSelected = S.selectedFile?.name === a.name ? -1 : 0;
+    const bSelected = S.selectedFile?.name === b.name ? -1 : 0;
+    return aSelected - bSelected;
+  });
+  sorted.forEach(f=>{
     const item=document.createElement('div');
     item.className='list-item'+(S.selectedFile?.name===f.name?' selected':'');
     item.innerHTML=`<span class="item-name">${f.name}</span>`;
     item.onclick=()=>{
-      const wasSelected = S.selectedFile?.name === f.name;
       S.selectedFile=f;
       renderFileList();
-      // Предзагружаем файл в фоне сразу при выборе — убирает лаг при goToGroups
-      const key = f.path || f.name;
-      if (!FILE_CACHE[key]) {
-        appLog('info','preload: начинаю фоновую загрузку '+f.name);
-        getFileBuf().then(buf => {
-          appLog('ok','preload: '+f.name+' загружен в кэш ('+Math.round(buf.byteLength/1024)+'КБ)');
-        }).catch(e => {
-          appLog('warn','preload: не удалось загрузить '+f.name+': '+e.message);
-        });
-      }
-      toast('📄 Выбран: '+f.name);
+      // Сразу переходим к группам/педагогам без подтверждения
+      goToGroups();
     };
     list.appendChild(item);
   });
@@ -2752,7 +2731,13 @@ async function goToGroups(){
 }
 function renderGroupList(groups){
   const list=document.getElementById('group-list');list.innerHTML='';
-  groups.forEach(g=>{
+  // Последняя выбранная группа всегда первой
+  const sorted = [...groups].sort((a, b) => {
+    if(S.lastGroup && a === S.lastGroup) return -1;
+    if(S.lastGroup && b === S.lastGroup) return 1;
+    return 0;
+  });
+  sorted.forEach(g=>{
     const item=document.createElement('div');
     item.className='list-item'+(S.lastGroup===g?' selected':'');
     item.innerHTML=`<span class="item-name">${g}</span>`;
@@ -3756,6 +3741,15 @@ function cmdExec(raw){
       }
     } break;
 
+    case 'shorts': {
+      cmdPrint('ok', '📱 Открываю YouTube Shorts...');
+      const q = parts.slice(1).join(' ').trim();
+      setTimeout(() => {
+        cmdClose();
+        ytShortsOpen(q || null);
+      }, 400);
+    } break;
+
     default:
       cmdPrint('err','"'+cmd+'" не найдена.');
   }
@@ -4207,25 +4201,6 @@ async function loadTeacherSchedule(teacher){
 }
 
 // Обновляем updateLastGroupBtn — в режиме учителей показывает последнего учителя
-
-// jumpToLastGroup — в режиме учителей идёт к учителю
-async function jumpToLastGroup(){
-  if(S.mode==='teacher'){
-    if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
-    const btn=document.getElementById('last-group-btn');
-    const origText=btn.textContent;
-    btn.classList.add('loading');
-    btn.innerHTML=`<span class="loading-spinner"></span><span class="btn-label">Загружаю...</span>`;
-    try{
-      await loadTeacherSchedule(S.lastTeacher);
-    }finally{
-      btn.classList.remove('loading');
-      btn.innerHTML=origText;
-    }
-  } else {
-    await _jumpStudentLastGroup();
-  }
-}
 
 // s-schedule — кнопка назад должна идти на правильный список
 function schedBack(){

@@ -9629,3 +9629,424 @@ function renderGroupsList() {
     </div>`;
   }).join('');
 }
+
+
+// ════════════════════════════════════════════════════════════════════════
+// 📱 YOUTUBE SHORTS PLAYER — встроенный клон Shorts
+// Открыть командой: shorts  (в CMD консоли)
+// ════════════════════════════════════════════════════════════════════════
+
+const YT_SHORTS = (() => {
+  // ── Популярные Shorts — стартовый набор видео IDs (обновляемые) ──────
+  // Используем реальные YouTube video ID
+  let _playlist = [
+    { id: 'dQw4w9WgXcQ', title: 'Never Gonna Give You Up', channel: '@rickastley',   likes: '1.2M', comments: '142K', music: 'Never Gonna Give You Up' },
+    { id: 'kJQP7kiw5Fk', title: 'Despacito (Short)',       channel: '@LuisFonsi',    likes: '8.4M', comments: '312K', music: 'Despacito' },
+    { id: 'JGwWNGJdvx8', title: 'Shape of You (Short)',    channel: '@EdSheeran',    likes: '4.1M', comments: '98K',  music: 'Shape of You' },
+    { id: 'OPf0YbXqDm0', title: 'Mark Ronson ft. Bruno',   channel: '@markronson',   likes: '2.7M', comments: '55K',  music: 'Uptown Funk' },
+    { id: 'hT_nvWreIhg', title: 'Счётчик просмотров',      channel: '@YouTube',      likes: '9.9M', comments: '888K', music: 'Оригинальный звук' },
+    { id: '9bZkp7q19f0', title: 'Gangnam Style (Short)',   channel: '@psy',          likes: '7.2M', comments: '421K', music: 'Gangnam Style' },
+    { id: 'CevxZvSJLk8', title: 'Katy Perry - Roar',       channel: '@katyperry',    likes: '3.5M', comments: '62K',  music: 'Roar' },
+    { id: 'RgKAFK5djSk', title: 'Wiz Khalifa - See You',   channel: '@WizKhalifa',   likes: '5.1M', comments: '103K', music: 'See You Again' },
+    { id: 'SlPhMPnQ58k', title: 'Shorts тест',             channel: '@shorts',       likes: '1K',   comments: '12',   music: 'Оригинальный звук' },
+    { id: 'uelHwf8o7_U', title: 'Billie Eilish - Bad Guy', channel: '@billieeilish', likes: '6.3M', comments: '201K', music: 'bad guy' },
+  ];
+
+  let _idx       = 0;      // текущий индекс
+  let _liked     = false;
+  let _subscribed= false;
+  let _progTimer = null;
+
+  // Позиции свайпа
+  let _sy = 0, _dragging = false, _dragY = 0;
+
+  // ── Открыть Shorts ───────────────────────────────────────────────────
+  function open(query) {
+    showScreen('s-shorts');
+    updateNavVisibility('s-shorts');
+    document.getElementById('yt-loader').style.display = 'flex';
+    setTimeout(() => {
+      _buildReel();
+      document.getElementById('yt-loader').style.display = 'none';
+      _renderSlide(_idx);
+    }, 800);
+    if (query) setTimeout(() => ytDoSearch(query), 900);
+    _setupSwipe();
+  }
+
+  // ── Строим reel из слайдов ────────────────────────────────────────────
+  function _buildReel() {
+    const reel = document.getElementById('yt-reel');
+    reel.innerHTML = '';
+    _playlist.forEach((v, i) => {
+      const slide = document.createElement('div');
+      slide.className = 'yt-slide';
+      slide.id = 'yt-slide-' + i;
+      slide.style.transform = i === 0 ? 'translateY(0)' : `translateY(${100 * (i)}%)`;
+      // Thumbnail as background
+      slide.innerHTML = `
+        <div class="yt-slide-thumb" id="yt-thumb-${i}"
+          style="background-image:url(https://img.youtube.com/vi/${v.id}/maxresdefault.jpg)"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+          <div id="yt-spinner-${i}" class="yt-spin" style="display:none"></div>
+        </div>
+        <!-- Tap zone: tap to play/pause -->
+        <div style="position:absolute;inset:0;z-index:10" id="yt-tap-${i}"
+          onclick="YTS._tapPlay(${i})"></div>
+        <!-- Play icon overlay (shown when paused) -->
+        <div id="yt-play-ov-${i}" style="
+          position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+          pointer-events:none;opacity:0;transition:opacity .2s;z-index:11">
+          <div style="width:70px;height:70px;border-radius:50%;background:rgba(0,0,0,.55);
+            backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+        </div>
+      `;
+      reel.appendChild(slide);
+    });
+  }
+
+  // ── Отрисовать текущий слайд — загрузить iframe ───────────────────────
+  function _renderSlide(i) {
+    const v = _playlist[i];
+    if (!v) return;
+
+    _liked = false;
+    _updateLikeUI();
+
+    // Обновляем sidebar
+    document.getElementById('yt-like-count').textContent    = v.likes   || '0';
+    document.getElementById('yt-comment-count').textContent = v.comments || '0';
+    document.getElementById('yt-channel-name').textContent  = v.channel || '@channel';
+    document.getElementById('yt-desc').textContent          = v.title   || '';
+    document.getElementById('yt-music-name').textContent    = v.music   || 'Оригинальный звук';
+
+    // Embed iframe в текущем слайде
+    const slide   = document.getElementById('yt-slide-' + i);
+    const spinner = document.getElementById('yt-spinner-' + i);
+    const thumb   = document.getElementById('yt-thumb-'  + i);
+    if (!slide) return;
+
+    // Удаляем старый iframe если есть
+    slide.querySelectorAll('iframe').forEach(f => f.remove());
+
+    if (spinner) spinner.style.display = 'block';
+
+    // Создаём iframe с YouTube embed
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://www.youtube.com/embed/${v.id}?autoplay=1&mute=0&loop=1&playlist=${v.id}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(location.origin||'https://scheduleapp.local')}`;
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+    iframe.allowFullscreen = false;
+    iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;z-index:5';
+    iframe.onload = () => {
+      if (spinner) spinner.style.display = 'none';
+      if (thumb)   { thumb.style.opacity = '0'; setTimeout(() => thumb.style.display = 'none', 400); }
+      _startProgress();
+    };
+    slide.appendChild(iframe);
+
+    // Предзагружаем следующий слайд (thumbnail)
+    _preloadThumb(i + 1);
+
+    // Прогресс-бар
+    document.getElementById('yt-progress').style.width = '0%';
+  }
+
+  // ── Прогресс-бар (имитация, т.к. нет доступа к iframe API без postMessage) ──
+  function _startProgress() {
+    clearInterval(_progTimer);
+    const dur = 30; // средняя длительность short в секундах
+    const start = Date.now();
+    _progTimer = setInterval(() => {
+      const pct = Math.min(100, (Date.now() - start) / (dur * 1000) * 100);
+      const el = document.getElementById('yt-progress');
+      if (el) el.style.width = pct + '%';
+      if (pct >= 100) { clearInterval(_progTimer); setTimeout(() => goNext(), 200); }
+    }, 500);
+  }
+
+  function _preloadThumb(i) {
+    if (i >= _playlist.length) return;
+    const img = new Image();
+    img.src = `https://img.youtube.com/vi/${_playlist[i].id}/maxresdefault.jpg`;
+  }
+
+  // ── Play / Pause тап ─────────────────────────────────────────────────
+  function _tapPlay(i) {
+    const iframe = document.querySelector(`#yt-slide-${i} iframe`);
+    const ov     = document.getElementById(`yt-play-ov-${i}`);
+    if (!iframe) return;
+    // Toggle mute через postMessage (YouTube iframe API)
+    try {
+      iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
+    } catch(_) {}
+    if (ov) {
+      ov.style.opacity = '1';
+      setTimeout(() => { ov.style.opacity = '0'; }, 700);
+    }
+  }
+
+  // ── Навигация ─────────────────────────────────────────────────────────
+  function goNext() {
+    if (_idx >= _playlist.length - 1) return;
+    clearInterval(_progTimer);
+    // Пауза в текущем iframe
+    _pauseCurrent();
+    const fromSlide = document.getElementById('yt-slide-' + _idx);
+    _idx++;
+    const toSlide = document.getElementById('yt-slide-' + _idx);
+    _animSlide(fromSlide, toSlide, 'up', () => _renderSlide(_idx));
+  }
+
+  function goPrev() {
+    if (_idx <= 0) return;
+    clearInterval(_progTimer);
+    _pauseCurrent();
+    const fromSlide = document.getElementById('yt-slide-' + _idx);
+    _idx--;
+    const toSlide = document.getElementById('yt-slide-' + _idx);
+    _animSlide(fromSlide, toSlide, 'down', () => _renderSlide(_idx));
+  }
+
+  function _pauseCurrent() {
+    const iframe = document.querySelector(`#yt-slide-${_idx} iframe`);
+    if (!iframe) return;
+    try { iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*'); } catch(_) {}
+  }
+
+  function _animSlide(from, to, dir, cb) {
+    if (!from || !to) { if(cb) cb(); return; }
+    const h = window.innerHeight;
+    const ease = 'cubic-bezier(0.4,0,0.2,1)';
+    const dur = 320;
+
+    to.style.transition = 'none';
+    to.style.transform  = dir === 'up' ? `translateY(${h}px)` : `translateY(${-h}px)`;
+    to.style.zIndex     = '2';
+    from.style.zIndex   = '1';
+    void to.getBoundingClientRect();
+
+    requestAnimationFrame(() => {
+      to.style.transition   = `transform ${dur}ms ${ease}`;
+      to.style.transform    = 'translateY(0)';
+      from.style.transition = `transform ${dur}ms ${ease}`;
+      from.style.transform  = dir === 'up' ? `translateY(${-h}px)` : `translateY(${h}px)`;
+      setTimeout(() => {
+        from.style.cssText = `position:absolute;left:0;right:0;width:100%;height:100%;background:#000;`;
+        to.style.zIndex    = '1';
+        if(cb) cb();
+      }, dur + 30);
+    });
+  }
+
+  // ── Свайп вертикальный ────────────────────────────────────────────────
+  function _setupSwipe() {
+    const reel = document.getElementById('yt-reel');
+    if (!reel || reel._swipeSet) return;
+    reel._swipeSet = true;
+
+    reel.addEventListener('touchstart', e => {
+      _sy = e.touches[0].clientY;
+      _dragging = true;
+      _dragY = 0;
+    }, { passive: true });
+
+    reel.addEventListener('touchmove', e => {
+      if (!_dragging) return;
+      _dragY = e.touches[0].clientY - _sy;
+      const slide = document.getElementById('yt-slide-' + _idx);
+      if (slide) slide.style.transform = `translateY(${_dragY * 0.35}px)`;
+    }, { passive: true });
+
+    reel.addEventListener('touchend', () => {
+      _dragging = false;
+      const slide = document.getElementById('yt-slide-' + _idx);
+      const THRESHOLD = 60;
+      if (_dragY < -THRESHOLD) {
+        goNext();
+      } else if (_dragY > THRESHOLD) {
+        goPrev();
+      } else {
+        // snap back
+        if (slide) {
+          slide.style.transition = 'transform .22s cubic-bezier(.4,0,.2,1)';
+          slide.style.transform  = 'translateY(0)';
+          setTimeout(() => { if(slide) slide.style.transition = ''; }, 250);
+        }
+      }
+    });
+  }
+
+  // ── Like UI ───────────────────────────────────────────────────────────
+  function _updateLikeUI() {
+    const btn = document.getElementById('yt-like-btn');
+    const ico = document.getElementById('yt-like-ico');
+    if (!btn || !ico) return;
+    if (_liked) {
+      btn.style.background = 'rgba(255,0,0,.25)';
+      ico.setAttribute('stroke', '#ff4444');
+      ico.setAttribute('fill', 'rgba(255,68,68,.3)');
+    } else {
+      btn.style.background = 'rgba(255,255,255,.15)';
+      ico.setAttribute('stroke', 'white');
+      ico.setAttribute('fill', 'none');
+    }
+  }
+
+  // ── Поиск через YouTube oEmbed hint ──────────────────────────────────
+  async function search(query) {
+    const el = document.getElementById('yt-search-results');
+    if (el) el.innerHTML = '<div style="color:#aaa;text-align:center;padding:30px">🔎 Ищу...</div>';
+    // Используем предустановленные IDs + запрос к Invidious API (open-source YouTube frontend)
+    try {
+      // Invidious — открытый фронтенд YouTube с API, не требует ключа
+      const invidiousInstances = [
+        'https://inv.nadeko.net',
+        'https://invidious.nerdvpn.de',
+        'https://yt.artemislena.eu',
+      ];
+      let data = null;
+      for (const host of invidiousInstances) {
+        try {
+          const r = await fetch(`${host}/api/v1/search?q=${encodeURIComponent(query)}&type=video&duration=short&page=1`, {
+            signal: AbortSignal.timeout(5000)
+          });
+          if (r.ok) { data = await r.json(); break; }
+        } catch(_) {}
+      }
+      if (data && Array.isArray(data) && data.length > 0) {
+        const shorts = data.filter(v => v.lengthSeconds > 0 && v.lengthSeconds <= 90).slice(0, 15);
+        if (el) {
+          el.innerHTML = shorts.length
+            ? shorts.map(v => `
+              <div onclick="YTS._addAndPlay({id:'${v.videoId}',title:${JSON.stringify(v.title||'')},channel:${JSON.stringify('@'+(v.author||''))},likes:'${_fmt(v.likeCount)}',comments:'0',music:'Оригинальный звук'})"
+                style="display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.08)">
+                <img src="https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg"
+                  style="width:80px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:3px;
+                    overflow:hidden;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical">${escHtml(v.title||'')}</div>
+                  <div style="font-size:11px;color:#aaa">${escHtml('@'+(v.author||''))}</div>
+                </div>
+              </div>`).join('')
+            : '<div style="color:#aaa;text-align:center;padding:30px">Ничего не найдено</div>';
+        }
+      } else {
+        if (el) el.innerHTML = '<div style="color:#aaa;text-align:center;padding:30px">Нет результатов. Попробуй другой запрос.</div>';
+      }
+    } catch(e) {
+      if (el) el.innerHTML = `<div style="color:#f66;text-align:center;padding:30px">Ошибка поиска: ${e.message}</div>`;
+    }
+  }
+
+  function _fmt(n) {
+    if (!n) return '0';
+    if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+    if (n >= 1e3) return (n/1e3).toFixed(0)+'K';
+    return String(n);
+  }
+
+  function _addAndPlay(v) {
+    // Добавляем в начало плейлиста и воспроизводим
+    _playlist.unshift(v);
+    _idx = 0;
+    _buildReel();
+    document.getElementById('yt-search-overlay').style.display = 'none';
+    _renderSlide(0);
+  }
+
+  return { open, goNext, goPrev, search, _addAndPlay, _tapPlay,
+           getLiked: () => _liked, setLiked: (v) => { _liked = v; _updateLikeUI(); },
+           isSubscribed: () => _subscribed, setSubscribed: (v) => { _subscribed = v; } };
+})();
+
+// ── Глобальные хелперы для HTML ───────────────────────────────────────────
+window.YTS = YT_SHORTS;
+
+function ytShortsOpen(query) { YT_SHORTS.open(query); }
+
+function ytToggleLike() {
+  const liked = !YT_SHORTS.getLiked();
+  YT_SHORTS.setLiked(liked);
+  const btn = document.getElementById('yt-like-btn');
+  if (btn) {
+    btn.style.animation = 'yt-like-pop .35s cubic-bezier(.34,1.3,.64,1)';
+    setTimeout(() => btn.style.animation = '', 400);
+  }
+  if (liked) SFX.play('success');
+}
+
+function ytToggleDislike() { toast('👎 Не нравится'); }
+
+function ytSubscribe(el) {
+  const subscribed = !YT_SHORTS.isSubscribed();
+  YT_SHORTS.setSubscribed(subscribed);
+  const btn = document.getElementById('yt-sub-btn');
+  if (btn) {
+    if (subscribed) {
+      btn.textContent = 'Подписан';
+      btn.style.background = 'rgba(255,255,255,.15)';
+      btn.style.borderColor = 'rgba(255,255,255,.4)';
+      toast('🔔 Вы подписались!');
+    } else {
+      btn.textContent = 'Подписаться';
+      btn.style.background = 'none';
+      btn.style.borderColor = 'rgba(255,255,255,.9)';
+    }
+  }
+  SFX.play('btnClick');
+}
+
+function ytShare() {
+  const v = YT_SHORTS._playlist ? null : null;
+  if (navigator.share) {
+    navigator.share({ title: 'YouTube Shorts', url: 'https://youtube.com/shorts' }).catch(() => {});
+  } else {
+    navigator.clipboard?.writeText('https://youtube.com/shorts').catch(() => {});
+    toast('🔗 Ссылка скопирована');
+  }
+}
+
+function ytMoreMenu() {
+  const sh = document.createElement('div');
+  sh.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
+  sh.innerHTML = `
+    <div style="background:#1a1a1a;border-radius:20px 20px 0 0;padding:10px 0 calc(16px + var(--safe-bot,0px));animation:mcSlideUp .22s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:#444;border-radius:2px;margin:0 auto 12px"></div>
+      ${[['🚫 Не интересует', ()=>{}],['⚑ Пожаловаться', ()=>toast('Жалоба отправлена')],
+         ['💾 Сохранить видео', ()=>toast('Сохранено в \"Смотреть позже\"')],
+         ['➕ В плейлист', ()=>toast('Добавлено в плейлист')],
+         ['📊 Качество', ()=>toast('Авто')]].map(([label, fn]) =>
+        `<button onclick="this.closest('[style*=fixed]').remove();(${fn})()"
+          style="width:100%;padding:14px 20px;background:none;border:none;color:#fff;
+                 font-family:inherit;font-size:15px;text-align:left;cursor:pointer;
+                 display:flex;align-items:center;gap:16px;-webkit-tap-highlight-color:transparent">${label}</button>`
+      ).join('')}
+    </div>`;
+  sh.addEventListener('click', () => sh.remove());
+  document.body.appendChild(sh);
+}
+
+function ytOpenComments() {
+  toast('💬 Комментарии в разработке');
+}
+
+function ytChannelOpen() {
+  toast('📺 Страница канала в разработке');
+}
+
+function ytExpandDesc(el) {
+  el.style.webkitLineClamp = el.style.webkitLineClamp === 'unset' ? '2' : 'unset';
+  el.style.maxHeight       = el.style.maxHeight === 'none' ? '60px' : 'none';
+}
+
+function ytShortsSearch() {
+  document.getElementById('yt-search-overlay').style.display = 'block';
+  setTimeout(() => document.getElementById('yt-search-input')?.focus(), 100);
+}
+
+function ytDoSearch(q) {
+  if (!q?.trim()) return;
+  YT_SHORTS.search(q.trim());
+}
