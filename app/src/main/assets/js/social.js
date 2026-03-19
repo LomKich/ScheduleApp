@@ -3060,7 +3060,10 @@ function profileUpdateP2PStatus(msg) {
 const _origShowScreenForSb = window.showScreen;
 window.showScreen = (function(orig) {
   return function(id, dir) {
-    if (id === 's-settings') sbFillSettings();
+    if (id === 's-settings') {
+      sbFillSettings();
+      _renderEmojiStyleToggle(_emojiStyleEnabled());
+    }
     if (orig) orig(id, dir);
   };
 })(window.showScreen);
@@ -4910,7 +4913,7 @@ function _emojiImg(emoji, size, style) {
   const extra = style ? ';' + style : '';
   return `<img src="${_EMOJI_BASE}${path}" alt="${emoji}" ` +
     `style="display:inline-block;width:${sz}px;height:${sz}px;vertical-align:-.2em;` +
-    `object-fit:contain;flex-shrink:0${extra}" class="emoji-img" draggable="false" ` +
+    `object-fit:contain;flex-shrink:0${extra}" class="emoji" draggable="false" ` +
     `onerror="this.outerHTML='${emoji}'">`;
 }
 
@@ -4932,9 +4935,7 @@ function _localEmojiHtml(text) {
         // Используем 1.15em вместо фиксированных px — emoji масштабируется вместе с
         // родительским font-size: и в стикерах (52px→60px), и в кнопках (13px→15px)
         result += `<img src="${_EMOJI_BASE}${path}" alt="${sub}" ` +
-          `style="display:inline-block;width:1.15em;height:1.15em;vertical-align:-.2em;` +
-          `margin:0 .03em;pointer-events:none;object-fit:contain" ` +
-          `class="emoji-img" draggable="false" onerror="this.replaceWith(document.createTextNode('${sub}'))">`;
+          `class="emoji" draggable="false" onerror="this.replaceWith(document.createTextNode('${sub}'))">`;
         i += len;
         changed = true;
         found = true;
@@ -4979,6 +4980,7 @@ function _localEmojiParse(root) {
     if (!html) continue;
     const span = document.createElement('span');
     span.dataset.emojiDone = '1';
+    span.style.display = 'contents'; // не создаёт отдельный box, дети встают inline
     span.innerHTML = html;
     try { textNode.parentNode.replaceChild(span, textNode); } catch(_) {}
   }
@@ -6655,12 +6657,7 @@ function messengerRenderMessages(animateLast) {
                onclick="mcVideoOpen('${safeUrl}','${safeName}')">
              ${msg.thumbData
                ? `<img src="${escHtml(msg.thumbData)}" style="display:block;width:100%;max-width:260px;min-height:80px;border-radius:14px;object-fit:cover" loading="lazy">`
-               : `<div style="width:260px;height:146px;border-radius:14px;overflow:hidden;position:relative;background:#111">
-                 <div style="position:absolute;inset:0;background:linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 50%,#1a1a1a 75%);background-size:200% 100%;animation:skelShimmer 1.4s infinite"></div>
-                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                   <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.25);border-top-color:rgba(255,255,255,.75);border-radius:50%;animation:mvpSpin .8s linear infinite"></div>
-                 </div>
-               </div>`
+               : `<div style="width:260px;height:146px;border-radius:14px;background:#000"></div>`
              }
              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
                <div style="width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.52);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center">
