@@ -5016,9 +5016,14 @@ const _msgSelected = new Set();
 function msgSelectEnter(username) {
   _msgSelectMode = true;
   _msgSelected.clear();
-  // Не добавляем автоматически — первый элемент должен tap-ом выбираться
+  if (username) _msgSelected.add(username); // сразу выделяем тот чат, что зажали
   document.getElementById('msg-hdr-normal').style.display = 'none';
   document.getElementById('msg-hdr-select').style.display = '';
+  // Скрываем поиск и FAB в режиме выделения
+  const searchBar = document.querySelector('#s-messenger > [style*="padding:8px"]');
+  if (searchBar) searchBar.style.display = 'none';
+  const fab = document.getElementById('msg-fab-container');
+  if (fab) { fab.style.opacity = '0'; fab.style.pointerEvents = 'none'; }
   messengerRenderList();
   _msgUpdateSelectCount();
   try { window.Android?.vibrate?.(35); } catch(_) {}
@@ -5030,6 +5035,11 @@ function msgSelectCancel() {
   _msgSelected.clear();
   document.getElementById('msg-hdr-normal').style.display = '';
   document.getElementById('msg-hdr-select').style.display = 'none';
+  // Восстанавливаем поиск и FAB
+  const searchBar = document.querySelector('#s-messenger > [style*="padding:8px"]');
+  if (searchBar) searchBar.style.display = '';
+  const fab = document.getElementById('msg-fab-container');
+  if (fab) { fab.style.opacity = ''; fab.style.pointerEvents = ''; }
   messengerRenderList();
 }
 
@@ -5037,13 +5047,17 @@ function msgToggleSelect(username, e) {
   e.stopPropagation();
   if (_msgSelected.has(username)) _msgSelected.delete(username);
   else _msgSelected.add(username);
+  // Авто-выход если ничего не выделено
+  if (_msgSelected.size === 0) { msgSelectCancel(); return; }
   _msgUpdateSelectCount();
   // Обновить визуал конкретной строки с анимацией
   const row = document.querySelector(`[data-chat-user="${CSS.escape(username)}"]`);
   if (row) {
     row.classList.toggle('chat-selected', _msgSelected.has(username));
+    // Обновляем оверлей аватара
+    _msgUpdateAvatarOverlay(row, _msgSelected.has(username));
     row.classList.remove('chat-row-selecting');
-    void row.offsetWidth; // reflow
+    void row.offsetWidth;
     row.classList.add('chat-row-selecting');
     row.addEventListener('animationend', () => row.classList.remove('chat-row-selecting'), { once: true });
   }
@@ -5051,7 +5065,12 @@ function msgToggleSelect(username, e) {
 
 function _msgUpdateSelectCount() {
   const el = document.getElementById('msg-select-count');
-  if (el) el.textContent = 'Выбрано: ' + _msgSelected.size;
+  if (el) el.textContent = String(_msgSelected.size);
+}
+
+function _msgUpdateAvatarOverlay(row, selected) {
+  const ov = row.querySelector('.chat-av-sel-ov');
+  if (ov) ov.classList.toggle('sel', selected);
 }
 
 function msgDeleteSelected() {
@@ -5108,6 +5127,47 @@ function msgPinSelected() {
     if (!pins.includes(u)) { pins.unshift(u); pinnedChatsSave(pins); }
   });
   toast('📌 Закреплено ' + _msgSelected.size + ' чат(ов)');
+  msgSelectCancel();
+}
+
+function msgMuteSelected() {
+  if (_msgSelected.size === 0) return;
+  _msgSelected.forEach(u => {
+    const muted = JSON.parse(localStorage.getItem('muted_chats') || '[]');
+    const idx = muted.indexOf(u);
+    if (idx === -1) muted.push(u); else muted.splice(idx, 1);
+    localStorage.setItem('muted_chats', JSON.stringify(muted));
+    _mcUpdateMuteIcon && _mcUpdateMuteIcon();
+  });
+  toast('🔇 Изменено для ' + _msgSelected.size + ' чат(ов)');
+  msgSelectCancel();
+}
+
+function msgSelectMoreMenu() {
+  const sh = document.createElement('div');
+  sh.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.45);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
+  sh.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:10px 0 calc(16px + var(--safe-bot,0px));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 12px"></div>
+      <button onclick="this.closest('[style*=fixed]').remove();msgReadSelected()"
+        style="width:100%;padding:14px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:16px;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:20px">✓</span> Отметить как прочитанное
+      </button>
+    </div>`;
+  sh.addEventListener('click', () => sh.remove());
+  document.body.appendChild(sh);
+}
+
+function msgReadSelected() {
+  if (_msgSelected.size === 0) return;
+  const msgs = msgLoad();
+  const p = profileLoad();
+  _msgSelected.forEach(u => {
+    if (msgs[u]) msgs[u].forEach(m => { if (m.from !== p?.username) m.read = true; });
+  });
+  msgSave(msgs);
+  messengerUpdateBadge();
+  toast('✓ Прочитано');
   msgSelectCancel();
 }
 
@@ -5261,7 +5321,8 @@ function messengerRenderList(filter) {
       ${_pinned && !_msgSelectMode ? '<span style="font-size:13px;opacity:.5;flex-shrink:0;transform:rotate(45deg);display:inline-block">📌</span>' : ''}
       <div style="position:relative;flex-shrink:0">
         <div style="width:52px;height:52px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;overflow:hidden">${avatarHtml}</div>
-        ${isOnline ? '<div style="position:absolute;bottom:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#4caf7d;border:2.5px solid var(--bg)"></div>' : ''}
+        ${isOnline && !_msgSelectMode ? '<div style="position:absolute;bottom:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#4caf7d;border:2.5px solid var(--bg)"></div>' : ''}
+        ${_msgSelectMode ? `<div class="chat-av-sel-ov${isSel?' sel':''}"></div>` : ''}
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
@@ -5332,12 +5393,14 @@ function msgRowTouchStart(el, username) {
   _msgTouchStartX = t?.clientX || 0;
   _msgTouchStartY = t?.clientY || 0;
   _msgTouchMoved  = false;
-  // В режиме выделения — НЕ обрабатываем здесь, обработчик onclick сам вызовет msgToggleSelect
   if (_msgSelectMode) return;
   el.style.background = 'rgba(255,255,255,.04)';
   _msgLongPressTimer = setTimeout(() => {
     el.style.background = '';
-    if (!_msgTouchMoved) showChatContextMenu(username);
+    if (!_msgTouchMoved) {
+      // Telegram-style: сразу входим в режим выделения с этим чатом
+      msgSelectEnter(username);
+    }
   }, 480);
 }
 
@@ -6144,10 +6207,13 @@ function _mcEnterSelectMode(row, idx) {
   if (_mcMultiSelect) return;
   _mcMultiSelect = true;
   _mcSelectedIdxs.clear();
-  _mcSelectedIdxs.add(idx);
+  if (idx !== null && idx !== undefined) _mcSelectedIdxs.add(idx);
   mcCloseMenu();
+  // Добавляем отступ слева под кружки
+  document.getElementById('mc-messages')?.classList.add('select-mode');
   _mcRenderSelectBar();
   _mcRefreshBubbleStates();
+  try { window.Android?.vibrate?.(28); } catch(_) {}
   SFX.play && SFX.play('btnClick');
 }
 
@@ -6155,6 +6221,17 @@ function _mcExitSelectMode() {
   _mcMultiSelect = false;
   _mcSelectedIdxs.clear();
   document.getElementById('mc-select-bar')?.remove();
+  // Убираем отступ
+  document.getElementById('mc-messages')?.classList.remove('select-mode');
+  // Восстанавливаем обычную шапку
+  const normalHdr = document.querySelector('#s-messenger-chat .hdr');
+  if (normalHdr) normalHdr.style.display = '';
+  // Восстанавливаем input-bar и reply-bar
+  const inputBar = document.getElementById('mc-input-bar');
+  if (inputBar) inputBar.style.display = '';
+  const replyBar = document.getElementById('mc-reply-bar');
+  // reply-bar восстанавливаем только если есть активный reply
+  if (replyBar && window._mcReplyTo) replyBar.style.display = '';
   _mcRefreshBubbleStates();
 }
 
@@ -6180,93 +6257,157 @@ function _mcRefreshBubbleStates() {
   body.querySelectorAll('[data-msg-bubble]').forEach(row => {
     const idx = parseInt(row.getAttribute('data-msg-idx'), 10);
     const sel = _mcMultiSelect && _mcSelectedIdxs.has(idx);
-    // Overlay-кружок
+    const isMe = row.dataset.msgMe === '1';
+
+    // ── 1. Кружок слева от пузыря ──────────────────────────────
     let circle = row.querySelector('.mc-sel-circle');
     if (_mcMultiSelect) {
       if (!circle) {
         circle = document.createElement('div');
         circle.className = 'mc-sel-circle';
         circle.style.cssText = [
-          'position:absolute;left:0;top:50%;transform:translateY(-50%);',
-          'width:24px;height:24px;border-radius:50%;border:2px solid var(--accent);',
-          'background:transparent;display:flex;align-items:center;justify-content:center;',
-          'flex-shrink:0;transition:background .1s,transform .12s cubic-bezier(.34,1.3,.64,1);',
-          'z-index:2;pointer-events:none;margin-left:2px;'
+          'flex-shrink:0;width:22px;height:22px;border-radius:50%;',
+          'border:2px solid rgba(255,255,255,.38);background:transparent;',
+          'display:flex;align-items:center;justify-content:center;',
+          'align-self:center;',
+          'transition:background .13s,border-color .13s,transform .14s cubic-bezier(.34,1.3,.64,1);',
+          'pointer-events:none;'
         ].join('');
-        row.style.position = 'relative';
-        row.appendChild(circle);
+        // Вставляем В НАЧАЛО строки (перед аватаром / пузырём)
+        row.insertBefore(circle, row.firstChild);
       }
-      circle.style.background   = sel ? 'var(--accent)' : 'transparent';
-      circle.style.borderColor  = sel ? 'var(--accent)' : 'rgba(255,255,255,.45)';
-      circle.style.transform    = sel ? 'translateY(-50%) scale(1.1)' : 'translateY(-50%) scale(1)';
-      circle.innerHTML          = sel
-        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>'
-        : '';
+      if (sel) {
+        circle.style.background  = 'var(--accent)';
+        circle.style.borderColor = 'var(--accent)';
+        circle.style.transform   = 'scale(1.08)';
+        circle.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>';
+        // pop-анимация
+        circle.style.animation = 'mc-sel-pop .18s cubic-bezier(.34,1.3,.64,1)';
+        setTimeout(() => { circle.style.animation = ''; }, 200);
+      } else {
+        circle.style.background  = 'transparent';
+        circle.style.borderColor = 'rgba(255,255,255,.38)';
+        circle.style.transform   = 'scale(1)';
+        circle.innerHTML = '';
+      }
     } else {
       circle?.remove();
     }
-    // Подсветка выделенного фона
+
+    // ── 2. Подсветка всей строки при выделении ─────────────────
+    row.style.background = (_mcMultiSelect && sel)
+      ? 'rgba(var(--accent-rgb,32,138,240), .15)'
+      : '';
+    row.style.transition = 'background .13s';
+
+    // ── 3. Сдвиг пузыря при входе/выходе из режима выделения ───
     const inner = row.querySelector('.mc-bubble-inner');
     if (inner) {
-      inner.style.transition = 'background .12s';
-      if (sel) inner.style.outline = '2px solid var(--accent)';
-      else     inner.style.outline = '';
+      inner.style.transition = 'transform .18s cubic-bezier(.34,1.1,.64,1), outline .12s';
+      inner.style.outline = '';
     }
   });
 }
 
-// Рисует нижний тулбар выделения
+// Рисует Telegram-style шапку выделения (меняет обычную шапку)
 function _mcRenderSelectBar() {
+  // Скрываем обычную шапку
+  const normalHdr = document.querySelector('#s-messenger-chat .hdr');
+  if (normalHdr) { normalHdr.style.display = 'none'; normalHdr._wasVisible = true; }
+  // Скрываем reply-bar и input-bar
+  const replyBar = document.getElementById('mc-reply-bar');
+  const inputBar = document.getElementById('mc-input-bar');
+  if (replyBar) replyBar.style.display = 'none';
+  if (inputBar) inputBar.style.display = 'none';
+
   let bar = document.getElementById('mc-select-bar');
   if (bar) bar.remove();
   bar = document.createElement('div');
   bar.id = 'mc-select-bar';
   bar.style.cssText = [
-    'position:fixed;bottom:0;left:0;right:0;z-index:9050;',
-    'background:var(--surface);border-top:1px solid rgba(255,255,255,.07);',
-    'display:flex;align-items:center;justify-content:space-between;',
-    'padding:10px 16px calc(10px + var(--safe-bot,0px));',
-    'animation:mcSlideUp .22s cubic-bezier(.34,1.1,.64,1);',
-    'gap:8px;'
+    'position:sticky;top:0;left:0;right:0;z-index:9050;',
+    'background:var(--surface);',
+    'display:flex;align-items:center;',
+    'padding:0 4px;min-height:56px;flex-shrink:0;',
+    'border-bottom:1px solid rgba(255,255,255,.06);',
+    'animation:mc-sel-hdr-in .18s cubic-bezier(.34,1.1,.64,1);'
   ].join('');
+
+  // Telegram-style: ✕ | N | copy | forward | delete
   bar.innerHTML = `
     <button id="mc-sel-cancel"
-      style="background:none;border:none;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;padding:8px 4px;font-family:inherit;">
-      Отмена
+      style="width:44px;height:44px;border-radius:50%;background:none;border:none;color:var(--text);
+             cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+             -webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
     </button>
     <div id="mc-sel-count"
-      style="flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text);">
-      Выделено: 1
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button id="mc-sel-forward"
-        style="width:40px;height:40px;border-radius:50%;background:var(--surface2);border:none;color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;"
-        title="Переслать">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 8V4l8 8-8 8v-4H4V8z"/>
-        </svg>
-      </button>
-      <button id="mc-sel-delete"
-        style="width:40px;height:40px;border-radius:50%;background:var(--surface2);border:none;color:var(--danger,#e05555);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;"
-        title="Удалить">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-        </svg>
-      </button>
-    </div>
+      style="flex:1;font-size:17px;font-weight:700;color:var(--text);padding-left:2px">1</div>
+    <button id="mc-sel-copy"
+      title="Копировать"
+      style="width:44px;height:44px;border-radius:50%;background:none;border:none;color:var(--text);
+             cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+             -webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+      </svg>
+    </button>
+    <button id="mc-sel-forward"
+      title="Переслать"
+      style="width:44px;height:44px;border-radius:50%;background:none;border:none;color:var(--text);
+             cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+             -webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 10 20 15 15 20"/>
+        <path d="M4 4v7a4 4 0 0 0 4 4h12"/>
+      </svg>
+    </button>
+    <button id="mc-sel-delete"
+      title="Удалить"
+      style="width:44px;height:44px;border-radius:50%;background:none;border:none;color:var(--danger,#e05555);
+             cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+             -webkit-tap-highlight-color:transparent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6l-1 14H6L5 6"/>
+        <path d="M10 11v6M14 11v6"/>
+        <path d="M9 6V4h6v2"/>
+      </svg>
+    </button>
   `;
-  document.body.appendChild(bar);
+
+  // Вставляем В НАЧАЛО экрана чата (сверху)
+  const chatScreen = document.getElementById('s-messenger-chat');
+  chatScreen.insertBefore(bar, chatScreen.firstChild);
+
   bar.querySelector('#mc-sel-cancel').addEventListener('click', _mcExitSelectMode);
+  bar.querySelector('#mc-sel-copy').addEventListener('click', _mcSelectionCopy);
   bar.querySelector('#mc-sel-forward').addEventListener('click', _mcSelectionForward);
   bar.querySelector('#mc-sel-delete').addEventListener('click', _mcSelectionDelete);
 }
 
 function _mcUpdateSelectBar() {
   const count = document.getElementById('mc-sel-count');
-  if (count) count.textContent = 'Выделено: ' + _mcSelectedIdxs.size;
+  if (count) count.textContent = String(_mcSelectedIdxs.size);
 }
 
 // Пересылка выделенных сообщений
+function _mcSelectionCopy() {
+  if (!_mcSelectedIdxs.size) return;
+  const msgs   = msgLoad()[_msgCurrentChat] || [];
+  const sorted = [..._mcSelectedIdxs].sort((a, b) => a - b);
+  const text   = sorted.map(i => msgs[i])
+    .filter(Boolean)
+    .map(m => m.text || m.sticker || (m.image ? '[Фото]' : '[Медиа]'))
+    .join('\n');
+  navigator.clipboard?.writeText(text).catch(() => {});
+  toast('📋 Скопировано');
+  _mcExitSelectMode();
+}
+
 function _mcSelectionForward() {
   if (!_mcSelectedIdxs.size) return;
   const msgs   = msgLoad()[_msgCurrentChat] || [];
