@@ -3522,9 +3522,12 @@ function showGroupSettings(groupId) {
   const memberCount = group.members.length;
   const memberWord  = memberCount===1?'участник':memberCount<5?'участника':'участников';
 
-  // Аватар группы   кликабельный для смены (только создатель)
+  // Аватар группы — кликабельный для смены (только создатель)
   const avatarClick = (!isPublic && isCreator) ? `onclick="groupPickAvatar('${groupId}')"` : '';
   const avatarCursor = (!isPublic && isCreator) ? 'cursor:pointer' : '';
+  const _gsAvatarInner = (group.avatarType === 'photo' && group.avatarData)
+    ? `<img class="gs-av-photo" src="${group.avatarData}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;position:absolute;inset:0"><span id="gs-avatar-emoji" style="display:none">${group.avatar||'👥'}</span>`
+    : `<span id="gs-avatar-emoji">${group.avatar||'👥'}</span>`;
 
   screen.innerHTML = `
     <style>
@@ -3547,7 +3550,7 @@ function showGroupSettings(groupId) {
       <!-- Аватар и название -->
       <div style="display:flex;flex-direction:column;align-items:center;padding:24px 20px 20px">
         <div ${avatarClick} style="width:80px;height:80px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:40px;position:relative;${avatarCursor}" id="gs-avatar-wrap">
-          <span id="gs-avatar-emoji">${group.avatar||'👥'}</span>
+          ${_gsAvatarInner}
           ${(!isPublic && isCreator) ? '<div style="position:absolute;bottom:0;right:0;width:26px;height:26px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></div>' : ''}
         </div>
         <div style="margin-top:12px;font-size:20px;font-weight:700;color:var(--text);text-align:center" id="gs-name-display">${escHtml(group.name)}</div>
@@ -3777,6 +3780,11 @@ function groupPickAvatar(groupId) {
     <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:16px;animation:mcSlideUp .22s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
       <div style="font-size:15px;font-weight:700;margin-bottom:14px">Аватар группы</div>
+      <button id="grp-av-photo-btn" style="width:100%;padding:13px 16px;background:var(--surface2);border:1.5px dashed var(--surface3);border-radius:14px;color:var(--accent);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:14px;-webkit-tap-highlight-color:transparent">
+        📷 Загрузить фото
+      </button>
+      <input type="file" id="grp-av-file-inp" accept="image/*" style="display:none">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Или выбери эмодзи:</div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px">
         ${EMOJIS.map(e => `<button onclick="groupSetAvatar('${groupId}','${e}');this.closest('[style*=fixed]').remove()"
           style="background:var(--surface2);border:none;border-radius:12px;font-size:28px;padding:10px;cursor:pointer;-webkit-tap-highlight-color:transparent">${e}</button>`).join('')}
@@ -3784,6 +3792,25 @@ function groupPickAvatar(groupId) {
     </div>`;
   sheet.addEventListener('click', () => sheet.remove());
   document.body.appendChild(sheet);
+
+  // Фото: кнопка → input → crop
+  sheet.querySelector('#grp-av-photo-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    sheet.querySelector('#grp-av-file-inp').click();
+  });
+  sheet.querySelector('#grp-av-file-inp').addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      sheet.remove();
+      openImageCrop(ev.target.result, {
+        mode: 'avatar',
+        onDone: (cropped) => groupSetAvatarPhoto(groupId, cropped)
+      });
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function groupSetAvatar(groupId, emoji) {
@@ -3791,11 +3818,51 @@ function groupSetAvatar(groupId, emoji) {
   const g = groups.find(x => x.id === groupId);
   if (!g) return;
   g.avatar = emoji;
+  g.avatarType = 'emoji';
+  g.avatarData = null;
   groupsSave(groups);
-  const el = document.getElementById('gs-avatar-emoji');
-  if (el) el.textContent = emoji;
+  // Обновляем UI в экране настроек
+  const wrap = document.getElementById('gs-avatar-wrap');
+  if (wrap) {
+    wrap.querySelector('img.gs-av-photo')?.remove();
+    const span = document.getElementById('gs-avatar-emoji');
+    if (span) { span.style.display = ''; span.textContent = emoji; }
+  }
   renderGroupsList();
   toast('✅ Аватар изменён');
+  const p = profileLoad();
+  if (sbReady() && p) {
+    _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+      { groups: JSON.stringify(groups) },
+      { 'Content-Type':'application/json','Prefer':'return=minimal' }).catch(()=>{});
+  }
+}
+
+// Сохраняет фото-аватарку для группы
+function groupSetAvatarPhoto(groupId, dataUrl) {
+  const groups = groupsLoad();
+  const g = groups.find(x => x.id === groupId);
+  if (!g) return;
+  g.avatarType = 'photo';
+  g.avatarData = dataUrl;
+  g.avatar = '👥'; // fallback если фото не загрузится
+  groupsSave(groups);
+  // Обновляем аватар в экране настроек группы
+  const wrap = document.getElementById('gs-avatar-wrap');
+  if (wrap) {
+    const span = document.getElementById('gs-avatar-emoji');
+    if (span) span.style.display = 'none';
+    // Убираем старое превью если есть
+    wrap.querySelector('img.gs-av-photo')?.remove();
+    const img = document.createElement('img');
+    img.className = 'gs-av-photo';
+    img.src = dataUrl;
+    img.style.cssText = 'width:80px;height:80px;border-radius:50%;object-fit:cover;position:absolute;inset:0';
+    wrap.style.position = 'relative';
+    wrap.insertBefore(img, wrap.firstChild);
+  }
+  renderGroupsList();
+  toast('✅ Фото установлено');
   const p = profileLoad();
   if (sbReady() && p) {
     _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
@@ -4187,11 +4254,12 @@ function groupChatKey(groupId) { return 'group_' + groupId; }
 function groupIsKey(chatKey)   { return chatKey && chatKey.startsWith('group_'); }
 function groupIdFromKey(chatKey){ return chatKey ? chatKey.replace('group_', '') : null; }
 
-async function groupSendMessage(groupId, text, extra) {
+async function groupSendMessage(groupId, text, extra, localTs) {
   const p = profileLoad();
   const group = groupGet(groupId);
   if (!p || !group) return;
-  const ts = Date.now();
+  // Используем переданный ts чтобы сервер и локальная запись имели одинаковый timestamp
+  const ts = localTs || Date.now();
   // ВСЕГДА используем groupChatKey   не sbChatKey
   const chatKey = groupChatKey(groupId);
 
@@ -4741,14 +4809,92 @@ document.addEventListener('DOMContentLoaded', () => {
   _initTwemoji();
 });
 
+// ── Локальный рендерер emoji из файлов assets/emoji/ ──────────────────────────
+// Использует IOS_EMOJI_MAP (ios_emoji_map.js) и локальные PNG-файлы.
+// На Android: file:///android_asset/emoji/…   На веб: CDN twemoji как раньше.
+
+const _EMOJI_BASE = 'file:///android_asset/emoji/';
+let _emojiObserver = null;
+
+// Заменяет emoji в строке text на <img> теги с локальными ассетами.
+// Возвращает HTML-строку, или null если emoji не найдено.
+function _localEmojiHtml(text) {
+  if (!text || typeof IOS_EMOJI_MAP === 'undefined') return null;
+  let result = '';
+  let changed = false;
+  let i = 0;
+  while (i < text.length) {
+    let found = false;
+    // Пробуем от длинных последовательностей к коротким (макс 12 кодовых единиц)
+    const maxLen = Math.min(12, text.length - i);
+    for (let len = maxLen; len >= 1; len--) {
+      const sub = text.substring(i, i + len);
+      const path = IOS_EMOJI_MAP[sub];
+      if (path) {
+        result += `<img src="${_EMOJI_BASE}${path}" alt="${sub}" width="20" height="20" ` +
+          `style="display:inline-block;vertical-align:-.25em;margin:0 .03em;pointer-events:none" ` +
+          `class="emoji-img" draggable="false">`;
+        i += len;
+        changed = true;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      const c = text[i];
+      if      (c === '&') result += '&amp;';
+      else if (c === '<') result += '&lt;';
+      else if (c === '>') result += '&gt;';
+      else                result += c;
+      i++;
+    }
+  }
+  return changed ? result : null;
+}
+
+// Обходит все текстовые узлы в node и заменяет emoji на <img>.
+function _localEmojiParse(root) {
+  if (typeof IOS_EMOJI_MAP === 'undefined') return;
+  const SKIP_TAGS = new Set(['SCRIPT','STYLE','INPUT','TEXTAREA','CODE','PRE']);
+  const walker = document.createTreeWalker(
+    root || document.body,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(n) {
+        const p = n.parentNode;
+        if (!p) return NodeFilter.FILTER_REJECT;
+        const tag = p.tagName;
+        if (tag && SKIP_TAGS.has(tag)) return NodeFilter.FILTER_REJECT;
+        // Не переобрабатываем уже разобранные узлы
+        if (p.dataset && p.dataset.emojiDone) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    }
+  );
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const textNode of nodes) {
+    const html = _localEmojiHtml(textNode.data);
+    if (!html) continue;
+    const span = document.createElement('span');
+    span.dataset.emojiDone = '1';
+    span.innerHTML = html;
+    try { textNode.parentNode.replaceChild(span, textNode); } catch(_) {}
+  }
+}
+
 function _twemojiParse(node) {
+  // На Android — используем локальные ассеты
+  if (window.Android && typeof IOS_EMOJI_MAP !== 'undefined') {
+    _localEmojiParse(node || document.body);
+    return;
+  }
+  // Веб-фолбэк: CDN twemoji
   if (typeof twemoji === 'undefined') return;
   twemoji.parse(node || document.body, {
     folder: 'svg',
     ext: '.svg',
     base: 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/',
-    // Apple emoji: берём PNG из emoji-datasource-apple через jsDelivr
-    // Важно: фильтруем fe0f (variation selector-16)   он не входит в имена файлов Apple CDN
     callback: (icon) => {
       const cleaned = icon.split('-').filter(p => p.toLowerCase() !== 'fe0f').join('-') || icon;
       return `https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.0.1/img/apple/64/${cleaned}.png`;
@@ -4757,12 +4903,31 @@ function _twemojiParse(node) {
 }
 
 function _initTwemoji() {
+  // На Android — сразу запускаем локальный рендерер, не ждём twemoji
+  if (window.Android && typeof IOS_EMOJI_MAP !== 'undefined') {
+    _localEmojiParse(document.body);
+    if (_emojiObserver) return;
+    _emojiObserver = new MutationObserver(mutations => {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (node.nodeType === 1) {
+            const tag = node.tagName;
+            if (tag && !['CANVAS','SCRIPT','STYLE','INPUT','TEXTAREA'].includes(tag)) {
+              _localEmojiParse(node);
+            }
+          }
+        }
+      }
+    });
+    _emojiObserver.observe(document.body, { childList: true, subtree: true });
+    return;
+  }
+  // Веб: ждём twemoji
   if (typeof twemoji === 'undefined') {
     setTimeout(_initTwemoji, 200);
     return;
   }
   _twemojiParse(document.body);
-
   const observer = new MutationObserver(mutations => {
     for (const m of mutations) {
       for (const node of m.addedNodes) {
@@ -5887,11 +6052,13 @@ function messengerRenderList(filter) {
       ? `msgToggleSelect('${username}', event)`
       : `messengerOpenChat('${username}')`;
 
-    // avatar: photo support
+    // avatar: photo support (группы и личные чаты)
     const avatarData = peer?.avatarData || peer?.avatar_data;
-    const avatarHtml = (peer?.avatarType === 'photo' || peer?.avatar_type === 'photo') && avatarData
-      ? `<img src="${avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
-      : `<span style="font-size:28px">${avatar}</span>`;
+    const avatarHtml = (_isGroupChat && _groupData?.avatarType === 'photo' && _groupData?.avatarData)
+      ? `<img src="${_groupData.avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
+      : (peer?.avatarType === 'photo' || peer?.avatar_type === 'photo') && avatarData
+        ? `<img src="${avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
+        : `<span style="font-size:28px">${avatar}</span>`;
 
     const _pinned = _pins.includes(username);
     // Локальный никнейм (если задан)
@@ -6059,11 +6226,21 @@ function _doOpenChat(username) {
     }
   }
   if (hdrAvatar) {
-    const hasPhoto = (peer?.avatarType === 'photo') && peer?.avatarData;
-    hdrAvatar.style.background = hasPhoto ? 'transparent' : (peer?.color || 'var(--surface3)');
-    hdrAvatar.innerHTML = hasPhoto
-      ? `<img src="${peer.avatarData}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">`
-      : (peer?.avatar || peer?.name?.charAt(0) || username.charAt(0).toUpperCase() || '?');
+    const _hdrGrp = _openedGroup;
+    const hasGrpPhoto = _hdrGrp?.avatarType === 'photo' && _hdrGrp?.avatarData;
+    const hasPhoto = !hasGrpPhoto && (peer?.avatarType === 'photo') && peer?.avatarData;
+    if (hasGrpPhoto) {
+      hdrAvatar.style.background = 'transparent';
+      hdrAvatar.innerHTML = `<img src="${_hdrGrp.avatarData}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">`;
+    } else if (hasPhoto) {
+      hdrAvatar.style.background = 'transparent';
+      hdrAvatar.innerHTML = `<img src="${peer.avatarData}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">`;
+    } else {
+      hdrAvatar.style.background = _hdrGrp ? 'linear-gradient(135deg,#2b5797,#1e3f6f)' : (peer?.color || 'var(--surface3)');
+      hdrAvatar.innerHTML = _hdrGrp
+        ? (_hdrGrp.avatar || '👥')
+        : (peer?.avatar || peer?.name?.charAt(0) || username.charAt(0).toUpperCase() || '?');
+    }
   }
 
   showScreen('s-messenger-chat');
@@ -6082,6 +6259,53 @@ function _doOpenChat(username) {
     // Сообщаем нативному Worker'у   сдвигаем окно чтобы не дублировать уведомления
     if (window.Android && typeof window.Android.updateLastMsgTs === 'function') {
       try { window.Android.updateLastMsgTs(Date.now()); } catch(_){}
+    }
+  }
+
+  // Предзагружаем профили всех участников группы — чтобы аватарки отображались в пузырях
+  const _openedGroupForMembers = (username === PUBLIC_GROUP_ID || username.startsWith('grp_')) ? groupGet(username) : null;
+  if (_openedGroupForMembers && sbReady()) {
+    const unknownMembers = (_openedGroupForMembers.members || []).filter(u =>
+      u !== '__all__' && u !== p?.username && !_allKnownUsers.some(x => x.username === u)
+    );
+    if (unknownMembers.length) {
+      const unames = unknownMembers.slice(0, 30).map(u => `"${u}"`).join(',');
+      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,color,status,vip,badge&username=in.(${unames})&limit=30`)
+        .then(rows => {
+          if (!Array.isArray(rows)) return;
+          rows.forEach(u => {
+            if (_allKnownUsers.some(x => x.username === u.username)) return;
+            _allKnownUsers.push({
+              username: u.username, name: u.name,
+              avatar: u.avatar, avatarType: u.avatar_type,
+              avatarData: u.avatar_data, color: u.color,
+              status: u.status, vip: u.vip, badge: u.badge, _online: false
+            });
+          });
+          if (_msgCurrentChat === username) messengerRenderMessages();
+        }).catch(() => {});
+    }
+    // Также подгружаем профили тех кто писал в чат, но не в списке участников
+    const chatMsgsForProfiles = (msgLoad()[username] || []);
+    const msgAuthors = [...new Set(chatMsgsForProfiles.map(m => m.from).filter(u =>
+      u && u !== p?.username && !_allKnownUsers.some(x => x.username === u)
+    ))];
+    if (msgAuthors.length) {
+      const unames2 = msgAuthors.slice(0, 30).map(u => `"${u}"`).join(',');
+      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,color,status,vip,badge&username=in.(${unames2})&limit=30`)
+        .then(rows => {
+          if (!Array.isArray(rows)) return;
+          rows.forEach(u => {
+            if (_allKnownUsers.some(x => x.username === u.username)) return;
+            _allKnownUsers.push({
+              username: u.username, name: u.name,
+              avatar: u.avatar, avatarType: u.avatar_type,
+              avatarData: u.avatar_data, color: u.color,
+              status: u.status, vip: u.vip, badge: u.badge, _online: false
+            });
+          });
+          if (_msgCurrentChat === username) messengerRenderMessages();
+        }).catch(() => {});
     }
   }
 
@@ -6496,7 +6720,7 @@ function messengerSend() {
   // ┄┄ Групповой чат: используем groupSendMessage (broadcast) ┄┄┄┄┄┄┄┄
   const _isGroupSend = _msgCurrentChat === PUBLIC_GROUP_ID || _msgCurrentChat.startsWith('grp_');
   if (_isGroupSend) {
-    groupSendMessage(_msgCurrentChat, text).then(() => {
+    groupSendMessage(_msgCurrentChat, text, null, ts).then(() => {
       msg.delivered = true; msg.pending = false;
       msgSave(msgs); messengerRenderMessages(); _outboxUpdateStatusBar();
     }).catch(() => {
@@ -10219,9 +10443,12 @@ function renderGroupsList() {
     const avatarBg = isPublic ? 'linear-gradient(135deg,var(--accent),var(--accent2,#c45f0a))' : 'var(--surface2)';
     const avatarR  = isPublic ? '18px' : '50%';
     const rowBg    = isPublic ? 'rgba(255,255,255,.018)' : '';
+    const _grpAvatarHtml = (g.avatarType === 'photo' && g.avatarData)
+      ? `<img src="${g.avatarData}" style="width:52px;height:52px;border-radius:${avatarR};object-fit:cover;display:block">`
+      : `<span style="font-size:28px">${g.avatar||'👥'}</span>`;
     return `<div onclick="messengerOpenChat('${escHtml(g.id)}')"
       style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);background:${rowBg}">
-      <div style="width:52px;height:52px;border-radius:${avatarR};background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">${g.avatar||'👥'}</div>
+      <div style="width:52px;height:52px;border-radius:${avatarR};background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;overflow:hidden">${_grpAvatarHtml}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
           <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">${escHtml(g.name)}</div>
