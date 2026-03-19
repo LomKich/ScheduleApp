@@ -2041,7 +2041,7 @@ public class MainActivity extends Activity {
         /** Вызывает JS-функцию из фонового потока через WebView.post() */
         private void _jsCallback(final String js) {
             if (webView != null) {
-                String safe = js.replace("\", "\\");
+                String safe = js.replace("\\", "\\\\");
                 webView.post(() -> webView.evaluateJavascript(
                     "(function(){try{" + safe + "}catch(e){}})()", null));
             }
