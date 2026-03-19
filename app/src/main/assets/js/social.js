@@ -3065,6 +3065,11 @@ window.showScreen = (function(orig) {
       _renderEmojiStyleToggle(_emojiStyleEnabled());
     }
     if (orig) orig(id, dir);
+    // Пересканируем активный экран на emoji после показа
+    if (_emojiStyleEnabled() && _emojiPackReady) {
+      const screen = document.getElementById(id);
+      if (screen) setTimeout(() => _localEmojiParse(screen), 50);
+    }
   };
 })(window.showScreen);
 
@@ -5016,13 +5021,36 @@ function _initTwemoji() {
     _initEmojiPack(); // проверяем пак и при необходимости качаем
     _localEmojiParse(document.body);
     if (_emojiObserver) return;
+    // Дебаунс — не запускаем парсер чаще чем раз в 80мс
+    let _emojiTimer = null;
+    const _emojiQueue = new Set();
+    function _emojiFlush() {
+      _emojiTimer = null;
+      _emojiQueue.forEach(n => _localEmojiParse(n));
+      _emojiQueue.clear();
+    }
+    function _emojiSchedule(node) {
+      _emojiQueue.add(node);
+      if (!_emojiTimer) _emojiTimer = setTimeout(_emojiFlush, 80);
+    }
     _emojiObserver = new MutationObserver(mutations => {
       for (const m of mutations) {
         for (const node of m.addedNodes) {
           if (node.nodeType === 1) {
+            // Элемент — парсим его содержимое
             const tag = node.tagName;
             if (tag && !['CANVAS','SCRIPT','STYLE','INPUT','TEXTAREA'].includes(tag)) {
-              _localEmojiParse(node);
+              _emojiSchedule(node);
+            }
+          } else if (node.nodeType === 3) {
+            // Текстовый узел — парсим родителя
+            const p = node.parentNode;
+            if (p && p.nodeType === 1) {
+              const tag = p.tagName;
+              if (tag && !['CANVAS','SCRIPT','STYLE','INPUT','TEXTAREA'].includes(tag)
+                  && !p.dataset?.emojiDone) {
+                _emojiSchedule(p);
+              }
             }
           }
         }
