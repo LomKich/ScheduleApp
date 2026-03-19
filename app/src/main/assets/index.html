@@ -3033,6 +3033,13 @@ html.notch-off #s-login {
       <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
     </div>
     <button class="btn btn-surface" onclick="clearCacheAndReload()" style="margin-bottom:4px">🧹 Очистить кэш и перезагрузить</button>
+    <div style="height:4px"></div>
+    <!-- Hot-patch: обновление только изменённых файлов -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <button class="btn btn-surface" style="flex:1;margin-bottom:0" onclick="checkHotPatch(false)">🔥 Горячий патч (только файлы)</button>
+      <button class="btn btn-surface3" style="width:auto;padding:8px 10px;font-size:12px;flex-shrink:0" onclick="hotPatchRollback()" title="Откатить все патчи">↩</button>
+    </div>
+    <div id="hot-patch-status" style="font-size:11px;color:var(--muted);padding:0 2px 4px;min-height:16px"></div>
     <div style="height:6px"></div>
     <button class="btn btn-surface3" onclick="logOpen()" style="margin-bottom:4px">📋 Просмотр JS-логов</button>
     <div style="height:24px"></div>
@@ -3391,6 +3398,9 @@ html.notch-off #s-login {
       <div id="mc-hdr-name" style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">...</div>
       <div id="mc-hdr-sub" style="font-size:11px;color:var(--muted)"></div>
     </div>
+    <button id="mc-encrypt-btn" title="Секретный чат" onclick="event.stopPropagation();mcToggleEncrypt()"
+      style="background:none;border:none;font-size:18px;padding:8px;cursor:pointer;opacity:0.45;transition:opacity .2s,transform .2s"
+      >🔓</button>
     <button style="background:none;border:none;color:var(--muted);font-size:20px;padding:8px;cursor:pointer" onclick="event.stopPropagation();messengerShowMore()">⋮</button>
   </div>
   <!-- Pinned message bar (hidden by default) -->
