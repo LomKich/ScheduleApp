@@ -3179,6 +3179,21 @@ function cmdExec(raw){
   switch(cmd){
     case 'help': {
       cmdPrint('info','Введи команду и нажми Enter.');
+      cmdPrint('out', '');
+      cmdPrint('info','── Основные команды ──');
+      cmdPrint('out','  version             — версия приложения');
+      cmdPrint('out','  theme list/[name]   — темы оформления');
+      cmdPrint('out','  font list/[name]    — шрифты');
+      cmdPrint('out','  sound on/off        — звук');
+      cmdPrint('out','  snow on/off         — снег');
+      cmdPrint('out','  matrix on/off       — матрица');
+      cmdPrint('out','  disco on/off        — дискотека');
+      cmdPrint('out','  glass on/off        — liquid glass');
+      cmdPrint('out','  hiscores            — рекорды мини-игр');
+      cmdPrint('out','  shorts [запрос]     — YouTube Shorts');
+      cmdPrint('out','  tiktok              — открыть TikTok');
+      cmdPrint('out','  donate              — поддержать проект');
+      cmdPrint('out','  vip <код>           — активировать VIP');
     } break;
     case 'greeting': {
       const sec2=loadSecret();
@@ -3748,6 +3763,31 @@ function cmdExec(raw){
     case 'donate': {
       cmdPrint('ok', '💝 Открываю страницу доната...');
       setTimeout(() => { cmdClose(); showDonateSheet(); }, 300);
+    } break;
+
+    case 'tiktok': {
+      cmdPrint('ok', '🎵 Открываю TikTok...');
+      setTimeout(() => {
+        cmdClose();
+        if (window.Android?.openUrl) {
+          window.Android.openUrl('https://www.tiktok.com');
+        } else if (window.Android?.loadUrlInWebView) {
+          window.Android.loadUrlInWebView('https://www.tiktok.com');
+        } else {
+          // Fallback: открываем встроенный WebView
+          const overlay = document.createElement('div');
+          overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column';
+          const bar = document.createElement('div');
+          bar.style.cssText = 'background:#161823;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0';
+          bar.innerHTML = '<span style="font-size:18px">🎵</span><span style="color:#fff;font-size:16px;font-weight:700;flex:1">TikTok</span><button onclick="this.closest('div[style*=z-index]').remove()" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer">✕ Закрыть</button>';
+          const frame = document.createElement('iframe');
+          frame.src = 'https://www.tiktok.com';
+          frame.style.cssText = 'flex:1;border:none;width:100%';
+          overlay.appendChild(bar);
+          overlay.appendChild(frame);
+          document.body.appendChild(overlay);
+        }
+      }, 300);
     } break;
 
     default:
