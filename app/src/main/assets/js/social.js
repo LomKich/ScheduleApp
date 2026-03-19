@@ -1575,6 +1575,182 @@ async function _sbFetch(method, path, body, extraHeaders) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+// 🔐 E2E ШИФРОВАНИЕ — ECDH + AES-GCM (WebCrypto API)
+//
+// Схема:
+//   • Каждый пользователь имеет пару ECDH ключей (P-256)
+//   • Публичный ключ хранится в Supabase users.pubkey (base64)
+//   • Приватный ключ — только в localStorage (никогда не уходит с устройства)
+//   • При отправке: ECDH shared secret → HKDF → AES-256-GCM
+//   • В Supabase хранится: зашифрованный текст + IV (оба base64, разделитель '.')
+//   • Формат в поле text: 'ENC:BASE64_IV.BASE64_CIPHERTEXT'
+//   • Если расшифровка не удалась — показывается '🔒 [зашифровано]'
+// ══════════════════════════════════════════════════════════════════════════
+
+const E2E_PRIVKEY_KEY = 'sapp_e2e_priv_v1'; // localStorage ключ
+const E2E_PUBKEY_KEY  = 'sapp_e2e_pub_v1';
+const E2E_PREFIX      = 'ENC:';
+
+// Кэш: username → CryptoKey (публичный ECDH)
+const _e2ePeerPubKeys = {};
+// Кэш: chatKey → CryptoKey (AES-GCM, производный от ECDH shared secret)
+const _e2eAesCache = {};
+
+let _e2ePrivKey = null;  // CryptoKey — наш приватный ECDH
+let _e2ePubKey  = null;  // CryptoKey — наш публичный ECDH
+let _e2eEnabled = false;
+
+// ── Инициализация: генерация или загрузка ключей ─────────────────────────
+async function e2eInit() {
+  try {
+    const storedPriv = localStorage.getItem(E2E_PRIVKEY_KEY);
+    const storedPub  = localStorage.getItem(E2E_PUBKEY_KEY);
+
+    if (storedPriv && storedPub) {
+      // Загружаем существующие ключи
+      _e2ePrivKey = await crypto.subtle.importKey(
+        'jwk', JSON.parse(storedPriv),
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false, ['deriveKey', 'deriveBits']
+      );
+      _e2ePubKey = await crypto.subtle.importKey(
+        'jwk', JSON.parse(storedPub),
+        { name: 'ECDH', namedCurve: 'P-256' },
+        true, []
+      );
+    } else {
+      // Генерируем новую пару
+      const pair = await crypto.subtle.generateKey(
+        { name: 'ECDH', namedCurve: 'P-256' },
+        true, ['deriveKey', 'deriveBits']
+      );
+      _e2ePrivKey = pair.privateKey;
+      _e2ePubKey  = pair.publicKey;
+      // Сохраняем
+      const privJwk = await crypto.subtle.exportKey('jwk', _e2ePrivKey);
+      const pubJwk  = await crypto.subtle.exportKey('jwk', _e2ePubKey);
+      localStorage.setItem(E2E_PRIVKEY_KEY, JSON.stringify(privJwk));
+      localStorage.setItem(E2E_PUBKEY_KEY,  JSON.stringify(pubJwk));
+    }
+    _e2eEnabled = true;
+  } catch(e) {
+    console.warn('[E2E] init failed:', e.message);
+    _e2eEnabled = false;
+  }
+}
+
+// ── Получить публичный ключ в виде base64 для отправки на сервер ──────────
+async function e2eGetMyPubKeyB64() {
+  if (!_e2ePubKey) return null;
+  try {
+    const raw = await crypto.subtle.exportKey('raw', _e2ePubKey);
+    return btoa(String.fromCharCode(...new Uint8Array(raw)));
+  } catch(e) { return null; }
+}
+
+// ── Загрузить публичный ключ собеседника из Supabase ─────────────────────
+async function e2eLoadPeerKey(username) {
+  if (_e2ePeerPubKeys[username]) return _e2ePeerPubKeys[username];
+  try {
+    const rows = await sbGet('users', `select=pubkey&username=eq.${encodeURIComponent(username)}&limit=1`);
+    if (!Array.isArray(rows) || !rows[0]?.pubkey) return null;
+    const raw = Uint8Array.from(atob(rows[0].pubkey), c => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey(
+      'raw', raw,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      false, []
+    );
+    _e2ePeerPubKeys[username] = key;
+    return key;
+  } catch(e) { return null; }
+}
+
+// ── Вывести AES ключ из ECDH shared secret (HKDF-SHA-256) ────────────────
+async function e2eDeriveAES(peerPubKey) {
+  const shared = await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: peerPubKey },
+    _e2ePrivKey, 256
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('ScheduleAppE2E') },
+    await crypto.subtle.importKey('raw', shared, 'HKDF', false, ['deriveKey']),
+    { name: 'AES-GCM', length: 256 },
+    false, ['encrypt', 'decrypt']
+  );
+}
+
+// ── Получить или кэшировать AES ключ для чата ────────────────────────────
+async function e2eGetAES(otherUsername) {
+  if (_e2eAesCache[otherUsername]) return _e2eAesCache[otherUsername];
+  const peerKey = await e2eLoadPeerKey(otherUsername);
+  if (!peerKey) return null;
+  const aes = await e2eDeriveAES(peerKey);
+  _e2eAesCache[otherUsername] = aes;
+  return aes;
+}
+
+// ── Зашифровать текст ─────────────────────────────────────────────────────
+async function e2eEncrypt(text, otherUsername) {
+  if (!_e2eEnabled || !text) return text;
+  try {
+    const aes = await e2eGetAES(otherUsername);
+    if (!aes) return text; // нет ключа — шлём открыто
+    const iv  = crypto.getRandomValues(new Uint8Array(12));
+    const enc = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      aes, new TextEncoder().encode(text)
+    );
+    const ivB64  = btoa(String.fromCharCode(...iv));
+    const encB64 = btoa(String.fromCharCode(...new Uint8Array(enc)));
+    return E2E_PREFIX + ivB64 + '.' + encB64;
+  } catch(e) {
+    console.warn('[E2E] encrypt failed:', e.message);
+    return text;
+  }
+}
+
+// ── Расшифровать текст ────────────────────────────────────────────────────
+async function e2eDecrypt(ciphertext, otherUsername) {
+  if (!ciphertext || !ciphertext.startsWith(E2E_PREFIX)) return ciphertext;
+  if (!_e2eEnabled) return '🔒 [зашифровано]';
+  try {
+    const payload = ciphertext.slice(E2E_PREFIX.length);
+    const dotIdx  = payload.indexOf('.');
+    if (dotIdx < 0) return '🔒 [зашифровано]';
+    const iv  = Uint8Array.from(atob(payload.slice(0, dotIdx)), c => c.charCodeAt(0));
+    const enc = Uint8Array.from(atob(payload.slice(dotIdx + 1)),  c => c.charCodeAt(0));
+    const aes = await e2eGetAES(otherUsername);
+    if (!aes) return '🔒 [зашифровано]';
+    const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aes, enc);
+    return new TextDecoder().decode(dec);
+  } catch(e) {
+    return '🔒 [зашифровано]';
+  }
+}
+
+// ── Синхронизировать публичный ключ на сервер при входе ──────────────────
+async function e2eSyncPubKey(username) {
+  if (!_e2eEnabled || !username) return;
+  try {
+    const pubB64 = await e2eGetMyPubKeyB64();
+    if (!pubB64) return;
+    // Проверяем: нужно ли обновить
+    const rows = await sbGet('users', `select=pubkey&username=eq.${encodeURIComponent(username)}&limit=1`);
+    if (Array.isArray(rows) && rows[0]?.pubkey === pubB64) return; // уже актуальный
+    await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
+      { pubkey: pubB64 },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+    console.log('[E2E] pubkey synced to server');
+  } catch(e) {}
+}
+
+// ── Инициализация при старте ──────────────────────────────────────────────
+e2eInit().then(() => {
+  console.log('[E2E] ready, enabled=' + _e2eEnabled);
+});
+
 // 📭 OFFLINE QUEUE — Telegram-style отложенная отправка
 // Сообщение сохраняется локально с pending:true, отправляется при появлении сети
 // ══════════════════════════════════════════════════════════════════════════
@@ -1942,6 +2118,8 @@ async function profileConnect(p) {
     }
     // Синхронизируем VIP/badge/frame с сервера (server source of truth)
     vipSyncFromServer(p.username).catch(()=>{});
+    // Синхронизируем публичный E2E ключ на сервер
+    e2eSyncPubKey(p.username).catch(()=>{});
     // Сбрасываем очередь отложенных сообщений (появился интернет)
     if (outboxLoad().length > 0) {
       outboxFlush().then(_outboxUpdateStatusBar).catch(()=>{});
@@ -2488,8 +2666,23 @@ function sbHandleIncomingMessages(myUsername, otherUsername, rows) {
     _fbLastMsgTs[key] = Math.max(_fbLastMsgTs[key]||0, msg.ts);
     if (!exists) {
       const alreadyRead = _msgCurrentChat === otherUsername;
+      // Расшифровываем E2E если текст зашифрован
+      let rawText = msg.text || '';
+      if (rawText.startsWith(E2E_PREFIX)) {
+        // Асинхронная расшифровка — обновим сообщение после
+        e2eDecrypt(rawText, msg.from_user).then(decrypted => {
+          if (!msgs[otherUsername]) return;
+          const stored = msgs[otherUsername].find(m => m.ts === msg.ts && m.from === msg.from_user);
+          if (stored && stored.text === '🔒 [расшифровываю...]') {
+            stored.text = decrypted;
+            msgSave(msgs);
+            if (_msgCurrentChat === otherUsername) messengerRenderMessages();
+          }
+        }).catch(() => {});
+        rawText = '🔒 [расшифровываю...]';
+      }
       // Parse sticker: single emoji-only messages stored as sticker field
-      let inText = msg.text || '';
+      let inText = rawText;
       let inSticker = msg.sticker || null;
       if (!inSticker) {
         const emojiOnly = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}){1,2}$/u;
@@ -4582,21 +4775,74 @@ function vipActivate(code) {
 // ══════════════════════════════════════════════════════════════════════
 
 // СБП реквизиты (замени на свои)
-const SBP_PHONE  = '+79991234567';   // ← ТВОЙ НОМЕР ДЛЯ СБП
-const SBP_NAME   = 'ScheduleApp';    // Имя получателя
-const SBP_BANK   = 'sberbank';       // Банк-получатель (sberbank/tinkoff/vtb)
+const SBP_PHONE = '+79991234567';   // ← ЗАМЕНИ НА СВОЙ НОМЕР СБП
 
 const DONATE_TIERS = [
-  { amount: 20,  label: '⭐ VIP месяц',      desc: '+ VIP на 30 дней',  vip: true  },
-  { amount: 30,  label: '👑 VIP 3 месяца',   desc: '+ VIP на 90 дней',  vip: true  },
-  { amount: 100, label: '🚀 VIP навсегда',   desc: '+ VIP навсегда',    vip: true  },
+  { amount: 20,  label: '⭐ VIP месяц',    desc: '+ VIP на 30 дней', vip: true  },
+  { amount: 30,  label: '👑 VIP 3 месяца', desc: '+ VIP на 90 дней', vip: true  },
+  { amount: 100, label: '🚀 VIP навсегда', desc: '+ VIP навсегда',   vip: true  },
+];
+
+// Банки с реальными deep-link схемами перевода по номеру телефона СБП
+const SBP_BANKS = [
+  {
+    id:    'sber',
+    name:  'Сбер',
+    icon:  '🟢',
+    bg:    '#21A038',
+    // Sberbank Online deep link перевода по телефону
+    deeplink: (phone, amount) =>
+      `sberbankonline://payment/transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+    webUrl: (phone, amount) =>
+      `https://online.sberbank.ru/CSAFront/index.do#/transfer/phone?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+  },
+  {
+    id:    'tinkoff',
+    name:  'Т-Банк',
+    icon:  '🟡',
+    bg:    '#FFDD2D',
+    textColor: '#000',
+    deeplink: (phone, amount) =>
+      `tinkoff://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}&comment=ScheduleApp`,
+    webUrl: (phone, amount) =>
+      `https://www.tbank.ru/payment/transfer/phone/${phone.replace(/\D/g,'')}/?amount=${amount}`,
+  },
+  {
+    id:    'vtb',
+    name:  'ВТБ',
+    icon:  '🔵',
+    bg:    '#003087',
+    deeplink: (phone, amount) =>
+      `vtbconnect://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+    webUrl: (phone, amount) =>
+      `https://online.vtb.ru/transfers/by-phone?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+  },
+  {
+    id:    'alfa',
+    name:  'Альфа',
+    icon:  '🔴',
+    bg:    '#EF3124',
+    deeplink: (phone, amount) =>
+      `alfabank://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+    webUrl: (phone, amount) =>
+      `https://alfabank.ru/everyday/p2p/?phone=${encodeURIComponent(phone)}&amount=${amount}`,
+  },
+  {
+    id:    'sbp',
+    name:  'СБП',
+    icon:  '💳',
+    bg:    '#7B3FBE',
+    // Универсальная СБП ссылка — система сама выберет банк пользователя
+    deeplink: (phone, amount) =>
+      `https://qr.nspk.ru/redirect?type=01&sum=${amount * 100}&cur=RUB`,
+    webUrl: (phone, amount) =>
+      `https://qr.nspk.ru/redirect?type=01&sum=${amount * 100}&cur=RUB`,
+  },
 ];
 
 function showDonateSheet() {
   const existing = document.getElementById('donate-sheet');
   if (existing) existing.remove();
-
-  const p = profileLoad();
 
   const sheet = document.createElement('div');
   sheet.id = 'donate-sheet';
@@ -4608,11 +4854,11 @@ function showDonateSheet() {
       <div style="width:44px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 18px"></div>
 
       <!-- Заголовок -->
-      <div style="text-align:center;padding:0 20px 18px">
+      <div style="text-align:center;padding:0 20px 16px">
         <div style="font-size:32px;margin-bottom:6px">💝</div>
         <div style="font-size:19px;font-weight:800;color:var(--text)">Поддержи проект</div>
         <div style="font-size:13px;color:var(--muted);margin-top:4px;line-height:1.5">
-          Донат через СБП за несколько секунд.<br>VIP-тарифы активируются автоматически.
+          Перевод по СБП — мгновенно, без комиссии.<br>VIP активируется после подтверждения.
         </div>
       </div>
 
@@ -4621,54 +4867,65 @@ function showDonateSheet() {
         ${DONATE_TIERS.map((t, i) => `
           <div onclick="donateSelectTier(${i})" id="donate-tier-${i}"
             style="display:flex;align-items:center;gap:14px;padding:14px 16px;
-                   border-radius:16px;border:2px solid ${t.vip ? 'var(--accent)' : 'rgba(255,255,255,.1)'};
-                   background:${t.vip ? 'color-mix(in srgb,var(--accent) 8%,var(--surface))' : 'var(--surface2)'};
-                   cursor:pointer;transition:border-color .15s;-webkit-tap-highlight-color:transparent">
+                   border-radius:16px;border:2px solid var(--accent);
+                   background:color-mix(in srgb,var(--accent) 8%,var(--surface));
+                   cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent">
             <div style="font-size:26px;flex-shrink:0">${t.label.split(' ')[0]}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:15px;font-weight:700;color:var(--text)">${t.label.slice(t.label.indexOf(' ')+1)}</div>
               <div style="font-size:12px;color:var(--muted)">${t.desc}</div>
             </div>
-            <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:17px;font-weight:800;color:${t.vip ? 'var(--accent)' : 'var(--text)'}">${t.amount}₽</div>
-              ${t.vip ? '<div style="font-size:10px;color:var(--accent);font-weight:700">VIP</div>' : ''}
-            </div>
+            <div style="font-size:20px;font-weight:800;color:var(--accent);flex-shrink:0">${t.amount}₽</div>
           </div>`).join('')}
       </div>
 
-      <!-- Кнопка оплаты -->
-      <div style="padding:18px 16px 0">
-        <button id="donate-pay-btn" onclick="donateOpenSBP()"
-          style="width:100%;padding:16px;background:var(--accent);border:none;border-radius:16px;
-                 color:var(--btn-text,#fff);font-family:inherit;font-size:16px;font-weight:800;
-                 cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;
-                 -webkit-tap-highlight-color:transparent;transition:opacity .15s">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          Оплатить через СБП
-        </button>
-        <div style="text-align:center;margin-top:10px;font-size:11px;color:var(--muted)">
-          После оплаты нажмите «Я оплатил» для активации VIP
+      <!-- Выбор банка -->
+      <div style="padding:16px 16px 0">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px">Выбери банк:</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px" id="donate-banks-grid">
+          ${SBP_BANKS.map((b, i) => `
+            <div onclick="donateSelectBank(${i})" id="donate-bank-${i}"
+              style="display:flex;flex-direction:column;align-items:center;gap:5px;
+                     padding:10px 4px;border-radius:14px;border:2px solid transparent;
+                     background:var(--surface2);cursor:pointer;transition:all .15s;
+                     -webkit-tap-highlight-color:transparent">
+              <div style="width:38px;height:38px;border-radius:50%;background:${b.bg};
+                          display:flex;align-items:center;justify-content:center;font-size:18px">${b.icon}</div>
+              <div style="font-size:10px;font-weight:600;color:var(--text);text-align:center">${b.name}</div>
+            </div>`).join('')}
         </div>
       </div>
 
-      <!-- Секция подтверждения (скрыта до нажатия кнопки оплаты) -->
+      <!-- Кнопка оплаты -->
+      <div style="padding:16px 16px 0">
+        <button id="donate-pay-btn" onclick="donateOpenBank()"
+          style="width:100%;padding:16px;background:var(--accent);border:none;border-radius:16px;
+                 color:#fff;font-family:inherit;font-size:16px;font-weight:800;
+                 cursor:pointer;-webkit-tap-highlight-color:transparent">
+          Перейти в Сбер · 20₽
+        </button>
+        <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted)">
+          Номер получателя: <b style="color:var(--text)">${SBP_PHONE}</b>
+        </div>
+      </div>
+
+      <!-- Подтверждение -->
       <div id="donate-confirm-section" style="display:none;padding:14px 16px 0">
         <div style="background:var(--surface2);border-radius:14px;padding:14px 16px">
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">
-            ✅ Я оплатил — подтвердить
-          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">✅ Я оплатил</div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
-            Введи последние 6 цифр номера транзакции из смс/чека:
+            Введи последние 4 цифры суммы перевода или номер операции из уведомления банка:
           </div>
-          <input id="donate-txn-input" placeholder="Например: 847291"
-            maxlength="12" inputmode="numeric"
-            style="width:100%;padding:10px 14px;background:var(--surface);border:1.5px solid rgba(255,255,255,.12);
-                   border-radius:10px;color:var(--text);font-size:15px;font-family:inherit;
+          <input id="donate-txn-input" placeholder="Номер операции / последние 4 цифры"
+            maxlength="20" inputmode="numeric"
+            style="width:100%;padding:10px 14px;background:var(--surface);
+                   border:1.5px solid rgba(255,255,255,.12);border-radius:10px;
+                   color:var(--text);font-size:15px;font-family:inherit;
                    outline:none;box-sizing:border-box;caret-color:var(--accent)">
           <button onclick="donateConfirm()"
-            style="width:100%;margin-top:10px;padding:12px;background:rgba(255,255,255,.08);
-                   border:1.5px solid rgba(255,255,255,.15);border-radius:10px;
-                   color:var(--text);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">
+            style="width:100%;margin-top:10px;padding:13px;background:var(--accent);
+                   border:none;border-radius:10px;color:#fff;font-family:inherit;
+                   font-size:14px;font-weight:700;cursor:pointer">
             Отправить на проверку
           </button>
         </div>
@@ -4678,50 +4935,74 @@ function showDonateSheet() {
   sheet.addEventListener('click', () => sheet.remove());
   document.body.appendChild(sheet);
 
-  // Дефолт — первый тариф с VIP
-  donateSelectTier(1);
+  donateSelectTier(0);
+  donateSelectBank(0);
 }
 
-let _selectedDoneTierIdx = 1;
+let _selectedDoneTierIdx = 0;
+let _selectedBankIdx     = 0;
+
 function donateSelectTier(i) {
   _selectedDoneTierIdx = i;
   DONATE_TIERS.forEach((t, idx) => {
     const el = document.getElementById(`donate-tier-${idx}`);
     if (!el) return;
-    el.style.borderColor = idx === i
-      ? 'var(--accent)'
-      : (t.vip ? 'rgba(var(--accent-rgb,32,138,240),.25)' : 'rgba(255,255,255,.1)');
-    el.style.transform = idx === i ? 'scale(1.01)' : 'scale(1)';
+    el.style.opacity     = idx === i ? '1'    : '0.55';
+    el.style.borderColor = idx === i ? 'var(--accent)' : 'transparent';
+    el.style.transform   = idx === i ? 'scale(1.02)' : 'scale(1)';
   });
-  const btn = document.getElementById('donate-pay-btn');
-  if (btn) btn.textContent = `Оплатить ${DONATE_TIERS[i].amount}₽ через СБП`;
+  _updateDonateBtn();
 }
 
-function donateOpenSBP() {
+function donateSelectBank(i) {
+  _selectedBankIdx = i;
+  SBP_BANKS.forEach((b, idx) => {
+    const el = document.getElementById(`donate-bank-${idx}`);
+    if (!el) return;
+    el.style.borderColor = idx === i ? 'var(--accent)' : 'transparent';
+    el.style.background  = idx === i
+      ? 'color-mix(in srgb,var(--accent) 15%,var(--surface2))'
+      : 'var(--surface2)';
+  });
+  _updateDonateBtn();
+}
+
+function _updateDonateBtn() {
+  const btn  = document.getElementById('donate-pay-btn');
+  if (!btn) return;
   const tier = DONATE_TIERS[_selectedDoneTierIdx];
-  // Формируем ссылку СБП (стандарт НСПК)
-  // Формат: https://qr.nspk.ru/AS1...
-  // Для простоты используем tel: ссылку с суммой — открывает приложение банка
-  const comment = encodeURIComponent(`ScheduleApp VIP ${tier.amount}rub`);
-  const sbpUrl  = `https://qr.nspk.ru/redirect?type=01&bank=${SBP_BANK}&sum=${tier.amount * 100}&cur=RUB&crc=000`;
-  // Fallback: прямая ссылка оплаты по номеру телефона
-  const fallbackUrl = `tel:${SBP_PHONE}`;
-
-  // Пробуем открыть СБП через Android
-  if (window.Android?.openUrl) {
-    window.Android.openUrl(sbpUrl);
-  } else {
-    window.open(sbpUrl, '_blank');
-  }
-
-  // Показываем секцию подтверждения
-  const sec = document.getElementById('donate-confirm-section');
-  if (sec) {
-    sec.style.display = 'block';
-    sec.scrollIntoView({ behavior: 'smooth' });
-  }
-  toast('💳 Откройте приложение банка и оплатите ' + tier.amount + '₽');
+  const bank = SBP_BANKS[_selectedBankIdx];
+  btn.textContent = `Перейти в ${bank.name} · ${tier.amount}₽`;
 }
+
+function donateOpenBank() {
+  const tier = DONATE_TIERS[_selectedDoneTierIdx];
+  const bank = SBP_BANKS[_selectedBankIdx];
+  const amount = tier.amount;
+
+  // Сначала пробуем deep-link (открывает приложение банка)
+  const deeplink = bank.deeplink(SBP_PHONE, amount);
+  const webUrl   = bank.webUrl(SBP_PHONE, amount);
+
+  if (window.Android?.openUrl) {
+    // Android: пробуем deep-link — если приложение есть, откроет его
+    // Иначе Android сам упадёт в браузер
+    window.Android.openUrl(deeplink);
+    // Через 1.5с показываем подтверждение (на случай если deeplink сработал)
+    setTimeout(() => {
+      const sec = document.getElementById('donate-confirm-section');
+      if (sec) { sec.style.display = 'block'; sec.scrollIntoView({ behavior: 'smooth' }); }
+    }, 1500);
+  } else {
+    // Браузер: сразу открываем web-версию
+    window.open(webUrl, '_blank', 'noopener');
+    const sec = document.getElementById('donate-confirm-section');
+    if (sec) { sec.style.display = 'block'; sec.scrollIntoView({ behavior: 'smooth' }); }
+  }
+
+  toast(`💳 Открываю ${bank.name}... Переведи ${amount}₽ на ${SBP_PHONE}`);
+}
+
 
 async function donateConfirm() {
   const txn = document.getElementById('donate-txn-input')?.value?.trim();
@@ -6165,27 +6446,33 @@ function messengerSend() {
   sbPollChat(p.username, _msgCurrentChat);
 
   const chatKey = sbChatKey(p.username, _msgCurrentChat);
-  const outboxItem = {
-    id:        'txt_' + ts,
-    type:      'message',
-    localChat: _msgCurrentChat,
-    ts,
-    data: { chat_key: chatKey, from_user: p.username, to_user: _msgCurrentChat, text, ts,
-            extra: replyTo ? JSON.stringify({ replyTo }) : null }
-  };
 
-  sbInsert('messages', outboxItem.data).then(res => {
-    if (res) {
-      msg.delivered = true; msg.pending = false;
-      msgSave(msgs); messengerRenderMessages(); _outboxUpdateStatusBar();
-    } else {
+  // Шифруем текст перед отправкой (E2E)
+  const _sendEncrypted = async () => {
+    const encText = await e2eEncrypt(text, _msgCurrentChat);
+    const outboxItem = {
+      id:        'txt_' + ts,
+      type:      'message',
+      localChat: _msgCurrentChat,
+      ts,
+      data: { chat_key: chatKey, from_user: p.username, to_user: _msgCurrentChat,
+              text: encText, ts,
+              extra: replyTo ? JSON.stringify({ replyTo }) : null }
+    };
+    sbInsert('messages', outboxItem.data).then(res => {
+      if (res) {
+        msg.delivered = true; msg.pending = false;
+        msgSave(msgs); messengerRenderMessages(); _outboxUpdateStatusBar();
+      } else {
+        msg.pending = true; msgSave(msgs);
+        outboxPush(outboxItem); messengerRenderMessages(); _outboxUpdateStatusBar();
+      }
+    }).catch(() => {
       msg.pending = true; msgSave(msgs);
       outboxPush(outboxItem); messengerRenderMessages(); _outboxUpdateStatusBar();
-    }
-  }).catch(() => {
-    msg.pending = true; msgSave(msgs);
-    outboxPush(outboxItem); messengerRenderMessages(); _outboxUpdateStatusBar();
-  });
+    });
+  };
+  _sendEncrypted();
 }
 
 
@@ -9884,35 +10171,26 @@ function renderGroupsList() {
 const YT_SHORTS_URL  = 'https://m.youtube.com/shorts';
 const YT_SEARCH_BASE = 'https://m.youtube.com/results?search_query=';
 
-let _ytIframe = null;
-
 function ytShortsOpen(query) {
-  showScreen('s-shorts');
-  updateNavVisibility('s-shorts');
-  _ytLoadUrl(query ? (YT_SEARCH_BASE + encodeURIComponent(query) + '&sp=EgIYAQ%3D%3D') : YT_SHORTS_URL);
+  // YouTube блокирует iframe (X-Frame-Options: sameorigin)
+  // Открываем нативно — браузер или YouTube-приложение
+  const url = query
+    ? (YT_SEARCH_BASE + encodeURIComponent(query) + '&sp=EgIYAQ%3D%3D')
+    : YT_SHORTS_URL;
+
+  if (window.Android?.openUrl) {
+    window.Android.openUrl(url);
+  } else {
+    window.open(url, '_blank', 'noopener');
+  }
 }
 
 function _ytLoadUrl(url) {
-  const wrap = document.getElementById('yt-webview-wrap');
-  if (!wrap) return;
-
-  // Удаляем старый iframe
-  if (_ytIframe) { _ytIframe.remove(); _ytIframe = null; }
-
-  const iframe = document.createElement('iframe');
-  _ytIframe = iframe;
-  iframe.src = url;
-  // Эмулируем мобильный браузер — убираем «Открыть в приложении» баннер
-  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation');
-  iframe.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture';
-  iframe.style.cssText = [
-    'position:absolute;inset:0;',
-    'width:100%;height:100%;',
-    'border:none;',
-    // Скрываем YouTube нижнюю навигацию внутри iframe через CSS injection
-    // (работает через CSP bypass в WebView)
-  ].join('');
-  wrap.appendChild(iframe);
+  if (window.Android?.openUrl) {
+    window.Android.openUrl(url);
+  } else {
+    window.open(url, '_blank', 'noopener');
+  }
 }
 
 function ytNavHome()          { _ytLoadUrl('https://m.youtube.com/'); }
@@ -9928,6 +10206,5 @@ function ytShortsSearch() {
 function ytDoSearch(q) {
   if (!q?.trim()) return;
   document.getElementById('yt-search-overlay').style.display = 'none';
-  // sp=EgIYAQ%3D%3D — фильтр «только Shorts» в YouTube поиске
   _ytLoadUrl(YT_SEARCH_BASE + encodeURIComponent(q.trim()) + '&sp=EgIYAQ%3D%3D');
 }
