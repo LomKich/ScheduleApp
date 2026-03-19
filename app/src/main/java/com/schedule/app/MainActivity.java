@@ -404,25 +404,35 @@ public class MainActivity extends Activity {
                     log.i(TAG, "fetch → " + url);
                 }
                 // ── Hot-patch: если файл был обновлён — отдаём из filesDir ────────────
+                // ── Emoji pack: кастомная схема https://emoji.local/ ──────────────────
+                // file:///android_asset/ не перехватывается надёжно — используем HTTPS
+                if (url.startsWith("https://emoji.local/")) {
+                    // req.getUrl().getPath() возвращает автоматически URL-decoded путь
+                    String emojiPath = req.getUrl().getPath(); // напр. "/nat/Fire.png"
+                    if (emojiPath != null && emojiPath.startsWith("/")) {
+                        emojiPath = emojiPath.substring(1); // убираем leading "/"
+                    }
+                    java.io.File emojiFile = new java.io.File(
+                        new java.io.File(getFilesDir(), "emoji"), emojiPath);
+                    if (emojiFile.exists()) {
+                        try {
+                            java.util.Map<String, String> h = new java.util.HashMap<>();
+                            h.put("Access-Control-Allow-Origin", "*");
+                            WebResourceResponse r = new WebResourceResponse(
+                                "image/png", null, 200, "OK", h,
+                                new java.io.FileInputStream(emojiFile));
+                            return r;
+                        } catch (Exception e) {
+                            log.w(TAG, "emoji serve error: " + e.getMessage());
+                        }
+                    } else {
+                        log.w(TAG, "emoji not found: " + emojiFile.getAbsolutePath());
+                    }
+                    return null;
+                }
+
                 if (url.startsWith("file:///android_asset/")) {
                     String assetPath = url.substring("file:///android_asset/".length());
-                    // Emoji pack: сначала ищем в filesDir/emoji (скачанный пак)
-                    if (assetPath.startsWith("emoji/")) {
-                        // URL может содержать %20 и другие encoded символы — декодируем
-                        String decodedPath = assetPath;
-                        try { decodedPath = java.net.URLDecoder.decode(assetPath, "UTF-8"); } catch (Exception _e) {}
-                        java.io.File emojiFile = new java.io.File(getFilesDir(), decodedPath);
-                        if (emojiFile.exists()) {
-                            try {
-                                return new WebResourceResponse("image/png", null,
-                                    new java.io.FileInputStream(emojiFile));
-                            } catch (Exception e) {
-                                log.w(TAG, "emoji serve error: " + e.getMessage());
-                            }
-                        }
-                        // Emoji ещё не скачан — возвращаем null (браузер покажет broken img)
-                        return null;
-                    }
                     // Hot-patch файлы
                     java.io.File patchFile = new java.io.File(
                         new java.io.File(getFilesDir(), "hotpatch"), assetPath);

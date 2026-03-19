@@ -4829,8 +4829,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // Путь: filesDir/emoji/ (скачанный пак) → android_asset/emoji/ (fallback из APK если есть)
 // На веб: CDN twemoji как раньше.
 
-// Базовый путь к emoji — устанавливается после проверки готовности пака
-let _EMOJI_BASE = 'file:///android_asset/emoji/'; // дефолт, перезаписывается ниже
+// Базовый путь к emoji — https://emoji.local/ перехватывается Java гарантированно
+// (file:///android_asset/ не вызывает shouldInterceptRequest надёжно в modern WebView)
+let _EMOJI_BASE = 'https://emoji.local/'; // всегда — Java сервит из filesDir/emoji/
 let _emojiPackReady = false;
 
 // EMOJI_PACK_ZIP_URL — архив репозитория LomKich/emoji (main branch).
@@ -4933,7 +4934,7 @@ function _localEmojiHtml(text) {
         result += `<img src="${_EMOJI_BASE}${path}" alt="${sub}" ` +
           `style="display:inline-block;width:1.15em;height:1.15em;vertical-align:-.2em;` +
           `margin:0 .03em;pointer-events:none;object-fit:contain" ` +
-          `class="emoji-img" draggable="false">`;
+          `class="emoji-img" draggable="false" onerror="this.replaceWith(document.createTextNode('${sub}'))">`;
         i += len;
         changed = true;
         found = true;
@@ -4984,6 +4985,8 @@ function _localEmojiParse(root) {
 }
 
 function _twemojiParse(node) {
+  // Если тогл выключен — не трогаем DOM, оставляем системные emoji
+  if (!_emojiStyleEnabled()) return;
   // На Android — используем локальные ассеты
   if (window.Android && typeof IOS_EMOJI_MAP !== 'undefined') {
     _localEmojiParse(node || document.body);
@@ -5003,6 +5006,9 @@ function _twemojiParse(node) {
 }
 
 function _initTwemoji() {
+  // Если тогл emoji выключен — используем системные (не трогаем DOM)
+  if (!_emojiStyleEnabled()) return;
+
   // На Android — сразу запускаем локальный рендерер, не ждём twemoji
   if (window.Android && typeof IOS_EMOJI_MAP !== 'undefined') {
     _initEmojiPack(); // проверяем пак и при необходимости качаем
@@ -6622,11 +6628,7 @@ function messengerRenderMessages(animateLast) {
                style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
                onclick="mcCircleToggle('${cid}','${safeUrl}')">
              <div id="cposter_${cid}" style="position:absolute;inset:0">
-               ${msg.thumbData
-                 ? `<img src="${escHtml(msg.thumbData)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
-                 : `<div style="width:100%;height:100%;background:#1c1c1c;display:flex;align-items:center;justify-content:center">
-                     <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.2);border-top-color:rgba(255,255,255,.75);border-radius:50%;animation:mvpSpin .8s linear infinite"></div>
-                   </div>`}
+               <div style="width:100%;height:100%;background:#000"></div>
              </div>
              <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden"></div>
              <div id="cbtn_${cid}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
@@ -10421,6 +10423,34 @@ function _renderNotchToggle(mode) {
       _renderNotchToggle(notchModeLoad());
     }, ms)
   );
+})();
+
+// ── Тогл стиля эмодзи ─────────────────────────────────────────────────────
+const _EMOJI_STYLE_KEY = 'sapp_emoji_style_v1';
+function _emojiStyleEnabled() {
+  try { return localStorage.getItem(_EMOJI_STYLE_KEY) === 'on'; } catch(e) { return false; }
+}
+function toggleEmojiStyle() {
+  const cur = _emojiStyleEnabled();
+  const next = cur ? 'off' : 'on';
+  try { localStorage.setItem(_EMOJI_STYLE_KEY, next); } catch(e) {}
+  _renderEmojiStyleToggle(next === 'on');
+  if (next === 'on') {
+    toast('😊 Эмодзи iOS включены · перезапусти приложение');
+  } else {
+    toast('😊 Системные эмодзи · перезапусти приложение');
+  }
+}
+function _renderEmojiStyleToggle(on) {
+  const t = document.getElementById('emoji-style-toggle');
+  const s = document.getElementById('emoji-style-sub');
+  if (t) t.classList.toggle('on', on);
+  if (s) s.textContent = on ? 'Стиль iOS (требует скачанного пака)' : 'Системные эмодзи (по умолчанию)';
+}
+// Инициализация при загрузке
+(function() {
+  const on = _emojiStyleEnabled();
+  _renderEmojiStyleToggle(on);
 })();
 
 // ┄┄ Анимация кнопки ◆ в чате ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
