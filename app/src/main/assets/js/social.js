@@ -6008,6 +6008,7 @@ function mcBubbleTouchStart(e, row, idx) {
 }
 
 function mcBubbleTouchMove(e, row, idx) {
+  if (_mcMultiSelect) { clearTimeout(_mcLongPressTimer); return; }
   const t  = e.touches[0];
   const dx = t.clientX - _mcDragStartX;
   const dy = Math.abs(t.clientY - _mcDragStartY);
@@ -6121,6 +6122,7 @@ function mcBubbleClick(e, idx) {
 
 function mcBubbleDblClick(e, idx) {
   e.preventDefault(); e.stopPropagation();
+  if (_mcMultiSelect) return;
   _mcDragTriggered = true; // блокируем click после dblclick
   mcCloseMenu();
   const bubble = e.currentTarget.querySelector('.mc-bubble-inner');
@@ -7518,7 +7520,6 @@ function mcStartCircleRecord() {
   if (_mcCircleActive) return;
   if (window.Android && typeof Android.startCircleRecord === 'function') {
     _mcCircleActive = true;
-    _mcInChatSendingShow('circle', null);
     Android.startCircleRecord();
     return;
   }
@@ -7532,6 +7533,7 @@ function mcStartCircleRecord() {
  */
 window.onNativeCircleUploading = function() {
   console.log('[Circle] uploading...');
+  _mcInChatSendingShow('circle', 'Видеосообщение');
   _mcInChatSendingUpdate('circle', '⬆ Загружаю...');
 };
 
@@ -7872,27 +7874,34 @@ function _mcVoiceCancel() {
 
 // ── UI ────────────────────────────────────────────────────────────
 function _mcVoiceShowUI() {
+  // Прячем поле ввода — как в Telegram
+  const wrap = document.getElementById('mc-input-wrap');
+  if (wrap) { wrap.style.transition = 'opacity .15s'; wrap.style.opacity = '0'; wrap.style.pointerEvents = 'none'; setTimeout(() => { if (wrap.style.opacity === '0') wrap.style.display = 'none'; }, 150); }
+
   let ui = document.getElementById('mc-voice-ui');
   if (ui) ui.remove();
   ui = document.createElement('div');
   ui.id = 'mc-voice-ui';
-  ui.style.cssText = 'animation:mc-voice-in .28s cubic-bezier(.34,1.1,.64,1) both';
+  ui.style.cssText = 'flex:1;display:flex;align-items:center;gap:8px;padding:0 6px 0 14px;min-width:0;overflow:hidden;animation:mc-voice-in .22s cubic-bezier(.34,1.1,.64,1) both';
   ui.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;padding:11px 16px 4px;width:100%;box-sizing:border-box">
-      <div class="mc-rec-dot"></div>
-      <div style="flex:1;position:relative;overflow:hidden;height:36px">
-        <canvas id="mc-voice-wave" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
-      </div>
-      <div id="mc-voice-timer"
-        style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--text);min-width:44px;text-align:right;flex-shrink:0;transition:color .3s">0:00</div>
+    <div class="mc-rec-dot"></div>
+    <div id="mc-voice-timer"
+      style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--text);min-width:40px;flex-shrink:0;transition:color .3s">0:00</div>
+    <div style="flex:1;position:relative;overflow:hidden;height:34px;min-width:0">
+      <canvas id="mc-voice-wave" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
     </div>
-    <div id="mc-voice-hint-row"
-      style="display:flex;align-items:center;justify-content:center;gap:6px;padding:0 16px 10px;width:100%;box-sizing:border-box;transition:transform .2s ease,opacity .15s">
-      <span class="mc-swipe-hint-arrow" style="font-size:16px;color:var(--muted)">←</span>
-      <span id="mc-voice-hint" style="font-size:12px;font-weight:500;color:var(--muted);transition:color .15s,opacity .15s">Свайп для отмены</span>
+    <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;overflow:hidden;max-width:110px;transition:transform .2s ease,opacity .15s">
+      <span class="mc-swipe-hint-arrow" style="font-size:14px;color:var(--muted)">←</span>
+      <span id="mc-voice-hint" style="font-size:11px;font-weight:500;color:var(--muted);white-space:nowrap;transition:color .15s,opacity .15s">Свайп для отмены</span>
     </div>
   `;
-  document.body.appendChild(ui);
+
+  // Вставляем ПЕРЕД кнопкой действия — внутри mc-input-bar
+  const bar = document.getElementById('mc-input-bar');
+  const actionBtn = document.getElementById('mc-action-btn');
+  if (bar && actionBtn) bar.insertBefore(ui, actionBtn);
+  else document.body.appendChild(ui);
+
   const btn = document.getElementById('mc-action-btn');
   if (btn) {
     btn.classList.add('recording');
@@ -7901,7 +7910,7 @@ function _mcVoiceShowUI() {
   }
   requestAnimationFrame(() => {
     const canvas = document.getElementById('mc-voice-wave');
-    if (canvas) { canvas.width = canvas.offsetWidth || 200; canvas.height = canvas.offsetHeight || 36; }
+    if (canvas) { canvas.width = canvas.offsetWidth || 160; canvas.height = canvas.offsetHeight || 34; }
   });
 }
 
@@ -7909,8 +7918,16 @@ function _mcVoiceHideUI() {
   cancelAnimationFrame(_mcVoiceAnimFrame);
   const ui = document.getElementById('mc-voice-ui');
   if (ui) {
-    ui.style.animation = 'mc-voice-out .2s cubic-bezier(.4,0,.8,.6) forwards';
-    setTimeout(() => ui.remove(), 210);
+    ui.style.animation = 'mc-voice-out .18s cubic-bezier(.4,0,.8,.6) forwards';
+    setTimeout(() => ui.remove(), 200);
+  }
+  // Восстанавливаем поле ввода
+  const wrap = document.getElementById('mc-input-wrap');
+  if (wrap) {
+    wrap.style.display = '';
+    wrap.style.pointerEvents = '';
+    requestAnimationFrame(() => { wrap.style.opacity = '1'; });
+    setTimeout(() => { wrap.style.transition = ''; }, 200);
   }
   const btn = document.getElementById('mc-action-btn');
   if (btn) {
