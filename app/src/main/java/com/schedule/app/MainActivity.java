@@ -552,13 +552,6 @@ public class MainActivity extends Activity {
                         != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
             }
 
-            Intent tapIntent = new Intent(this, MainActivity.class);
-            tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            int piFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                : PendingIntent.FLAG_UPDATE_CURRENT;
-            PendingIntent pi = PendingIntent.getActivity(this, 0, tapIntent, piFlags);
-
             for (java.util.Map.Entry<String, java.util.List<String>> entry : byUser.entrySet()) {
                 String from = entry.getKey();
                 java.util.List<String> texts = entry.getValue();
