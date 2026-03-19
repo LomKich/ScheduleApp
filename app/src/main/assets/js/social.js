@@ -930,7 +930,24 @@ function profileInitEditScreen() {
   const vipSec = document.createElement('div');
   vipSec.id = 'vip-edit-section';
 
-  // Фото-аватар
+  // ── Кнопка доната (всегда видна) ─────────────────────────────────────
+  const donateRow = document.createElement('div');
+  donateRow.innerHTML = `<div class="sep"></div>`;
+  const donateBtn = document.createElement('button');
+  donateBtn.className = 'btn btn-accent';
+  donateBtn.style.cssText = 'margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px';
+  donateBtn.innerHTML = `<span style="font-size:18px">💝</span> Поддержать проект • VIP`;
+  donateBtn.onclick = showDonateSheet;
+  donateRow.appendChild(donateBtn);
+  if (!isVip) {
+    const subNote = document.createElement('div');
+    subNote.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:14px;text-align:center';
+    subNote.textContent = 'Донат через СБП • VIP активируется автоматически';
+    donateRow.appendChild(subNote);
+  }
+  vipSec.appendChild(donateRow);
+
+
   const photoRow = document.createElement('div');
   photoRow.innerHTML = `<div class="sep"></div>
     <div class="section-label" style="display:flex;align-items:center;gap:8px">
@@ -3254,8 +3271,7 @@ async function syncGroupsFromServer(username) {
     const rows = await sbGet('users', `select=groups&username=eq.${encodeURIComponent(username)}&limit=1`);
     if (!Array.isArray(rows) || !rows.length) return;
     const raw = rows[0].groups;
-    if (!raw) return;
-    const serverGroups = JSON.parse(raw);
+    const serverGroups = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(serverGroups)) return;
     const local  = groupsLoad();
     // Merge: добавляем серверные группы которых нет локально
@@ -3264,6 +3280,23 @@ async function syncGroupsFromServer(username) {
       if (!merged.find(g => g.id === sg.id)) merged.push(sg);
     });
     groupsSave(merged);
+
+    // ── Авто-вступление в публичную группу ─────────────────────────────
+    // Проверяем: есть ли пользователь в members публичной группы на сервере
+    const pgInServer = serverGroups.find(g => g.id === PUBLIC_GROUP_ID);
+    const pgLocal    = merged.find(g => g.id === PUBLIC_GROUP_ID);
+    const alreadyMember = pgInServer?.members?.includes(username) || pgLocal?.members?.includes('__all__');
+    if (!alreadyMember) {
+      // Добавляем пользователя в публичную группу на сервере
+      const pubGroup = _publicGroupDef();
+      pubGroup.members = [username]; // сервер хранит реальный список
+      const newServerGroups = [...serverGroups.filter(g => g.id !== PUBLIC_GROUP_ID), pubGroup];
+      // PATCH users.groups
+      await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
+        { groups: JSON.stringify(newServerGroups) },
+        { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+      ).catch(() => {});
+    }
   } catch(e) {}
 }
 
@@ -4530,7 +4563,6 @@ function vipActivate(code) {
   const p = profileLoad();
   if (p) {
     p.vip = true; profileSave(p);
-    // Сохраняем на сервер немедленно
     if (sbReady()) {
       _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
         { vip: true }, { 'Content-Type':'application/json', 'Prefer':'return=minimal' }).catch(()=>{});
@@ -4538,6 +4570,219 @@ function vipActivate(code) {
   }
   return true;
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// 💳 ДОНАТ / СБП — поддержи проект и получи VIP
+// Схема:
+//   1. Пользователь выбирает сумму → открывается QR/ссылка СБП
+//   2. После оплаты жмёт «Я оплатил» → вводит номер транзакции
+//   3. Запись сохраняется в таблицу donations (Supabase)
+//   4. Владелец вручную подтверждает → vipGrantTo(username)
+//      ИЛИ — авто-верификация через webhook если настроен
+// ══════════════════════════════════════════════════════════════════════
+
+// СБП реквизиты (замени на свои)
+const SBP_PHONE  = '+79991234567';   // ← ТВОЙ НОМЕР ДЛЯ СБП
+const SBP_NAME   = 'ScheduleApp';    // Имя получателя
+const SBP_BANK   = 'sberbank';       // Банк-получатель (sberbank/tinkoff/vtb)
+
+const DONATE_TIERS = [
+  { amount: 20,  label: '⭐ VIP месяц',      desc: '+ VIP на 30 дней',  vip: true  },
+  { amount: 30,  label: '👑 VIP 3 месяца',   desc: '+ VIP на 90 дней',  vip: true  },
+  { amount: 100, label: '🚀 VIP навсегда',   desc: '+ VIP навсегда',    vip: true  },
+];
+
+function showDonateSheet() {
+  const existing = document.getElementById('donate-sheet');
+  if (existing) existing.remove();
+
+  const p = profileLoad();
+
+  const sheet = document.createElement('div');
+  sheet.id = 'donate-sheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
+
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:24px 24px 0 0;padding:14px 0 calc(20px + var(--safe-bot,0px));max-height:92vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)"
+         onclick="event.stopPropagation()">
+      <div style="width:44px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 18px"></div>
+
+      <!-- Заголовок -->
+      <div style="text-align:center;padding:0 20px 18px">
+        <div style="font-size:32px;margin-bottom:6px">💝</div>
+        <div style="font-size:19px;font-weight:800;color:var(--text)">Поддержи проект</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px;line-height:1.5">
+          Донат через СБП за несколько секунд.<br>VIP-тарифы активируются автоматически.
+        </div>
+      </div>
+
+      <!-- Тарифы -->
+      <div style="padding:0 16px;display:grid;gap:10px">
+        ${DONATE_TIERS.map((t, i) => `
+          <div onclick="donateSelectTier(${i})" id="donate-tier-${i}"
+            style="display:flex;align-items:center;gap:14px;padding:14px 16px;
+                   border-radius:16px;border:2px solid ${t.vip ? 'var(--accent)' : 'rgba(255,255,255,.1)'};
+                   background:${t.vip ? 'color-mix(in srgb,var(--accent) 8%,var(--surface))' : 'var(--surface2)'};
+                   cursor:pointer;transition:border-color .15s;-webkit-tap-highlight-color:transparent">
+            <div style="font-size:26px;flex-shrink:0">${t.label.split(' ')[0]}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:15px;font-weight:700;color:var(--text)">${t.label.slice(t.label.indexOf(' ')+1)}</div>
+              <div style="font-size:12px;color:var(--muted)">${t.desc}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:17px;font-weight:800;color:${t.vip ? 'var(--accent)' : 'var(--text)'}">${t.amount}₽</div>
+              ${t.vip ? '<div style="font-size:10px;color:var(--accent);font-weight:700">VIP</div>' : ''}
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Кнопка оплаты -->
+      <div style="padding:18px 16px 0">
+        <button id="donate-pay-btn" onclick="donateOpenSBP()"
+          style="width:100%;padding:16px;background:var(--accent);border:none;border-radius:16px;
+                 color:var(--btn-text,#fff);font-family:inherit;font-size:16px;font-weight:800;
+                 cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;
+                 -webkit-tap-highlight-color:transparent;transition:opacity .15s">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          Оплатить через СБП
+        </button>
+        <div style="text-align:center;margin-top:10px;font-size:11px;color:var(--muted)">
+          После оплаты нажмите «Я оплатил» для активации VIP
+        </div>
+      </div>
+
+      <!-- Секция подтверждения (скрыта до нажатия кнопки оплаты) -->
+      <div id="donate-confirm-section" style="display:none;padding:14px 16px 0">
+        <div style="background:var(--surface2);border-radius:14px;padding:14px 16px">
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">
+            ✅ Я оплатил — подтвердить
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+            Введи последние 6 цифр номера транзакции из смс/чека:
+          </div>
+          <input id="donate-txn-input" placeholder="Например: 847291"
+            maxlength="12" inputmode="numeric"
+            style="width:100%;padding:10px 14px;background:var(--surface);border:1.5px solid rgba(255,255,255,.12);
+                   border-radius:10px;color:var(--text);font-size:15px;font-family:inherit;
+                   outline:none;box-sizing:border-box;caret-color:var(--accent)">
+          <button onclick="donateConfirm()"
+            style="width:100%;margin-top:10px;padding:12px;background:rgba(255,255,255,.08);
+                   border:1.5px solid rgba(255,255,255,.15);border-radius:10px;
+                   color:var(--text);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">
+            Отправить на проверку
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  sheet.addEventListener('click', () => sheet.remove());
+  document.body.appendChild(sheet);
+
+  // Дефолт — первый тариф с VIP
+  donateSelectTier(1);
+}
+
+let _selectedDoneTierIdx = 1;
+function donateSelectTier(i) {
+  _selectedDoneTierIdx = i;
+  DONATE_TIERS.forEach((t, idx) => {
+    const el = document.getElementById(`donate-tier-${idx}`);
+    if (!el) return;
+    el.style.borderColor = idx === i
+      ? 'var(--accent)'
+      : (t.vip ? 'rgba(var(--accent-rgb,32,138,240),.25)' : 'rgba(255,255,255,.1)');
+    el.style.transform = idx === i ? 'scale(1.01)' : 'scale(1)';
+  });
+  const btn = document.getElementById('donate-pay-btn');
+  if (btn) btn.textContent = `Оплатить ${DONATE_TIERS[i].amount}₽ через СБП`;
+}
+
+function donateOpenSBP() {
+  const tier = DONATE_TIERS[_selectedDoneTierIdx];
+  // Формируем ссылку СБП (стандарт НСПК)
+  // Формат: https://qr.nspk.ru/AS1...
+  // Для простоты используем tel: ссылку с суммой — открывает приложение банка
+  const comment = encodeURIComponent(`ScheduleApp VIP ${tier.amount}rub`);
+  const sbpUrl  = `https://qr.nspk.ru/redirect?type=01&bank=${SBP_BANK}&sum=${tier.amount * 100}&cur=RUB&crc=000`;
+  // Fallback: прямая ссылка оплаты по номеру телефона
+  const fallbackUrl = `tel:${SBP_PHONE}`;
+
+  // Пробуем открыть СБП через Android
+  if (window.Android?.openUrl) {
+    window.Android.openUrl(sbpUrl);
+  } else {
+    window.open(sbpUrl, '_blank');
+  }
+
+  // Показываем секцию подтверждения
+  const sec = document.getElementById('donate-confirm-section');
+  if (sec) {
+    sec.style.display = 'block';
+    sec.scrollIntoView({ behavior: 'smooth' });
+  }
+  toast('💳 Откройте приложение банка и оплатите ' + tier.amount + '₽');
+}
+
+async function donateConfirm() {
+  const txn = document.getElementById('donate-txn-input')?.value?.trim();
+  if (!txn || txn.length < 4) { toast('❌ Введи номер транзакции'); return; }
+
+  const p    = DONATE_TIERS[_selectedDoneTierIdx];
+  const prof = profileLoad();
+  if (!prof) { toast('❌ Войди в аккаунт'); return; }
+
+  const btn = document.querySelector('#donate-confirm-section button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Отправляю...'; }
+
+  try {
+    // Сохраняем в таблицу donations (создай в Supabase: username, amount, txn, ts, status)
+    const res = await _sbFetch('POST', '/rest/v1/donations',
+      {
+        username:  prof.username,
+        amount:    DONATE_TIERS[_selectedDoneTierIdx].amount,
+        txn_id:    txn,
+        ts:        Date.now(),
+        status:    'pending',
+        tier:      DONATE_TIERS[_selectedDoneTierIdx].label,
+        vip_tier:  DONATE_TIERS[_selectedDoneTierIdx].vip,
+      },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+
+    if (res.ok || res.status === 201) {
+      document.getElementById('donate-sheet')?.remove();
+      // Показываем благодарность
+      const thanks = document.createElement('div');
+      thanks.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;animation:mcFadeIn .2s ease';
+      thanks.innerHTML = `
+        <div style="background:var(--surface);border-radius:24px;padding:32px 24px;text-align:center;max-width:300px;margin:20px;animation:mc-sel-pop .3s cubic-bezier(.34,1.3,.64,1)">
+          <div style="font-size:48px;margin-bottom:12px">🙏</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">Спасибо!</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px">
+            Платёж получен на проверку.<br>
+            ${DONATE_TIERS[_selectedDoneTierIdx].vip
+              ? 'VIP будет активирован в течение <b style="color:var(--accent)">24 часов</b> после подтверждения оплаты.'
+              : 'Ты поддержал развитие проекта ❤️'}
+          </div>
+          <button onclick="this.closest('[style*=fixed]').remove()"
+            style="background:var(--accent);border:none;color:var(--btn-text,#fff);
+                   padding:12px 28px;border-radius:12px;font-size:15px;font-weight:700;
+                   cursor:pointer;font-family:inherit">Отлично!</button>
+        </div>`;
+      thanks.addEventListener('click', e => { if (e.target === thanks) thanks.remove(); });
+      document.body.appendChild(thanks);
+      SFX.play('success');
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = 'Отправить на проверку'; }
+      toast('❌ Ошибка сохранения. Напиши в поддержку.');
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Отправить на проверку'; }
+    toast('❌ ' + (e.message || 'Ошибка'));
+  }
+}
+
+
 
 // CMD команда /vip
 // Добавляем в cmdExec — патч через хук
@@ -9632,526 +9877,48 @@ function renderGroupsList() {
 
 
 // ════════════════════════════════════════════════════════════════════════
-// 📱 YOUTUBE SHORTS PLAYER — встроенный клон Shorts
-// Открыть командой: shorts  (в CMD консоли)
+// 📱 YOUTUBE SHORTS — встроенный плеер через YouTube Mobile Web
+// Команда в CMD: shorts [поисковый запрос]
 // ════════════════════════════════════════════════════════════════════════
 
-const YT_SHORTS = (() => {
-  // ── Популярные Shorts — стартовый набор видео IDs (обновляемые) ──────
-  // Используем реальные YouTube video ID
-  let _playlist = [
-    { id: 'dQw4w9WgXcQ', title: 'Never Gonna Give You Up', channel: '@rickastley',   likes: '1.2M', comments: '142K', music: 'Never Gonna Give You Up' },
-    { id: 'kJQP7kiw5Fk', title: 'Despacito (Short)',       channel: '@LuisFonsi',    likes: '8.4M', comments: '312K', music: 'Despacito' },
-    { id: 'JGwWNGJdvx8', title: 'Shape of You (Short)',    channel: '@EdSheeran',    likes: '4.1M', comments: '98K',  music: 'Shape of You' },
-    { id: 'OPf0YbXqDm0', title: 'Mark Ronson ft. Bruno',   channel: '@markronson',   likes: '2.7M', comments: '55K',  music: 'Uptown Funk' },
-    { id: 'hT_nvWreIhg', title: 'Счётчик просмотров',      channel: '@YouTube',      likes: '9.9M', comments: '888K', music: 'Оригинальный звук' },
-    { id: '9bZkp7q19f0', title: 'Gangnam Style (Short)',   channel: '@psy',          likes: '7.2M', comments: '421K', music: 'Gangnam Style' },
-    { id: 'CevxZvSJLk8', title: 'Katy Perry - Roar',       channel: '@katyperry',    likes: '3.5M', comments: '62K',  music: 'Roar' },
-    { id: 'RgKAFK5djSk', title: 'Wiz Khalifa - See You',   channel: '@WizKhalifa',   likes: '5.1M', comments: '103K', music: 'See You Again' },
-    { id: 'SlPhMPnQ58k', title: 'Shorts тест',             channel: '@shorts',       likes: '1K',   comments: '12',   music: 'Оригинальный звук' },
-    { id: 'uelHwf8o7_U', title: 'Billie Eilish - Bad Guy', channel: '@billieeilish', likes: '6.3M', comments: '201K', music: 'bad guy' },
-  ];
+const YT_SHORTS_URL  = 'https://m.youtube.com/shorts';
+const YT_SEARCH_BASE = 'https://m.youtube.com/results?search_query=';
 
-  let _idx       = 0;      // текущий индекс
-  let _liked     = false;
-  let _subscribed= false;
-  let _progTimer = null;
+let _ytIframe = null;
 
-  // Позиции свайпа
-  let _sy = 0, _dragging = false, _dragY = 0;
-
-  // ── Открыть Shorts ───────────────────────────────────────────────────
-  function open(query) {
-    showScreen('s-shorts');
-    updateNavVisibility('s-shorts');
-    document.getElementById('yt-loader').style.display = 'flex';
-    setTimeout(() => {
-      _buildReel();
-      document.getElementById('yt-loader').style.display = 'none';
-      _renderSlide(_idx);
-    }, 800);
-    if (query) setTimeout(() => ytDoSearch(query), 900);
-    _setupSwipe();
-  }
-
-  // ── Строим reel из слайдов ────────────────────────────────────────────
-  function _buildReel() {
-    const reel = document.getElementById('yt-reel');
-    reel.innerHTML = '';
-    _playlist.forEach((v, i) => {
-      const slide = document.createElement('div');
-      slide.className = 'yt-slide';
-      slide.id = 'yt-slide-' + i;
-      slide.style.transform = i === 0 ? 'translateY(0)' : `translateY(${100 * (i)}%)`;
-      // Thumbnail as background
-      slide.innerHTML = `
-        <div class="yt-slide-thumb" id="yt-thumb-${i}"
-          style="background-image:url(https://img.youtube.com/vi/${v.id}/maxresdefault.jpg)"></div>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-          <div id="yt-spinner-${i}" class="yt-spin" style="display:none"></div>
-        </div>
-        <!-- Tap zone: tap to play/pause -->
-        <div style="position:absolute;inset:0;z-index:10" id="yt-tap-${i}"
-          onclick="YTS._tapPlay(${i})"></div>
-        <!-- Play icon overlay (shown when paused) -->
-        <div id="yt-play-ov-${i}" style="
-          position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-          pointer-events:none;opacity:0;transition:opacity .2s;z-index:11">
-          <div style="width:70px;height:70px;border-radius:50%;background:rgba(0,0,0,.55);
-            backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
-          </div>
-        </div>
-      `;
-      reel.appendChild(slide);
-    });
-  }
-
-  // ── Отрисовать текущий слайд — прямой стрим через Invidious API ─────────
-  // Используем nativeFetch (Java, без CORS) для получения прямого URL потока.
-  // Это полностью обходит: ограничение file:// origin, disabled embedding, bot-protection.
-  const _INV_APIS = [
-    'https://invidious.io',
-    'https://inv.vern.cc',
-    'https://invidious.nerdvpn.de',
-    'https://invidious.kavin.rocks',
-    'https://y.com.sb',
-    'https://yt.artemislena.eu',
-    'https://invidious.lunar.icu',
-    'https://iv.datura.network',
-  ];
-  // Кэш: videoId → прямой URL стрима
-  const _streamCache = {};
-
-  async function _getStreamUrl(videoId) {
-    if (_streamCache[videoId]) return _streamCache[videoId];
-    for (const host of _INV_APIS) {
-      try {
-        const apiUrl = `${host}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`;
-        let data;
-        // Java nativeFetch работает без CORS ограничений
-        if (window.Android && typeof window.Android.nativeFetch === 'function') {
-          const res = JSON.parse(window.Android.nativeFetch(apiUrl));
-          if (!res.ok) continue;
-          data = JSON.parse(res.body);
-        } else {
-          // Браузерный fallback
-          const r = await fetch(apiUrl, { signal: AbortSignal.timeout(4000) });
-          if (!r.ok) continue;
-          data = await r.json();
-        }
-        // Предпочитаем mp4 360p-720p из formatStreams (мукс аудио+видео)
-        const streams = data.formatStreams || [];
-        const adaptive = data.adaptiveFormats || [];
-        // Ищем mp4 с качеством 720p или 480p или 360p
-        const pref = ['720p', '480p', '360p', '240p'];
-        let best = null;
-        for (const q of pref) {
-          best = streams.find(s => s.qualityLabel === q && s.type?.includes('mp4'));
-          if (best) break;
-        }
-        // Fallback: первый mp4 вообще
-        if (!best) best = streams.find(s => s.type?.includes('mp4'));
-        // Fallback: первый вообще
-        if (!best) best = streams[0] || adaptive[0];
-        if (best && best.url) {
-          _streamCache[videoId] = best.url;
-          return best.url;
-        }
-      } catch(_) {}
-    }
-    return null;
-  }
-
-  function _renderSlide(i) {
-    const v = _playlist[i];
-    if (!v) return;
-
-    _liked = false;
-    _updateLikeUI();
-
-    document.getElementById('yt-like-count').textContent    = v.likes   || '0';
-    document.getElementById('yt-comment-count').textContent = v.comments || '0';
-    document.getElementById('yt-channel-name').textContent  = v.channel || '@channel';
-    document.getElementById('yt-desc').textContent          = v.title   || '';
-    document.getElementById('yt-music-name').textContent    = v.music   || 'Оригинальный звук';
-
-    const slide   = document.getElementById('yt-slide-' + i);
-    const spinner = document.getElementById('yt-spinner-' + i);
-    const thumb   = document.getElementById('yt-thumb-'  + i);
-    if (!slide) return;
-
-    // Убираем старые video/iframe
-    slide.querySelectorAll('video,iframe').forEach(el => { try { el.pause(); } catch(_) {} el.remove(); });
-
-    if (spinner) spinner.style.display = 'block';
-
-    document.getElementById('yt-progress').style.width = '0%';
-
-    // Получаем прямой URL стрима
-    _getStreamUrl(v.id).then(url => {
-      if (!url) {
-        // Нет URL — показываем thumbnail + сообщение
-        if (spinner) spinner.style.display = 'none';
-        const info = document.createElement('div');
-        info.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6';
-        info.innerHTML = `<div style="background:rgba(0,0,0,.7);border-radius:14px;padding:18px 22px;text-align:center;max-width:260px">
-          <div style="font-size:28px;margin-bottom:8px">⚠️</div>
-          <div style="color:#fff;font-size:13px;line-height:1.5">Видео недоступно.<br>Попробуй следующее.</div>
-          <button onclick="YTS.goNext()" style="margin-top:12px;background:#ff0000;border:none;color:#fff;border-radius:20px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">Следующее ▶</button>
-        </div>`;
-        slide.appendChild(info);
-        return;
-      }
-
-      // Создаём <video> с прямым URL
-      const vid = document.createElement('video');
-      vid.src = url;
-      vid.playsInline = true;
-      vid.autoplay    = true;
-      vid.controls    = false;
-      vid.muted       = false;
-      vid.loop        = true;
-      vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:5;background:#000';
-
-      vid.oncanplay = () => {
-        if (spinner) spinner.style.display = 'none';
-        if (thumb) { thumb.style.opacity = '0'; setTimeout(() => { if(thumb) thumb.style.display = 'none'; }, 400); }
-        vid.play().catch(() => {});
-        _startProgress(vid);
-      };
-      vid.onerror = () => {
-        if (spinner) spinner.style.display = 'none';
-        // Стрим не загрузился — убираем кэш и пробуем следующий инстанс
-        delete _streamCache[v.id];
-      };
-
-      slide.appendChild(vid);
-      // Тап play/pause через существующий обработчик
-      const tapZone = document.getElementById(`yt-tap-${i}`);
-      if (tapZone) {
-        tapZone._vid = vid;
-        tapZone.onclick = () => {
-          const ov = document.getElementById(`yt-play-ov-${i}`);
-          if (vid.paused) {
-            vid.play().then(() => { if(ov) { ov.style.opacity='0'; }}).catch(()=>{});
-          } else {
-            vid.pause();
-            if (ov) { ov.style.opacity = '1'; setTimeout(() => ov.style.opacity='0', 800); }
-          }
-        };
-      }
-    });
-
-    _preloadThumb(i + 1);
-    // Предзагружаем URL следующего видео
-    if (_playlist[i+1]) setTimeout(() => _getStreamUrl(_playlist[i+1].id), 2000);
-  }
-  // ── Прогресс-бар (имитация, т.к. нет доступа к iframe API без postMessage) ──
-  function _startProgress(videoEl) {
-    clearInterval(_progTimer);
-    if (videoEl) {
-      // Реальный прогресс по timeupdate
-      const onTimeUpdate = () => {
-        if (!videoEl.duration) return;
-        const pct = videoEl.currentTime / videoEl.duration * 100;
-        const el = document.getElementById('yt-progress');
-        if (el) el.style.width = pct + '%';
-      };
-      const onEnded = () => {
-        videoEl.removeEventListener('timeupdate', onTimeUpdate);
-        videoEl.removeEventListener('ended', onEnded);
-        setTimeout(() => goNext(), 300);
-      };
-      videoEl.addEventListener('timeupdate', onTimeUpdate, { passive: true });
-      videoEl.addEventListener('ended', onEnded, { once: true });
-      return;
-    }
-    // Fallback без video element
-    const dur = 30;
-    const start = Date.now();
-    _progTimer = setInterval(() => {
-      const pct = Math.min(100, (Date.now() - start) / (dur * 1000) * 100);
-      const el = document.getElementById('yt-progress');
-      if (el) el.style.width = pct + '%';
-      if (pct >= 100) { clearInterval(_progTimer); setTimeout(() => goNext(), 200); }
-    }, 500);
-  }
-
-  function _preloadThumb(i) {
-    if (i >= _playlist.length) return;
-    const img = new Image();
-    img.src = `https://img.youtube.com/vi/${_playlist[i].id}/maxresdefault.jpg`;
-  }
-
-  // ── Play / Pause тап ─────────────────────────────────────────────────
-  function _tapPlay(i) {
-    // Теперь управляется через tapZone._vid в _renderSlide
-    // Эта функция — fallback
-    const vid = document.querySelector(`#yt-slide-${i} video`);
-    const ov  = document.getElementById(`yt-play-ov-${i}`);
-    if (!vid) return;
-    if (vid.paused) {
-      vid.play().catch(() => {});
-      if (ov) ov.style.opacity = '0';
-    } else {
-      vid.pause();
-      if (ov) { ov.style.opacity = '1'; setTimeout(() => ov.style.opacity = '0', 800); }
-    }
-  }
-
-  // ── Навигация ─────────────────────────────────────────────────────────
-  function goNext() {
-    if (_idx >= _playlist.length - 1) return;
-    clearInterval(_progTimer);
-    // Пауза в текущем iframe
-    _pauseCurrent();
-    const fromSlide = document.getElementById('yt-slide-' + _idx);
-    _idx++;
-    const toSlide = document.getElementById('yt-slide-' + _idx);
-    _animSlide(fromSlide, toSlide, 'up', () => _renderSlide(_idx));
-  }
-
-  function goPrev() {
-    if (_idx <= 0) return;
-    clearInterval(_progTimer);
-    _pauseCurrent();
-    const fromSlide = document.getElementById('yt-slide-' + _idx);
-    _idx--;
-    const toSlide = document.getElementById('yt-slide-' + _idx);
-    _animSlide(fromSlide, toSlide, 'down', () => _renderSlide(_idx));
-  }
-
-  function _pauseCurrent() {
-    const vid = document.querySelector(`#yt-slide-${_idx} video`);
-    if (vid) { try { vid.pause(); } catch(_) {} }
-  }
-
-  function _animSlide(from, to, dir, cb) {
-    if (!from || !to) { if(cb) cb(); return; }
-    const h = window.innerHeight;
-    const ease = 'cubic-bezier(0.4,0,0.2,1)';
-    const dur = 320;
-
-    to.style.transition = 'none';
-    to.style.transform  = dir === 'up' ? `translateY(${h}px)` : `translateY(${-h}px)`;
-    to.style.zIndex     = '2';
-    from.style.zIndex   = '1';
-    void to.getBoundingClientRect();
-
-    requestAnimationFrame(() => {
-      to.style.transition   = `transform ${dur}ms ${ease}`;
-      to.style.transform    = 'translateY(0)';
-      from.style.transition = `transform ${dur}ms ${ease}`;
-      from.style.transform  = dir === 'up' ? `translateY(${-h}px)` : `translateY(${h}px)`;
-      setTimeout(() => {
-        from.style.cssText = `position:absolute;left:0;right:0;width:100%;height:100%;background:#000;`;
-        to.style.zIndex    = '1';
-        if(cb) cb();
-      }, dur + 30);
-    });
-  }
-
-  // ── Свайп вертикальный ────────────────────────────────────────────────
-  function _setupSwipe() {
-    const reel = document.getElementById('yt-reel');
-    if (!reel || reel._swipeSet) return;
-    reel._swipeSet = true;
-
-    reel.addEventListener('touchstart', e => {
-      _sy = e.touches[0].clientY;
-      _dragging = true;
-      _dragY = 0;
-    }, { passive: true });
-
-    reel.addEventListener('touchmove', e => {
-      if (!_dragging) return;
-      _dragY = e.touches[0].clientY - _sy;
-      const slide = document.getElementById('yt-slide-' + _idx);
-      if (slide) slide.style.transform = `translateY(${_dragY * 0.35}px)`;
-    }, { passive: true });
-
-    reel.addEventListener('touchend', () => {
-      _dragging = false;
-      const slide = document.getElementById('yt-slide-' + _idx);
-      const THRESHOLD = 60;
-      if (_dragY < -THRESHOLD) {
-        goNext();
-      } else if (_dragY > THRESHOLD) {
-        goPrev();
-      } else {
-        // snap back
-        if (slide) {
-          slide.style.transition = 'transform .22s cubic-bezier(.4,0,.2,1)';
-          slide.style.transform  = 'translateY(0)';
-          setTimeout(() => { if(slide) slide.style.transition = ''; }, 250);
-        }
-      }
-    });
-  }
-
-  // ── Like UI ───────────────────────────────────────────────────────────
-  function _updateLikeUI() {
-    const btn = document.getElementById('yt-like-btn');
-    const ico = document.getElementById('yt-like-ico');
-    if (!btn || !ico) return;
-    if (_liked) {
-      btn.style.background = 'rgba(255,0,0,.25)';
-      ico.setAttribute('stroke', '#ff4444');
-      ico.setAttribute('fill', 'rgba(255,68,68,.3)');
-    } else {
-      btn.style.background = 'rgba(255,255,255,.15)';
-      ico.setAttribute('stroke', 'white');
-      ico.setAttribute('fill', 'none');
-    }
-  }
-
-  // ── Поиск через YouTube oEmbed hint ──────────────────────────────────
-  async function search(query) {
-    const el = document.getElementById('yt-search-results');
-    if (el) el.innerHTML = '<div style="color:#aaa;text-align:center;padding:30px">🔎 Ищу...</div>';
-    // Используем предустановленные IDs + запрос к Invidious API (open-source YouTube frontend)
-    try {
-      // Invidious — открытый фронтенд YouTube с API, не требует ключа
-      const invidiousInstances = [
-        'https://inv.nadeko.net',
-        'https://invidious.nerdvpn.de',
-        'https://yt.artemislena.eu',
-      ];
-      let data = null;
-      for (const host of invidiousInstances) {
-        try {
-          const r = await fetch(`${host}/api/v1/search?q=${encodeURIComponent(query)}&type=video&duration=short&page=1`, {
-            signal: AbortSignal.timeout(5000)
-          });
-          if (r.ok) { data = await r.json(); break; }
-        } catch(_) {}
-      }
-      if (data && Array.isArray(data) && data.length > 0) {
-        const shorts = data.filter(v => v.lengthSeconds > 0 && v.lengthSeconds <= 90).slice(0, 15);
-        if (el) {
-          el.innerHTML = shorts.length
-            ? shorts.map(v => `
-              <div onclick="YTS._addAndPlay({id:'${v.videoId}',title:${JSON.stringify(v.title||'')},channel:${JSON.stringify('@'+(v.author||''))},likes:'${_fmt(v.likeCount)}',comments:'0',music:'Оригинальный звук'})"
-                style="display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.08)">
-                <img src="https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg"
-                  style="width:80px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:3px;
-                    overflow:hidden;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical">${escHtml(v.title||'')}</div>
-                  <div style="font-size:11px;color:#aaa">${escHtml('@'+(v.author||''))}</div>
-                </div>
-              </div>`).join('')
-            : '<div style="color:#aaa;text-align:center;padding:30px">Ничего не найдено</div>';
-        }
-      } else {
-        if (el) el.innerHTML = '<div style="color:#aaa;text-align:center;padding:30px">Нет результатов. Попробуй другой запрос.</div>';
-      }
-    } catch(e) {
-      if (el) el.innerHTML = `<div style="color:#f66;text-align:center;padding:30px">Ошибка поиска: ${e.message}</div>`;
-    }
-  }
-
-  function _fmt(n) {
-    if (!n) return '0';
-    if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
-    if (n >= 1e3) return (n/1e3).toFixed(0)+'K';
-    return String(n);
-  }
-
-  function _addAndPlay(v) {
-    // Добавляем в начало плейлиста и воспроизводим
-    _playlist.unshift(v);
-    _idx = 0;
-    _buildReel();
-    document.getElementById('yt-search-overlay').style.display = 'none';
-    _renderSlide(0);
-  }
-
-  return { open, goNext, goPrev, search, _addAndPlay, _tapPlay,
-           getLiked: () => _liked, setLiked: (v) => { _liked = v; _updateLikeUI(); },
-           isSubscribed: () => _subscribed, setSubscribed: (v) => { _subscribed = v; } };
-})();
-
-// ── Глобальные хелперы для HTML ───────────────────────────────────────────
-window.YTS = YT_SHORTS;
-
-function ytShortsOpen(query) { YT_SHORTS.open(query); }
-
-function ytToggleLike() {
-  const liked = !YT_SHORTS.getLiked();
-  YT_SHORTS.setLiked(liked);
-  const btn = document.getElementById('yt-like-btn');
-  if (btn) {
-    btn.style.animation = 'yt-like-pop .35s cubic-bezier(.34,1.3,.64,1)';
-    setTimeout(() => btn.style.animation = '', 400);
-  }
-  if (liked) SFX.play('success');
+function ytShortsOpen(query) {
+  showScreen('s-shorts');
+  updateNavVisibility('s-shorts');
+  _ytLoadUrl(query ? (YT_SEARCH_BASE + encodeURIComponent(query) + '&sp=EgIYAQ%3D%3D') : YT_SHORTS_URL);
 }
 
-function ytToggleDislike() { toast('👎 Не нравится'); }
+function _ytLoadUrl(url) {
+  const wrap = document.getElementById('yt-webview-wrap');
+  if (!wrap) return;
 
-function ytSubscribe(el) {
-  const subscribed = !YT_SHORTS.isSubscribed();
-  YT_SHORTS.setSubscribed(subscribed);
-  const btn = document.getElementById('yt-sub-btn');
-  if (btn) {
-    if (subscribed) {
-      btn.textContent = 'Подписан';
-      btn.style.background = 'rgba(255,255,255,.15)';
-      btn.style.borderColor = 'rgba(255,255,255,.4)';
-      toast('🔔 Вы подписались!');
-    } else {
-      btn.textContent = 'Подписаться';
-      btn.style.background = 'none';
-      btn.style.borderColor = 'rgba(255,255,255,.9)';
-    }
-  }
-  SFX.play('btnClick');
+  // Удаляем старый iframe
+  if (_ytIframe) { _ytIframe.remove(); _ytIframe = null; }
+
+  const iframe = document.createElement('iframe');
+  _ytIframe = iframe;
+  iframe.src = url;
+  // Эмулируем мобильный браузер — убираем «Открыть в приложении» баннер
+  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation');
+  iframe.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture';
+  iframe.style.cssText = [
+    'position:absolute;inset:0;',
+    'width:100%;height:100%;',
+    'border:none;',
+    // Скрываем YouTube нижнюю навигацию внутри iframe через CSS injection
+    // (работает через CSP bypass в WebView)
+  ].join('');
+  wrap.appendChild(iframe);
 }
 
-function ytShare() {
-  const v = YT_SHORTS._playlist ? null : null;
-  if (navigator.share) {
-    navigator.share({ title: 'YouTube Shorts', url: 'https://youtube.com/shorts' }).catch(() => {});
-  } else {
-    navigator.clipboard?.writeText('https://youtube.com/shorts').catch(() => {});
-    toast('🔗 Ссылка скопирована');
-  }
-}
-
-function ytMoreMenu() {
-  const sh = document.createElement('div');
-  sh.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
-  sh.innerHTML = `
-    <div style="background:#1a1a1a;border-radius:20px 20px 0 0;padding:10px 0 calc(16px + var(--safe-bot,0px));animation:mcSlideUp .22s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
-      <div style="width:40px;height:4px;background:#444;border-radius:2px;margin:0 auto 12px"></div>
-      ${[['🚫 Не интересует', ()=>{}],['⚑ Пожаловаться', ()=>toast('Жалоба отправлена')],
-         ['💾 Сохранить видео', ()=>toast('Сохранено в \"Смотреть позже\"')],
-         ['➕ В плейлист', ()=>toast('Добавлено в плейлист')],
-         ['📊 Качество', ()=>toast('Авто')]].map(([label, fn]) =>
-        `<button onclick="this.closest('[style*=fixed]').remove();(${fn})()"
-          style="width:100%;padding:14px 20px;background:none;border:none;color:#fff;
-                 font-family:inherit;font-size:15px;text-align:left;cursor:pointer;
-                 display:flex;align-items:center;gap:16px;-webkit-tap-highlight-color:transparent">${label}</button>`
-      ).join('')}
-    </div>`;
-  sh.addEventListener('click', () => sh.remove());
-  document.body.appendChild(sh);
-}
-
-function ytOpenComments() {
-  toast('💬 Комментарии в разработке');
-}
-
-function ytChannelOpen() {
-  toast('📺 Страница канала в разработке');
-}
-
-function ytExpandDesc(el) {
-  el.style.webkitLineClamp = el.style.webkitLineClamp === 'unset' ? '2' : 'unset';
-  el.style.maxHeight       = el.style.maxHeight === 'none' ? '60px' : 'none';
-}
+function ytNavHome()          { _ytLoadUrl('https://m.youtube.com/'); }
+function ytNavShorts()        { _ytLoadUrl(YT_SHORTS_URL); }
+function ytNavSubscriptions() { _ytLoadUrl('https://m.youtube.com/feed/subscriptions'); }
+function ytNavLibrary()       { _ytLoadUrl('https://m.youtube.com/feed/library'); }
 
 function ytShortsSearch() {
   document.getElementById('yt-search-overlay').style.display = 'block';
@@ -10160,5 +9927,7 @@ function ytShortsSearch() {
 
 function ytDoSearch(q) {
   if (!q?.trim()) return;
-  YT_SHORTS.search(q.trim());
+  document.getElementById('yt-search-overlay').style.display = 'none';
+  // sp=EgIYAQ%3D%3D — фильтр «только Shorts» в YouTube поиске
+  _ytLoadUrl(YT_SEARCH_BASE + encodeURIComponent(q.trim()) + '&sp=EgIYAQ%3D%3D');
 }

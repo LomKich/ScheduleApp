@@ -3745,6 +3745,11 @@ function cmdExec(raw){
       }, 400);
     } break;
 
+    case 'donate': {
+      cmdPrint('ok', '💝 Открываю страницу доната...');
+      setTimeout(() => { cmdClose(); showDonateSheet(); }, 300);
+    } break;
+
     default:
       cmdPrint('err','"'+cmd+'" не найдена.');
   }
