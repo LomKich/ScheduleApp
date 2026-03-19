@@ -2787,7 +2787,6 @@ public class MainActivity extends Activity {
         public void startCircleRecord() {
             log.i(TAG, "startCircleRecord called");
             runOnUiThread(() -> {
-                // Проверяем разрешение на камеру
                 boolean camOk = ContextCompat.checkSelfPermission(
                     MainActivity.this, android.Manifest.permission.CAMERA)
                     == PackageManager.PERMISSION_GRANTED;
@@ -2803,9 +2802,26 @@ public class MainActivity extends Activity {
                         }, CAMERA_PERM_CODE);
                     return;
                 }
+                // Сбрасываем флаги перед открытием
+                CircleRecordActivity.shouldStop   = false;
+                CircleRecordActivity.shouldCancel = false;
                 Intent intent = new Intent(MainActivity.this, CircleRecordActivity.class);
                 startActivityForResult(intent, CIRCLE_RECORD_CODE);
             });
+        }
+
+        /** JS → отпустил палец → остановить запись и отправить */
+        @JavascriptInterface
+        public void stopCircleRecord() {
+            log.i(TAG, "stopCircleRecord called");
+            CircleRecordActivity.shouldStop = true;
+        }
+
+        /** JS → свайп отмены → отменить запись */
+        @JavascriptInterface
+        public void cancelCircleRecord() {
+            log.i(TAG, "cancelCircleRecord called");
+            CircleRecordActivity.shouldCancel = true;
         }
 
         // ─── Фоновый сервис (Telegram-style keep-alive) ───────────────────────
