@@ -408,7 +408,10 @@ public class MainActivity extends Activity {
                     String assetPath = url.substring("file:///android_asset/".length());
                     // Emoji pack: сначала ищем в filesDir/emoji (скачанный пак)
                     if (assetPath.startsWith("emoji/")) {
-                        java.io.File emojiFile = new java.io.File(getFilesDir(), assetPath);
+                        // URL может содержать %20 и другие encoded символы — декодируем
+                        String decodedPath = assetPath;
+                        try { decodedPath = java.net.URLDecoder.decode(assetPath, "UTF-8"); } catch (Exception _e) {}
+                        java.io.File emojiFile = new java.io.File(getFilesDir(), decodedPath);
                         if (emojiFile.exists()) {
                             try {
                                 return new WebResourceResponse("image/png", null,
