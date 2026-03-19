@@ -3814,13 +3814,6 @@ function messengerMarkRead() {
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) return;
   let changed = false;
-// 鈹�鈹� messengerMarkRead 鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�鈹�
-function messengerMarkRead() {
-  if (!_msgCurrentChat) return;
-  const p = profileLoad();
-  const msgs = msgLoad();
-  if (!msgs[_msgCurrentChat]) return;
-  let changed = false;
   let maxReadTs = 0;
   msgs[_msgCurrentChat].forEach(m => {
     if (m.from !== p?.username && !m.read) {
