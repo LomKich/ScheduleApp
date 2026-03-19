@@ -10173,7 +10173,9 @@ function ytShortsOpen(query) {
     ? (YT_SEARCH_BASE + encodeURIComponent(query) + '&sp=EgIYAQ%3D%3D')
     : YT_SHORTS_URL;
 
-  if (window.Android?.openUrl) {
+  if (window.Android?.openInAppBrowser) {
+    window.Android.openInAppBrowser(url);
+  } else if (window.Android?.openUrl) {
     window.Android.openUrl(url);
   } else {
     window.open(url, '_blank', 'noopener');
@@ -10181,7 +10183,9 @@ function ytShortsOpen(query) {
 }
 
 function _ytLoadUrl(url) {
-  if (window.Android?.openUrl) {
+  if (window.Android?.openInAppBrowser) {
+    window.Android.openInAppBrowser(url);
+  } else if (window.Android?.openUrl) {
     window.Android.openUrl(url);
   } else {
     window.open(url, '_blank', 'noopener');
