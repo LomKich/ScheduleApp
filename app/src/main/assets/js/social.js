@@ -9707,7 +9707,62 @@ const YT_SHORTS = (() => {
     });
   }
 
-  // ── Отрисовать текущий слайд — загрузить iframe ───────────────────────
+  // ── Отрисовать текущий слайд — прямой стрим через Invidious API ─────────
+  // Используем nativeFetch (Java, без CORS) для получения прямого URL потока.
+  // Это полностью обходит: ограничение file:// origin, disabled embedding, bot-protection.
+  const _INV_APIS = [
+    'https://invidious.io',
+    'https://inv.vern.cc',
+    'https://invidious.nerdvpn.de',
+    'https://invidious.kavin.rocks',
+    'https://y.com.sb',
+    'https://yt.artemislena.eu',
+    'https://invidious.lunar.icu',
+    'https://iv.datura.network',
+  ];
+  // Кэш: videoId → прямой URL стрима
+  const _streamCache = {};
+
+  async function _getStreamUrl(videoId) {
+    if (_streamCache[videoId]) return _streamCache[videoId];
+    for (const host of _INV_APIS) {
+      try {
+        const apiUrl = `${host}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`;
+        let data;
+        // Java nativeFetch работает без CORS ограничений
+        if (window.Android && typeof window.Android.nativeFetch === 'function') {
+          const res = JSON.parse(window.Android.nativeFetch(apiUrl));
+          if (!res.ok) continue;
+          data = JSON.parse(res.body);
+        } else {
+          // Браузерный fallback
+          const r = await fetch(apiUrl, { signal: AbortSignal.timeout(4000) });
+          if (!r.ok) continue;
+          data = await r.json();
+        }
+        // Предпочитаем mp4 360p-720p из formatStreams (мукс аудио+видео)
+        const streams = data.formatStreams || [];
+        const adaptive = data.adaptiveFormats || [];
+        // Ищем mp4 с качеством 720p или 480p или 360p
+        const pref = ['720p', '480p', '360p', '240p'];
+        let best = null;
+        for (const q of pref) {
+          best = streams.find(s => s.qualityLabel === q && s.type?.includes('mp4'));
+          if (best) break;
+        }
+        // Fallback: первый mp4 вообще
+        if (!best) best = streams.find(s => s.type?.includes('mp4'));
+        // Fallback: первый вообще
+        if (!best) best = streams[0] || adaptive[0];
+        if (best && best.url) {
+          _streamCache[videoId] = best.url;
+          return best.url;
+        }
+      } catch(_) {}
+    }
+    return null;
+  }
+
   function _renderSlide(i) {
     const v = _playlist[i];
     if (!v) return;
@@ -9715,59 +9770,105 @@ const YT_SHORTS = (() => {
     _liked = false;
     _updateLikeUI();
 
-    // Обновляем sidebar
     document.getElementById('yt-like-count').textContent    = v.likes   || '0';
     document.getElementById('yt-comment-count').textContent = v.comments || '0';
     document.getElementById('yt-channel-name').textContent  = v.channel || '@channel';
     document.getElementById('yt-desc').textContent          = v.title   || '';
     document.getElementById('yt-music-name').textContent    = v.music   || 'Оригинальный звук';
 
-    // Embed iframe в текущем слайде
     const slide   = document.getElementById('yt-slide-' + i);
     const spinner = document.getElementById('yt-spinner-' + i);
     const thumb   = document.getElementById('yt-thumb-'  + i);
     if (!slide) return;
 
-    // Удаляем старый iframe если есть
-    slide.querySelectorAll('iframe').forEach(f => f.remove());
+    // Убираем старые video/iframe
+    slide.querySelectorAll('video,iframe').forEach(el => { try { el.pause(); } catch(_) {} el.remove(); });
 
     if (spinner) spinner.style.display = 'block';
 
-    // Создаём iframe с YouTube embed
-    // Используем youtube-nocookie.com + несколько Invidious instances как fallback
-    // YouTube блокирует embeds с file:// origin (ошибка 153)
-    // Invidious — открытый фронтенд YouTube без этого ограничения
-    const _invidiousHosts = [
-      'https://inv.nadeko.net',
-      'https://invidious.nerdvpn.de',
-      'https://yt.artemislena.eu',
-      'https://invidious.privacydev.net',
-    ];
-    const _embedHost = _invidiousHosts[Math.floor(Math.random() * _invidiousHosts.length)];
-    const iframe = document.createElement('iframe');
-    // Пробуем сначала YouTube nocookie (меньше ограничений), затем Invidious
-    iframe.src = `${_embedHost}/embed/${v.id}?autoplay=1&loop=1&rel=0&local=true`;
-    iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
-    iframe.allowFullscreen = false;
-    iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;z-index:5';
-    iframe.onload = () => {
-      if (spinner) spinner.style.display = 'none';
-      if (thumb)   { thumb.style.opacity = '0'; setTimeout(() => thumb.style.display = 'none', 400); }
-      _startProgress();
-    };
-    slide.appendChild(iframe);
-
-    // Предзагружаем следующий слайд (thumbnail)
-    _preloadThumb(i + 1);
-
-    // Прогресс-бар
     document.getElementById('yt-progress').style.width = '0%';
-  }
 
+    // Получаем прямой URL стрима
+    _getStreamUrl(v.id).then(url => {
+      if (!url) {
+        // Нет URL — показываем thumbnail + сообщение
+        if (spinner) spinner.style.display = 'none';
+        const info = document.createElement('div');
+        info.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6';
+        info.innerHTML = `<div style="background:rgba(0,0,0,.7);border-radius:14px;padding:18px 22px;text-align:center;max-width:260px">
+          <div style="font-size:28px;margin-bottom:8px">⚠️</div>
+          <div style="color:#fff;font-size:13px;line-height:1.5">Видео недоступно.<br>Попробуй следующее.</div>
+          <button onclick="YTS.goNext()" style="margin-top:12px;background:#ff0000;border:none;color:#fff;border-radius:20px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">Следующее ▶</button>
+        </div>`;
+        slide.appendChild(info);
+        return;
+      }
+
+      // Создаём <video> с прямым URL
+      const vid = document.createElement('video');
+      vid.src = url;
+      vid.playsInline = true;
+      vid.autoplay    = true;
+      vid.controls    = false;
+      vid.muted       = false;
+      vid.loop        = true;
+      vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:5;background:#000';
+
+      vid.oncanplay = () => {
+        if (spinner) spinner.style.display = 'none';
+        if (thumb) { thumb.style.opacity = '0'; setTimeout(() => { if(thumb) thumb.style.display = 'none'; }, 400); }
+        vid.play().catch(() => {});
+        _startProgress(vid);
+      };
+      vid.onerror = () => {
+        if (spinner) spinner.style.display = 'none';
+        // Стрим не загрузился — убираем кэш и пробуем следующий инстанс
+        delete _streamCache[v.id];
+      };
+
+      slide.appendChild(vid);
+      // Тап play/pause через существующий обработчик
+      const tapZone = document.getElementById(`yt-tap-${i}`);
+      if (tapZone) {
+        tapZone._vid = vid;
+        tapZone.onclick = () => {
+          const ov = document.getElementById(`yt-play-ov-${i}`);
+          if (vid.paused) {
+            vid.play().then(() => { if(ov) { ov.style.opacity='0'; }}).catch(()=>{});
+          } else {
+            vid.pause();
+            if (ov) { ov.style.opacity = '1'; setTimeout(() => ov.style.opacity='0', 800); }
+          }
+        };
+      }
+    });
+
+    _preloadThumb(i + 1);
+    // Предзагружаем URL следующего видео
+    if (_playlist[i+1]) setTimeout(() => _getStreamUrl(_playlist[i+1].id), 2000);
+  }
   // ── Прогресс-бар (имитация, т.к. нет доступа к iframe API без postMessage) ──
-  function _startProgress() {
+  function _startProgress(videoEl) {
     clearInterval(_progTimer);
-    const dur = 30; // средняя длительность short в секундах
+    if (videoEl) {
+      // Реальный прогресс по timeupdate
+      const onTimeUpdate = () => {
+        if (!videoEl.duration) return;
+        const pct = videoEl.currentTime / videoEl.duration * 100;
+        const el = document.getElementById('yt-progress');
+        if (el) el.style.width = pct + '%';
+      };
+      const onEnded = () => {
+        videoEl.removeEventListener('timeupdate', onTimeUpdate);
+        videoEl.removeEventListener('ended', onEnded);
+        setTimeout(() => goNext(), 300);
+      };
+      videoEl.addEventListener('timeupdate', onTimeUpdate, { passive: true });
+      videoEl.addEventListener('ended', onEnded, { once: true });
+      return;
+    }
+    // Fallback без video element
+    const dur = 30;
     const start = Date.now();
     _progTimer = setInterval(() => {
       const pct = Math.min(100, (Date.now() - start) / (dur * 1000) * 100);
@@ -9785,16 +9886,17 @@ const YT_SHORTS = (() => {
 
   // ── Play / Pause тап ─────────────────────────────────────────────────
   function _tapPlay(i) {
-    const iframe = document.querySelector(`#yt-slide-${i} iframe`);
-    const ov     = document.getElementById(`yt-play-ov-${i}`);
-    if (!iframe) return;
-    // Toggle mute через postMessage (YouTube iframe API)
-    try {
-      iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-    } catch(_) {}
-    if (ov) {
-      ov.style.opacity = '1';
-      setTimeout(() => { ov.style.opacity = '0'; }, 700);
+    // Теперь управляется через tapZone._vid в _renderSlide
+    // Эта функция — fallback
+    const vid = document.querySelector(`#yt-slide-${i} video`);
+    const ov  = document.getElementById(`yt-play-ov-${i}`);
+    if (!vid) return;
+    if (vid.paused) {
+      vid.play().catch(() => {});
+      if (ov) ov.style.opacity = '0';
+    } else {
+      vid.pause();
+      if (ov) { ov.style.opacity = '1'; setTimeout(() => ov.style.opacity = '0', 800); }
     }
   }
 
@@ -9821,9 +9923,8 @@ const YT_SHORTS = (() => {
   }
 
   function _pauseCurrent() {
-    const iframe = document.querySelector(`#yt-slide-${_idx} iframe`);
-    if (!iframe) return;
-    try { iframe.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*'); } catch(_) {}
+    const vid = document.querySelector(`#yt-slide-${_idx} video`);
+    if (vid) { try { vid.pause(); } catch(_) {} }
   }
 
   function _animSlide(from, to, dir, cb) {
