@@ -1886,16 +1886,6 @@ public class MainActivity extends Activity {
             }
         }
 
-        public void hotPatchClearAll() {
-            try {
-                java.io.File dir = new java.io.File(getFilesDir(), "hotpatch");
-                deleteRecursive(dir);
-                log.i(TAG, "hotPatchClearAll: done");
-            } catch (Exception e) {
-                log.e(TAG, "hotPatchClearAll error: " + e.getMessage());
-            }
-        }
-
         // ── Backup & Watchdog ─────────────────────────────────────────────────
 
         /** JS вызывает при каждом успешном старте (через 3-5 сек после инита) */
@@ -2344,35 +2334,6 @@ public class MainActivity extends Activity {
             }).start();
         }
 
-        /**
-         * Показывает нативный диалог с предложением откатиться к предыдущей версии.
-         * Вызывается watchdog когда JS не прислал heartbeat.
-         */
-        private void _showRestoreDialog(String reason, String backupVersion, String backupPath) {
-            log.i(TAG, "_showRestoreDialog: " + reason);
-            String title   = "⚠️ Проблема с приложением";
-            String msg     = reason + "\n\n" +
-                "Доступна резервная версия: v" + (backupVersion != null ? backupVersion : "?") + "\n\n" +
-                "Установить предыдущую версию?";
-
-            new android.app.AlertDialog.Builder(MainActivity.this)
-                .setTitle(title)
-                .setMessage(msg)
-                .setPositiveButton("↩ Восстановить", (d, w) -> {
-                    boolean ok = BackupManager.get(MainActivity.this)
-                        .restoreBackup(MainActivity.this, new java.io.File(backupPath));
-                    if (!ok) {
-                        new android.app.AlertDialog.Builder(MainActivity.this)
-                            .setTitle("Ошибка")
-                            .setMessage("Не удалось запустить установку бэкапа.\nФайл: " + backupPath)
-                            .setPositiveButton("OK", null)
-                            .show();
-                    }
-                })
-                .setNegativeButton("Пропустить", null)
-                .setCancelable(false)
-                .show();
-        }
 
         private void _jsProgress(int pct, String label) {
             final String js = String.format(
@@ -3698,4 +3659,38 @@ public class MainActivity extends Activity {
         }
 
     }
+    /**
+     * Нативный диалог восстановления бэкапа (вызывается из watchdog).
+     */
+    /**
+     * Показывает нативный диалог с предложением откатиться к предыдущей версии.
+     * Вызывается watchdog когда JS не прислал heartbeat.
+     */
+    private void _showRestoreDialog(String reason, String backupVersion, String backupPath) {
+        log.i(TAG, "_showRestoreDialog: " + reason);
+        String title   = "⚠️ Проблема с приложением";
+        String msg     = reason + "\n\n" +
+            "Доступна резервная версия: v" + (backupVersion != null ? backupVersion : "?") + "\n\n" +
+            "Установить предыдущую версию?";
+
+        new android.app.AlertDialog.Builder(MainActivity.this)
+            .setTitle(title)
+            .setMessage(msg)
+            .setPositiveButton("↩ Восстановить", (d, w) -> {
+                boolean ok = BackupManager.get(MainActivity.this)
+                    .restoreBackup(MainActivity.this, new java.io.File(backupPath));
+                if (!ok) {
+                    new android.app.AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Ошибка")
+                        .setMessage("Не удалось запустить установку бэкапа.\nФайл: " + backupPath)
+                        .setPositiveButton("OK", null)
+                        .show();
+                }
+            })
+            .setNegativeButton("Пропустить", null)
+            .setCancelable(false)
+            .show();
+    }
+
+
 }
