@@ -385,6 +385,19 @@ public class MainActivity extends Activity {
                 startJavaPollTimer();
                 // Передаём реальную высоту статус-бара в CSS-переменную
                 injectStatusBarHeight();
+                // Watchdog: ждём heartbeat от JS — если не придёт, предлагаем откат
+                BackupManager.get(MainActivity.this).startWatchdog(new BackupManager.WatchdogCallback() {
+                    @Override public void onAppHealthy() {
+                        log.i(TAG, "Watchdog: приложение работает нормально ✅");
+                    }
+                    @Override public void onAppUnhealthy(String reason, String backupVer, String backupPath) {
+                        if (backupPath == null) {
+                            log.w(TAG, "Watchdog FAIL, но бэкапа нет — ничего не делаем");
+                            return;
+                        }
+                        runOnUiThread(() -> _showRestoreDialog(reason, backupVer, backupPath));
+                    }
+                });
             }
 
             @Override
@@ -1873,6 +1886,78 @@ public class MainActivity extends Activity {
             }
         }
 
+        public void hotPatchClearAll() {
+            try {
+                java.io.File dir = new java.io.File(getFilesDir(), "hotpatch");
+                deleteRecursive(dir);
+                log.i(TAG, "hotPatchClearAll: done");
+            } catch (Exception e) {
+                log.e(TAG, "hotPatchClearAll error: " + e.getMessage());
+            }
+        }
+
+        // ── Backup & Watchdog ─────────────────────────────────────────────────
+
+        /** JS вызывает при каждом успешном старте (через 3-5 сек после инита) */
+        @JavascriptInterface
+        public void heartbeat() {
+            BackupManager.get(MainActivity.this).onHeartbeat();
+        }
+
+        /** Возвращает JSON с информацией о последнем бэкапе */
+        @JavascriptInterface
+        public String getBackupInfo() {
+            BackupManager bm = BackupManager.get(MainActivity.this);
+            java.io.File[] backups = bm.listBackups();
+            org.json.JSONObject obj = new org.json.JSONObject();
+            try {
+                obj.put("hasBackup",    bm.hasBackup());
+                obj.put("lastVersion",  bm.getLastBackupVersion() != null ? bm.getLastBackupVersion() : "");
+                obj.put("lastTs",       bm.getLastBackupTimestamp());
+                obj.put("lastDate",     bm.getLastBackupTimestamp() > 0
+                    ? BackupManager.formatDate(bm.getLastBackupTimestamp()) : "");
+                obj.put("totalSize",    BackupManager.formatSize(bm.getTotalBackupSize()));
+                obj.put("count",        backups.length);
+                org.json.JSONArray arr = new org.json.JSONArray();
+                for (java.io.File f : backups) {
+                    org.json.JSONObject b = new org.json.JSONObject();
+                    b.put("name",    f.getName());
+                    b.put("path",    f.getAbsolutePath());
+                    b.put("size",    BackupManager.formatSize(f.length()));
+                    b.put("date",    BackupManager.formatDate(f.lastModified()));
+                    arr.put(b);
+                }
+                obj.put("backups", arr);
+            } catch (Exception ignored) {}
+            return obj.toString();
+        }
+
+        /** Устанавливает последний бэкап */
+        @JavascriptInterface
+        public void restoreBackup() {
+            log.i(TAG, "restoreBackup called from JS");
+            BackupManager bm = BackupManager.get(MainActivity.this);
+            runOnUiThread(() -> {
+                boolean ok = bm.restoreLatestBackup(MainActivity.this);
+                if (!ok) {
+                    webView.evaluateJavascript("toast('❌ Бэкап не найден или повреждён')", null);
+                }
+            });
+        }
+
+        /** Устанавливает бэкап по пути */
+        @JavascriptInterface
+        public void restoreBackupByPath(String path) {
+            log.i(TAG, "restoreBackupByPath: " + path);
+            BackupManager bm = BackupManager.get(MainActivity.this);
+            runOnUiThread(() -> {
+                boolean ok = bm.restoreBackup(MainActivity.this, new java.io.File(path));
+                if (!ok) {
+                    webView.evaluateJavascript("toast('❌ Не удалось установить бэкап')", null);
+                }
+            });
+        }
+
         private void deleteRecursive(java.io.File f) {
             if (f.isDirectory()) {
                 java.io.File[] ch = f.listFiles();
@@ -2152,6 +2237,16 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void downloadAndInstallApk(String originalUrl) {
             log.i(TAG, "downloadAndInstallApk: " + originalUrl);
+
+            // Сохраняем текущую версию как бэкап ПЕРЕД скачиванием новой
+            new Thread(() -> {
+                String backupPath = BackupManager.get(MainActivity.this).backupCurrentApk();
+                if (backupPath != null) {
+                    log.i(TAG, "Pre-update backup saved: " + backupPath);
+                } else {
+                    log.w(TAG, "Pre-update backup FAILED — продолжаем без бэкапа");
+                }
+            }).start();
             final String[] candidates = {
                 originalUrl,
                 "https://ghproxy.com/"        + originalUrl,
@@ -2247,6 +2342,36 @@ public class MainActivity extends Activity {
                 log.e(TAG, "All mirrors failed: " + msg);
                 _jsError("❌ Не удалось скачать: " + msg);
             }).start();
+        }
+
+        /**
+         * Показывает нативный диалог с предложением откатиться к предыдущей версии.
+         * Вызывается watchdog когда JS не прислал heartbeat.
+         */
+        private void _showRestoreDialog(String reason, String backupVersion, String backupPath) {
+            log.i(TAG, "_showRestoreDialog: " + reason);
+            String title   = "⚠️ Проблема с приложением";
+            String msg     = reason + "\n\n" +
+                "Доступна резервная версия: v" + (backupVersion != null ? backupVersion : "?") + "\n\n" +
+                "Установить предыдущую версию?";
+
+            new android.app.AlertDialog.Builder(MainActivity.this)
+                .setTitle(title)
+                .setMessage(msg)
+                .setPositiveButton("↩ Восстановить", (d, w) -> {
+                    boolean ok = BackupManager.get(MainActivity.this)
+                        .restoreBackup(MainActivity.this, new java.io.File(backupPath));
+                    if (!ok) {
+                        new android.app.AlertDialog.Builder(MainActivity.this)
+                            .setTitle("Ошибка")
+                            .setMessage("Не удалось запустить установку бэкапа.\nФайл: " + backupPath)
+                            .setPositiveButton("OK", null)
+                            .show();
+                    }
+                })
+                .setNegativeButton("Пропустить", null)
+                .setCancelable(false)
+                .show();
         }
 
         private void _jsProgress(int pct, String label) {
