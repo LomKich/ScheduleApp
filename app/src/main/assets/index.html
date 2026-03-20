@@ -2996,7 +2996,24 @@ html.notch-off #s-login {
       <button class="btn btn-surface" style="flex:1;margin-bottom:0" onclick="checkHotPatch(false)">🔥 Горячий патч (только файлы)</button>
       <button class="btn btn-surface3" style="width:auto;padding:8px 10px;font-size:12px;flex-shrink:0" onclick="hotPatchRollback()" title="Откатить все патчи">↩</button>
     </div>
+    <div style="height:4px"></div>
+    <!-- Hot-patch: обновление только изменённых файлов -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <button class="btn btn-surface" style="flex:1;margin-bottom:0" onclick="checkHotPatch(false)">🔥 Горячий патч (только файлы)</button>
+      <button class="btn btn-surface3" style="width:auto;padding:8px 10px;font-size:12px;flex-shrink:0" onclick="hotPatchRollback()" title="Откатить все патчи">↩</button>
+    </div>
     <div id="hot-patch-status" style="font-size:11px;color:var(--muted);padding:0 2px 4px;min-height:16px"></div>
+    <div style="height:12px"></div>
+
+    <!-- Бэкапы APK -->
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">💾 Резервные копии</div>
+    <div id="backup-info-section" style="background:var(--surface2);border-radius:14px;padding:12px 14px;margin-bottom:10px;font-size:13px;color:var(--text)">
+      <div id="backup-info-text" style="color:var(--muted);font-size:12px">Загрузка...</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-surface" style="flex:1;margin-bottom:0;font-size:13px" onclick="showBackupList()">📋 Список</button>
+      <button class="btn btn-surface3" style="flex:1;margin-bottom:0;font-size:13px;color:#ff6b6b" onclick="confirmRestoreBackup()">↩ Восстановить</button>
+    </div>
     <div style="height:24px"></div>
   </div>
 </div>
