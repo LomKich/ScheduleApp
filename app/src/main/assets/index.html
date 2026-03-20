@@ -2609,6 +2609,8 @@ body.disco-mode .bottom-nav{animation:disco-nav 3s linear infinite!important;}
   background:rgba(0,0,0,.85);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   animation:fadeIn .18s ease;
+  touch-action:none;
+  user-select:none;-webkit-user-select:none;
 }
 .img-crop-container{
   position:relative;overflow:hidden;touch-action:none;
@@ -3033,7 +3035,7 @@ html.notch-off #s-login {
 }
 /* Кружок — слегка другой цвет кнопки */
 #mc-action-btn.state-circle {
-  background: #7c5cfc;
+  background: var(--accent);
 }
 
 /* CMD консоль — позиция и высота управляются JS через visualViewport */
@@ -3785,7 +3787,7 @@ html.notch-off #s-login {
         ontouchstart="event.preventDefault()"
         ontouchend="messengerSend()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M2 21L23 12 2 3v7l15 2-15 2v7z" fill="white"/>
+          <path d="M2 21L23 12 2 3v7l15 2-15 2v7z" fill="currentColor" style="color:#fff"/>
         </svg>
       </div>
 
@@ -3798,7 +3800,7 @@ html.notch-off #s-login {
         ontouchstart="mcVoiceTouchStart(event)"
         ontouchmove="mcVoiceTouchMove(event)"
         ontouchend="mcVoiceTouchEnd(event)">
-        <svg id="mc-mic-svg" width="22" height="22" viewBox="0 0 24 24" fill="white">
+        <svg id="mc-mic-svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style="color:#fff">
           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/>
         </svg>
       </div>
@@ -4368,7 +4370,7 @@ html.notch-off #s-login {
       <button class="diff-btn" onclick="tanksDiff='hard';updateDiffBtns('tanks');tanksRestart()">💀 Хардкор</button>
     </div>
     <div class="egg-score" id="tanks-score-label">Уничтожено: 0 • Жизни: ❤️❤️❤️</div>
-    <canvas id="tanks-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
+    <canvas id="tanks-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none;max-width:100%;max-height:45vh;width:auto;height:auto"></canvas>
     <div class="tanks-controls">
       <div class="dpad-btn" data-dir="up" ontouchstart="event.preventDefault();tanksDir('up')" onclick="tanksDir('up')">▲</div>
       <div style="display:flex;gap:6px">
@@ -4379,6 +4381,18 @@ html.notch-off #s-login {
       <div class="dpad-btn" data-dir="down" ontouchstart="event.preventDefault();tanksDir('down')" onclick="tanksDir('down')">▼</div>
     </div>
     <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tanksRestart()">🔄 Заново</button>
+  </div>
+
+  <!-- ── Таблица лидеров (перемещена из профиля) ── -->
+  <div style="padding:16px 16px 0">
+    <div onclick="showScreen('s-leaderboard')" style="background:var(--surface2);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;border:1.5px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
+      <span style="font-size:22px">🏆</span>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">Таблица лидеров</div>
+        <div style="font-size:12px;color:var(--muted)">Рекорды в играх</div>
+      </div>
+      <span style="color:var(--muted);font-size:18px">›</span>
+    </div>
   </div>
 
 </div>

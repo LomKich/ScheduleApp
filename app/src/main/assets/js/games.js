@@ -5,6 +5,7 @@ let snakeGrid, snakeCells, snakeDir_v, snakeNextDir, snakeFood, snakeLen;
 let snakeHi = 0, snakeSW, snakeSH, snakeCellSize;
 const SNAKE_COLS = 20, SNAKE_ROWS = 24;
 let snakeDifficulty = 'normal';
+let dinoDifficulty   = 'normal'; // алиас для кнопок в HTML
 const SNAKE_DIFF = { easy: {baseDelay:280, step:3}, normal: {baseDelay:200, step:4}, hard: {baseDelay:120, step:6} };
 
 function snakeInit() {
@@ -704,8 +705,6 @@ function pongTick(dt) {
       b.vx = Math.sin(ba) * pongSpeed; b.vy = Math.cos(ba) * pongSpeed;
       b.sx=1.16;b.sy=0.86;b._sqTx=0.16;b._sqTy=-0.14;b.sqT=1;
       SFX.play('pongHit'); SFX.play('pongScore');
-      pongScoreP2++;
-      pongUpdateScore();
       if (pongMode === 'lan') pongLanSend({type:'ball', ball: b, score1: pongScoreP1, score2: pongScoreP2});
     }
     // Ball out top
@@ -713,7 +712,10 @@ function pongTick(dt) {
       pongRunning = false; pongMissed = true;
       cancelAnimationFrame(pongRaf);
       SFX.play('pongLose');
-      pongDraw(); _drawPongMsg('💀 Игрок 1 пропустил! Тапни — заново');
+      pongScoreP2++;
+      pongUpdateScore();
+      pongDraw();
+      _drawPongRoundEnd(2);
       return;
     }
   }
@@ -723,10 +725,16 @@ function pongTick(dt) {
     pongRunning = false; pongMissed = true;
     cancelAnimationFrame(pongRaf);
     SFX.play('pongLose');
-    pongDraw();
-    const msg = pongMode === 'ai' ? '💀 Промах! Тапни — заново' : '💀 Игрок 2 пропустил! Тапни — заново';
-    _drawPongMsg(msg);
-    if (pongMode === 'ai') toast('💀 Счёт: ' + pongScore);
+    if (pongMode === 'ai') {
+      pongDraw();
+      _drawPongMsg('💀 Промах! Тапни — заново');
+      toast('💀 Счёт: ' + pongScore);
+    } else {
+      pongScoreP1++;
+      pongUpdateScore();
+      pongDraw();
+      _drawPongRoundEnd(1);
+    }
   }
 }
 
@@ -786,6 +794,32 @@ function pongDraw() {
   if (pongMode !== 'ai' && p2) drawPad(p2, '#60cdff');
 
   ctx.textAlign = 'left';
+}
+
+function _drawPongRoundEnd(scorer) {
+  // scorer = 1 (нижний игрок) или 2 (верхний игрок)
+  const canvas = document.getElementById('pong-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const accent = getAccent();
+  // Полупрозрачный тёмный фон
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillRect(0, 0, pongW, pongH);
+  // Большой текст
+  ctx.textAlign = 'center';
+  ctx.fillStyle = accent;
+  ctx.font = 'bold 28px "JetBrains Mono",monospace';
+  ctx.fillText(scorer === 1 ? 'Игрок 1' : 'Игрок 2', pongW/2, pongH/2 - 22);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.fillText('забил! 🏓', pongW/2, pongH/2 + 8);
+  // Счёт
+  ctx.font = '14px "JetBrains Mono",monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText(pongScoreP1 + ' : ' + pongScoreP2, pongW/2, pongH/2 + 34);
+  ctx.font = '12px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('Тапни — продолжить', pongW/2, pongH/2 + 56);
 }
 
 function _drawPongMsg(msg) {
@@ -1622,7 +1656,7 @@ function dinoRestart() {
   if (cdRaf) cancelAnimationFrame(cdRaf);
   cdRunning = false;
   cdOver = false;
-  cdDifficulty = typeof dinoDifficulty !== 'undefined' ? dinoDifficulty : 'normal';
+  cdDifficulty = dinoDifficulty;
   _cdStartGame();
 }
 
@@ -3761,15 +3795,17 @@ function basketInit(){
 }
 
 function basketShoot(){
+  // Вектор: от позиции мяча до точки начала касания (откуда тянули)
+  const bx=basketBall.x, by=basketBall.y;
   const dx=basketDragCur.x-basketDragStart.x;
   const dy=basketDragCur.y-basketDragStart.y;
   if(Math.abs(dy)<10)return;
-  // Направление: от текущей точки к началу (вверх)
   const power=Math.min(Math.sqrt(dx*dx+dy*dy)*0.045,14);
   basketVx=-dx*0.055;
   basketVy=Math.min(dy*0.055,-3.5)*power*0.6;
   basketBallInFlight=true;
-  basketBall={x:basketDragStart.x,y:basketDragStart.y,r:20};
+  // Мяч стартует со своей текущей позиции, а не с точки касания
+  basketBall={x:bx,y:by,r:20};
   SFX.play('pongHit');
 }
 
@@ -3886,7 +3922,7 @@ function basketDraw(){
       const power=Math.min(Math.sqrt(dx*dx+dy*dy)*0.045,14);
       const tvx=-dx*0.055;
       let tvy=Math.min(dy*0.055,-3.5)*power*0.6;
-      let tx=basketDragStart.x, ty=basketDragStart.y;
+      let tx=basketBall.x, ty=basketBall.y;
       ctx.setLineDash([5,5]);
       for(let step=0;step<40;step++){
         tvy+=0.45;
@@ -4040,8 +4076,16 @@ function geoTick(dt){
   const px=geoPlayer.x+4,py=geoPlayer.y+4,pw=geoPlayer.w-8,ph=geoPlayer.h-8;
   for(const obs of geoObstacles){
     const ox=obs.x-geoScrollX;
-    if(px+pw>ox&&px<ox+obs.w&&py+ph>geoGround-obs.h&&py<geoGround){
-      geoDie(); return;
+    const obsTop=geoGround-obs.h;
+    if(px+pw>ox&&px<ox+obs.w&&py+ph>obsTop&&py<geoGround){
+      const isBlock=(obs.type==='block'||obs.type==='tallblock');
+      // Если блок (без шипа) и игрок падает сверху — приземляемся на него
+      if(isBlock&&geoPlayer.vy>=0&&py+ph-obsTop<=geoPlayer.vy*2+8){
+        geoPlayer.y=obsTop-geoPlayer.h;
+        geoPlayer.vy=0;geoPlayer.onGround=true;geoPlayer.rotation=0;
+      } else {
+        geoDie(); return;
+      }
     }
   }
   // Бесконечный уровень — победы нет, играем вечно

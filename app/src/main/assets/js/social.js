@@ -719,14 +719,7 @@ function profileRenderScreen() {
 
     <!-- Карточка: Таблица лидеров + Друзья + Группы -->
     <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
-      <div onclick="showScreen('s-leaderboard')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
-        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg></span>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">Таблица лидеров</div>
-          <div style="font-size:12px;color:var(--muted)">Рекорды в играх</div>
-        </div>
-        <span style="color:var(--muted);font-size:18px"> </span>
-      </div>
+
       <div onclick="profileRenderOnline();showScreen('s-online')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
         <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span>
         <div style="flex:1">
@@ -1377,10 +1370,14 @@ async function profileSaveEdit() {
   p.bio      = bio;
   p.status   = _editSelectedStatus;
   p.color    = _editSelectedColor;
-  if (_profileAvatarMode === 'photo' && window._profileTempAvatarData) {
+  if (_profileAvatarMode === 'photo') {
     p.avatarType = 'photo';
-    p.avatarData = window._profileTempAvatarData;
-    window._profileTempAvatarData = null;
+    if (window._profileTempAvatarData) {
+      // Новое фото загружено — сохраняем его
+      p.avatarData = window._profileTempAvatarData;
+      window._profileTempAvatarData = null;
+    }
+    // Если нет нового фото — avatarData уже в p (из profileLoad), оставляем как есть
   } else {
     p.avatarType = 'emoji';
     p.avatar     = _editSelectedEmoji;
