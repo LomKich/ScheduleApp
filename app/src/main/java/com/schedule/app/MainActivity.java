@@ -404,6 +404,23 @@ public class MainActivity extends Activity {
                     log.i(TAG, "fetch → " + url);
                 }
                 // ── Hot-patch: если файл был обновлён — отдаём из filesDir ────────────
+                // ── Sounds: кастомная схема https://sounds.local/ ────────────────────
+                // fetch('file:///android_asset/sounds/') не работает в WebView — используем HTTPS
+                if (url.startsWith("https://sounds.local/")) {
+                    String soundFile = req.getUrl().getPath(); // напр. "/msg_send.ogg"
+                    if (soundFile != null && soundFile.startsWith("/")) {
+                        soundFile = soundFile.substring(1);
+                    }
+                    try {
+                        java.io.InputStream is = getAssets().open("sounds/" + soundFile);
+                        java.util.Map<String, String> h = new java.util.HashMap<>();
+                        h.put("Access-Control-Allow-Origin", "*");
+                        return new WebResourceResponse("audio/ogg", null, 200, "OK", h, is);
+                    } catch (Exception e) {
+                        log.w(TAG, "sound not found: sounds/" + soundFile);
+                        return null;
+                    }
+                }
                 // ── Emoji pack: кастомная схема https://emoji.local/ ──────────────────
                 // file:///android_asset/ не перехватывается надёжно — используем HTTPS
                 if (url.startsWith("https://emoji.local/")) {
