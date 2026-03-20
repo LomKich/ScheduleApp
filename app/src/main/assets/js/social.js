@@ -8182,6 +8182,95 @@ function confirmRestoreBackup() {
   document.body.appendChild(d);
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// 🚨 CRITICAL ERROR → BACKUP DIALOG
+// Показывается автоматически при критических сбоях (падение экрана, JS-краш,
+// ошибки загрузки), чтобы пользователь мог быстро откатиться на прошлую версию.
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _critErrShown = false; // показываем только один раз за сессию
+
+window.showCriticalErrorBackupDialog = function(errorMsg) {
+  if (_critErrShown) return;
+  _critErrShown = true;
+
+  // Если нет Android-бриджа или бэкапов — показываем облегчённый вариант без кнопки отката
+  const hasBackup = (function() {
+    try {
+      if (!window.Android?.getBackupInfo) return false;
+      const info = JSON.parse(window.Android.getBackupInfo());
+      return !!(info.hasBackup && info.backups?.length);
+    } catch(e) { return false; }
+  })();
+
+  const d = document.createElement('div');
+  d.id = 'critical-error-overlay';
+  d.style.cssText = [
+    'position:fixed;inset:0;z-index:99999',
+    'background:rgba(0,0,0,.72)',
+    'display:flex;align-items:center;justify-content:center',
+    'padding:24px',
+    'animation:mcFadeIn .25s ease',
+  ].join(';');
+
+  const shortErr = (errorMsg || 'Неизвестная ошибка')
+    .replace(/https?:\/\/[^\s]*/g, '')
+    .slice(0, 120);
+
+  const backupBlock = hasBackup ? (() => {
+    let info = {};
+    try { info = JSON.parse(window.Android.getBackupInfo()); } catch(e) {}
+    return `
+      <div style="background:rgba(255,100,100,.12);border:1px solid rgba(255,100,100,.28);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:rgba(255,180,180,.95)">
+        💾 Доступна резервная копия: <strong>v${info.lastVersion || '?'}</strong>
+        <span style="color:rgba(255,255,255,.45);font-size:11px;margin-left:6px">${info.lastDate || ''}</span>
+      </div>
+      <button id="cerr-restore-btn" style="width:100%;padding:13px;background:#ff6b6b;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px">
+        ↩ Восстановить предыдущую версию
+      </button>`;
+  })() : `
+      <div style="background:rgba(255,255,255,.06);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:rgba(255,255,255,.5)">
+        Резервных копий нет. Попробуй переустановить приложение вручную.
+      </div>`;
+
+  d.innerHTML = `
+    <div style="background:var(--surface,#1c1c1e);border-radius:22px;padding:24px;max-width:360px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,.7)">
+      <div style="font-size:36px;text-align:center;margin-bottom:10px">⚠️</div>
+      <div style="font-size:18px;font-weight:700;text-align:center;margin-bottom:6px;color:var(--text,#fff)">Критическая ошибка</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:20px;line-height:1.45">
+        Приложение обнаружило сбой и не может нормально работать.
+      </div>
+      <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px 12px;margin-bottom:18px;font-size:11px;color:rgba(255,255,255,.35);font-family:monospace;word-break:break-all;max-height:60px;overflow:hidden">
+        ${shortErr}
+      </div>
+      ${backupBlock}
+      <button id="cerr-ignore-btn" style="width:100%;padding:12px;background:rgba(255,255,255,.07);border:none;border-radius:14px;color:rgba(255,255,255,.6);font-size:14px;font-weight:600;cursor:pointer">
+        Продолжить (нестабильно)
+      </button>
+    </div>`;
+
+  document.body.appendChild(d);
+
+  const restoreBtn = document.getElementById('cerr-restore-btn');
+  const ignoreBtn  = document.getElementById('cerr-ignore-btn');
+
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', () => {
+      restoreBtn.disabled = true;
+      restoreBtn.textContent = '⏳ Запуск установщика...';
+      try { window.Android.restoreBackup(); } catch(e) { toast('❌ Ошибка запуска'); }
+    });
+  }
+
+  if (ignoreBtn) {
+    ignoreBtn.addEventListener('click', () => {
+      d.remove();
+      // Сбрасываем флаг чтобы при следующей новой серьёзной ошибке диалог мог появиться снова
+      _critErrShown = false;
+    });
+  }
+};
+
 // Хранит данные категорий после первого build — не пересобираем каждый раз
 let _mcEmojiCats = null;
 
