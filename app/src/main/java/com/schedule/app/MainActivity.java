@@ -3477,6 +3477,7 @@ public class MainActivity extends Activity {
                         }, CAMERA_PERM_CODE);
                     return;
                 }
+                // Не скрываем клавиатуру — пользователь хочет её сохранить
                 // Сбрасываем флаги перед открытием
                 CircleRecordActivity.shouldStop   = false;
                 CircleRecordActivity.shouldCancel = false;
