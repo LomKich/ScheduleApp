@@ -1758,6 +1758,190 @@ body.on-home-screen #live-blur-canvas {
 /* #bg-layer (резкий фон) всегда виден, даже если canvas скрыт */
 
 
+/* ═══════════════════════════════════════════════════════════════════
+   GLASS MODE — недостающие элементы (мессенджер, группы, профиль)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Карточки пузырей сообщений ── */
+body.glass-mode .mc-bubble-inner {
+  backdrop-filter: var(--gb-cards) !important;
+  -webkit-backdrop-filter: var(--gb-cards) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+}
+body.glass-mode [data-msg-me="1"] .mc-bubble-inner {
+  background: color-mix(in srgb, var(--accent) 55%, rgba(255,255,255,.04)) !important;
+  border-color: color-mix(in srgb, var(--accent) 65%, rgba(255,255,255,.18)) !important;
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.30), 0 2px 10px color-mix(in srgb, var(--accent) 25%, transparent) !important;
+}
+body.glass-mode [data-msg-me="0"] .mc-bubble-inner {
+  background: rgba(255,255,255,0.09) !important;
+  border-color: rgba(255,255,255,0.16) !important;
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.25), 0 2px 8px rgba(0,0,0,.14) !important;
+}
+
+/* ── Плеер голосового сообщения ── */
+body.glass-mode .mc-voice-player,
+body.glass-mode [style*="waveform"],
+body.glass-mode [class*="voice-msg"] {
+  background: rgba(255,255,255,0.08) !important;
+  backdrop-filter: var(--gb-cards) !important;
+  -webkit-backdrop-filter: var(--gb-cards) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.28), 0 2px 12px rgba(0,0,0,.18) !important;
+}
+
+/* ── Профиль пира — блок кнопок действий ── */
+body.glass-mode #peer-profile-body [style*="surface2"][style*="border-radius:16px"],
+body.glass-mode #peer-profile-body [style*="surface2"][style*="border-radius"] {
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  backdrop-filter: var(--gb-cards) !important;
+  -webkit-backdrop-filter: var(--gb-cards) !important;
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.22) !important;
+}
+
+/* ── Профиль пира — кнопки действий (Написать, Уведомления и т.д.) ── */
+body.glass-mode #peer-profile-body button[style*="padding:14px"] {
+  transition: background 0.18s ease !important;
+}
+body.glass-mode #peer-profile-body button[style*="padding:14px"]:active {
+  background: rgba(255,255,255,0.10) !important;
+}
+
+/* ── Группы — настройки группы (gs-btn контейнер) ── */
+body.glass-mode .gs-btn:active {
+  background: rgba(255,255,255,0.10) !important;
+}
+body.glass-mode [style*="group-settings"],
+body.glass-mode #group-settings-screen [style*="surface"][style*="border-radius:16px"],
+body.glass-mode [id^="gs-"] [style*="surface"],
+body.glass-mode [style*="var(--surface);border-radius:16px"] {
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(255,255,255,0.13) !important;
+  backdrop-filter: var(--gb-cards) !important;
+  -webkit-backdrop-filter: var(--gb-cards) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.20) !important;
+}
+
+/* ── FAB кнопка (+ в сообщениях) ── */
+body.glass-mode #msg-fab-btn {
+  background: color-mix(in srgb, var(--accent) 70%, rgba(255,255,255,.08)) !important;
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.50),
+    0 6px 24px color-mix(in srgb, var(--accent) 50%, transparent),
+    0 2px 8px rgba(0,0,0,.25) !important;
+}
+body.glass-mode #msg-fab-btn:active {
+  transform: scale(0.92) !important;
+}
+
+/* ── FAB подменю кнопки ── */
+body.glass-mode #msg-fab-menu button {
+  background: color-mix(in srgb, var(--bg) 55%, rgba(255,255,255,.06)) !important;
+  border: 1px solid rgba(255,255,255,0.20) !important;
+  backdrop-filter: var(--gb-cards) !important;
+  -webkit-backdrop-filter: var(--gb-cards) !important;
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.40), 0 4px 16px rgba(0,0,0,.28) !important;
+  transition: transform 0.2s var(--gspring) !important;
+}
+body.glass-mode #msg-fab-menu button:active {
+  transform: scale(0.90) !important;
+}
+
+/* ── FAB лейблы ("Создать группу", "Новый диалог") ── */
+body.glass-mode #msg-fab-menu span[style*="background:var(--surface)"] {
+  background: color-mix(in srgb, var(--bg) 60%, transparent) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255,255,255,0.16) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 10px rgba(0,0,0,.20) !important;
+}
+
+/* ── VIP badge ── */
+body.glass-mode .vip-badge-pill {
+  background: color-mix(in srgb, #f5c518 20%, rgba(255,255,255,.08)) !important;
+  border: 1px solid color-mix(in srgb, #f5c518 50%, rgba(255,255,255,.25)) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.40), 0 2px 12px rgba(245,197,24,0.25) !important;
+}
+
+/* ── Диалог создания группы (bottom sheet) ── */
+body.glass-mode [id="create-group-sheet"],
+body.glass-mode [id*="group-sheet"] {
+  background: color-mix(in srgb, var(--bg) 60%, transparent) !important;
+  backdrop-filter: blur(32px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(200%) !important;
+  border-top: 1px solid rgba(255,255,255,0.18) !important;
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.45), 0 -8px 40px rgba(0,0,0,.30) !important;
+}
+
+/* ── Список диалогов (чат-лист) ── */
+body.glass-mode [id="mc-chat-list"] > *,
+body.glass-mode [id="chat-list"] > *,
+body.glass-mode .mc-chat-row {
+  background: rgba(255,255,255,0.06) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+}
+body.glass-mode .mc-chat-row:active,
+body.glass-mode [id="mc-chat-list"] > *:active {
+  background: rgba(255,255,255,0.12) !important;
+}
+
+/* ── Peer profile info card (username, bio) ── */
+body.glass-mode #peer-profile-body [style*="surface2"][style*="border-radius:14px"],
+body.glass-mode #peer-profile-body [style*="surface"][style*="border-radius:14px"] {
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(255,255,255,0.13) !important;
+  backdrop-filter: var(--gb-cards) !important;
+  -webkit-backdrop-filter: var(--gb-cards) !important;
+}
+
+/* ── Date separators in chat ── */
+body.glass-mode [style*="text-align:center"][style*="margin:"] span,
+body.glass-mode .mc-date-sep {
+  background: rgba(0,0,0,0.38) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   PERFORMANCE FIX — Главная причина лагов на всех вкладках кроме расписания:
+   backdrop-filter на КАЖДОМ элементе списка создаёт сотни compositor layer'ов.
+   
+   Расписание не лагает потому что там нет backdrop-filter на элементах —
+   там простые card'ы без blur.
+   
+   Решение: убрать will-change со всех list-item'ов (сохраняет память GPU),
+   уменьшить blur-радиус для оптимизированного режима,
+   и добавить contain:layout для изоляции перерисовок.
+   ════════════════════════════════════════════════════════════════════ */
+body.glass-mode .list-item,
+body.glass-mode .pair-card,
+body.glass-mode .bell-card,
+body.glass-mode .settings-row,
+body.glass-mode .last-group-btn,
+body.glass-mode .theme-card,
+body.glass-mode .proxy-card,
+body.glass-mode .diff-btn {
+  /* Убираем will-change: transform — он резервирует GPU layer на каждый элемент
+     даже когда элемент не анимируется. При 10+ элементах → утечка GPU памяти */
+  will-change: auto !important;
+  /* contain:layout позволяет браузеру не перерисовывать соседние элементы */
+  contain: layout style !important;
+}
+
+/* На вкладке расписания (#s-home, #s-sched) glass НЕ применяется к list-items —
+   это и есть причина отсутствия лагов там. Явно отключаем blur для pair-card
+   на главной странице чтобы сохранить производительность */
+body.glass-mode #s-home .pair-card,
+body.glass-mode #s-sched .pair-card {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(255,255,255,0.08) !important;
+}
+
 /* ═══ GAME WINDOW — динамическое полноэкранное окно для игр ═══ */
 #game-window {
   position: fixed;
