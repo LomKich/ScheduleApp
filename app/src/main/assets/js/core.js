@@ -226,15 +226,16 @@ const SFX = (() => {
 
 
   // ── Звуки из папки sounds/ — ОСНОВНОЙ источник для всех SFX ─────
-  // Все звуки хранятся в assets/sounds/*.ogg
-  // Пользователь может заменить любой файл своим.
+  // На Android используем https://sounds.local/ (перехватывается Java из assets)
+  // На вебе — относительный путь sounds/
+  const _SOUNDS_BASE = window.Android ? 'https://sounds.local/' : 'sounds/';
   const _extBuffers = {};
 
   async function _loadExtSound(name, file) {
     try {
       const ctx = ac();
       if (!ctx) return;
-      const resp = await fetch('sounds/' + file);
+      const resp = await fetch(_SOUNDS_BASE + file);
       if (!resp.ok) return;
       const ab = await resp.arrayBuffer();
       const buf = await new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
@@ -4382,12 +4383,92 @@ function logClear(){
   toast('Лог очищен');
 }
 
-// Перехватываем ошибки JS
+// ══════════════════════════════════════════════════════════════════════
+// 🚨 УМНЫЙ ПЕРЕХВАТЧИК КРИТИЧЕСКИХ ОШИБОК
+// Логирует все ошибки. При критических — автоматически показывает
+// диалог восстановления из бэкапа (через showCriticalErrorBackupDialog).
+//
+// Критерии «критической» ошибки:
+//  1. ReferenceError / TypeError в ядре приложения (core.js, social.js)
+//  2. SyntaxError в любом файле приложения
+//  3. Накопление: 3+ разных ошибок за 10 секунд
+//  4. Прямой вызов через window._reportCriticalError(msg)
+// ══════════════════════════════════════════════════════════════════════
+
+const _errTracker = {
+  errors: [],          // { msg, ts }
+  WINDOW_MS: 10000,   // окно подсчёта — 10 сек
+  THRESHOLD: 3,        // сколько ошибок считаем критичным пакетом
+};
+
+// Список файлов приложения (только наши)
+const _APP_FILES = ['core.js', 'social.js', 'games.js', 'index.html'];
+
+function _isAppFile(filename) {
+  if (!filename) return false;
+  return _APP_FILES.some(f => filename.includes(f));
+}
+
+function _isCriticalError(type, msg, filename) {
+  // SyntaxError в любом нашем файле — всегда критично
+  if (type === 'SyntaxError' && _isAppFile(filename)) return true;
+  // ReferenceError/TypeError в нашем файле — критично
+  if ((type === 'ReferenceError' || type === 'TypeError') && _isAppFile(filename)) return true;
+  // Ошибка загрузки ресурса (скрипт не загрузился)
+  if (msg && msg.includes('Script error')) return true;
+  return false;
+}
+
+function _trackError(msg, filename, type) {
+  const now = Date.now();
+  // Очищаем устаревшие
+  _errTracker.errors = _errTracker.errors.filter(e => now - e.ts < _errTracker.WINDOW_MS);
+  _errTracker.errors.push({ msg, ts: now });
+
+  // Критичная одиночная ошибка
+  if (_isCriticalError(type, msg, filename)) {
+    _triggerBackupDialog(msg);
+    return;
+  }
+  // Накопилось 3+ ошибок за 10 секунд — тоже критично
+  if (_errTracker.errors.length >= _errTracker.THRESHOLD) {
+    _triggerBackupDialog('Слишком много ошибок: ' + msg);
+  }
+}
+
+function _triggerBackupDialog(msg) {
+  // Даём время логгеру отработать, потом показываем диалог
+  setTimeout(() => {
+    if (typeof window.showCriticalErrorBackupDialog === 'function') {
+      window.showCriticalErrorBackupDialog(msg);
+    }
+  }, 600);
+}
+
+// Публичный метод для вызова из любого места (например, из catch в loadFiles)
+window._reportCriticalError = function(msg) {
+  appLog('err', '[CRITICAL] ' + msg);
+  _triggerBackupDialog(msg);
+};
+
 window.addEventListener('error', e => {
-  appLog('err', `${e.message} [${e.filename?.split('/').pop()}:${e.lineno}]`);
+  const filename = e.filename?.split('/').pop() || '';
+  const type = e.error?.constructor?.name || '';
+  const msg  = e.message || 'Unknown error';
+  appLog('err', `${msg} [${filename}:${e.lineno}]`);
+  _trackError(msg, filename, type);
 });
+
 window.addEventListener('unhandledrejection', e => {
-  appLog('err', 'Promise rejection: ' + (e.reason?.message || e.reason));
+  const reason = e.reason;
+  const msg = reason?.message || String(reason) || 'Promise rejected';
+  appLog('err', 'Promise rejection: ' + msg);
+  // Unhandled rejection в нашем коде считаем критичной если содержит стек из app-файлов
+  const stack = reason?.stack || '';
+  const fromApp = _APP_FILES.some(f => stack.includes(f));
+  if (fromApp) {
+    _trackError(msg, stack, reason?.constructor?.name || '');
+  }
 });
 
 // Логируем ключевые события приложения
@@ -5087,11 +5168,18 @@ showGreeting();
 
 // ── Автопроверка при запуске отключена — проверка вручную через кнопку в настройках ──
 
-// ── Единая проверка обновлений при запуске (через 5 сек) ──
-// Читает patch-manifest.json из релиза и решает:
-//   все файлы — JS/HTML/CSS  →  горячий патч (без переустановки)
-//   есть Java/Manifest/res/  →  полный APK через OTA-диалог
-setTimeout(() => checkForUpdates(true), 5000);
+// ── Автопроверка горячего патча при каждом запуске приложения ──
+// Запускается сразу после загрузки страницы, тихо (без UI)
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => checkForUpdates(true), 1500);
+  // Watchdog heartbeat — сообщаем Java что JS загрузился и работает
+  setTimeout(() => {
+    if (window.Android?.heartbeat) {
+      window.Android.heartbeat();
+      console.log('[Backup] heartbeat sent');
+    }
+  }, 4000);
+});
 
 // ══════════════════════════════════════════════════════════════════════
 // 🔄 ЕДИНАЯ ПРОВЕРКА ОБНОВЛЕНИЙ
@@ -5238,9 +5326,8 @@ async function checkForUpdates(silent) {
       return;
     }
 
-    // Горячий патч: всегда показываем диалог — даже при автозапуске (silent=true).
-    // Пользователь должен сам подтвердить обновление файлов.
-    await _applyHotPatch(manifest, toUpdate, latestVer, false);
+    // Горячий патч: при silent=true — обновляем без диалога и уведомлений
+    await _applyHotPatch(manifest, toUpdate, latestVer, silent);
 
   } catch(e) {
     if (!silent) toast('❌ ' + e.message.slice(0, 80));
@@ -5601,11 +5688,11 @@ async function checkHotPatch(silent) {
 async function _applyHotPatch(manifest, toUpdate, version, silent) {
   if (!window.Android?.hotPatchSaveFile) return { updated: false };
   const statusEl = document.getElementById('hot-patch-status');
-  const setStatus = t => { if (statusEl) statusEl.textContent = t; };
+  const setStatus = t => { if (statusEl && !silent) statusEl.textContent = t; };
   const installed = _hotPatchLoad();
   const installedFiles = { ...(installed?.files || {}) };
   try {
-    // Диалог подтверждения
+    // Диалог подтверждения — только при ручном запуске (silent=false)
     if (!silent) {
       const fileList = toUpdate.map(f => '• ' + f).join('\n');
       const confirmed = await new Promise(resolve => {
@@ -5637,24 +5724,109 @@ async function _applyHotPatch(manifest, toUpdate, version, silent) {
       const info = manifest.files[path];
       const url  = info?.url || info;
       setStatus(`⬇ Скачиваю ${path} (${++done}/${toUpdate.length})...`);
+      console.log('[hotpatch] downloading:', path, url?.slice(0,60));
       const content = await _hotFetchText(url);
       const result  = window.Android.hotPatchSaveFile(path, content);
       if (!result.startsWith('ok')) throw new Error('Ошибка сохранения ' + path + ': ' + result);
       installedFiles[path] = info?.sha || info;
+      console.log('[hotpatch] saved:', path, '(' + content.length + ' chars)');
     }
     _hotPatchSave({ version, files: installedFiles });
-    setStatus('✅ Обновлено ' + toUpdate.length + ' файлов! Перезагружаю...');
-    setTimeout(() => {
+    console.log('[hotpatch] all done, files:', toUpdate.length, '→ reload');
+    if (silent) {
+      // Сохраняем флаг «только что применён патч» — покажем диалог после перезагрузки
+      try {
+        localStorage.setItem('sapp_just_patched', JSON.stringify({
+          version,
+          files: toUpdate,
+          ts: Date.now()
+        }));
+      } catch(e) {}
       if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
       location.reload(true);
-    }, 1200);
+    } else {
+      setStatus('✅ Обновлено ' + toUpdate.length + ' файлов! Перезагружаю...');
+      setTimeout(() => {
+        if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
+        location.reload(true);
+      }, 1200);
+    }
     return { updated: true, count: toUpdate.length };
   } catch(e) {
     setStatus('');
     if (!silent) toast('❌ Hot-patch: ' + e.message.slice(0, 80));
+    console.error('[hotpatch] ошибка:', e.message);
     return { updated: false, error: e.message };
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// 🆕 ДИАЛОГ «ГОРЯЧИЙ ПАТЧ ПРИМЕНЁН» — показывается через 5 сек после
+//    перезагрузки, если в прошлой сессии был успешный silent hot-patch
+// ══════════════════════════════════════════════════════════════════════
+
+function _showJustPatchedDialog(version, files) {
+  const d = document.createElement('div');
+  d.style.cssText = [
+    'position:fixed;inset:0;z-index:9998',
+    'background:rgba(0,0,0,.6)',
+    'display:flex;align-items:flex-end;justify-content:center',
+  ].join(';');
+
+  const fileLines = files.map(f =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+       <span style="font-size:13px;color:var(--accent)">•</span>
+       <span style="font-size:13px;color:var(--text);font-family:monospace;word-break:break-all">${escHtml(f)}</span>
+     </div>`
+  ).join('');
+
+  d.innerHTML = `
+    <div style="background:var(--surface);border-radius:22px 22px 0 0;width:100%;max-width:480px;
+      padding-bottom:calc(20px + var(--safe-bot,0px));animation:mcSlideUp .28s cubic-bezier(.34,1.1,.64,1)">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:14px auto 18px"></div>
+      <div style="padding:0 20px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-size:26px">🔥</span>
+          <div>
+            <div style="font-size:17px;font-weight:700;color:var(--text)">Приложение обновлено</div>
+            <div style="font-size:12px;color:var(--accent);font-weight:600;margin-top:1px">Горячий патч v${escHtml(version)}</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+          Изменено файлов: <strong style="color:var(--text)">${files.length}</strong>
+        </div>
+        <div style="background:var(--surface2);border-radius:12px;padding:8px 12px;
+          max-height:180px;overflow-y:auto;margin-bottom:18px">
+          ${fileLines}
+        </div>
+        <button id="jpatch-close-btn"
+          style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:14px;
+            color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+          Отлично!
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(d);
+
+  document.getElementById('jpatch-close-btn')
+    .addEventListener('click', () => d.remove());
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+}
+
+// Проверяем флаг при старте приложения
+(function _checkJustPatched() {
+  try {
+    const raw = localStorage.getItem('sapp_just_patched');
+    if (!raw) return;
+    localStorage.removeItem('sapp_just_patched');
+    const data = JSON.parse(raw);
+    // Флаг актуален только если создан < 60 секунд назад (свежая перезагрузка)
+    if (!data?.version || !Array.isArray(data.files)) return;
+    if (Date.now() - (data.ts || 0) > 60000) return;
+    setTimeout(() => _showJustPatchedDialog(data.version, data.files), 5000);
+  } catch(e) {}
+})();
 
 // Сброс горячих патчей (откат к встроенным файлам)
 function hotPatchRollback() {

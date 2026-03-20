@@ -26,11 +26,11 @@ public class MessagingForegroundService extends Service {
     public static final String CHANNEL_NAME    = "Фоновое соединение";
     public static final int    FG_NOTIF_ID     = 9001;
     public static final String PREF_BG_ENABLED = "bg_service_enabled";
-    // Используем те же ключи что и MainActivity чтобы читать из общего "schedule_prefs"
     public static final String PREF_SB_USER    = "sb_username";
     public static final String PREF_SB_LAST_TS = "sb_last_notif_ts";
 
-    private static final int POLL_INTERVAL_MS  = 5000;
+    // 30 секунд в фоне — разумный баланс между оперативностью и трафиком
+    private static final int POLL_INTERVAL_MS  = 30_000;
 
     private Handler           pollHandler;
     private Runnable          pollRunnable;
@@ -92,38 +92,20 @@ public class MessagingForegroundService extends Service {
     // ── WakeLock ──────────────────────────────────────────────────────────────
 
     private void acquireWakeLock() {
-        try {
-            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-            if (pm != null) {
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ScheduleApp:BgService");
-                wakeLock.setReferenceCounted(false);
-                wakeLock.acquire(60 * 60 * 1000L); // максимум 1 час, потом автообновляем
-                log.i(TAG, "WakeLock acquired");
-            }
-        } catch (Exception e) {
-            log.w(TAG, "WakeLock acquire failed: " + e.getMessage());
-        }
+        // WakeLock не используем — он держит CPU активным и тратит батарею.
+        // Android сам управляет пробуждением через Doze + AlarmManager.
+        log.i(TAG, "WakeLock: отключён для экономии батареи и трафика");
     }
 
     private void releaseWakeLock() {
         try {
             if (wakeLock != null && wakeLock.isHeld()) {
                 wakeLock.release();
-                log.i(TAG, "WakeLock released");
             }
-        } catch (Exception e) {
-            log.w(TAG, "WakeLock release error: " + e.getMessage());
-        }
+        } catch (Exception ignored) {}
     }
 
-    /** Перезапрашивает WakeLock раз в 30 минут чтобы не истёк. */
-    private void renewWakeLockIfNeeded() {
-        try {
-            if (wakeLock != null && !wakeLock.isHeld()) {
-                acquireWakeLock();
-            }
-        } catch (Exception e) {}
-    }
+    private void renewWakeLockIfNeeded() { /* не используется */ }
 
     // ── Restart on kill ───────────────────────────────────────────────────────
 
@@ -404,11 +386,12 @@ public class MessagingForegroundService extends Service {
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
-                CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW);
+                CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_MIN);
             ch.setDescription("Фоновое соединение ScheduleApp");
             ch.setShowBadge(false);
             ch.setSound(null, null);
             ch.enableVibration(false);
+            // IMPORTANCE_MIN = не показывает иконку в статус-баре, не пикает
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) nm.createNotificationChannel(ch);
         }

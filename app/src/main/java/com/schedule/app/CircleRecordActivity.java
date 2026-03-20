@@ -22,6 +22,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Size;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -38,11 +39,11 @@ import java.util.Arrays;
 
 public class CircleRecordActivity extends Activity {
 
-    public static final String EXTRA_VIDEO_PATH = "video_path";
-    public static final int    REQUEST_CODE     = 2001;
-    public static final int    MAX_SECONDS      = 60;
+    public static final String EXTRA_VIDEO_PATH   = "video_path";
+    public static final String EXTRA_FRONT_CAMERA = "front_camera";
+    public static final int    REQUEST_CODE       = 2001;
+    public static final int    MAX_SECONDS        = 60;
 
-    // Флаги для связи JS → Activity через static volatile
     public static volatile boolean isActive     = false;
     public static volatile boolean shouldStop   = false;
     public static volatile boolean shouldCancel = false;
@@ -68,22 +69,47 @@ public class CircleRecordActivity extends Activity {
     private ProgressRingView  progressRing;
     private TextView          timerText;
     private View              switchBtn;
-    private View              bottomBar;       // нижняя панель (скрыта до начала записи)
-    private View              lockBtn;         // кнопка замка справа
+    private View              bottomBar;
+    private View              lockBtn;
+
+    // ── флаг: палец отпущен → отправлять сразу ──────────────────────────
+    private boolean _fingerReleased = false;
 
     private int dp(float v) {
         return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // Перехватываем ACTION_UP глобально — как только палец отпущен,
+    // останавливаем запись и отправляем. Это Telegram-стиль "hold to record".
+    // ════════════════════════════════════════════════════════════════
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            if (!_fingerReleased) {
+                _fingerReleased = true;
+                if (isRecording) {
+                    // Небольшая задержка чтобы записать последние кадры
+                    uiHandler.postDelayed(this::stopRecordingAndSend, 120);
+                    return true;
+                }
+            }
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         isActive = true; shouldStop = false; shouldCancel = false;
+        _fingerReleased = false;
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // Полностью прозрачный фон — мы рисуем своё
         getWindow().setBackgroundDrawable(
-            new android.graphics.drawable.ColorDrawable(0x99000000));
+            new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
 
@@ -120,7 +146,7 @@ public class CircleRecordActivity extends Activity {
     @Override
     public void onBackPressed() { cancel(); }
 
-    // Поллинг флага остановки от JS каждые 80мс
+    // Поллинг флага остановки от JS
     private void startStopPoll() {
         stopStopPoll();
         stopPollRunnable = new Runnable() {
@@ -143,15 +169,14 @@ public class CircleRecordActivity extends Activity {
     @SuppressLint("ClickableViewAccessibility")
     private View buildUi() {
         int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        int circleSize = Math.min(screenW, screenH) - dp(48);
 
-        // Круг — почти во всю ширину экрана (как в Telegram)
-        int circleSize = screenW - dp(32);
-
-        // ── Root: чёрный фон на весь экран ──────────────────────
+        // Root: полупрозрачный тёмный фон на весь экран
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(0xCC000000); // ~80% затемнение, фон просвечивает
+        root.setBackgroundColor(0xCC000000);
 
-        // ── TextureView (кружок) — горизонтально центрирован, от верха ──
+        // ── TextureView — по центру экрана ──────────────────────────────
         textureView = new TextureView(this);
         textureView.setSurfaceTextureListener(surfaceListener);
         textureView.setClipToOutline(true);
@@ -161,65 +186,59 @@ public class CircleRecordActivity extends Activity {
             }
         });
         FrameLayout.LayoutParams tvLp = new FrameLayout.LayoutParams(circleSize, circleSize);
-        tvLp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
-        tvLp.topMargin = dp(52);
-        tvLp.leftMargin = dp(16);
-        tvLp.rightMargin = dp(16);
+        tvLp.gravity = Gravity.CENTER;
+        tvLp.bottomMargin = dp(80); // чуть выше центра — место для нижней панели
         root.addView(textureView, tvLp);
 
-        // ── Прогресс-кольцо поверх TextureView ──────────────────
+        // ── Прогресс-кольцо ───────────────────────────────────────────
         progressRing = new ProgressRingView(this);
         progressRing.setVisibility(View.GONE);
         int ringSize = circleSize + dp(10);
         FrameLayout.LayoutParams ringLp = new FrameLayout.LayoutParams(ringSize, ringSize);
-        ringLp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
-        ringLp.topMargin = tvLp.topMargin - dp(5);
-        root.addView(progressRing, ringLp);
+        ringLp.gravity = Gravity.CENTER;
+        ringLp.bottomMargin = tvLp.bottomMargin;
+        root.addView(progressRing, ringLp);;
 
-        // ── Кнопка замка справа от кружка (вертикально по центру) ──
+        // ── Кнопка замка справа от кружка ─────────────────────────────
         lockBtn = makeLockBtn();
-        FrameLayout.LayoutParams lockLp = new FrameLayout.LayoutParams(dp(44), dp(44));
-        lockLp.gravity = Gravity.END | Gravity.TOP;
-        lockLp.topMargin = tvLp.topMargin + circleSize / 2 - dp(22);
+        FrameLayout.LayoutParams lockLp = new FrameLayout.LayoutParams(dp(48), dp(48));
+        lockLp.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
         lockLp.rightMargin = dp(8);
+        lockLp.bottomMargin = tvLp.bottomMargin;
         root.addView(lockBtn, lockLp);
         lockBtn.setVisibility(View.GONE);
 
-        // ── Нижняя панель (появляется после начала записи) ────────
+        // ── Нижняя панель ──────────────────────────────────────────────
         bottomBar = buildBottomBar();
         FrameLayout.LayoutParams bbLp = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(72));
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(80));
         bbLp.gravity = Gravity.BOTTOM;
-        bbLp.bottomMargin = dp(12);
+        bbLp.bottomMargin = dp(16);
         root.addView(bottomBar, bbLp);
-        bottomBar.setVisibility(View.GONE);
+        // Показываем нижнюю панель сразу — пользователь должен видеть ОТМЕНА и ▶
 
         return root;
     }
 
-    /** Нижняя панель в стиле Telegram: [flip+flash] | [●timer ← отмена] | [📷] */
+    /** Нижняя панель в стиле Telegram: [⟳ ⚡] [● timer ОТМЕНА] [📤] */
     private View buildBottomBar() {
         FrameLayout wrap = new FrameLayout(this);
 
-        // Пилюля с flip и flash слева
+        // ── Левая пилюля: Flip + Flash ─────────────────────────────────
         LinearLayout leftPill = new LinearLayout(this);
         leftPill.setOrientation(LinearLayout.HORIZONTAL);
         leftPill.setGravity(Gravity.CENTER_VERTICAL);
-        android.graphics.drawable.GradientDrawable pillBg =
-            new android.graphics.drawable.GradientDrawable();
-        pillBg.setCornerRadius(dp(24));
-        pillBg.setColor(0xCC1C1C1E);
+        android.graphics.drawable.GradientDrawable pillBg = new android.graphics.drawable.GradientDrawable();
+        pillBg.setCornerRadius(dp(24)); pillBg.setColor(0xCC1C1C1E);
         leftPill.setBackground(pillBg);
         leftPill.setPadding(dp(6), dp(6), dp(6), dp(6));
 
         switchBtn = makePillIconBtn("⟳");
         switchBtn.setOnClickListener(v -> switchCamera());
-        leftPill.addView(switchBtn,
-            new LinearLayout.LayoutParams(dp(44), dp(44)));
+        leftPill.addView(switchBtn, new LinearLayout.LayoutParams(dp(44), dp(44)));
 
         View flashBtn = makePillIconBtn("⚡");
-        leftPill.addView(flashBtn,
-            new LinearLayout.LayoutParams(dp(44), dp(44)));
+        leftPill.addView(flashBtn, new LinearLayout.LayoutParams(dp(44), dp(44)));
 
         FrameLayout.LayoutParams pillLp = new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, dp(56));
@@ -227,11 +246,9 @@ public class CircleRecordActivity extends Activity {
         pillLp.leftMargin = dp(12);
         wrap.addView(leftPill, pillLp);
 
-        // Центральная пилюля: ● таймер  ‹ Влево — отмена
-        android.graphics.drawable.GradientDrawable centerBg =
-            new android.graphics.drawable.GradientDrawable();
-        centerBg.setCornerRadius(dp(24));
-        centerBg.setColor(0xCC1C1C1E);
+        // ── Центральная пилюля: ● таймер  ОТМЕНА ──────────────────────
+        android.graphics.drawable.GradientDrawable centerBg = new android.graphics.drawable.GradientDrawable();
+        centerBg.setCornerRadius(dp(24)); centerBg.setColor(0xCC1C1C1E);
 
         LinearLayout centerPill = new LinearLayout(this);
         centerPill.setOrientation(LinearLayout.HORIZONTAL);
@@ -239,6 +256,7 @@ public class CircleRecordActivity extends Activity {
         centerPill.setBackground(centerBg);
         centerPill.setPadding(dp(14), 0, dp(14), 0);
 
+        // Красная точка
         View dot = new View(this);
         dot.setBackground(makeCircleDrawable(0xFFFF3B30));
         LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(8), dp(8));
@@ -251,88 +269,80 @@ public class CircleRecordActivity extends Activity {
         timerText.setTypeface(android.graphics.Typeface.MONOSPACE);
         timerText.setText("0:00,0");
         timerText.setPadding(0, 0, dp(14), 0);
-        centerPill.addView(timerText,
-            new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT));
+        centerPill.addView(timerText, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        TextView hintTv = new TextView(this);
-        hintTv.setTextColor(0xAAFFFFFF);
-        hintTv.setTextSize(13);
-        hintTv.setText("‹ Влево — отмена");
-        centerPill.addView(hintTv,
-            new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT));
+        TextView cancelTv = new TextView(this);
+        cancelTv.setTextColor(0xAAFFFFFF);
+        cancelTv.setTextSize(13);
+        cancelTv.setText("ОТМЕНА");
+        cancelTv.setOnClickListener(v -> cancel());
+        centerPill.addView(cancelTv, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         FrameLayout.LayoutParams ctrLp = new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, dp(44));
         ctrLp.gravity = Gravity.CENTER;
         wrap.addView(centerPill, ctrLp);
 
-        // Кнопка 📷 справа — большой серый круг
-        FrameLayout camBtn = new FrameLayout(this);
-        android.graphics.drawable.GradientDrawable camBg =
-            new android.graphics.drawable.GradientDrawable();
-        camBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        camBg.setColor(0xCC3A3A3C);
-        camBtn.setBackground(camBg);
-        camBtn.setClickable(true); camBtn.setFocusable(true);
-        TextView camIco = new TextView(this);
-        camIco.setText("📷");
-        camIco.setTextSize(22);
-        camIco.setGravity(Gravity.CENTER);
-        camBtn.addView(camIco, new FrameLayout.LayoutParams(dp(60), dp(60)));
-        camBtn.setOnClickListener(v -> stopRecordingAndSend());
+        // ── Правая кнопка: ▶ Отправить ────────────────────────────────
+        FrameLayout sendBtn = new FrameLayout(this);
+        android.graphics.drawable.GradientDrawable sendBg = new android.graphics.drawable.GradientDrawable();
+        sendBg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        sendBg.setColor(0xFF2196F3); // синяя как в Telegram
+        sendBtn.setBackground(sendBg);
+        sendBtn.setClickable(true); sendBtn.setFocusable(true);
+        // Треугольник ▶
+        android.widget.ImageView arrow = new android.widget.ImageView(this);
+        android.graphics.drawable.GradientDrawable tri = new android.graphics.drawable.GradientDrawable();
+        // Используем TextView с ▶
+        TextView sendIco = new TextView(this);
+        sendIco.setText("▶");
+        sendIco.setTextSize(22);
+        sendIco.setTextColor(Color.WHITE);
+        sendIco.setGravity(Gravity.CENTER);
+        sendBtn.addView(sendIco, new FrameLayout.LayoutParams(dp(60), dp(60)));
+        sendBtn.setOnClickListener(v -> {
+            _fingerReleased = true;
+            stopRecordingAndSend();
+        });
 
-        FrameLayout.LayoutParams camLp = new FrameLayout.LayoutParams(dp(60), dp(60));
-        camLp.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
-        camLp.rightMargin = dp(12);
-        wrap.addView(camBtn, camLp);
+        FrameLayout.LayoutParams sendLp = new FrameLayout.LayoutParams(dp(60), dp(60));
+        sendLp.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
+        sendLp.rightMargin = dp(12);
+        wrap.addView(sendBtn, sendLp);
 
         return wrap;
     }
 
     private View makePillIconBtn(String emoji) {
         TextView tv = new TextView(this);
-        tv.setText(emoji);
-        tv.setTextSize(20);
-        tv.setGravity(Gravity.CENTER);
-        tv.setTextColor(0xFFFFFFFF);
-        tv.setClickable(true); tv.setFocusable(true);
-        android.graphics.drawable.RippleDrawable rip =
-            new android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(0x33FFFFFF),
-                null, makeCircleDrawable(0xFFFFFFFF));
+        tv.setText(emoji); tv.setTextSize(20); tv.setGravity(Gravity.CENTER);
+        tv.setTextColor(0xFFFFFFFF); tv.setClickable(true); tv.setFocusable(true);
+        android.graphics.drawable.RippleDrawable rip = new android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf(0x33FFFFFF), null, makeCircleDrawable(0xFFFFFFFF));
         tv.setBackground(rip);
         return tv;
     }
 
     private View makeLockBtn() {
         FrameLayout fl = new FrameLayout(this);
-        android.graphics.drawable.GradientDrawable bg =
-            new android.graphics.drawable.GradientDrawable();
-        bg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        bg.setColor(0xCC1C1C1E);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setShape(android.graphics.drawable.GradientDrawable.OVAL); bg.setColor(0xCC1C1C1E);
         fl.setBackground(bg); fl.setClickable(true); fl.setFocusable(true);
         TextView tv = new TextView(this);
         tv.setText("🔒"); tv.setTextSize(18); tv.setGravity(Gravity.CENTER);
-        fl.addView(tv, new FrameLayout.LayoutParams(dp(44), dp(44)));
+        fl.addView(tv, new FrameLayout.LayoutParams(dp(48), dp(48)));
         return fl;
     }
 
     private void startBgThread() {
-        bgThread = new HandlerThread("CamBG");
-        bgThread.start();
+        bgThread = new HandlerThread("CamBG"); bgThread.start();
         bgHandler = new Handler(bgThread.getLooper());
     }
 
     private void stopBgThread() {
-        if (bgThread != null) {
-            bgThread.quitSafely();
-            try { bgThread.join(); } catch (InterruptedException ignored) {}
-            bgThread = null; bgHandler = null;
-        }
+        if (bgThread != null) { bgThread.quitSafely(); try { bgThread.join(); } catch (InterruptedException ignored) {} bgThread = null; bgHandler = null; }
     }
 
     private String getCameraId(boolean front) {
@@ -343,24 +353,20 @@ public class CircleRecordActivity extends Activity {
                 if (front  && facing == CameraCharacteristics.LENS_FACING_FRONT) return id;
                 if (!front && facing == CameraCharacteristics.LENS_FACING_BACK)  return id;
             }
-        } catch (CameraAccessException e) {
-            AppLogger.get(this).e("CircleRec", "getCameraId: " + e.getMessage());
-        }
+        } catch (CameraAccessException e) { AppLogger.get(this).e("CircleRec", "getCameraId: " + e.getMessage()); }
         return null;
     }
 
     private Size chooseVideoSize(String cameraId) {
         try {
             CameraCharacteristics ch = cameraManager.getCameraCharacteristics(cameraId);
-            StreamConfigurationMap map = ch.get(
-                CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+            StreamConfigurationMap map = ch.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             if (map == null) return new Size(640, 480);
             Size[] sizes = map.getOutputSizes(MediaRecorder.class);
             Size best = null; int bestScore = Integer.MAX_VALUE;
             for (Size s : sizes) {
                 int w = s.getWidth(), h = s.getHeight();
                 if (Math.min(w,h) < 320 || Math.max(w,h) > 1280) continue;
-                // Предпочитаем близкие к квадрату и к 720px
                 int score = Math.abs(w - h) * 3 + Math.abs(Math.min(w,h) - 720);
                 if (score < bestScore) { bestScore = score; best = s; }
             }
@@ -373,44 +379,24 @@ public class CircleRecordActivity extends Activity {
         currentCameraId = getCameraId(isFrontCamera);
         if (currentCameraId == null) currentCameraId = getCameraId(!isFrontCamera);
         if (currentCameraId == null) { finish(); return; }
-
         videoSize = chooseVideoSize(currentCameraId);
-        AppLogger.get(this).i("CircleRec",
-            "openCamera size=" + videoSize.getWidth() + "x" + videoSize.getHeight());
+        AppLogger.get(this).i("CircleRec", "openCamera size=" + videoSize.getWidth() + "x" + videoSize.getHeight());
         configureTransform(w, h);
-
         try {
             cameraManager.openCamera(currentCameraId, new CameraDevice.StateCallback() {
-                @Override public void onOpened(@NonNull CameraDevice cam) {
-                    cameraDevice = cam;
-                    // Сразу начинаем запись — не ждём нажатия кнопки
-                    startRecording();
-                }
-                @Override public void onDisconnected(@NonNull CameraDevice cam) {
-                    cam.close(); cameraDevice = null;
-                }
-                @Override public void onError(@NonNull CameraDevice cam, int err) {
-                    cam.close(); cameraDevice = null;
-                    AppLogger.get(CircleRecordActivity.this).e("CircleRec","cam err="+err);
-                    finish();
-                }
+                @Override public void onOpened(@NonNull CameraDevice cam) { cameraDevice = cam; startRecording(); }
+                @Override public void onDisconnected(@NonNull CameraDevice cam) { cam.close(); cameraDevice = null; }
+                @Override public void onError(@NonNull CameraDevice cam, int err) { cam.close(); cameraDevice = null; AppLogger.get(CircleRecordActivity.this).e("CircleRec","cam err="+err); finish(); }
             }, bgHandler);
-        } catch (CameraAccessException e) {
-            AppLogger.get(this).e("CircleRec", "openCamera exc: " + e.getMessage());
-        }
+        } catch (CameraAccessException e) { AppLogger.get(this).e("CircleRec", "openCamera exc: " + e.getMessage()); }
     }
 
     private void closeCamera() {
-        if (isRecording) {
-            try { mediaRecorder.stop(); } catch (Exception ignored) {}
-            isRecording = false;
-        }
+        if (isRecording) { try { mediaRecorder.stop(); } catch (Exception ignored) {} isRecording = false; }
         if (captureSession != null) { captureSession.close(); captureSession = null; }
         if (cameraDevice   != null) { cameraDevice.close();   cameraDevice   = null; }
         if (mediaRecorder  != null) { mediaRecorder.release(); mediaRecorder  = null; }
-        if (timerRunnable  != null) {
-            uiHandler.removeCallbacks(timerRunnable); timerRunnable = null;
-        }
+        if (timerRunnable  != null) { uiHandler.removeCallbacks(timerRunnable); timerRunnable = null; }
     }
 
     private void startRecording() {
@@ -418,115 +404,77 @@ public class CircleRecordActivity extends Activity {
         try {
             videoFile = File.createTempFile("circle_", ".mp4", getCacheDir());
             setupMediaRecorder();
-
             SurfaceTexture st = textureView.getSurfaceTexture();
             st.setDefaultBufferSize(videoSize.getWidth(), videoSize.getHeight());
             final Surface previewSurface  = new Surface(st);
             final Surface recorderSurface = mediaRecorder.getSurface();
-
             if (captureSession != null) { captureSession.close(); captureSession = null; }
-
-            // Пробуем preview + recorder (основной путь)
             previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
             previewRequestBuilder.addTarget(previewSurface);
             previewRequestBuilder.addTarget(recorderSurface);
-
-            cameraDevice.createCaptureSession(
-                Arrays.asList(previewSurface, recorderSurface),
+            cameraDevice.createCaptureSession(Arrays.asList(previewSurface, recorderSurface),
                 new CameraCaptureSession.StateCallback() {
                     @Override public void onConfigured(@NonNull CameraCaptureSession ses) {
                         captureSession = ses;
                         try {
-                            previewRequestBuilder.set(CaptureRequest.CONTROL_MODE,
-                                CaptureRequest.CONTROL_MODE_AUTO);
-                            previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                                CaptureRequest.CONTROL_AE_MODE_ON);
-                            ses.setRepeatingRequest(
-                                previewRequestBuilder.build(), null, bgHandler);
+                            previewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+                            previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                            ses.setRepeatingRequest(previewRequestBuilder.build(), null, bgHandler);
                             mediaRecorder.start();
                             isRecording = true;
-                            AppLogger.get(CircleRecordActivity.this)
-                                .i("CircleRec","Recording STARTED OK (preview+recorder)");
+                            AppLogger.get(CircleRecordActivity.this).i("CircleRec","Recording STARTED OK");
                             runOnUiThread(() -> {
                                 configureTransform(textureView.getWidth(), textureView.getHeight());
                                 onRecordingStarted();
+                                // Если палец уже отпущен до начала записи — сразу стопаем
+                                if (_fingerReleased) uiHandler.postDelayed(CircleRecordActivity.this::stopRecordingAndSend, 300);
                             });
-                        } catch (Exception e) {
-                            AppLogger.get(CircleRecordActivity.this)
-                                .e("CircleRec","ses.configure error: "+e.getMessage());
-                        }
+                        } catch (Exception e) { AppLogger.get(CircleRecordActivity.this).e("CircleRec","ses.configure error: "+e.getMessage()); }
                     }
                     @Override public void onConfigureFailed(@NonNull CameraCaptureSession s) {
-                        // Некоторые устройства (vivo, OPPO) не поддерживают
-                        // одновременно preview + recorder → fallback: только recorder
-                        AppLogger.get(CircleRecordActivity.this)
-                            .w("CircleRec","preview+recorder FAILED, retrying recorder-only");
+                        AppLogger.get(CircleRecordActivity.this).w("CircleRec","preview+recorder FAILED, retrying recorder-only");
                         startRecordingRecorderOnly(recorderSurface);
                     }
                 }, bgHandler);
-        } catch (Exception e) {
-            AppLogger.get(this).e("CircleRec","startRecording exc: "+e.getMessage());
-            runOnUiThread(this::finish);
-        }
+        } catch (Exception e) { AppLogger.get(this).e("CircleRec","startRecording exc: "+e.getMessage()); runOnUiThread(this::finish); }
     }
 
-    /** Fallback для устройств, не поддерживающих одновременно preview+recorder */
     private void startRecordingRecorderOnly(Surface recorderSurface) {
         if (cameraDevice == null) return;
         try {
             if (captureSession != null) { captureSession.close(); captureSession = null; }
             previewRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
             previewRequestBuilder.addTarget(recorderSurface);
-            // Скрываем TextureView — нет превью
             runOnUiThread(() -> textureView.setVisibility(View.INVISIBLE));
-
-            cameraDevice.createCaptureSession(
-                Arrays.asList(recorderSurface),
+            cameraDevice.createCaptureSession(Arrays.asList(recorderSurface),
                 new CameraCaptureSession.StateCallback() {
                     @Override public void onConfigured(@NonNull CameraCaptureSession ses) {
                         captureSession = ses;
                         try {
-                            previewRequestBuilder.set(CaptureRequest.CONTROL_MODE,
-                                CaptureRequest.CONTROL_MODE_AUTO);
-                            ses.setRepeatingRequest(
-                                previewRequestBuilder.build(), null, bgHandler);
+                            previewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+                            ses.setRepeatingRequest(previewRequestBuilder.build(), null, bgHandler);
                             mediaRecorder.start();
                             isRecording = true;
-                            AppLogger.get(CircleRecordActivity.this)
-                                .i("CircleRec","Recording STARTED OK (recorder-only fallback)");
-                            runOnUiThread(CircleRecordActivity.this::onRecordingStarted);
-                        } catch (Exception e) {
-                            AppLogger.get(CircleRecordActivity.this)
-                                .e("CircleRec","recorder-only configure error: "+e.getMessage());
-                            runOnUiThread(CircleRecordActivity.this::finish);
-                        }
+                            AppLogger.get(CircleRecordActivity.this).i("CircleRec","Recording STARTED OK (recorder-only)");
+                            runOnUiThread(() -> {
+                                onRecordingStarted();
+                                if (_fingerReleased) uiHandler.postDelayed(CircleRecordActivity.this::stopRecordingAndSend, 300);
+                            });
+                        } catch (Exception e) { AppLogger.get(CircleRecordActivity.this).e("CircleRec","recorder-only error: "+e.getMessage()); runOnUiThread(CircleRecordActivity.this::finish); }
                     }
                     @Override public void onConfigureFailed(@NonNull CameraCaptureSession s) {
-                        AppLogger.get(CircleRecordActivity.this)
-                            .e("CircleRec","recorder-only configure FAILED — giving up");
+                        AppLogger.get(CircleRecordActivity.this).e("CircleRec","recorder-only FAILED");
                         runOnUiThread(CircleRecordActivity.this::cancel);
                     }
                 }, bgHandler);
-        } catch (Exception e) {
-            AppLogger.get(this).e("CircleRec","startRecordingRecorderOnly exc: "+e.getMessage());
-            runOnUiThread(this::cancel);
-        }
+        } catch (Exception e) { AppLogger.get(this).e("CircleRec","startRecordingRecorderOnly exc: "+e.getMessage()); runOnUiThread(this::cancel); }
     }
 
-    /**
-     * ПРАВИЛЬНЫЙ порядок MediaRecorder:
-     * setAudioSource + setVideoSource → setOutputFormat →
-     * setVideoSize + setVideoEncoder + setAudioEncoder →
-     * setOutputFile → prepare()
-     */
     private void setupMediaRecorder() throws Exception {
         mediaRecorder = new MediaRecorder();
-        // 1. Источники — ДО setOutputFormat
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-        // 2. Формат
         mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-        // 3. Параметры кодека — ПОСЛЕ setOutputFormat
         int side = Math.min(videoSize.getWidth(), videoSize.getHeight());
         if (side > 720) side = 720;
         mediaRecorder.setVideoSize(side, side);
@@ -536,9 +484,8 @@ public class CircleRecordActivity extends Activity {
         mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
         mediaRecorder.setAudioSamplingRate(44100);
         mediaRecorder.setAudioEncodingBitRate(128_000);
-        // 4. Файл и лимит
         mediaRecorder.setOutputFile(videoFile.getAbsolutePath());
-        int rot    = getWindowManager().getDefaultDisplay().getRotation();
+        int rot = getWindowManager().getDefaultDisplay().getRotation();
         int sensor = getSensorOrientation(currentCameraId);
         mediaRecorder.setOrientationHint(getRecordOrientation(sensor, rot, isFrontCamera));
         mediaRecorder.setMaxDuration(MAX_SECONDS * 1000);
@@ -546,18 +493,13 @@ public class CircleRecordActivity extends Activity {
             if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED)
                 runOnUiThread(this::stopRecordingAndSend);
         });
-        // 5. Prepare
         mediaRecorder.prepare();
-        AppLogger.get(this).i("CircleRec",
-            "MediaRecorder prepared side="+side+" file="+videoFile.getAbsolutePath());
+        AppLogger.get(this).i("CircleRec", "MediaRecorder prepared side="+side);
     }
 
     private int getSensorOrientation(String camId) {
-        try {
-            Integer o = cameraManager.getCameraCharacteristics(camId)
-                .get(CameraCharacteristics.SENSOR_ORIENTATION);
-            return o != null ? o : 90;
-        } catch (Exception e) { return 90; }
+        try { Integer o = cameraManager.getCameraCharacteristics(camId).get(CameraCharacteristics.SENSOR_ORIENTATION); return o != null ? o : 90; }
+        catch (Exception e) { return 90; }
     }
 
     private int getRecordOrientation(int sensor, int devRot, boolean front) {
@@ -569,24 +511,16 @@ public class CircleRecordActivity extends Activity {
     private void onRecordingStarted() {
         progressRing.setVisibility(View.VISIBLE);
         progressRing.setProgress(0f);
-        // Показываем нижнюю панель с таймером
-        if (bottomBar != null) bottomBar.setVisibility(View.VISIBLE);
-        if (lockBtn   != null) lockBtn.setVisibility(View.VISIBLE);
-        // Скрываем переключение камеры во время записи (как в Telegram)
+        // bottomBar уже виден с самого начала
+        if (lockBtn != null) lockBtn.setVisibility(View.VISIBLE);
         if (switchBtn != null) switchBtn.setEnabled(false);
-
         recordSeconds = 0;
-        // Тик каждые 100мс — для отображения десятых долей секунды
         final int[] tenths = {0};
         timerRunnable = new Runnable() {
             @Override public void run() {
                 tenths[0]++;
-                int total = tenths[0];
-                int secs  = total / 10;
-                int dec   = total % 10;
-                if (timerText != null)
-                    timerText.setText(secs / 60 + ":"
-                        + String.format("%02d", secs % 60) + "," + dec);
+                int total = tenths[0], secs = total / 10, dec = total % 10;
+                if (timerText != null) timerText.setText(secs / 60 + ":" + String.format("%02d", secs % 60) + "," + dec);
                 progressRing.setProgress((float) secs / MAX_SECONDS);
                 recordSeconds = secs;
                 if (secs < MAX_SECONDS) uiHandler.postDelayed(this, 100);
@@ -600,18 +534,14 @@ public class CircleRecordActivity extends Activity {
         stopStopPoll();
         if (!isRecording) { setResult(RESULT_CANCELED); finish(); return; }
         isRecording = false;
-        if (timerRunnable != null) {
-            uiHandler.removeCallbacks(timerRunnable); timerRunnable = null;
-        }
+        if (timerRunnable != null) { uiHandler.removeCallbacks(timerRunnable); timerRunnable = null; }
         if (captureSession != null) { captureSession.close(); captureSession = null; }
-        try { mediaRecorder.stop(); } catch (Exception e) {
-            AppLogger.get(this).e("CircleRec","stop: "+e.getMessage());
-        }
+        try { mediaRecorder.stop(); } catch (Exception e) { AppLogger.get(this).e("CircleRec","stop: "+e.getMessage()); }
         if (mediaRecorder != null) { mediaRecorder.release(); mediaRecorder = null; }
-        AppLogger.get(this).i("CircleRec",
-            "Saved path="+videoFile.getAbsolutePath()+" len="+videoFile.length());
+        AppLogger.get(this).i("CircleRec", "Saved path="+videoFile.getAbsolutePath()+" len="+videoFile.length());
         Intent res = new Intent();
         res.putExtra(EXTRA_VIDEO_PATH, videoFile.getAbsolutePath());
+        res.putExtra(EXTRA_FRONT_CAMERA, isFrontCamera);
         setResult(RESULT_OK, res);
         finish();
     }
@@ -632,44 +562,31 @@ public class CircleRecordActivity extends Activity {
 
     private void switchCamera() {
         isFrontCamera = !isFrontCamera;
-        closeCamera();
-        startBgThread();
+        closeCamera(); startBgThread();
         openCamera(textureView.getWidth(), textureView.getHeight());
     }
 
-    private final TextureView.SurfaceTextureListener surfaceListener =
-        new TextureView.SurfaceTextureListener() {
-            @Override public void onSurfaceTextureAvailable(
-                @NonNull SurfaceTexture s, int w, int h) { openCamera(w, h); }
-            @Override public void onSurfaceTextureSizeChanged(
-                @NonNull SurfaceTexture s, int w, int h) { configureTransform(w, h); }
-            @Override public boolean onSurfaceTextureDestroyed(
-                @NonNull SurfaceTexture s) { return true; }
-            @Override public void onSurfaceTextureUpdated(@NonNull SurfaceTexture s) {}
-        };
+    private final TextureView.SurfaceTextureListener surfaceListener = new TextureView.SurfaceTextureListener() {
+        @Override public void onSurfaceTextureAvailable(@NonNull SurfaceTexture s, int w, int h) { openCamera(w, h); }
+        @Override public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture s, int w, int h) { configureTransform(w, h); }
+        @Override public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture s) { return true; }
+        @Override public void onSurfaceTextureUpdated(@NonNull SurfaceTexture s) {}
+    };
 
-    /**
-     * Center-crop transform: камера заполняет квадратный TextureView без полос.
-     */
     private void configureTransform(int vw, int vh) {
         if (videoSize == null || vw == 0 || vh == 0) return;
         android.graphics.Matrix m = new android.graphics.Matrix();
         int rot = getWindowManager().getDefaultDisplay().getRotation();
-
         float bufW, bufH;
-        if (rot == Surface.ROTATION_0 || rot == Surface.ROTATION_180) {
-            bufW = videoSize.getHeight(); bufH = videoSize.getWidth();
-        } else {
-            bufW = videoSize.getWidth(); bufH = videoSize.getHeight();
-        }
+        if (rot == Surface.ROTATION_0 || rot == Surface.ROTATION_180) { bufW = videoSize.getHeight(); bufH = videoSize.getWidth(); }
+        else { bufW = videoSize.getWidth(); bufH = videoSize.getHeight(); }
         float scale = Math.max((float)vw / bufW, (float)vh / bufH);
         m.setScale(scale * bufW / vw, scale * bufH / vh, vw / 2f, vh / 2f);
-
         if (rot == Surface.ROTATION_90)  m.postRotate(270, vw/2f, vh/2f);
         if (rot == Surface.ROTATION_270) m.postRotate(90,  vw/2f, vh/2f);
         if (rot == Surface.ROTATION_180) m.postRotate(180, vw/2f, vh/2f);
+        // Зеркало для фронтальной камеры — только превью, не запись
         if (isFrontCamera) m.postScale(-1, 1, vw/2f, vh/2f);
-
         runOnUiThread(() -> textureView.setTransform(m));
     }
 
@@ -678,18 +595,14 @@ public class CircleRecordActivity extends Activity {
         private final Paint bg = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint fg = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF oval = new RectF();
-
         ProgressRingView(android.content.Context ctx) {
             super(ctx);
             bg.setStyle(Paint.Style.STROKE); bg.setStrokeWidth(dp(4)); bg.setColor(0x44FFFFFF);
-            fg.setStyle(Paint.Style.STROKE); fg.setStrokeWidth(dp(4));
-            fg.setColor(0xFFFF3B30); fg.setStrokeCap(Paint.Cap.ROUND);
+            fg.setStyle(Paint.Style.STROKE); fg.setStrokeWidth(dp(4)); fg.setColor(0xFFFF3B30); fg.setStrokeCap(Paint.Cap.ROUND);
         }
         void setProgress(float p) { progress = p; invalidate(); }
-
         @Override protected void onDraw(Canvas canvas) {
-            int cx = getWidth()/2, cy = getHeight()/2;
-            int r = Math.min(cx, cy) - dp(4);
+            int cx = getWidth()/2, cy = getHeight()/2, r = Math.min(cx, cy) - dp(4);
             oval.set(cx-r, cy-r, cx+r, cy+r);
             canvas.drawArc(oval, 0, 360, false, bg);
             if (progress > 0) canvas.drawArc(oval, -90, progress*360, false, fg);
@@ -698,19 +611,6 @@ public class CircleRecordActivity extends Activity {
 
     private android.graphics.drawable.GradientDrawable makeCircleDrawable(int color) {
         android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
-        d.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        d.setColor(color); return d;
-    }
-
-    private View makeRoundBtn(String label, int size) {
-        FrameLayout fl = new FrameLayout(this);
-        fl.setBackground(makeCircleDrawable(0x77000000));
-        fl.setClickable(true); fl.setFocusable(true);
-        TextView tv = new TextView(this);
-        tv.setText(label); tv.setTextColor(Color.WHITE);
-        tv.setTextSize(18); tv.setGravity(Gravity.CENTER);
-        fl.addView(tv, new FrameLayout.LayoutParams(size, size));
-        fl.setLayoutParams(new FrameLayout.LayoutParams(size, size));
-        return fl;
+        d.setShape(android.graphics.drawable.GradientDrawable.OVAL); d.setColor(color); return d;
     }
 }

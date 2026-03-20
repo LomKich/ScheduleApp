@@ -679,7 +679,7 @@ function profileRenderScreen() {
     <div style="text-align:center;padding:0 16px 12px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(p.name)}</span>
-        ${vip ? '<span class="vip-badge-pill">${_emojiImg("👑",14)} VIP</span>' : ''}
+        ${vip ? `<span class="vip-badge-pill">${_emojiImg('👑',14)} VIP</span>` : ''}
       </div>
       <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(p.username)}</div>
       <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${statusObj.color}22;color:${statusObj.color}">
@@ -3060,8 +3060,16 @@ function profileUpdateP2PStatus(msg) {
 const _origShowScreenForSb = window.showScreen;
 window.showScreen = (function(orig) {
   return function(id, dir) {
-    if (id === 's-settings') sbFillSettings();
+    if (id === 's-settings') {
+      sbFillSettings();
+      _renderEmojiStyleToggle(_emojiStyleEnabled());
+    }
     if (orig) orig(id, dir);
+    // Пересканируем активный экран на emoji после показа
+    if (_emojiStyleEnabled() && _emojiPackReady) {
+      const screen = document.getElementById(id);
+      if (screen) setTimeout(() => _localEmojiParse(screen), 50);
+    }
   };
 })(window.showScreen);
 
@@ -3228,7 +3236,7 @@ function profileRenderOnline() {
           <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${escHtml(u.name)}
             ${isMe ? '<span style="color:var(--accent);font-size:11px">(ты)</span>' : ''}
-            ${u.vip ? '<span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 6px;border-radius:6px">${_emojiImg("👑",10)} VIP</span>' : ''}
+            ${u.vip ? `<span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 6px;border-radius:6px">${_emojiImg('👑',10)} VIP</span>` : ''}
             ${badgeObj ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${badgeObj.color}22;color:${badgeObj.color}">${_emojiImg(badgeObj.emoji,12)} ${badgeObj.label}</span>` : ''}
           </div>
           <div style="font-size:12px;color:var(--muted)">@${escHtml(u.username)}</div>
@@ -4910,12 +4918,15 @@ function _emojiImg(emoji, size, style) {
   const extra = style ? ';' + style : '';
   return `<img src="${_EMOJI_BASE}${path}" alt="${emoji}" ` +
     `style="display:inline-block;width:${sz}px;height:${sz}px;vertical-align:-.2em;` +
-    `object-fit:contain;flex-shrink:0${extra}" class="emoji-img" draggable="false" ` +
+    `object-fit:contain;flex-shrink:0${extra}" class="emoji" draggable="false" ` +
     `onerror="this.outerHTML='${emoji}'">`;
 }
 
 // Заменяет emoji в строке text на <img> теги с локальными ассетами.
 // Возвращает HTML-строку, или null если emoji не найдено.
+// Заменяет emoji в строке text на <img> теги с локальными ассетами.
+// Возвращает HTML-строку, или null если emoji не найдено.
+const _emojiMissLog = new Set(); // дедупликация — не спамим одними символами
 function _localEmojiHtml(text) {
   if (!text || typeof IOS_EMOJI_MAP === 'undefined') return null;
   let result = '';
@@ -4923,18 +4934,13 @@ function _localEmojiHtml(text) {
   let i = 0;
   while (i < text.length) {
     let found = false;
-    // Пробуем от длинных последовательностей к коротким (макс 12 кодовых единиц)
     const maxLen = Math.min(12, text.length - i);
     for (let len = maxLen; len >= 1; len--) {
       const sub = text.substring(i, i + len);
       const path = IOS_EMOJI_MAP[sub];
       if (path) {
-        // Используем 1.15em вместо фиксированных px — emoji масштабируется вместе с
-        // родительским font-size: и в стикерах (52px→60px), и в кнопках (13px→15px)
         result += `<img src="${_EMOJI_BASE}${path}" alt="${sub}" ` +
-          `style="display:inline-block;width:1.15em;height:1.15em;vertical-align:-.2em;` +
-          `margin:0 .03em;pointer-events:none;object-fit:contain" ` +
-          `class="emoji-img" draggable="false" onerror="this.replaceWith(document.createTextNode('${sub}'))">`;
+          `class="emoji" draggable="false" onerror="this.replaceWith(document.createTextNode('${sub}'))">`;
         i += len;
         changed = true;
         found = true;
@@ -4943,6 +4949,15 @@ function _localEmojiHtml(text) {
     }
     if (!found) {
       const c = text[i];
+      // Логируем emoji-символы которых нет в карте
+      const cp = c.codePointAt(0);
+      if (cp > 0x1F300 || (cp >= 0x2600 && cp <= 0x27BF)) {
+        const key = cp.toString(16);
+        if (!_emojiMissLog.has(key)) {
+          _emojiMissLog.add(key);
+          console.warn(`[emoji] не в карте: U+${key} "${c}" контекст: "${text.slice(Math.max(0,i-3), i+4).replace(/\n/g,' ')}"`);
+        }
+      }
       if      (c === '&') result += '&amp;';
       else if (c === '<') result += '&lt;';
       else if (c === '>') result += '&gt;';
@@ -4953,9 +4968,17 @@ function _localEmojiHtml(text) {
   return changed ? result : null;
 }
 
+
 // Обходит все текстовые узлы в node и заменяет emoji на <img>.
 function _localEmojiParse(root) {
-  if (typeof IOS_EMOJI_MAP === 'undefined') return;
+  if (typeof IOS_EMOJI_MAP === 'undefined') {
+    console.warn('[emoji] IOS_EMOJI_MAP не определён — ios_emoji_map.js не загружен?');
+    return;
+  }
+  if (!_emojiPackReady) {
+    console.warn('[emoji] _emojiPackReady=false — пак не готов, парсинг пропущен');
+    return;
+  }
   const SKIP_TAGS = new Set(['SCRIPT','STYLE','INPUT','TEXTAREA','CODE','PRE']);
   const walker = document.createTreeWalker(
     root || document.body,
@@ -4974,13 +4997,25 @@ function _localEmojiParse(root) {
   );
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
+
+  let replaced = 0, skipped = 0, errors = 0;
   for (const textNode of nodes) {
     const html = _localEmojiHtml(textNode.data);
-    if (!html) continue;
+    if (!html) { skipped++; continue; }
     const span = document.createElement('span');
     span.dataset.emojiDone = '1';
+    span.style.display = 'contents';
     span.innerHTML = html;
-    try { textNode.parentNode.replaceChild(span, textNode); } catch(_) {}
+    try {
+      textNode.parentNode.replaceChild(span, textNode);
+      replaced++;
+    } catch(e) {
+      errors++;
+      console.warn('[emoji] replaceChild error:', e.message, '| text:', textNode.data?.slice(0,30));
+    }
+  }
+  if (replaced > 0 || errors > 0) {
+    console.log(`[emoji] parse(${(root||document.body).id||root?.tagName||'body'}): заменено=${replaced} пропущено=${skipped} ошибок=${errors}`);
   }
 }
 
@@ -5014,13 +5049,36 @@ function _initTwemoji() {
     _initEmojiPack(); // проверяем пак и при необходимости качаем
     _localEmojiParse(document.body);
     if (_emojiObserver) return;
+    // Дебаунс — не запускаем парсер чаще чем раз в 80мс
+    let _emojiTimer = null;
+    const _emojiQueue = new Set();
+    function _emojiFlush() {
+      _emojiTimer = null;
+      _emojiQueue.forEach(n => _localEmojiParse(n));
+      _emojiQueue.clear();
+    }
+    function _emojiSchedule(node) {
+      _emojiQueue.add(node);
+      if (!_emojiTimer) _emojiTimer = setTimeout(_emojiFlush, 80);
+    }
     _emojiObserver = new MutationObserver(mutations => {
       for (const m of mutations) {
         for (const node of m.addedNodes) {
           if (node.nodeType === 1) {
+            // Элемент — парсим его содержимое
             const tag = node.tagName;
             if (tag && !['CANVAS','SCRIPT','STYLE','INPUT','TEXTAREA'].includes(tag)) {
-              _localEmojiParse(node);
+              _emojiSchedule(node);
+            }
+          } else if (node.nodeType === 3) {
+            // Текстовый узел — парсим родителя
+            const p = node.parentNode;
+            if (p && p.nodeType === 1) {
+              const tag = p.tagName;
+              if (tag && !['CANVAS','SCRIPT','STYLE','INPUT','TEXTAREA'].includes(tag)
+                  && !p.dataset?.emojiDone) {
+                _emojiSchedule(p);
+              }
             }
           }
         }
@@ -5111,73 +5169,17 @@ function vipActivate(code) {
 //      ИЛИ   авто-верификация через webhook если настроен
 // ══════════════════════════════════════════════════════════════════════
 
-// СБП реквизиты (замени на свои)
-const SBP_PHONE = '+79966219426';   // ↩ ЗАМЕНИ НА СВОЙ НОМЕР СБП
-// Прямая СБП-ссылка — открывается при нажатии кнопки оплаты
-const SBP_DIRECT_URL = 'https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=%2B79966219426&bankCode=100000000004';
+// СБП реквизиты
+const SBP_PHONE      = '+79966219426';
+const SBP_DIRECT_URL = 'https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=+79966219426&bankCode=100000000004';
 
 const DONATE_TIERS = [
-  { amount: 20,  label: '⭐ VIP месяц',    desc: '+ VIP на 30 дней', vip: true  },
-  { amount: 30,  label: '👑 VIP 3 месяца', desc: '+ VIP на 90 дней', vip: true  },
-  { amount: 100, label: '🚀 VIP навсегда', desc: '+ VIP навсегда',   vip: true  },
+  { amount: 20,  label: '⭐ VIP месяц',    desc: '+ VIP на 30 дней' },
+  { amount: 30,  label: '👑 VIP 3 месяца', desc: '+ VIP на 90 дней' },
+  { amount: 100, label: '🚀 VIP навсегда', desc: '+ VIP навсегда'   },
 ];
 
-// Банки с реальными deep-link схемами перевода по номеру телефона СБП
-const SBP_BANKS = [
-  {
-    id:    'sber',
-    name:  'Сбер',
-    icon:  '🟢',
-    bg:    '#21A038',
-    // Sberbank Online deep link перевода по телефону
-    deeplink: (phone, amount) =>
-      `sberbankonline://payment/transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-    webUrl: (phone, amount) =>
-      `https://online.sberbank.ru/CSAFront/index.do#/transfer/phone?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-  },
-  {
-    id:    'tinkoff',
-    name:  'Т-Банк',
-    icon:  '🟡',
-    bg:    '#FFDD2D',
-    textColor: '#000',
-    deeplink: (phone, amount) =>
-      `tinkoff://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}&comment=ScheduleApp`,
-    webUrl: (phone, amount) =>
-      `https://www.tbank.ru/payment/transfer/phone/${phone.replace(/\D/g,'')}/?amount=${amount}`,
-  },
-  {
-    id:    'vtb',
-    name:  'ВТБ',
-    icon:  '🔵',
-    bg:    '#003087',
-    deeplink: (phone, amount) =>
-      `vtbconnect://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-    webUrl: (phone, amount) =>
-      `https://online.vtb.ru/transfers/by-phone?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-  },
-  {
-    id:    'alfa',
-    name:  'Альфа',
-    icon:  '🔴',
-    bg:    '#EF3124',
-    deeplink: (phone, amount) =>
-      `alfabank://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-    webUrl: (phone, amount) =>
-      `https://alfabank.ru/everyday/p2p/?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-  },
-  {
-    id:    'sbp',
-    name:  'СБП',
-    icon:  '💳',
-    bg:    '#7B3FBE',
-    // Универсальная СБП ссылка   система сама выберет банк пользователя
-    deeplink: (phone, amount) =>
-      `https://qr.nspk.ru/redirect?type=01&sum=${amount * 100}&cur=RUB`,
-    webUrl: (phone, amount) =>
-      `https://qr.nspk.ru/redirect?type=01&sum=${amount * 100}&cur=RUB`,
-  },
-];
+let _selectedDoneTierIdx = 0;
 
 function showDonateSheet() {
   const existing = document.getElementById('donate-sheet');
@@ -5188,16 +5190,15 @@ function showDonateSheet() {
   sheet.style.cssText = 'position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
 
   sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:24px 24px 0 0;padding:14px 0 calc(20px + var(--safe-bot,0px));max-height:92vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)"
+    <div style="background:var(--surface);border-radius:24px 24px 0 0;padding:14px 0 calc(24px + var(--safe-bot,0px));max-height:92vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)"
          onclick="event.stopPropagation()">
       <div style="width:44px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 18px"></div>
 
-      <!-- Заголовок -->
-      <div style="text-align:center;padding:0 20px 16px">
+      <div style="text-align:center;padding:0 20px 18px">
         <div style="font-size:32px;margin-bottom:6px">💝</div>
         <div style="font-size:19px;font-weight:800;color:var(--text)">Поддержи проект</div>
         <div style="font-size:13px;color:var(--muted);margin-top:4px;line-height:1.5">
-          Перевод по СБП   мгновенно, без комиссии.<br>VIP активируется после подтверждения.
+          Перевод по СБП — мгновенно, без комиссии.<br>VIP активируется после подтверждения.
         </div>
       </div>
 
@@ -5206,9 +5207,10 @@ function showDonateSheet() {
         ${DONATE_TIERS.map((t, i) => `
           <div onclick="donateSelectTier(${i})" id="donate-tier-${i}"
             style="display:flex;align-items:center;gap:14px;padding:14px 16px;
-                   border-radius:16px;border:2px solid var(--accent);
-                   background:color-mix(in srgb,var(--accent) 8%,var(--surface));
-                   cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent">
+                   border-radius:16px;border:2px solid ${i===0?'var(--accent)':'transparent'};
+                   background:${i===0?'color-mix(in srgb,var(--accent) 8%,var(--surface))':'var(--surface2)'};
+                   cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;
+                   opacity:${i===0?'1':'0.6'}">
             <div style="font-size:26px;flex-shrink:0">${t.label.split(' ')[0]}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:15px;font-weight:700;color:var(--text)">${t.label.slice(t.label.indexOf(' ')+1)}</div>
@@ -5218,33 +5220,16 @@ function showDonateSheet() {
           </div>`).join('')}
       </div>
 
-      <!-- Выбор банка -->
-      <div style="padding:16px 16px 0">
-        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px">Выбери банк:</div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px" id="donate-banks-grid">
-          ${SBP_BANKS.map((b, i) => `
-            <div onclick="donateSelectBank(${i})" id="donate-bank-${i}"
-              style="display:flex;flex-direction:column;align-items:center;gap:5px;
-                     padding:10px 4px;border-radius:14px;border:2px solid transparent;
-                     background:var(--surface2);cursor:pointer;transition:all .15s;
-                     -webkit-tap-highlight-color:transparent">
-              <div style="width:38px;height:38px;border-radius:50%;background:${b.bg};
-                          display:flex;align-items:center;justify-content:center;font-size:18px">${b.icon}</div>
-              <div style="font-size:10px;font-weight:600;color:var(--text);text-align:center">${b.name}</div>
-            </div>`).join('')}
-        </div>
-      </div>
-
-      <!-- Кнопка оплаты -->
-      <div style="padding:16px 16px 0">
-        <button id="donate-pay-btn" onclick="donateOpenBank()"
+      <!-- Кнопка -->
+      <div style="padding:18px 16px 0">
+        <button id="donate-pay-btn" onclick="donateOpenLink()"
           style="width:100%;padding:16px;background:var(--accent);border:none;border-radius:16px;
                  color:#fff;font-family:inherit;font-size:16px;font-weight:800;
                  cursor:pointer;-webkit-tap-highlight-color:transparent">
-          Перейти в Сбер · 20₽
+          Оплатить 20₽ через СБП
         </button>
         <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted)">
-          Номер получателя: <b style="color:var(--text)">${SBP_PHONE}</b>
+          Номер: <b style="color:var(--text)">${SBP_PHONE}</b> — выбор банка в браузере
         </div>
       </div>
 
@@ -5253,7 +5238,7 @@ function showDonateSheet() {
         <div style="background:var(--surface2);border-radius:14px;padding:14px 16px">
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">✅ Я оплатил</div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
-            Введи последние 4 цифры суммы перевода или номер операции из уведомления банка:
+            Введи последние 4 цифры суммы или номер операции из уведомления банка:
           </div>
           <input id="donate-txn-input" placeholder="Номер операции / последние 4 цифры"
             maxlength="20" inputmode="numeric"
@@ -5273,128 +5258,241 @@ function showDonateSheet() {
 
   sheet.addEventListener('click', () => sheet.remove());
   document.body.appendChild(sheet);
-
-  donateSelectTier(0);
-  donateSelectBank(0);
 }
-
-let _selectedDoneTierIdx = 0;
-let _selectedBankIdx     = 0;
 
 function donateSelectTier(i) {
   _selectedDoneTierIdx = i;
   DONATE_TIERS.forEach((t, idx) => {
     const el = document.getElementById(`donate-tier-${idx}`);
     if (!el) return;
-    el.style.opacity     = idx === i ? '1'    : '0.55';
-    el.style.borderColor = idx === i ? 'var(--accent)' : 'transparent';
-    el.style.transform   = idx === i ? 'scale(1.02)' : 'scale(1)';
-  });
-  _updateDonateBtn();
-}
-
-function donateSelectBank(i) {
-  _selectedBankIdx = i;
-  SBP_BANKS.forEach((b, idx) => {
-    const el = document.getElementById(`donate-bank-${idx}`);
-    if (!el) return;
+    el.style.opacity     = idx === i ? '1' : '0.6';
     el.style.borderColor = idx === i ? 'var(--accent)' : 'transparent';
     el.style.background  = idx === i
-      ? 'color-mix(in srgb,var(--accent) 15%,var(--surface2))'
+      ? 'color-mix(in srgb,var(--accent) 8%,var(--surface))'
       : 'var(--surface2)';
   });
-  _updateDonateBtn();
+  const btn = document.getElementById('donate-pay-btn');
+  if (btn) btn.textContent = `Оплатить ${DONATE_TIERS[i].amount}₽ через СБП`;
 }
 
-function _updateDonateBtn() {
-  const btn  = document.getElementById('donate-pay-btn');
-  if (!btn) return;
+function donateOpenLink() {
   const tier = DONATE_TIERS[_selectedDoneTierIdx];
-  const bank = SBP_BANKS[_selectedBankIdx];
-  btn.textContent = `Перейти в ${bank.name} · ${tier.amount}₽`;
-}
-
-function donateOpenBank() {
-  const tier   = DONATE_TIERS[_selectedDoneTierIdx];
-  const amount = tier.amount;
-
-  // Открываем прямую СБП-ссылку
+  // Строим СБП-ссылку с нужной суммой (сумма в копейках)
+  const url = `https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=+79966219426&bankCode=100000000004&sum=${tier.amount * 100}`;
   if (window.Android?.openUrl) {
-    window.Android.openUrl(SBP_DIRECT_URL);
+    window.Android.openUrl(url);
   } else {
-    window.open(SBP_DIRECT_URL, '_blank', 'noopener');
+    window.open(url, '_blank', 'noopener');
   }
-
-  // Показываем подтверждение через 1.5с
+  toast(`💳 Переведи ${tier.amount}₽ через СБП на ${SBP_PHONE}`);
+  // Показываем подтверждение через 2с
   setTimeout(() => {
     const sec = document.getElementById('donate-confirm-section');
     if (sec) { sec.style.display = 'block'; sec.scrollIntoView({ behavior: 'smooth' }); }
-  }, 1500);
-
-  toast(`💳 Переведи ${amount}₽ через СБП на ${SBP_PHONE}`);
+  }, 2000);
 }
-
 
 async function donateConfirm() {
   const txn = document.getElementById('donate-txn-input')?.value?.trim();
   if (!txn || txn.length < 4) { toast('❌ Введи номер транзакции'); return; }
-
-  const p    = DONATE_TIERS[_selectedDoneTierIdx];
-  const prof = profileLoad();
-  if (!prof) { toast('❌ Войди в аккаунт'); return; }
-
+  const p = profileLoad();
+  if (!p) { toast('❌ Войди в аккаунт'); return; }
   const btn = document.querySelector('#donate-confirm-section button');
   if (btn) { btn.disabled = true; btn.textContent = 'Отправляю...'; }
-
   try {
-    // Сохраняем в таблицу donations (создай в Supabase: username, amount, txn, ts, status)
     const res = await _sbFetch('POST', '/rest/v1/donations',
-      {
-        username:  prof.username,
-        amount:    DONATE_TIERS[_selectedDoneTierIdx].amount,
-        txn_id:    txn,
-        ts:        Date.now(),
-        status:    'pending',
-        tier:      DONATE_TIERS[_selectedDoneTierIdx].label,
-        vip_tier:  DONATE_TIERS[_selectedDoneTierIdx].vip,
-      },
+      { username: p.username, amount: DONATE_TIERS[_selectedDoneTierIdx].amount,
+        txn_id: txn, ts: Date.now(), status: 'pending',
+        tier: DONATE_TIERS[_selectedDoneTierIdx].label, vip_tier: true },
       { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
     );
-
     if (res.ok || res.status === 201) {
       document.getElementById('donate-sheet')?.remove();
-      // Показываем благодарность
-      const thanks = document.createElement('div');
-      thanks.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;animation:mcFadeIn .2s ease';
-      thanks.innerHTML = `
-        <div style="background:var(--surface);border-radius:24px;padding:32px 24px;text-align:center;max-width:300px;margin:20px;animation:mc-sel-pop .3s cubic-bezier(.34,1.3,.64,1)">
-          <div style="font-size:48px;margin-bottom:12px">🙏</div>
-          <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">Спасибо!</div>
-          <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px">
-            Платёж получен на проверку.<br>
-            ${DONATE_TIERS[_selectedDoneTierIdx].vip
-              ? 'VIP будет активирован в течение <b style="color:var(--accent)">24 часов</b> после подтверждения оплаты.'
-              : 'Ты поддержал развитие проекта ❤️'}
-          </div>
-          <button onclick="this.closest('[style*=fixed]').remove()"
-            style="background:var(--accent);border:none;color:var(--btn-text,#fff);
-                   padding:12px 28px;border-radius:12px;font-size:15px;font-weight:700;
-                   cursor:pointer;font-family:inherit">Отлично!</button>
-        </div>`;
-      thanks.addEventListener('click', e => { if (e.target === thanks) thanks.remove(); });
-      document.body.appendChild(thanks);
-      SFX.play('success');
+      toast('🎉 Заявка отправлена! VIP активируется после проверки.');
     } else {
-      if (btn) { btn.disabled = false; btn.textContent = 'Отправить на проверку'; }
-      toast('❌ Ошибка сохранения. Напиши в поддержку.');
+      throw new Error(res.status);
     }
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Отправить на проверку'; }
-    toast('❌ ' + (e.message || 'Ошибка'));
+    toast('❌ Ошибка отправки, попробуй позже');
   }
 }
 
 
+
+
+// ── Проверка отображения всех emoji из карты ───────────────────────────────
+// Команда: /emoji_check в девконсоли
+// Выводит все emoji группами по категориям — можно визуально проверить каждый
+function emojiCheck() {
+  if (typeof IOS_EMOJI_MAP === 'undefined') {
+    cmdPrint('err', '❌ IOS_EMOJI_MAP не загружен');
+    return;
+  }
+
+  // Группируем emoji по категории (по пути файла)
+  const groups = {};
+  for (const [emoji, path] of Object.entries(IOS_EMOJI_MAP)) {
+    const cat = path.split('/')[0]; // act, food, nat, obj, ppl, sym, travel, flags
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push({ emoji, path });
+  }
+
+  const catOrder = ['ppl','nat','food','act','travel','obj','sym','flags'];
+  const catLabels = {
+    ppl: '👤 Люди и жесты',
+    nat: '🌿 Природа и животные',
+    food: '🍎 Еда и напитки',
+    act: '⚽ Активность и спорт',
+    travel: '✈️ Путешествия',
+    obj: '💡 Объекты',
+    sym: '🔣 Символы',
+    flags: '🏳️ Флаги',
+  };
+
+  cmdPrint('info', '══════════════════════════════════════════════');
+  cmdPrint('info', `  📦 Проверка emoji-пака  (всего: ${Object.keys(IOS_EMOJI_MAP).length})`);
+  cmdPrint('info', '  Скопируй вывод консоли и скинь если что-то');
+  cmdPrint('info', '  не отображается или отображается как □');
+  cmdPrint('info', '══════════════════════════════════════════════');
+
+  // Выводим каждую категорию построчно по 20 emoji в строке
+  const ROW = 20;
+  for (const cat of catOrder) {
+    const items = groups[cat];
+    if (!items || items.length === 0) continue;
+
+    cmdPrint('info', '');
+    cmdPrint('ok', `── ${catLabels[cat] || cat}  (${items.length}) ──`);
+
+    // Базовые emoji без вариантов кожи (оставляем только уникальные базовые)
+    // Для флагов и ppl это может быть много — показываем все
+    for (let i = 0; i < items.length; i += ROW) {
+      const chunk = items.slice(i, i + ROW);
+      const line = chunk.map(x => x.emoji).join(' ');
+      // Выводим emoji строку + номера для ориентира
+      cmdPrint('out', `${String(i+1).padStart(4,'0')}: ${line}`);
+    }
+
+    // Дополнительно: список имён файлов для тех кто не отображается
+    // Выводим по 5 в строку для читаемости
+    const names = items.map(x => x.path.split('/')[1].replace('.png',''));
+    for (let i = 0; i < names.length; i += 5) {
+      const chunk = names.slice(i, i + 5).join(' | ');
+      cmdPrint('muted', `      ${chunk}`);
+    }
+  }
+
+  cmdPrint('info', '');
+  cmdPrint('info', '══════════════════════════════════════════════');
+  cmdPrint('info', '  ✅ Готово. Если видишь □ вместо emoji —');
+  cmdPrint('info', '  запусти /emoji_diag для диагностики.');
+  cmdPrint('info', '══════════════════════════════════════════════');
+}
+
+// ── Диагностика emoji-пака ──────────────────────────────────────────────────
+// Команда: /emoji_diag в девконсоли
+// Сравнивает файлы на диске с IOS_EMOJI_MAP и выводит отчёт в консоль
+async function emojiDiag() {
+  if (!window.Android?.getEmojiFileList) {
+    console.warn('[emoji_diag] Android.getEmojiFileList недоступен');
+    toast('❌ Метод getEmojiFileList не найден');
+    return;
+  }
+  if (typeof IOS_EMOJI_MAP === 'undefined') {
+    console.warn('[emoji_diag] IOS_EMOJI_MAP не определён');
+    toast('❌ IOS_EMOJI_MAP не загружен');
+    return;
+  }
+
+  toast('🔍 Диагностика emoji запущена...');
+
+  let diskFiles;
+  try {
+    diskFiles = JSON.parse(window.Android.getEmojiFileList());
+  } catch(e) {
+    console.error('[emoji_diag] Ошибка чтения списка файлов:', e);
+    toast('❌ Ошибка чтения файлов');
+    return;
+  }
+
+  const diskSet = new Set(diskFiles); // "food/Hot Beverage.png"
+  // Нормализованный сет для нечёткого сравнения
+  const diskLower = new Map(); // "food/hot beverage.png" -> "food/Hot Beverage.png"
+  diskFiles.forEach(f => diskLower.set(f.toLowerCase(), f));
+
+  const mapPaths = Object.values(IOS_EMOJI_MAP); // пути из карты
+  const mapSet   = new Set(mapPaths);
+
+  const missingExact   = []; // в карте есть, на диске нет (точное совпадение)
+  const missingButClose = []; // на диске есть похожий файл (регистр отличается)
+  const extraOnDisk    = []; // на диске есть, в карте нет
+
+  for (const path of mapSet) {
+    if (diskSet.has(path)) continue; // ✅ точное совпадение
+    const lower = path.toLowerCase();
+    if (diskLower.has(lower)) {
+      missingButClose.push({ mapPath: path, diskPath: diskLower.get(lower) });
+    } else {
+      missingExact.push(path);
+    }
+  }
+  for (const f of diskFiles) {
+    if (!mapSet.has(f)) extraOnDisk.push(f);
+  }
+
+  console.group('[emoji_diag] Результат');
+  console.log(`Файлов на диске: ${diskFiles.length}`);
+  console.log(`Записей в IOS_EMOJI_MAP: ${mapPaths.length} (уникальных путей: ${mapSet.size})`);
+  console.log(`✅ Точных совпадений: ${mapSet.size - missingExact.length - missingButClose.length}`);
+
+  if (missingButClose.length > 0) {
+    console.group(`⚠️ Разница в регистре (${missingButClose.length}) — карта ожидает один регистр, диск другой:`);
+    missingButClose.slice(0, 30).forEach(({mapPath, diskPath}) =>
+      console.log(`  карта: "${mapPath}" | диск: "${diskPath}"`)
+    );
+    if (missingButClose.length > 30) console.log(`  ... и ещё ${missingButClose.length - 30}`);
+    console.groupEnd();
+  }
+
+  if (missingExact.length > 0) {
+    console.group(`❌ Отсутствуют на диске (${missingExact.length}):`);
+    missingExact.slice(0, 30).forEach(p => console.log('  ' + p));
+    if (missingExact.length > 30) console.log(`  ... и ещё ${missingExact.length - 30}`);
+    console.groupEnd();
+  }
+
+  if (extraOnDisk.length > 0) {
+    console.group(`📂 На диске есть, но нет в карте (${extraOnDisk.length}) — примеры:`);
+    extraOnDisk.slice(0, 10).forEach(p => console.log('  ' + p));
+    if (extraOnDisk.length > 10) console.log(`  ... и ещё ${extraOnDisk.length - 10}`);
+    console.groupEnd();
+  }
+  console.groupEnd();
+
+  const msg = missingButClose.length > 0
+    ? `⚠️ Регистр: ${missingButClose.length} файлов. Диск: ${diskFiles.length}, Карта: ${mapSet.size}`
+    : missingExact.length > 0
+    ? `❌ Нет ${missingExact.length} файлов из ${mapSet.size}. Смотри консоль.`
+    : `✅ Все ${diskFiles.length} файлов совпадают!`;
+  toast(msg);
+
+  // Если есть проблема с регистром — исправляем карту в памяти
+  if (missingButClose.length > 0) {
+    console.log('[emoji_diag] Применяю авто-фикс регистра в IOS_EMOJI_MAP...');
+    let fixed = 0;
+    for (const [emoji, path] of Object.entries(IOS_EMOJI_MAP)) {
+      const lower = path.toLowerCase();
+      if (!diskSet.has(path) && diskLower.has(lower)) {
+        IOS_EMOJI_MAP[emoji] = diskLower.get(lower);
+        fixed++;
+      }
+    }
+    console.log(`[emoji_diag] Исправлено в памяти: ${fixed} записей. Перезапускаю парсер...`);
+    _localEmojiParse(document.body);
+    toast(`🔧 Авто-фикс: исправлено ${fixed} записей регистра`);
+  }
+}
 
 // CMD команда /vip
 // Добавляем в cmdExec   патч через хук
@@ -6540,6 +6638,10 @@ function messengerRenderMessages(animateLast) {
     const isCircle  = msg.fileLink && msg.fileType === 'circle';
     const isFile    = msg.fileLink && msg.fileType === 'file' && !_isAudioFile(msg.fileName);
     const isAudio   = msg.fileLink && msg.fileType === 'file' && _isAudioFile(msg.fileName);
+    // Парсим extra для доп. флагов (front-камера у кружка и т.д.)
+    let _msgExtra = null;
+    try { if (msg.extra) _msgExtra = typeof msg.extra === 'string' ? JSON.parse(msg.extra) : msg.extra; } catch(_) {}
+    const isFrontCircle = isCircle && (_msgExtra?.front === true);
     const bubbleBg  = (isSticker || isImage || isVideo || isCircle) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
     const bubblePad = (isSticker || isImage || isVideo || isCircle) ? '0' : '8px 12px 6px';    const _fmtSize  = s => !s ? '' : s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
     const _fmtDur   = s => { const m=Math.floor((s||0)/60), sec=String((s||0)%60).padStart(2,'0'); return m+':'+sec; };
@@ -6623,44 +6725,39 @@ function messengerRenderMessages(animateLast) {
       : isCircle
         ? (() => {
             const cid = 'circ_' + idx + '_' + msg.ts;
-            const circumference = 2 * Math.PI * 97; // ≈609.7
-            return `<div data-no-menu id="cw_${cid}"
-               style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
-               onclick="mcCircleToggle('${cid}','${safeUrl}')">
+            const circumference = 2 * Math.PI * 97;
+            const mirrorStyle = isFrontCircle ? 'transform:scaleX(-1);' : '';
+            // 160px в покое (density-independent), 280px при полном воспроизведении
+            const SZ = Math.round(160 * (window.devicePixelRatio > 2 ? 1.2 : 1));
+            return `<div data-no-menu id="cw_${cid}" data-circle-url="${safeUrl}"
+               style="position:relative;width:${SZ}px;height:${SZ}px;border-radius:50%;overflow:hidden;cursor:pointer;background:#1a1a1a;flex-shrink:0;transition:width .3s cubic-bezier(.34,1.1,.64,1),height .3s cubic-bezier(.34,1.1,.64,1)"
+               onclick="mcCircleToggle('${cid}','${safeUrl}',false)">
              <div id="cposter_${cid}" style="position:absolute;inset:0">
-               <div style="width:100%;height:100%;background:#000"></div>
-             </div>
-             <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden"></div>
-             <div id="cbtn_${cid}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-               <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
-                 <svg id="cico_${cid}" width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+               <div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center">
+                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="rgba(255,255,255,.65)"/></svg>
                </div>
              </div>
+             <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden;${mirrorStyle}"></div>
              <svg id="cring_${cid}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none" viewBox="0 0 200 200">
-               <circle cx="100" cy="100" r="97" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="3.5"/>
-               <circle id="cringp_${cid}" cx="100" cy="100" r="97" fill="none" stroke="#fff" stroke-width="3.5"
-                 stroke-dasharray="${circumference.toFixed(1)}" stroke-dashoffset="${circumference.toFixed(1)}"
+               <circle cx="100" cy="100" r="96" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="4"/>
+               <circle id="cringp_${cid}" cx="100" cy="100" r="96" fill="none" stroke="#fff" stroke-width="4"
+                 stroke-dasharray="${(2*Math.PI*96).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*96).toFixed(1)}"
                  stroke-linecap="round" transform="rotate(-90 100 100)"
                  style="transition:stroke-dashoffset .12s linear"/>
              </svg>
-             <div style="position:absolute;bottom:10px;right:10px;display:flex;align-items:center;gap:3px;pointer-events:none">
-               <span id="ctime_${cid}" style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.7)">${msgFormatTime(msg.ts)}</span>
-               <span style="font-size:11px;color:rgba(255,255,255,.9)">${status}</span>
+             <div style="position:absolute;bottom:6px;right:6px;display:flex;align-items:center;gap:2px;pointer-events:none">
+               <span id="ctime_${cid}" style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.8)">${msgFormatTime(msg.ts)}</span>
+               <span style="font-size:10px;color:rgba(255,255,255,.85)">${status}</span>
              </div>
            </div>`;
           })()
-      // ┄┄ ВИДЕО   превью + круглая play + duration badge ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+      // ┄┄ ВИДЕО   превью + круглая play + автоплей без звука при появлении ┄┄┄┄
       : isVideo
-        ? `<div data-no-menu style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;min-width:140px;cursor:pointer;background:#111"
+        ? `<div data-no-menu data-video-url="${safeUrl}" style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;min-width:140px;cursor:pointer;background:#111"
                onclick="mcVideoOpen('${safeUrl}','${safeName}')">
              ${msg.thumbData
                ? `<img src="${escHtml(msg.thumbData)}" style="display:block;width:100%;max-width:260px;min-height:80px;border-radius:14px;object-fit:cover" loading="lazy">`
-               : `<div style="width:260px;height:146px;border-radius:14px;overflow:hidden;position:relative;background:#111">
-                 <div style="position:absolute;inset:0;background:linear-gradient(90deg,#1a1a1a 25%,#2a2a2a 50%,#1a1a1a 75%);background-size:200% 100%;animation:skelShimmer 1.4s infinite"></div>
-                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-                   <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.25);border-top-color:rgba(255,255,255,.75);border-radius:50%;animation:mvpSpin .8s linear infinite"></div>
-                 </div>
-               </div>`
+               : `<div style="width:260px;height:146px;border-radius:14px;background:#000"></div>`
              }
              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
                <div style="width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.52);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center">
@@ -6763,9 +6860,78 @@ function messengerRenderMessages(animateLast) {
       }
     }
   });
+  // Запускаем автоплей кружков и видео которые в поле зрения
+  requestAnimationFrame(_mcAttachAutoplayObserver);
 }
 
-// ┄┄ Отправка ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ── Автоплей кружков и видео при появлении в viewport ──────────────────────
+let _mcAutoplayObserver = null;
+
+function _mcAttachAutoplayObserver() {
+  const body = document.getElementById('mc-messages');
+  if (!body) return;
+
+  // Отключаем старый наблюдатель
+  if (_mcAutoplayObserver) { _mcAutoplayObserver.disconnect(); _mcAutoplayObserver = null; }
+
+  _mcAutoplayObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const el = entry.target;
+
+      // ── Кружки ──────────────────────────────────────────────────────
+      if (el.dataset.circleUrl) {
+        const cid = el.id.replace('cw_', '');
+        const url = el.dataset.circleUrl;
+        if (entry.isIntersecting) {
+          // Виден — запускаем беззвучно если не играет
+          const state = _circleState[cid];
+          if (!state) {
+            mcCircleToggle(cid, url, true); // muted=true
+          } else if (!state.playing) {
+            state.video.play().then(() => { state.playing = true; }).catch(() => {});
+          }
+        } else {
+          // Ушёл из поля зрения — паузируем беззвучный
+          const state = _circleState[cid];
+          if (state && state.muted && state.playing) {
+            state.video.pause();
+            state.playing = false;
+          }
+        }
+      }
+
+      // ── Видео ────────────────────────────────────────────────────────
+      if (el.dataset.videoUrl) {
+        const videoId = el.dataset.videoId;
+        let vid = el._autoVid;
+        if (entry.isIntersecting) {
+          if (!vid) {
+            vid = document.createElement('video');
+            vid.src = el.dataset.videoUrl;
+            vid.muted = true;
+            vid.playsInline = true;
+            vid.loop = true;
+            vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:14px;z-index:0';
+            el.appendChild(vid);
+            el._autoVid = vid;
+          }
+          vid.play().catch(() => {});
+        } else {
+          if (vid) { vid.pause(); }
+        }
+      }
+    });
+  }, {
+    root: body,
+    rootMargin: '60px',
+    threshold: 0.4
+  });
+
+  // Наблюдаем за всеми кружками
+  body.querySelectorAll('[data-circle-url]').forEach(el => _mcAutoplayObserver.observe(el));
+  // Наблюдаем за всеми видео
+  body.querySelectorAll('[data-video-url]').forEach(el => _mcAutoplayObserver.observe(el));
+}
 function messengerSend() {
   const inp = document.getElementById('mc-input');
   if (!inp || !_msgCurrentChat) return;
@@ -7888,32 +8054,370 @@ let _mcStickerPanelOpen = false;
 
 function mcToggleStickerPanel() {
   const panel = document.getElementById('mc-sticker-panel');
+  const btn   = document.getElementById('mc-sticker-btn');
   if (!panel) return;
   _mcStickerPanelOpen = !_mcStickerPanelOpen;
-  panel.style.display = _mcStickerPanelOpen ? '' : 'none';
-  if (_mcStickerPanelOpen) mcRenderStickerPanel();
+
+  if (_mcStickerPanelOpen) {
+    // Скрываем клавиатуру
+    const inp = document.getElementById('mc-input');
+    if (inp) inp.blur();
+    panel.style.display = '';
+    panel.style.maxHeight = '0';
+    panel.style.overflowY = 'auto';
+    panel.style.overflowX = 'hidden';
+    panel.style.touchAction = 'pan-y';
+    panel.style.webkitOverflowScrolling = 'touch';
+    panel.style.transition = 'max-height .28s cubic-bezier(.34,1.1,.64,1)';
+    panel.style.padding = '0 12px 8px';
+    requestAnimationFrame(() => { panel.style.maxHeight = '300px'; });
+    mcRenderStickerPanel();
+    // Меняем иконку на клавиатуру
+    if (btn) btn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2"/>
+      <path d="M8 11h.01M12 11h.01M16 11h.01M8 15h8"/>
+    </svg>`;
+  } else {
+    panel.style.maxHeight = '0';
+    setTimeout(() => { panel.style.display = 'none'; panel.style.maxHeight = ''; panel.style.overflow = ''; }, 280);
+    // Восстанавливаем иконку смайлика
+    if (btn) btn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+      <path d="M9 9h.01M15 9h.01"/><path d="M14 15c0 0 .5 1 2 .5"/>
+    </svg>`;
+    // Фокусируем инпут чтобы показать клавиатуру
+    setTimeout(() => {
+      const inp = document.getElementById('mc-input');
+      if (inp) inp.focus();
+    }, 50);
+  }
+}
+
+// Закрывать emoji-панель при тапе на инпут
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('mc-input');
+  if (inp) inp.addEventListener('focus', () => {
+    if (_mcStickerPanelOpen) mcToggleStickerPanel();
+  // Загружаем информацию о бэкапах при открытии настроек
+  setTimeout(_loadBackupInfo, 100);
+  });
+});
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 💾 BACKUP SYSTEM
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _loadBackupInfo() {
+  const el = document.getElementById('backup-info-text');
+  if (!el) return;
+  if (!window.Android?.getBackupInfo) {
+    el.textContent = 'Недоступно в этой версии';
+    return;
+  }
+  try {
+    const info = JSON.parse(window.Android.getBackupInfo());
+    if (!info.hasBackup) {
+      el.innerHTML = '<span style="color:var(--muted)">Бэкапов нет — они создаются автоматически перед каждым обновлением</span>';
+    } else {
+      el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:700;font-size:14px">v${info.lastVersion}</div>
+            <div style="font-size:11px;color:var(--muted)">${info.lastDate} · ${info.totalSize}</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);text-align:right">${info.count} файл${info.count === 1 ? '' : info.count < 5 ? 'а' : 'ов'}</div>
+        </div>`;
+    }
+  } catch(e) {
+    el.textContent = 'Ошибка загрузки';
+  }
+}
+
+function showBackupList() {
+  if (!window.Android?.getBackupInfo) { toast('ℹ️ Функция недоступна'); return; }
+  let info;
+  try { info = JSON.parse(window.Android.getBackupInfo()); } catch(e) { toast('❌ Ошибка'); return; }
+  if (!info.hasBackup || !info.backups?.length) {
+    toast('ℹ️ Бэкапов нет. Они создаются автоматически перед каждым обновлением');
+    return;
+  }
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center';
+  let rows = info.backups.map((b, i) => `
+    <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:14px;font-weight:700">${b.name.replace('backup_','').replace('.apk','')}</div>
+        <div style="font-size:11px;color:var(--muted)">${b.date} · ${b.size}</div>
+      </div>
+      <button onclick="this.disabled=true;this.textContent='⏳';window.Android?.restoreBackupByPath('${b.path.replace(/'/g,"\'")}');document.getElementById('backup-list-sheet')?.remove()"
+        style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">↩ Откат</button>
+    </div>`).join('');
+  d.innerHTML = `<div id="backup-list-sheet" style="background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding-bottom:calc(16px + var(--safe-bot));animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
+    <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:14px auto 16px"></div>
+    <div style="font-size:17px;font-weight:700;padding:0 16px 12px;border-bottom:1px solid rgba(255,255,255,.06)">💾 Резервные копии (${info.count})</div>
+    ${rows}
+    <button onclick="this.closest('[style*=fixed]').remove()" style="width:calc(100% - 32px);margin:12px 16px 0;padding:13px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer">Закрыть</button>
+  </div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+}
+
+function confirmRestoreBackup() {
+  if (!window.Android?.getBackupInfo) { toast('ℹ️ Функция недоступна'); return; }
+  let info;
+  try { info = JSON.parse(window.Android.getBackupInfo()); } catch(e) { toast('❌ Ошибка'); return; }
+  if (!info.hasBackup) { toast('ℹ️ Бэкапов нет'); return; }
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px';
+  d.innerHTML = `<div style="background:var(--surface);border-radius:20px;padding:24px;max-width:340px;width:100%;animation:mcSlideUp .22s ease">
+    <div style="font-size:22px;text-align:center;margin-bottom:8px">↩</div>
+    <div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:8px">Восстановить v${info.lastVersion}?</div>
+    <div style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px">Будет запущен установщик APK. Текущая версия будет заменена.</div>
+    <div style="display:flex;gap:10px">
+      <button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:12px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer">Отмена</button>
+      <button onclick="this.closest('[style*=fixed]').remove();window.Android?.restoreBackup()" style="flex:1;padding:12px;background:#ff6b6b;border:none;border-radius:14px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">Восстановить</button>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 🚨 CRITICAL ERROR → BACKUP DIALOG
+// Показывается автоматически при критических сбоях (падение экрана, JS-краш,
+// ошибки загрузки), чтобы пользователь мог быстро откатиться на прошлую версию.
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _critErrShown = false; // показываем только один раз за сессию
+
+window.showCriticalErrorBackupDialog = function(errorMsg) {
+  if (_critErrShown) return;
+  _critErrShown = true;
+
+  // Если нет Android-бриджа или бэкапов — показываем облегчённый вариант без кнопки отката
+  const hasBackup = (function() {
+    try {
+      if (!window.Android?.getBackupInfo) return false;
+      const info = JSON.parse(window.Android.getBackupInfo());
+      return !!(info.hasBackup && info.backups?.length);
+    } catch(e) { return false; }
+  })();
+
+  const d = document.createElement('div');
+  d.id = 'critical-error-overlay';
+  d.style.cssText = [
+    'position:fixed;inset:0;z-index:99999',
+    'background:rgba(0,0,0,.72)',
+    'display:flex;align-items:center;justify-content:center',
+    'padding:24px',
+    'animation:mcFadeIn .25s ease',
+  ].join(';');
+
+  const shortErr = (errorMsg || 'Неизвестная ошибка')
+    .replace(/https?:\/\/[^\s]*/g, '')
+    .slice(0, 120);
+
+  const backupBlock = hasBackup ? (() => {
+    let info = {};
+    try { info = JSON.parse(window.Android.getBackupInfo()); } catch(e) {}
+    return `
+      <div style="background:rgba(255,100,100,.12);border:1px solid rgba(255,100,100,.28);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:rgba(255,180,180,.95)">
+        💾 Доступна резервная копия: <strong>v${info.lastVersion || '?'}</strong>
+        <span style="color:rgba(255,255,255,.45);font-size:11px;margin-left:6px">${info.lastDate || ''}</span>
+      </div>
+      <button id="cerr-restore-btn" style="width:100%;padding:13px;background:#ff6b6b;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px">
+        ↩ Восстановить предыдущую версию
+      </button>`;
+  })() : `
+      <div style="background:rgba(255,255,255,.06);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:rgba(255,255,255,.5)">
+        Резервных копий нет. Попробуй переустановить приложение вручную.
+      </div>`;
+
+  d.innerHTML = `
+    <div style="background:var(--surface,#1c1c1e);border-radius:22px;padding:24px;max-width:360px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,.7)">
+      <div style="font-size:36px;text-align:center;margin-bottom:10px">⚠️</div>
+      <div style="font-size:18px;font-weight:700;text-align:center;margin-bottom:6px;color:var(--text,#fff)">Критическая ошибка</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:20px;line-height:1.45">
+        Приложение обнаружило сбой и не может нормально работать.
+      </div>
+      <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px 12px;margin-bottom:18px;font-size:11px;color:rgba(255,255,255,.35);font-family:monospace;word-break:break-all;max-height:60px;overflow:hidden">
+        ${shortErr}
+      </div>
+      ${backupBlock}
+      <button id="cerr-ignore-btn" style="width:100%;padding:12px;background:rgba(255,255,255,.07);border:none;border-radius:14px;color:rgba(255,255,255,.6);font-size:14px;font-weight:600;cursor:pointer">
+        Продолжить (нестабильно)
+      </button>
+    </div>`;
+
+  document.body.appendChild(d);
+
+  const restoreBtn = document.getElementById('cerr-restore-btn');
+  const ignoreBtn  = document.getElementById('cerr-ignore-btn');
+
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', () => {
+      restoreBtn.disabled = true;
+      restoreBtn.textContent = '⏳ Запуск установщика...';
+      try { window.Android.restoreBackup(); } catch(e) { toast('❌ Ошибка запуска'); }
+    });
+  }
+
+  if (ignoreBtn) {
+    ignoreBtn.addEventListener('click', () => {
+      d.remove();
+      // Сбрасываем флаг чтобы при следующей новой серьёзной ошибке диалог мог появиться снова
+      _critErrShown = false;
+    });
+  }
+};
+
+// Хранит данные категорий после первого build — не пересобираем каждый раз
+let _mcEmojiCats = null;
+
+// Порядок категорий как в Google Keyboard Android:
+// Смайлики → Люди → Природа → Еда → Активность → Путешествия → Объекты → Символы
+// (ppl разделён на "faces" и "people" — объединяем в одну вкладку как в Gboard)
+const _MC_EMOJI_CAT_ORDER = ['ppl', 'nat', 'food', 'act', 'travel', 'obj', 'sym'];
+const _MC_EMOJI_CAT_LABELS = {
+  ppl:    '😀 Смайлы',
+  nat:    '🐶 Природа',
+  food:   '🍕 Еда',
+  act:    '⚽ Активность',
+  travel: '🚗 Места',
+  obj:    '💡 Объекты',
+  sym:    '🔣 Символы',
+};
+
+function _mcBuildEmojiCats() {
+  if (_mcEmojiCats) return _mcEmojiCats;
+  const cats = {};
+  _MC_EMOJI_CAT_ORDER.forEach(k => { cats[k] = { label: _MC_EMOJI_CAT_LABELS[k], items: [] }; });
+  if (typeof IOS_EMOJI_MAP !== 'undefined') {
+    for (const [emoji, path] of Object.entries(IOS_EMOJI_MAP)) {
+      const cat = path.split('/')[0];
+      if (cat === 'flags') continue;
+      if (path.includes('Skin Tone') || path.includes('No Skin Tone')) continue;
+      if (cats[cat]) cats[cat].items.push(emoji);
+    }
+  } else {
+    MC_STICKER_PACKS.forEach(pack => {
+      pack.stickers.forEach(s => { if (cats.ppl) cats.ppl.items.push(s); });
+    });
+  }
+  _mcEmojiCats = cats;
+  return cats;
 }
 
 function mcRenderStickerPanel() {
   const panel = document.getElementById('mc-sticker-panel');
   if (!panel) return;
-  const isVip = vipCheck();
-  let html = '';
-  MC_STICKER_PACKS.forEach(pack => {
-    const locked = pack.vip && !isVip;
-    html += `<div style="margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px">
-        ${pack.name} ${locked ? '<span style="font-size:10px;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:1px 6px;border-radius:6px;font-weight:800">VIP</span>' : ''}
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px">
-        ${pack.stickers.map(s => locked
-          ? `<span style="font-size:36px;opacity:.3;cursor:not-allowed" onclick="toast('🔒 Стикер только для VIP')">${typeof _emojiImg==='function'?_emojiImg(s,36):s}</span>`
-          : `<span style="font-size:36px;cursor:pointer;transition:transform .1s" ontouchstart="this.style.transform='scale(1.25)'" ontouchend="this.style.transform=''" onclick="mcSendSticker('${s}')">${typeof _emojiImg==='function'?_emojiImg(s,36):s}</span>`
-        ).join('')}
+  const cats = _mcBuildEmojiCats();
+
+  // ── Шапка с категориями ───────────────────────────────────────────
+  let html = `<div style="display:flex;gap:4px;padding:8px 0 8px;border-bottom:1px solid rgba(255,255,255,.07);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x">`;
+  for (const [key, cat] of Object.entries(cats)) {
+    if (!cat.items.length) continue;
+    html += `<button ontouchend="mcScrollEmojiCat('${key}')" style="flex-shrink:0;background:none;border:none;color:var(--muted);font-size:18px;padding:4px 8px;border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:transparent" id="mc-ecat-btn-${key}">${cat.label.split(' ')[0]}</button>`;
+  }
+  html += `</div>`;
+
+  // ── Для каждой категории рисуем placeholder-блок ──────────────────
+  // Сами emoji НЕ рендерятся сразу — только пустые <span data-emoji="...">
+  for (const [key, cat] of Object.entries(cats)) {
+    if (!cat.items.length) continue;
+    const ITEM_SIZE = 44; // px
+    const cols = Math.floor((window.innerWidth - 24) / ITEM_SIZE) || 8;
+    const rows = Math.ceil(cat.items.length / cols);
+    const totalH = rows * ITEM_SIZE;
+    // Сохраняем список emoji в data-атрибуте как JSON (одна строка для IntersectionObserver)
+    const chunked = [];
+    for (let i = 0; i < cat.items.length; i += cols * 4) {
+      chunked.push(cat.items.slice(i, i + cols * 4));
+    }
+    html += `<div id="mc-ecat-${key}" style="margin-top:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;padding:0 4px">${cat.label}</div>
+      <div id="mc-ecat-grid-${key}" data-cat="${key}" style="display:flex;flex-wrap:wrap;gap:0;min-height:${Math.min(totalH, ITEM_SIZE * 3)}px">
+        <div class="mc-emoji-lazy-sentinel" data-cat="${key}" data-offset="0" style="width:100%;height:1px;flex-shrink:0"></div>
       </div>
     </div>`;
-  });
+  }
   panel.innerHTML = html;
+
+  // ── Настраиваем IntersectionObserver для ленивой загрузки ─────────
+  const CHUNK = 40; // сколько emoji рендерим за раз
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const sentinel = entry.target;
+      observer.unobserve(sentinel);
+      const cat = sentinel.dataset.cat;
+      const offset = parseInt(sentinel.dataset.offset, 10) || 0;
+      const items = _mcEmojiCats?.[cat]?.items;
+      if (!items) return;
+      const grid = document.getElementById('mc-ecat-grid-' + cat);
+      if (!grid) return;
+      const chunk = items.slice(offset, offset + CHUNK);
+      const frag = document.createDocumentFragment();
+      chunk.forEach(s => {
+        const sp = document.createElement('span');
+        sp.style.cssText = 'width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:10px;flex-shrink:0;-webkit-tap-highlight-color:transparent;touch-action:auto';
+        // Отслеживаем свайп — если пользователь скролит, не отправляем
+        let _tx = 0, _ty = 0, _moved = false;
+        sp.addEventListener('touchstart', e => {
+          const t = e.touches[0];
+          _tx = t.clientX; _ty = t.clientY; _moved = false;
+          sp.style.background = 'rgba(255,255,255,.12)';
+        }, { passive: true });
+        sp.addEventListener('touchmove', e => {
+          const t = e.touches[0];
+          if (Math.abs(t.clientX - _tx) > 8 || Math.abs(t.clientY - _ty) > 8) _moved = true;
+        }, { passive: true });
+        sp.addEventListener('touchend', e => {
+          sp.style.background = '';
+          if (!_moved) { e.preventDefault(); mcSendStickerOrEmoji(s); }
+        });
+        const img = typeof _emojiImg === 'function' ? _emojiImg(s, 34) : s;
+        sp.innerHTML = img;
+        frag.appendChild(sp);
+      });
+      // Если есть ещё — добавляем следующий sentinel
+      if (offset + CHUNK < items.length) {
+        const nextSentinel = document.createElement('div');
+        nextSentinel.className = 'mc-emoji-lazy-sentinel';
+        nextSentinel.dataset.cat = cat;
+        nextSentinel.dataset.offset = String(offset + CHUNK);
+        nextSentinel.style.cssText = 'width:100%;height:1px;flex-shrink:0';
+        frag.appendChild(nextSentinel);
+        observer.observe(nextSentinel);
+      }
+      grid.appendChild(frag);
+    });
+  }, { root: panel, rootMargin: '200px', threshold: 0 });
+
+  // Запускаем наблюдение за первыми sentinel'ами каждой категории
+  panel.querySelectorAll('.mc-emoji-lazy-sentinel').forEach(s => observer.observe(s));
+}
+
+function mcScrollEmojiCat(key) {
+  const el = document.getElementById('mc-ecat-' + key);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function mcSendStickerOrEmoji(emoji) {
+  // Вставляем в инпут если он активен, иначе отправляем как стикер
+  const inp = document.getElementById('mc-input');
+  if (inp && document.activeElement !== inp) {
+    // Отправляем как стикер
+    mcSendSticker(emoji);
+  } else if (inp) {
+    // Вставляем в текст
+    const start = inp.selectionStart || inp.value.length;
+    inp.value = inp.value.slice(0, start) + emoji + inp.value.slice(inp.selectionEnd || start);
+    inp.dispatchEvent(new Event('input'));
+    inp.selectionStart = inp.selectionEnd = start + emoji.length;
+  } else {
+    mcSendSticker(emoji);
+  }
 }
 
 function mcSendSticker(emoji) {
@@ -8244,46 +8748,56 @@ function _mcInChatSendingShow(fileType, label) {
   const circumference = 2 * Math.PI * (isCircle ? 48 : 22);
 
   if (isCircle) {
-    // Кружок: круглый превью-плейсхолдер с кольцом прогресса
+    // Кружок: круглый превью с кольцом прогресса + кнопка отмены
     el.innerHTML = `
-      <div style="position:relative;width:120px;height:120px;border-radius:50%;background:#1a1a1a;overflow:hidden;flex-shrink:0">
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(255,255,255,.35)">
-            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>
-            <circle cx="12" cy="9" r="3" fill="rgba(255,255,255,.35)"/>
-            <path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="rgba(255,255,255,.35)"/>
-          </svg>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="mc-ics-cancel-btn" onclick="mcCancelSending()" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </div>
-        <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="55" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="4"/>
-          <circle id="mc-ics-ring" cx="60" cy="60" r="55" fill="none" stroke="white" stroke-width="4"
-            stroke-dasharray="${(2*Math.PI*55).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*55).toFixed(1)}"
-            stroke-linecap="round" transform="rotate(-90 60 60)"
-            style="transition:stroke-dashoffset .2s linear"/>
-        </svg>
-      </div>`;
-  } else {
-    // Голосовое / файл: горизонтальный пузырь с прогресс-кольцом
-    el.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;background:var(--accent);padding:8px 14px 8px 8px;border-radius:18px 18px 4px 18px;min-width:180px;max-width:72%">
-        <div style="position:relative;width:44px;height:44px;flex-shrink:0">
-          <svg width="44" height="44" viewBox="0 0 44 44" style="position:absolute;inset:0">
-            <circle cx="22" cy="22" r="18" fill="rgba(255,255,255,.15)" stroke="none"/>
-            <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.5"/>
-            <circle id="mc-ics-ring" cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="2.5"
-              stroke-dasharray="${(2*Math.PI*18).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*18).toFixed(1)}"
-              stroke-linecap="round" transform="rotate(-90 22 22)"
+        <div style="position:relative;width:96px;height:96px;border-radius:50%;background:#1a1a1a;overflow:hidden;flex-shrink:0">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(255,255,255,.35)">
+              <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>
+              <circle cx="12" cy="9" r="3" fill="rgba(255,255,255,.35)"/>
+              <path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="rgba(255,255,255,.35)"/>
+            </svg>
+          </div>
+          <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 96 96">
+            <circle cx="48" cy="48" r="44" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="4"/>
+            <circle id="mc-ics-ring" cx="48" cy="48" r="44" fill="none" stroke="white" stroke-width="4"
+              stroke-dasharray="${(2*Math.PI*44).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*44).toFixed(1)}"
+              stroke-linecap="round" transform="rotate(-90 48 48)"
               style="transition:stroke-dashoffset .2s linear"/>
           </svg>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-            ${isVoice
-              ? `<svg width="14" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`
-              : `<svg width="14" height="16" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`}
-          </div>
         </div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((label||'').slice(0,30))}</div>
-          <div id="mc-ics-sub" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Отправляю </div>
+      </div>`;
+  } else {
+    // Голосовое / файл: пузырь + кнопка отмены (X) слева
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="mc-ics-cancel-btn" onclick="mcCancelSending()" style="width:36px;height:36px;border-radius:50%;background:var(--surface2);border:1.5px solid var(--surface3);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:var(--muted)"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;background:var(--accent);padding:8px 14px 8px 8px;border-radius:18px 18px 4px 18px;min-width:180px;max-width:66%">
+          <div style="position:relative;width:44px;height:44px;flex-shrink:0">
+            <svg width="44" height="44" viewBox="0 0 44 44" style="position:absolute;inset:0">
+              <circle cx="22" cy="22" r="18" fill="rgba(255,255,255,.15)" stroke="none"/>
+              <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.5"/>
+              <circle id="mc-ics-ring" cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="2.5"
+                stroke-dasharray="${(2*Math.PI*18).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*18).toFixed(1)}"
+                stroke-linecap="round" transform="rotate(-90 22 22)"
+                style="transition:stroke-dashoffset .2s linear"/>
+            </svg>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+              ${isVoice
+                ? `<svg width="14" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`
+                : `<svg width="14" height="16" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`}
+            </div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((label||'').slice(0,30))}</div>
+            <div id="mc-ics-sub" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Отправляю </div>
+          </div>
         </div>
       </div>`;
   }
@@ -8457,7 +8971,7 @@ async function _catboxUpload(base64, fileName, mimeType, onProgress) {
 }
 
 // ┄┄ Отправка файла/видео/голоса как сообщения ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbData, _blob, _mime }) {
+function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbData, _blob, _mime, extra }) {
   // Немедленно кэшируем blob локально   файл доступен без сети
   if (_blob && url) {
     mcCacheSave(url, _blob, _mime || 'application/octet-stream').catch(() => {});
@@ -8487,6 +9001,7 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
     ...(duration  ? { duration  } : {}),
     ...(thumbData ? { thumbData } : {}),
     ...(replyTo   ? { replyTo   } : {}),
+    ...(extra     ? { extra: JSON.stringify(extra) } : {}),
   };
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
@@ -8509,7 +9024,8 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
     extra: JSON.stringify({ fileLink: url, fileName, fileType,
       ...(fileSize  ? { fileSize  } : {}),
       ...(duration  ? { duration  } : {}),
-      ...(thumbData ? { thumbData } : {}) })
+      ...(thumbData ? { thumbData } : {}),
+      ...(extra     ? extra        : {}) })
   };
   const _mediaOutboxItem2 = {
     id: 'media_' + ts, type: 'media', localChat: _msgCurrentChat, ts,
@@ -8657,23 +9173,27 @@ window.onNativeCircleUploading = function() {
   _mcInChatSendingUpdate('circle', '⬆ Загружаю...');
 };
 
-window.onNativeCircleUploaded = function(url, fileSize) {
-  console.log('[Circle] uploaded url=' + url);
+window.onNativeCircleUploaded = function(url, fileSize, frontCamera) {
+  console.log('[Circle] uploaded url=' + url + ' front=' + frontCamera);
   _mcCircleActive = false;
+  _mcVoiceNative  = false;
   _mcInChatSendingHide();
   _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle',
-    fileSize: fileSize || 0, thumbData: null });
+    fileSize: fileSize || 0, thumbData: null,
+    extra: frontCamera !== false ? { front: true } : undefined });
 };
 
 window.onNativeCircleCancelled = function() {
   console.log('[Circle] cancelled');
   _mcCircleActive = false;
+  _mcVoiceNative  = false;
   _mcInChatSendingHide();
 };
 
 window.onNativeCircleError = function(msg) {
   console.error('[Circle] error:', msg);
   _mcCircleActive = false;
+  _mcVoiceNative  = false;
   _mcInChatSendingHide();
   toast('❌ Ошибка камеры: ' + (msg || ''));
 };
@@ -8831,14 +9351,15 @@ function mcVoiceTouchStart(e) {
   _mcVoiceStartY = _vt.clientY || _vt.pageY || 0;
 
   // Режим кружка   ЗАЖАТИЕ запускает CircleRecordActivity напрямую
-  // Никаких промежуточных шитов, как голосовое сообщение
   if (_mcVoiceMode === 'circle') {
     console.log('[Voice] circle hold   starting native recorder');
-    // Короткий тап (< 280мс) ↩ переключаемся обратно на голосовой
     clearTimeout(_mcVoiceHoldTimer);
     _mcVoiceHoldTimer = setTimeout(() => {
       if (_mcVoiceCancelled) return;
+      // Ставим флаг ДО запуска — touchEnd увидит активную запись
+      _mcVoiceNative = true;
       mcStartCircleRecord();
+      // НЕ показываем VoiceUI — кружок управляется через Activity
     }, 280);
     return;
   }
@@ -8962,7 +9483,12 @@ function _mcVoiceSend() {
   if (_mcVoiceNative) {
     _mcVoiceNative = false;
     _mcVoiceHideUI();
-    if (window.Android) window.Android.stopVoiceRecording();
+    if (_mcCircleActive) {
+      // Кружок — останавливаем через флаг в CircleRecordActivity
+      if (window.Android) window.Android.stopCircleRecord();
+    } else {
+      if (window.Android) window.Android.stopVoiceRecording();
+    }
     return;
   }
   if (!_mcVoiceRecorder) return;
@@ -8976,7 +9502,12 @@ function _mcVoiceCancel() {
   if (_mcVoiceNative) {
     _mcVoiceNative = false;
     _mcVoiceHideUI();
-    if (window.Android) window.Android.cancelVoiceRecording();
+    if (_mcCircleActive) {
+      _mcCircleActive = false;
+      if (window.Android) window.Android.cancelCircleRecord();
+    } else {
+      if (window.Android) window.Android.cancelVoiceRecording();
+    }
     toast('🗑 Запись отменена');
     return;
   }
@@ -9055,6 +9586,22 @@ function _mcVoiceHideUI() {
   }
   setTimeout(_mcInitActionBtn, 60);
 }
+
+/** Отменяет отправку голосового/кружка во время загрузки */
+function mcCancelSending() {
+  // Отменяем кружок если идёт
+  if (_mcCircleActive) {
+    _mcCircleActive = false;
+    if (window.Android?.cancelCircleRecord) window.Android.cancelCircleRecord();
+  }
+  // Отменяем голосовое если идёт
+  if (_mcVoiceRecorder || _mcVoiceNative) {
+    _mcVoiceCancel();
+  }
+  _mcInChatSendingHide();
+  toast('❌ Отправка отменена');
+}
+
 
 function _mcVoiceUpdateTimer() {
   const el = document.getElementById('mc-voice-timer');
@@ -9492,7 +10039,7 @@ function peerProfileOpen(username) {
     <div style="text-align:center;padding:0 16px 16px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(peer.name||username)}</span>
-        ${peer.vip ? '<span style="background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">${_emojiImg("👑",10)} VIP</span>' : ''}
+        ${peer.vip ? `<span class="vip-badge-pill">${_emojiImg('👑',10)} VIP</span>` : ''}
       </div>
       <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(username)}</div>
       <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${isOnline?'#4caf7d22':'rgba(255,255,255,.08)'};color:${isOnline?'#4caf7d':'var(--muted)'}">
@@ -9693,89 +10240,115 @@ function peerProfileOpen(username) {
 // ┄┄ Inline-плеер кружков (как в Telegram   воспроизводится прямо в чате) ┄┄
 const _circleState = {}; // cid ↩ { video, playing, circumference }
 
-function mcCircleToggle(cid, url) {
+// Размер кружка в покое (px, density-aware)
+function _circleIdleSize() {
+  return Math.round(160 * (window.devicePixelRatio > 2 ? 1.2 : 1));
+}
+
+/**
+ * mcCircleToggle — запуск/пауза кружка
+ * @param {string}  cid     id кружка
+ * @param {string}  url     URL видео
+ * @param {boolean} muted   true = беззвучный автоплей (IntersectionObserver),
+ *                          false = полное воспроизведение со звуком (тап)
+ */
+function mcCircleToggle(cid, url, muted) {
   const wrap = document.getElementById('cw_' + cid);
   if (!wrap) return;
 
+  const fullPlay = (muted === false); // явный тап = полное воспроизведение
+
   let state = _circleState[cid];
 
+  // Если уже играет в muted-режиме, тап переключает в полный режим
+  if (state && state.muted && fullPlay) {
+    state.video.muted = false;
+    state.muted = false;
+    // Расширяем до 280px
+    wrap.style.width = '280px';
+    wrap.style.height = '280px';
+    if (!state.playing) {
+      state.video.play().then(() => { state.playing = true; }).catch(() => {});
+    }
+    return;
+  }
+
+  // Если уже играет в полном режиме — pause/resume
+  if (state && !state.muted) {
+    if (state.playing) {
+      state.video.pause();
+      state.playing = false;
+    } else {
+      state.video.play().then(() => { state.playing = true; }).catch(() => {});
+    }
+    return;
+  }
+
   if (!state) {
-    // Первый тап   создаём video-элемент
     const vid = document.createElement('video');
     vid.src = url;
     vid.playsInline = true;
+    vid.setAttribute('playsinline', '');
     vid.preload = 'auto';
     vid.loop = false;
-    vid.muted = false;
+    vid.muted = !!muted; // muted только при автоплее
+
     vid.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
 
-    const circumference = 2 * Math.PI * 97;
-    state = { video: vid, playing: false, circumference };
+    const circumference = 2 * Math.PI * 96;
+    state = { video: vid, playing: false, circumference, muted: !!muted };
     _circleState[cid] = state;
 
     const vidWrap = document.getElementById('cvid_' + cid);
     if (vidWrap) { vidWrap.style.display = 'block'; vidWrap.appendChild(vid); }
 
-    // Скрываем постер
     const poster = document.getElementById('cposter_' + cid);
-    if (poster) poster.style.opacity = '0';
+    if (poster) poster.style.display = 'none';
 
-    // Показываем кольцо прогресса
     const ring = document.getElementById('cring_' + cid);
-    if (ring) ring.style.display = 'block';
 
-    // Обновляем кольцо в реальном времени
+    if (fullPlay) {
+      // Тап — расширяем и показываем кольцо
+      if (ring) ring.style.display = 'block';
+      wrap.style.width = '280px';
+      wrap.style.height = '280px';
+    }
+    // При muted-автоплее размер не меняем, кольцо не показываем
+
     vid.addEventListener('timeupdate', () => {
-      if (!vid.duration) return;
+      if (!vid.duration || state.muted) return;
       const pct = vid.currentTime / vid.duration;
       const ringProg = document.getElementById('cringp_' + cid);
       if (ringProg) {
-        const offset = circumference * (1 - pct);
-        ringProg.style.strokeDashoffset = offset.toFixed(1);
+        ringProg.style.strokeDashoffset = (circumference * (1 - pct)).toFixed(1);
       }
-      // Таймер
       const timeEl = document.getElementById('ctime_' + cid);
       if (timeEl) {
-        const rem = Math.max(0, Math.ceil(vid.duration - vid.currentTime));
-        timeEl.textContent = rem + 's';
+        const rem = Math.max(0, Math.floor(vid.duration - vid.currentTime));
+        const m = Math.floor(rem/60), s = String(rem%60).padStart(2,'0');
+        timeEl.textContent = m + ':' + s;
       }
     });
 
-    // По завершению   возврат в состояние "play"
     vid.addEventListener('ended', () => {
       state.playing = false;
-      _circleSetIcon(cid, false);
-      const ringProg = document.getElementById('cringp_' + cid);
-      if (ringProg) ringProg.style.strokeDashoffset = '0';
+      const sz = _circleIdleSize();
+      wrap.style.width = sz + 'px';
+      wrap.style.height = sz + 'px';
+      if (poster) poster.style.display = '';
+      if (ring) ring.style.display = 'none';
+      vidWrap.style.display = 'none';
+      delete _circleState[cid];
     });
 
-    // Автоплей сразу
     vid.play().then(() => {
       state.playing = true;
-      _circleSetIcon(cid, true);
-    }).catch(() => {});
-    return;
-  }
-
-  // Последующие тапы   play/pause
-  if (state.playing) {
-    state.video.pause();
-    state.playing = false;
-    _circleSetIcon(cid, false);
-  } else {
-    state.video.play().then(() => {
-      state.playing = true;
-      _circleSetIcon(cid, true);
     }).catch(() => {});
   }
 }
 
 function _circleSetIcon(cid, playing) {
-  const ico = document.getElementById('cico_' + cid);
-  if (!ico) return;
-  ico.innerHTML = playing
-    ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
-    : '<path d="M8 5v14l11-7z"/>';
+  // Кнопка play/pause убрана визуально — функция оставлена для совместимости
 }
 
 // ┄┄ Фуллскрин видеоплеер с Telegram-стилем ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -10286,6 +10859,15 @@ if (typeof cmdExec !== 'undefined') {
     const parts = raw.trim().split(/\s+/);
     const cmd = parts[0].toLowerCase();
     const arg = parts.slice(1).join(' ').trim();
+    if (cmd === '/emoji_diag') {
+      cmdPrint('info', '🔍 Запускаю диагностику emoji-пака...');
+      emojiDiag();
+      return;
+    }
+    if (cmd === '/emoji_check') {
+      emojiCheck();
+      return;
+    }
     if (cmd === '/vip') {
       if (!arg) {
         cmdPrint('info', '👑 Использование:');

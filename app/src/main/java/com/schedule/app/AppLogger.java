@@ -26,6 +26,7 @@ public class AppLogger {
     private static final String TAG          = "ScheduleApp";
     private static final String SUBFOLDER    = "расписание";   // папка внутри Downloads
     private static final int    MAX_SIZE     = 512 * 1024; // 512 KB — потом очищаем
+    private static final int    MAX_LOGS     = 4;          // хранить не более N файлов логов
 
     private static AppLogger instance;
     private final Context ctx;
@@ -75,6 +76,9 @@ public class AppLogger {
     private void initMediaStore() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
 
+        // Удаляем старые логи перед созданием нового
+        pruneOldLogsMediaStore();
+
         // Всегда создаём НОВЫЙ файл (уникальное имя на каждый запуск)
         try {
             ContentValues cv = new ContentValues();
@@ -92,6 +96,45 @@ public class AppLogger {
         }
     }
 
+    /** Удаляет старые логи через MediaStore (Android 10+), оставляет MAX_LOGS-1 (место для нового) */
+    private void pruneOldLogsMediaStore() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
+        try {
+            String selection = MediaStore.MediaColumns.RELATIVE_PATH + " LIKE ? AND "
+                + MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?";
+            String[] args = {
+                "%" + SUBFOLDER + "%",
+                "%_log.txt"
+            };
+            String[] projection = {
+                MediaStore.MediaColumns._ID,
+                MediaStore.MediaColumns.DISPLAY_NAME,
+                MediaStore.MediaColumns.DATE_ADDED
+            };
+            android.database.Cursor cursor = ctx.getContentResolver().query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                projection, selection, args,
+                MediaStore.MediaColumns.DATE_ADDED + " ASC"
+            );
+            if (cursor == null) return;
+            java.util.List<Uri> uris = new java.util.ArrayList<>();
+            while (cursor.moveToNext()) {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
+                uris.add(android.content.ContentUris.withAppendedId(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, id));
+            }
+            cursor.close();
+            // Удаляем самые старые, оставляем MAX_LOGS-1 (новый ещё не создан)
+            int toDelete = uris.size() - (MAX_LOGS - 1);
+            for (int i = 0; i < toDelete; i++) {
+                ctx.getContentResolver().delete(uris.get(i), null, null);
+                Log.i(TAG, "Pruned old log (MediaStore): " + uris.get(i));
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "pruneOldLogsMediaStore error: " + e.getMessage());
+        }
+    }
+
     /**
      * Запасной вариант: пишем лог во внутреннее хранилище приложения (getFilesDir).
      * Не требует никаких разрешений, никогда не падает.
@@ -100,14 +143,11 @@ public class AppLogger {
         try {
             File dir = ctx.getFilesDir();
             if (!dir.exists()) dir.mkdirs();
+            pruneOldLogsDir(dir);
             legacyFile = new File(dir, FILE_NAME);
-            if (legacyFile.exists() && legacyFile.length() > MAX_SIZE) {
-                legacyFile.delete();
-            }
             Log.i(TAG, "Logger: using internal fallback at " + legacyFile.getAbsolutePath());
         } catch (Exception e) {
             Log.e(TAG, "Logger: all storage options failed: " + e.getMessage());
-            // legacyFile остаётся null — writeRaw() просто пропустит запись, без краша
         }
     }
 
@@ -115,8 +155,24 @@ public class AppLogger {
         File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
         File dir = new File(downloads, SUBFOLDER);
         if (!dir.exists()) dir.mkdirs();
+        pruneOldLogsDir(dir);
         legacyFile = new File(dir, FILE_NAME);
-        // Для legacy не нужно чистить — имя уникальное каждый раз
+    }
+
+    /** Удаляет старые логи в указанной папке, оставляет MAX_LOGS-1 файлов */
+    private void pruneOldLogsDir(File dir) {
+        try {
+            File[] logs = dir.listFiles(f -> f.getName().endsWith("_log.txt"));
+            if (logs == null || logs.length < MAX_LOGS) return;
+            java.util.Arrays.sort(logs, java.util.Comparator.comparingLong(File::lastModified));
+            int toDelete = logs.length - (MAX_LOGS - 1);
+            for (int i = 0; i < toDelete; i++) {
+                Log.i(TAG, "Pruned old log: " + logs[i].getName());
+                logs[i].delete();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "pruneOldLogsDir error: " + e.getMessage());
+        }
     }
 
     // ── Публичные методы ─────────────────────────────────────────────────────
