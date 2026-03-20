@@ -6725,30 +6725,28 @@ function messengerRenderMessages(animateLast) {
       : isCircle
         ? (() => {
             const cid = 'circ_' + idx + '_' + msg.ts;
-            const circumference = 2 * Math.PI * 97; // ≈609.7
+            const circumference = 2 * Math.PI * 97;
             const mirrorStyle = isFrontCircle ? 'transform:scaleX(-1);' : '';
+            // Маленький кружок (96px) в покое, расширяется до 280px при воспроизведении
             return `<div data-no-menu id="cw_${cid}"
-               style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
+               style="position:relative;width:96px;height:96px;border-radius:50%;overflow:hidden;cursor:pointer;background:#1a1a1a;flex-shrink:0;transition:width .28s cubic-bezier(.34,1.1,.64,1),height .28s cubic-bezier(.34,1.1,.64,1)"
                onclick="mcCircleToggle('${cid}','${safeUrl}')">
              <div id="cposter_${cid}" style="position:absolute;inset:0">
-               <div style="width:100%;height:100%;background:#000"></div>
-             </div>
-             <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden;${mirrorStyle}"></div>
-             <div id="cbtn_${cid}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-               <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
-                 <svg id="cico_${cid}" width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+               <div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center">
+                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="rgba(255,255,255,.6)"/></svg>
                </div>
              </div>
+             <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden;${mirrorStyle}"></div>
              <svg id="cring_${cid}" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none" viewBox="0 0 200 200">
-               <circle cx="100" cy="100" r="97" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="3.5"/>
-               <circle id="cringp_${cid}" cx="100" cy="100" r="97" fill="none" stroke="#fff" stroke-width="3.5"
-                 stroke-dasharray="${circumference.toFixed(1)}" stroke-dashoffset="${circumference.toFixed(1)}"
+               <circle cx="100" cy="100" r="96" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="4"/>
+               <circle id="cringp_${cid}" cx="100" cy="100" r="96" fill="none" stroke="#fff" stroke-width="4"
+                 stroke-dasharray="${(2*Math.PI*96).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*96).toFixed(1)}"
                  stroke-linecap="round" transform="rotate(-90 100 100)"
                  style="transition:stroke-dashoffset .12s linear"/>
              </svg>
-             <div style="position:absolute;bottom:10px;right:10px;display:flex;align-items:center;gap:3px;pointer-events:none">
-               <span id="ctime_${cid}" style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.7)">${msgFormatTime(msg.ts)}</span>
-               <span style="font-size:11px;color:rgba(255,255,255,.9)">${status}</span>
+             <div style="position:absolute;bottom:5px;right:5px;display:flex;align-items:center;gap:2px;pointer-events:none">
+               <span id="ctime_${cid}" style="font-size:9px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.8)">${msgFormatTime(msg.ts)}</span>
+               <span style="font-size:9px;color:rgba(255,255,255,.85)">${status}</span>
              </div>
            </div>`;
           })()
@@ -7986,32 +7984,116 @@ let _mcStickerPanelOpen = false;
 
 function mcToggleStickerPanel() {
   const panel = document.getElementById('mc-sticker-panel');
+  const btn   = document.getElementById('mc-sticker-btn');
   if (!panel) return;
   _mcStickerPanelOpen = !_mcStickerPanelOpen;
-  panel.style.display = _mcStickerPanelOpen ? '' : 'none';
-  if (_mcStickerPanelOpen) mcRenderStickerPanel();
+
+  if (_mcStickerPanelOpen) {
+    // Скрываем клавиатуру
+    const inp = document.getElementById('mc-input');
+    if (inp) inp.blur();
+    panel.style.display = '';
+    panel.style.maxHeight = '0';
+    panel.style.overflow = 'hidden';
+    panel.style.transition = 'max-height .28s cubic-bezier(.34,1.1,.64,1)';
+    requestAnimationFrame(() => { panel.style.maxHeight = '300px'; });
+    mcRenderStickerPanel();
+    // Меняем иконку на клавиатуру
+    if (btn) btn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2"/>
+      <path d="M8 11h.01M12 11h.01M16 11h.01M8 15h8"/>
+    </svg>`;
+  } else {
+    panel.style.maxHeight = '0';
+    setTimeout(() => { panel.style.display = 'none'; panel.style.maxHeight = ''; panel.style.overflow = ''; }, 280);
+    // Восстанавливаем иконку смайлика
+    if (btn) btn.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+      <path d="M9 9h.01M15 9h.01"/><path d="M14 15c0 0 .5 1 2 .5"/>
+    </svg>`;
+  }
 }
+
+// Закрывать emoji-панель при тапе на инпут
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('mc-input');
+  if (inp) inp.addEventListener('focus', () => {
+    if (_mcStickerPanelOpen) mcToggleStickerPanel();
+  });
+});
 
 function mcRenderStickerPanel() {
   const panel = document.getElementById('mc-sticker-panel');
   if (!panel) return;
-  const isVip = vipCheck();
-  let html = '';
-  MC_STICKER_PACKS.forEach(pack => {
-    const locked = pack.vip && !isVip;
-    html += `<div style="margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px">
-        ${pack.name} ${locked ? '<span style="font-size:10px;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:1px 6px;border-radius:6px;font-weight:800">VIP</span>' : ''}
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px">
-        ${pack.stickers.map(s => locked
-          ? `<span style="font-size:36px;opacity:.3;cursor:not-allowed" onclick="toast('🔒 Стикер только для VIP')">${typeof _emojiImg==='function'?_emojiImg(s,36):s}</span>`
-          : `<span style="font-size:36px;cursor:pointer;transition:transform .1s" ontouchstart="this.style.transform='scale(1.25)'" ontouchend="this.style.transform=''" onclick="mcSendSticker('${s}')">${typeof _emojiImg==='function'?_emojiImg(s,36):s}</span>`
-        ).join('')}
+
+  // Категории из IOS_EMOJI_MAP — группируем по папке файла
+  const cats = {
+    ppl:    { label: '😀 Люди',       items: [] },
+    nat:    { label: '🌿 Природа',    items: [] },
+    food:   { label: '🍎 Еда',        items: [] },
+    act:    { label: '⚽ Спорт',       items: [] },
+    travel: { label: '✈️ Путешествия', items: [] },
+    obj:    { label: '💡 Объекты',     items: [] },
+    sym:    { label: '🔣 Символы',     items: [] },
+  };
+
+  // Собираем emoji из карты (если загружена)
+  if (typeof IOS_EMOJI_MAP !== 'undefined') {
+    for (const [emoji, path] of Object.entries(IOS_EMOJI_MAP)) {
+      const cat = path.split('/')[0];
+      // Пропускаем варианты с тоном кожи и флаги — слишком много
+      if (cat === 'flags') continue;
+      if (path.includes('Skin Tone') || path.includes('No Skin Tone')) continue;
+      if (cats[cat]) cats[cat].items.push(emoji);
+    }
+  } else {
+    // Fallback — стикерпаки
+    MC_STICKER_PACKS.forEach(pack => {
+      pack.stickers.forEach(s => { if (cats.ppl) cats.ppl.items.push(s); });
+    });
+  }
+
+  let html = `<div style="display:flex;gap:6px;padding:6px 0 10px;border-bottom:1px solid rgba(255,255,255,.07);overflow-x:auto;scrollbar-width:none">`;
+  for (const [key, cat] of Object.entries(cats)) {
+    html += `<button onclick="mcScrollEmojiCat('${key}')" style="flex-shrink:0;background:none;border:none;color:var(--muted);font-size:13px;font-weight:600;padding:4px 8px;border-radius:8px;cursor:pointer;transition:color .15s,background .15s" id="mc-ecat-btn-${key}">${cat.label.split(' ')[0]}</button>`;
+  }
+  html += `</div>`;
+
+  for (const [key, cat] of Object.entries(cats)) {
+    if (!cat.items.length) continue;
+    html += `<div id="mc-ecat-${key}" style="margin-top:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">${cat.label}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px">
+        ${cat.items.map(s => {
+          const img = typeof _emojiImg === 'function' ? _emojiImg(s, 32) : s;
+          return `<span style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:8px;transition:background .1s;-webkit-tap-highlight-color:transparent" ontouchstart="this.style.background='rgba(255,255,255,.1)'" ontouchend="this.style.background=''" onclick="mcSendStickerOrEmoji('${s.replace(/'/g,'\x27')}')">${img}</span>`;
+        }).join('')}
       </div>
     </div>`;
-  });
+  }
   panel.innerHTML = html;
+}
+
+function mcScrollEmojiCat(key) {
+  const el = document.getElementById('mc-ecat-' + key);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function mcSendStickerOrEmoji(emoji) {
+  // Вставляем в инпут если он активен, иначе отправляем как стикер
+  const inp = document.getElementById('mc-input');
+  if (inp && document.activeElement !== inp) {
+    // Отправляем как стикер
+    mcSendSticker(emoji);
+  } else if (inp) {
+    // Вставляем в текст
+    const start = inp.selectionStart || inp.value.length;
+    inp.value = inp.value.slice(0, start) + emoji + inp.value.slice(inp.selectionEnd || start);
+    inp.dispatchEvent(new Event('input'));
+    inp.selectionStart = inp.selectionEnd = start + emoji.length;
+  } else {
+    mcSendSticker(emoji);
+  }
 }
 
 function mcSendSticker(emoji) {
@@ -8342,46 +8424,56 @@ function _mcInChatSendingShow(fileType, label) {
   const circumference = 2 * Math.PI * (isCircle ? 48 : 22);
 
   if (isCircle) {
-    // Кружок: круглый превью-плейсхолдер с кольцом прогресса
+    // Кружок: круглый превью с кольцом прогресса + кнопка отмены
     el.innerHTML = `
-      <div style="position:relative;width:120px;height:120px;border-radius:50%;background:#1a1a1a;overflow:hidden;flex-shrink:0">
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(255,255,255,.35)">
-            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>
-            <circle cx="12" cy="9" r="3" fill="rgba(255,255,255,.35)"/>
-            <path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="rgba(255,255,255,.35)"/>
-          </svg>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="mc-ics-cancel-btn" onclick="mcCancelSending()" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </div>
-        <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="55" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="4"/>
-          <circle id="mc-ics-ring" cx="60" cy="60" r="55" fill="none" stroke="white" stroke-width="4"
-            stroke-dasharray="${(2*Math.PI*55).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*55).toFixed(1)}"
-            stroke-linecap="round" transform="rotate(-90 60 60)"
-            style="transition:stroke-dashoffset .2s linear"/>
-        </svg>
-      </div>`;
-  } else {
-    // Голосовое / файл: горизонтальный пузырь с прогресс-кольцом
-    el.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;background:var(--accent);padding:8px 14px 8px 8px;border-radius:18px 18px 4px 18px;min-width:180px;max-width:72%">
-        <div style="position:relative;width:44px;height:44px;flex-shrink:0">
-          <svg width="44" height="44" viewBox="0 0 44 44" style="position:absolute;inset:0">
-            <circle cx="22" cy="22" r="18" fill="rgba(255,255,255,.15)" stroke="none"/>
-            <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.5"/>
-            <circle id="mc-ics-ring" cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="2.5"
-              stroke-dasharray="${(2*Math.PI*18).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*18).toFixed(1)}"
-              stroke-linecap="round" transform="rotate(-90 22 22)"
+        <div style="position:relative;width:96px;height:96px;border-radius:50%;background:#1a1a1a;overflow:hidden;flex-shrink:0">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="rgba(255,255,255,.35)">
+              <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>
+              <circle cx="12" cy="9" r="3" fill="rgba(255,255,255,.35)"/>
+              <path d="M6 20c0-3.31 2.69-6 6-6s6 2.69 6 6" fill="rgba(255,255,255,.35)"/>
+            </svg>
+          </div>
+          <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 96 96">
+            <circle cx="48" cy="48" r="44" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="4"/>
+            <circle id="mc-ics-ring" cx="48" cy="48" r="44" fill="none" stroke="white" stroke-width="4"
+              stroke-dasharray="${(2*Math.PI*44).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*44).toFixed(1)}"
+              stroke-linecap="round" transform="rotate(-90 48 48)"
               style="transition:stroke-dashoffset .2s linear"/>
           </svg>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
-            ${isVoice
-              ? `<svg width="14" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`
-              : `<svg width="14" height="16" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`}
-          </div>
         </div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((label||'').slice(0,30))}</div>
-          <div id="mc-ics-sub" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Отправляю </div>
+      </div>`;
+  } else {
+    // Голосовое / файл: пузырь + кнопка отмены (X) слева
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="mc-ics-cancel-btn" onclick="mcCancelSending()" style="width:36px;height:36px;border-radius:50%;background:var(--surface2);border:1.5px solid var(--surface3);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:var(--muted)"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;background:var(--accent);padding:8px 14px 8px 8px;border-radius:18px 18px 4px 18px;min-width:180px;max-width:66%">
+          <div style="position:relative;width:44px;height:44px;flex-shrink:0">
+            <svg width="44" height="44" viewBox="0 0 44 44" style="position:absolute;inset:0">
+              <circle cx="22" cy="22" r="18" fill="rgba(255,255,255,.15)" stroke="none"/>
+              <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.5"/>
+              <circle id="mc-ics-ring" cx="22" cy="22" r="18" fill="none" stroke="white" stroke-width="2.5"
+                stroke-dasharray="${(2*Math.PI*18).toFixed(1)}" stroke-dashoffset="${(2*Math.PI*18).toFixed(1)}"
+                stroke-linecap="round" transform="rotate(-90 22 22)"
+                style="transition:stroke-dashoffset .2s linear"/>
+            </svg>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+              ${isVoice
+                ? `<svg width="14" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>`
+                : `<svg width="14" height="16" viewBox="0 0 24 24" fill="white"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>`}
+            </div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((label||'').slice(0,30))}</div>
+            <div id="mc-ics-sub" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">Отправляю </div>
+          </div>
         </div>
       </div>`;
   }
@@ -8760,6 +8852,7 @@ window.onNativeCircleUploading = function() {
 window.onNativeCircleUploaded = function(url, fileSize, frontCamera) {
   console.log('[Circle] uploaded url=' + url + ' front=' + frontCamera);
   _mcCircleActive = false;
+  _mcVoiceNative  = false;
   _mcInChatSendingHide();
   _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle',
     fileSize: fileSize || 0, thumbData: null,
@@ -8769,12 +8862,14 @@ window.onNativeCircleUploaded = function(url, fileSize, frontCamera) {
 window.onNativeCircleCancelled = function() {
   console.log('[Circle] cancelled');
   _mcCircleActive = false;
+  _mcVoiceNative  = false;
   _mcInChatSendingHide();
 };
 
 window.onNativeCircleError = function(msg) {
   console.error('[Circle] error:', msg);
   _mcCircleActive = false;
+  _mcVoiceNative  = false;
   _mcInChatSendingHide();
   toast('❌ Ошибка камеры: ' + (msg || ''));
 };
@@ -8932,14 +9027,15 @@ function mcVoiceTouchStart(e) {
   _mcVoiceStartY = _vt.clientY || _vt.pageY || 0;
 
   // Режим кружка   ЗАЖАТИЕ запускает CircleRecordActivity напрямую
-  // Никаких промежуточных шитов, как голосовое сообщение
   if (_mcVoiceMode === 'circle') {
     console.log('[Voice] circle hold   starting native recorder');
-    // Короткий тап (< 280мс) ↩ переключаемся обратно на голосовой
     clearTimeout(_mcVoiceHoldTimer);
     _mcVoiceHoldTimer = setTimeout(() => {
       if (_mcVoiceCancelled) return;
+      // Ставим флаг ДО запуска — touchEnd увидит активную запись
+      _mcVoiceNative = true;
       mcStartCircleRecord();
+      _mcVoiceShowUI();
     }, 280);
     return;
   }
@@ -9063,7 +9159,12 @@ function _mcVoiceSend() {
   if (_mcVoiceNative) {
     _mcVoiceNative = false;
     _mcVoiceHideUI();
-    if (window.Android) window.Android.stopVoiceRecording();
+    if (_mcCircleActive) {
+      // Кружок — останавливаем через флаг в CircleRecordActivity
+      if (window.Android) window.Android.stopCircleRecord();
+    } else {
+      if (window.Android) window.Android.stopVoiceRecording();
+    }
     return;
   }
   if (!_mcVoiceRecorder) return;
@@ -9077,7 +9178,12 @@ function _mcVoiceCancel() {
   if (_mcVoiceNative) {
     _mcVoiceNative = false;
     _mcVoiceHideUI();
-    if (window.Android) window.Android.cancelVoiceRecording();
+    if (_mcCircleActive) {
+      _mcCircleActive = false;
+      if (window.Android) window.Android.cancelCircleRecord();
+    } else {
+      if (window.Android) window.Android.cancelVoiceRecording();
+    }
     toast('🗑 Запись отменена');
     return;
   }
@@ -9156,6 +9262,22 @@ function _mcVoiceHideUI() {
   }
   setTimeout(_mcInitActionBtn, 60);
 }
+
+/** Отменяет отправку голосового/кружка во время загрузки */
+function mcCancelSending() {
+  // Отменяем кружок если идёт
+  if (_mcCircleActive) {
+    _mcCircleActive = false;
+    if (window.Android?.cancelCircleRecord) window.Android.cancelCircleRecord();
+  }
+  // Отменяем голосовое если идёт
+  if (_mcVoiceRecorder || _mcVoiceNative) {
+    _mcVoiceCancel();
+  }
+  _mcInChatSendingHide();
+  toast('❌ Отправка отменена');
+}
+
 
 function _mcVoiceUpdateTimer() {
   const el = document.getElementById('mc-voice-timer');
@@ -9801,31 +9923,34 @@ function mcCircleToggle(cid, url) {
   let state = _circleState[cid];
 
   if (!state) {
-    // Первый тап   создаём video-элемент
     const vid = document.createElement('video');
     vid.src = url;
     vid.playsInline = true;
+    vid.setAttribute('playsinline', '');
     vid.preload = 'auto';
     vid.loop = false;
     vid.muted = false;
     vid.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
 
-    const circumference = 2 * Math.PI * 97;
+    const circumference = 2 * Math.PI * 96;
     state = { video: vid, playing: false, circumference };
     _circleState[cid] = state;
 
     const vidWrap = document.getElementById('cvid_' + cid);
     if (vidWrap) { vidWrap.style.display = 'block'; vidWrap.appendChild(vid); }
 
-    // Скрываем постер
+    // Скрываем постер и кнопку play
     const poster = document.getElementById('cposter_' + cid);
-    if (poster) poster.style.opacity = '0';
+    if (poster) poster.style.display = 'none';
 
     // Показываем кольцо прогресса
     const ring = document.getElementById('cring_' + cid);
     if (ring) ring.style.display = 'block';
 
-    // Обновляем кольцо в реальном времени
+    // Расширяем кружок до 280px
+    wrap.style.width = '280px';
+    wrap.style.height = '280px';
+
     vid.addEventListener('timeupdate', () => {
       if (!vid.duration) return;
       const pct = vid.currentTime / vid.duration;
@@ -9834,49 +9959,42 @@ function mcCircleToggle(cid, url) {
         const offset = circumference * (1 - pct);
         ringProg.style.strokeDashoffset = offset.toFixed(1);
       }
-      // Таймер
       const timeEl = document.getElementById('ctime_' + cid);
       if (timeEl) {
-        const rem = Math.max(0, Math.ceil(vid.duration - vid.currentTime));
-        timeEl.textContent = rem + 's';
+        const rem = Math.max(0, Math.floor(vid.duration - vid.currentTime));
+        const m = Math.floor(rem/60), s = String(rem%60).padStart(2,'0');
+        timeEl.textContent = m + ':' + s;
       }
     });
 
-    // По завершению   возврат в состояние "play"
     vid.addEventListener('ended', () => {
       state.playing = false;
-      _circleSetIcon(cid, false);
-      const ringProg = document.getElementById('cringp_' + cid);
-      if (ringProg) ringProg.style.strokeDashoffset = '0';
+      // Сворачиваем обратно
+      wrap.style.width = '96px';
+      wrap.style.height = '96px';
+      if (poster) { poster.style.display = ''; }
+      if (ring) ring.style.display = 'none';
+      vidWrap.style.display = 'none';
+      delete _circleState[cid];
     });
 
-    // Автоплей сразу
     vid.play().then(() => {
       state.playing = true;
-      _circleSetIcon(cid, true);
     }).catch(() => {});
     return;
   }
 
-  // Последующие тапы   play/pause
+  // Последующие тапы — pause/resume (нет кнопки, просто тап)
   if (state.playing) {
     state.video.pause();
     state.playing = false;
-    _circleSetIcon(cid, false);
   } else {
-    state.video.play().then(() => {
-      state.playing = true;
-      _circleSetIcon(cid, true);
-    }).catch(() => {});
+    state.video.play().then(() => { state.playing = true; }).catch(() => {});
   }
 }
 
 function _circleSetIcon(cid, playing) {
-  const ico = document.getElementById('cico_' + cid);
-  if (!ico) return;
-  ico.innerHTML = playing
-    ? '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>'
-    : '<path d="M8 5v14l11-7z"/>';
+  // Кнопка play/pause убрана визуально — функция оставлена для совместимости
 }
 
 // ┄┄ Фуллскрин видеоплеер с Telegram-стилем ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
