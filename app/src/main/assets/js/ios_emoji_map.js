@@ -3063,7 +3063,6 @@ const IOS_EMOJI_MAP={
 "\ud83e\uddc7":"food/Waffle.png",
 "\ud83c\udf49":"food/Watermelon.png",
 "\ud83c\udf77":"food/Wine Glass.png",
-,
 "\ud83d\udfe5":"sym/Large Red Square.png",
 "\ud83d\udfe7":"sym/Large Orange Square.png",
 "\ud83d\udfe8":"sym/Large Yellow Square.png",
