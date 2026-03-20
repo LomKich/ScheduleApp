@@ -5141,73 +5141,17 @@ function vipActivate(code) {
 //      ИЛИ   авто-верификация через webhook если настроен
 // ══════════════════════════════════════════════════════════════════════
 
-// СБП реквизиты (замени на свои)
-const SBP_PHONE = '+79966219426';   // ↩ ЗАМЕНИ НА СВОЙ НОМЕР СБП
-// Прямая СБП-ссылка — открывается при нажатии кнопки оплаты
-const SBP_DIRECT_URL = 'https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=%2B79966219426&bankCode=100000000004';
+// СБП реквизиты
+const SBP_PHONE      = '+79966219426';
+const SBP_DIRECT_URL = 'https://qr.nspk.ru/AS10003FQVFN7J2ONAG2QOIQTQN6IDHO?type=01&bank=100000000007&sum=2000&cur=RUB&crc=4E6A';
 
 const DONATE_TIERS = [
-  { amount: 20,  label: '⭐ VIP месяц',    desc: '+ VIP на 30 дней', vip: true  },
-  { amount: 30,  label: '👑 VIP 3 месяца', desc: '+ VIP на 90 дней', vip: true  },
-  { amount: 100, label: '🚀 VIP навсегда', desc: '+ VIP навсегда',   vip: true  },
+  { amount: 20,  label: '⭐ VIP месяц',    desc: '+ VIP на 30 дней' },
+  { amount: 30,  label: '👑 VIP 3 месяца', desc: '+ VIP на 90 дней' },
+  { amount: 100, label: '🚀 VIP навсегда', desc: '+ VIP навсегда'   },
 ];
 
-// Банки с реальными deep-link схемами перевода по номеру телефона СБП
-const SBP_BANKS = [
-  {
-    id:    'sber',
-    name:  'Сбер',
-    icon:  '🟢',
-    bg:    '#21A038',
-    // Sberbank Online deep link перевода по телефону
-    deeplink: (phone, amount) =>
-      `sberbankonline://payment/transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-    webUrl: (phone, amount) =>
-      `https://online.sberbank.ru/CSAFront/index.do#/transfer/phone?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-  },
-  {
-    id:    'tinkoff',
-    name:  'Т-Банк',
-    icon:  '🟡',
-    bg:    '#FFDD2D',
-    textColor: '#000',
-    deeplink: (phone, amount) =>
-      `tinkoff://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}&comment=ScheduleApp`,
-    webUrl: (phone, amount) =>
-      `https://www.tbank.ru/payment/transfer/phone/${phone.replace(/\D/g,'')}/?amount=${amount}`,
-  },
-  {
-    id:    'vtb',
-    name:  'ВТБ',
-    icon:  '🔵',
-    bg:    '#003087',
-    deeplink: (phone, amount) =>
-      `vtbconnect://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-    webUrl: (phone, amount) =>
-      `https://online.vtb.ru/transfers/by-phone?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-  },
-  {
-    id:    'alfa',
-    name:  'Альфа',
-    icon:  '🔴',
-    bg:    '#EF3124',
-    deeplink: (phone, amount) =>
-      `alfabank://transfer?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-    webUrl: (phone, amount) =>
-      `https://alfabank.ru/everyday/p2p/?phone=${encodeURIComponent(phone)}&amount=${amount}`,
-  },
-  {
-    id:    'sbp',
-    name:  'СБП',
-    icon:  '💳',
-    bg:    '#7B3FBE',
-    // Универсальная СБП ссылка   система сама выберет банк пользователя
-    deeplink: (phone, amount) =>
-      `https://qr.nspk.ru/redirect?type=01&sum=${amount * 100}&cur=RUB`,
-    webUrl: (phone, amount) =>
-      `https://qr.nspk.ru/redirect?type=01&sum=${amount * 100}&cur=RUB`,
-  },
-];
+let _selectedDoneTierIdx = 0;
 
 function showDonateSheet() {
   const existing = document.getElementById('donate-sheet');
@@ -5218,16 +5162,15 @@ function showDonateSheet() {
   sheet.style.cssText = 'position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
 
   sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:24px 24px 0 0;padding:14px 0 calc(20px + var(--safe-bot,0px));max-height:92vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)"
+    <div style="background:var(--surface);border-radius:24px 24px 0 0;padding:14px 0 calc(24px + var(--safe-bot,0px));max-height:92vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)"
          onclick="event.stopPropagation()">
       <div style="width:44px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 18px"></div>
 
-      <!-- Заголовок -->
-      <div style="text-align:center;padding:0 20px 16px">
+      <div style="text-align:center;padding:0 20px 18px">
         <div style="font-size:32px;margin-bottom:6px">💝</div>
         <div style="font-size:19px;font-weight:800;color:var(--text)">Поддержи проект</div>
         <div style="font-size:13px;color:var(--muted);margin-top:4px;line-height:1.5">
-          Перевод по СБП   мгновенно, без комиссии.<br>VIP активируется после подтверждения.
+          Перевод по СБП — мгновенно, без комиссии.<br>VIP активируется после подтверждения.
         </div>
       </div>
 
@@ -5236,9 +5179,10 @@ function showDonateSheet() {
         ${DONATE_TIERS.map((t, i) => `
           <div onclick="donateSelectTier(${i})" id="donate-tier-${i}"
             style="display:flex;align-items:center;gap:14px;padding:14px 16px;
-                   border-radius:16px;border:2px solid var(--accent);
-                   background:color-mix(in srgb,var(--accent) 8%,var(--surface));
-                   cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent">
+                   border-radius:16px;border:2px solid ${i===0?'var(--accent)':'transparent'};
+                   background:${i===0?'color-mix(in srgb,var(--accent) 8%,var(--surface))':'var(--surface2)'};
+                   cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;
+                   opacity:${i===0?'1':'0.6'}">
             <div style="font-size:26px;flex-shrink:0">${t.label.split(' ')[0]}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:15px;font-weight:700;color:var(--text)">${t.label.slice(t.label.indexOf(' ')+1)}</div>
@@ -5248,33 +5192,16 @@ function showDonateSheet() {
           </div>`).join('')}
       </div>
 
-      <!-- Выбор банка -->
-      <div style="padding:16px 16px 0">
-        <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px">Выбери банк:</div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px" id="donate-banks-grid">
-          ${SBP_BANKS.map((b, i) => `
-            <div onclick="donateSelectBank(${i})" id="donate-bank-${i}"
-              style="display:flex;flex-direction:column;align-items:center;gap:5px;
-                     padding:10px 4px;border-radius:14px;border:2px solid transparent;
-                     background:var(--surface2);cursor:pointer;transition:all .15s;
-                     -webkit-tap-highlight-color:transparent">
-              <div style="width:38px;height:38px;border-radius:50%;background:${b.bg};
-                          display:flex;align-items:center;justify-content:center;font-size:18px">${b.icon}</div>
-              <div style="font-size:10px;font-weight:600;color:var(--text);text-align:center">${b.name}</div>
-            </div>`).join('')}
-        </div>
-      </div>
-
-      <!-- Кнопка оплаты -->
-      <div style="padding:16px 16px 0">
-        <button id="donate-pay-btn" onclick="donateOpenBank()"
+      <!-- Кнопка -->
+      <div style="padding:18px 16px 0">
+        <button id="donate-pay-btn" onclick="donateOpenLink()"
           style="width:100%;padding:16px;background:var(--accent);border:none;border-radius:16px;
                  color:#fff;font-family:inherit;font-size:16px;font-weight:800;
                  cursor:pointer;-webkit-tap-highlight-color:transparent">
-          Перейти в Сбер · 20₽
+          Оплатить 20₽ через СБП
         </button>
         <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted)">
-          Номер получателя: <b style="color:var(--text)">${SBP_PHONE}</b>
+          Номер: <b style="color:var(--text)">${SBP_PHONE}</b> — выбор банка в браузере
         </div>
       </div>
 
@@ -5283,7 +5210,7 @@ function showDonateSheet() {
         <div style="background:var(--surface2);border-radius:14px;padding:14px 16px">
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">✅ Я оплатил</div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
-            Введи последние 4 цифры суммы перевода или номер операции из уведомления банка:
+            Введи последние 4 цифры суммы или номер операции из уведомления банка:
           </div>
           <input id="donate-txn-input" placeholder="Номер операции / последние 4 цифры"
             maxlength="20" inputmode="numeric"
@@ -5303,126 +5230,66 @@ function showDonateSheet() {
 
   sheet.addEventListener('click', () => sheet.remove());
   document.body.appendChild(sheet);
-
-  donateSelectTier(0);
-  donateSelectBank(0);
 }
-
-let _selectedDoneTierIdx = 0;
-let _selectedBankIdx     = 0;
 
 function donateSelectTier(i) {
   _selectedDoneTierIdx = i;
   DONATE_TIERS.forEach((t, idx) => {
     const el = document.getElementById(`donate-tier-${idx}`);
     if (!el) return;
-    el.style.opacity     = idx === i ? '1'    : '0.55';
-    el.style.borderColor = idx === i ? 'var(--accent)' : 'transparent';
-    el.style.transform   = idx === i ? 'scale(1.02)' : 'scale(1)';
-  });
-  _updateDonateBtn();
-}
-
-function donateSelectBank(i) {
-  _selectedBankIdx = i;
-  SBP_BANKS.forEach((b, idx) => {
-    const el = document.getElementById(`donate-bank-${idx}`);
-    if (!el) return;
+    el.style.opacity     = idx === i ? '1' : '0.6';
     el.style.borderColor = idx === i ? 'var(--accent)' : 'transparent';
     el.style.background  = idx === i
-      ? 'color-mix(in srgb,var(--accent) 15%,var(--surface2))'
+      ? 'color-mix(in srgb,var(--accent) 8%,var(--surface))'
       : 'var(--surface2)';
   });
-  _updateDonateBtn();
+  const btn = document.getElementById('donate-pay-btn');
+  if (btn) btn.textContent = `Оплатить ${DONATE_TIERS[i].amount}₽ через СБП`;
 }
 
-function _updateDonateBtn() {
-  const btn  = document.getElementById('donate-pay-btn');
-  if (!btn) return;
+function donateOpenLink() {
   const tier = DONATE_TIERS[_selectedDoneTierIdx];
-  const bank = SBP_BANKS[_selectedBankIdx];
-  btn.textContent = `Перейти в ${bank.name} · ${tier.amount}₽`;
-}
-
-function donateOpenBank() {
-  const tier   = DONATE_TIERS[_selectedDoneTierIdx];
-  const amount = tier.amount;
-
-  // Открываем прямую СБП-ссылку
+  // Строим СБП-ссылку с нужной суммой (сумма в копейках)
+  const url = `https://qr.nspk.ru/AS10003FQVFN7J2ONAG2QOIQTQN6IDHO?type=01&bank=100000000007&sum=${tier.amount * 100}&cur=RUB&crc=4E6A`;
   if (window.Android?.openUrl) {
-    window.Android.openUrl(SBP_DIRECT_URL);
+    window.Android.openUrl(url);
   } else {
-    window.open(SBP_DIRECT_URL, '_blank', 'noopener');
+    window.open(url, '_blank', 'noopener');
   }
-
-  // Показываем подтверждение через 1.5с
+  toast(`💳 Переведи ${tier.amount}₽ через СБП на ${SBP_PHONE}`);
+  // Показываем подтверждение через 2с
   setTimeout(() => {
     const sec = document.getElementById('donate-confirm-section');
     if (sec) { sec.style.display = 'block'; sec.scrollIntoView({ behavior: 'smooth' }); }
-  }, 1500);
-
-  toast(`💳 Переведи ${amount}₽ через СБП на ${SBP_PHONE}`);
+  }, 2000);
 }
-
 
 async function donateConfirm() {
   const txn = document.getElementById('donate-txn-input')?.value?.trim();
   if (!txn || txn.length < 4) { toast('❌ Введи номер транзакции'); return; }
-
-  const p    = DONATE_TIERS[_selectedDoneTierIdx];
-  const prof = profileLoad();
-  if (!prof) { toast('❌ Войди в аккаунт'); return; }
-
+  const p = profileLoad();
+  if (!p) { toast('❌ Войди в аккаунт'); return; }
   const btn = document.querySelector('#donate-confirm-section button');
   if (btn) { btn.disabled = true; btn.textContent = 'Отправляю...'; }
-
   try {
-    // Сохраняем в таблицу donations (создай в Supabase: username, amount, txn, ts, status)
     const res = await _sbFetch('POST', '/rest/v1/donations',
-      {
-        username:  prof.username,
-        amount:    DONATE_TIERS[_selectedDoneTierIdx].amount,
-        txn_id:    txn,
-        ts:        Date.now(),
-        status:    'pending',
-        tier:      DONATE_TIERS[_selectedDoneTierIdx].label,
-        vip_tier:  DONATE_TIERS[_selectedDoneTierIdx].vip,
-      },
+      { username: p.username, amount: DONATE_TIERS[_selectedDoneTierIdx].amount,
+        txn_id: txn, ts: Date.now(), status: 'pending',
+        tier: DONATE_TIERS[_selectedDoneTierIdx].label, vip_tier: true },
       { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
     );
-
     if (res.ok || res.status === 201) {
       document.getElementById('donate-sheet')?.remove();
-      // Показываем благодарность
-      const thanks = document.createElement('div');
-      thanks.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;animation:mcFadeIn .2s ease';
-      thanks.innerHTML = `
-        <div style="background:var(--surface);border-radius:24px;padding:32px 24px;text-align:center;max-width:300px;margin:20px;animation:mc-sel-pop .3s cubic-bezier(.34,1.3,.64,1)">
-          <div style="font-size:48px;margin-bottom:12px">🙏</div>
-          <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">Спасибо!</div>
-          <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:16px">
-            Платёж получен на проверку.<br>
-            ${DONATE_TIERS[_selectedDoneTierIdx].vip
-              ? 'VIP будет активирован в течение <b style="color:var(--accent)">24 часов</b> после подтверждения оплаты.'
-              : 'Ты поддержал развитие проекта ❤️'}
-          </div>
-          <button onclick="this.closest('[style*=fixed]').remove()"
-            style="background:var(--accent);border:none;color:var(--btn-text,#fff);
-                   padding:12px 28px;border-radius:12px;font-size:15px;font-weight:700;
-                   cursor:pointer;font-family:inherit">Отлично!</button>
-        </div>`;
-      thanks.addEventListener('click', e => { if (e.target === thanks) thanks.remove(); });
-      document.body.appendChild(thanks);
-      SFX.play('success');
+      toast('🎉 Заявка отправлена! VIP активируется после проверки.');
     } else {
-      if (btn) { btn.disabled = false; btn.textContent = 'Отправить на проверку'; }
-      toast('❌ Ошибка сохранения. Напиши в поддержку.');
+      throw new Error(res.status);
     }
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Отправить на проверку'; }
-    toast('❌ ' + (e.message || 'Ошибка'));
+    toast('❌ Ошибка отправки, попробуй позже');
   }
 }
+
 
 
 
