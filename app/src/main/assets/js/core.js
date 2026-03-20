@@ -226,15 +226,16 @@ const SFX = (() => {
 
 
   // ── Звуки из папки sounds/ — ОСНОВНОЙ источник для всех SFX ─────
-  // Все звуки хранятся в assets/sounds/*.ogg
-  // Пользователь может заменить любой файл своим.
+  // На Android используем https://sounds.local/ (перехватывается Java из assets)
+  // На вебе — относительный путь sounds/
+  const _SOUNDS_BASE = window.Android ? 'https://sounds.local/' : 'sounds/';
   const _extBuffers = {};
 
   async function _loadExtSound(name, file) {
     try {
       const ctx = ac();
       if (!ctx) return;
-      const resp = await fetch('sounds/' + file);
+      const resp = await fetch(_SOUNDS_BASE + file);
       if (!resp.ok) return;
       const ab = await resp.arrayBuffer();
       const buf = await new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
