@@ -9950,7 +9950,7 @@ function peerProfileOpen(username) {
     <div style="text-align:center;padding:0 16px 16px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(peer.name||username)}</span>
-        ${peer.vip ? '<span style="background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">${_emojiImg("👑",10)} VIP</span>' : ''}
+        ${peer.vip ? `<span class="vip-badge-pill">${_emojiImg('👑',10)} VIP</span>` : ''}
       </div>
       <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(username)}</div>
       <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${isOnline?'#4caf7d22':'rgba(255,255,255,.08)'};color:${isOnline?'#4caf7d':'var(--muted)'}">
