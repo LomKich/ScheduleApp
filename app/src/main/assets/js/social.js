@@ -679,7 +679,7 @@ function profileRenderScreen() {
     <div style="text-align:center;padding:0 16px 12px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(p.name)}</span>
-        ${vip ? '<span class="vip-badge-pill">${_emojiImg("👑",14)} VIP</span>' : ''}
+        ${vip ? `<span class="vip-badge-pill">${_emojiImg('👑',14)} VIP</span>` : ''}
       </div>
       <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(p.username)}</div>
       <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${statusObj.color}22;color:${statusObj.color}">
@@ -3236,7 +3236,7 @@ function profileRenderOnline() {
           <div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${escHtml(u.name)}
             ${isMe ? '<span style="color:var(--accent);font-size:11px">(ты)</span>' : ''}
-            ${u.vip ? '<span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 6px;border-radius:6px">${_emojiImg("👑",10)} VIP</span>' : ''}
+            ${u.vip ? `<span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 6px;border-radius:6px">${_emojiImg('👑',10)} VIP</span>` : ''}
             ${badgeObj ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${badgeObj.color}22;color:${badgeObj.color}">${_emojiImg(badgeObj.emoji,12)} ${badgeObj.label}</span>` : ''}
           </div>
           <div style="font-size:12px;color:var(--muted)">@${escHtml(u.username)}</div>
@@ -5171,7 +5171,7 @@ function vipActivate(code) {
 
 // СБП реквизиты
 const SBP_PHONE      = '+79966219426';
-const SBP_DIRECT_URL = 'https://qr.nspk.ru/AS10003FQVFN7J2ONAG2QOIQTQN6IDHO?type=01&bank=100000000007&sum=2000&cur=RUB&crc=4E6A';
+const SBP_DIRECT_URL = 'https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=+79966219426&bankCode=100000000004';
 
 const DONATE_TIERS = [
   { amount: 20,  label: '⭐ VIP месяц',    desc: '+ VIP на 30 дней' },
@@ -5278,11 +5278,7 @@ function donateSelectTier(i) {
 function donateOpenLink() {
   const tier = DONATE_TIERS[_selectedDoneTierIdx];
   // Строим СБП-ссылку с нужной суммой (сумма в копейках)
-  const url = `https://qr.nspk.ru/AS10003FQVFN7J2ONAG2QOIQTQN6IDHO?type=01&bank=100000000007&sum=${tier.amount * 100}&cur=RUB&crc=4E6A`;
-  if (window.Android?.openUrl) {
-    window.Android.openUrl(url);
-  } else {
-    window.open(url, '_blank', 'noopener');
+  const url = `https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=+79966219426&bankCode=100000000004'_blank', 'noopener');
   }
   toast(`💳 Переведи ${tier.amount}₽ через СБП на ${SBP_PHONE}`);
   // Показываем подтверждение через 2с
@@ -7994,8 +7990,12 @@ function mcToggleStickerPanel() {
     if (inp) inp.blur();
     panel.style.display = '';
     panel.style.maxHeight = '0';
-    panel.style.overflow = 'hidden';
+    panel.style.overflowY = 'auto';
+    panel.style.overflowX = 'hidden';
+    panel.style.touchAction = 'pan-y';
+    panel.style.webkitOverflowScrolling = 'touch';
     panel.style.transition = 'max-height .28s cubic-bezier(.34,1.1,.64,1)';
+    panel.style.padding = '0 12px 8px';
     requestAnimationFrame(() => { panel.style.maxHeight = '300px'; });
     mcRenderStickerPanel();
     // Меняем иконку на клавиатуру
@@ -8022,56 +8022,113 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-function mcRenderStickerPanel() {
-  const panel = document.getElementById('mc-sticker-panel');
-  if (!panel) return;
+// Хранит данные категорий после первого build — не пересобираем каждый раз
+let _mcEmojiCats = null;
 
-  // Категории из IOS_EMOJI_MAP — группируем по папке файла
+function _mcBuildEmojiCats() {
+  if (_mcEmojiCats) return _mcEmojiCats;
   const cats = {
-    ppl:    { label: '😀 Люди',       items: [] },
-    nat:    { label: '🌿 Природа',    items: [] },
-    food:   { label: '🍎 Еда',        items: [] },
-    act:    { label: '⚽ Спорт',       items: [] },
+    ppl:    { label: '😀 Люди',        items: [] },
+    nat:    { label: '🌿 Природа',     items: [] },
+    food:   { label: '🍎 Еда',         items: [] },
+    act:    { label: '⚽ Спорт',        items: [] },
     travel: { label: '✈️ Путешествия', items: [] },
-    obj:    { label: '💡 Объекты',     items: [] },
-    sym:    { label: '🔣 Символы',     items: [] },
+    obj:    { label: '💡 Объекты',      items: [] },
+    sym:    { label: '🔣 Символы',      items: [] },
   };
-
-  // Собираем emoji из карты (если загружена)
   if (typeof IOS_EMOJI_MAP !== 'undefined') {
     for (const [emoji, path] of Object.entries(IOS_EMOJI_MAP)) {
       const cat = path.split('/')[0];
-      // Пропускаем варианты с тоном кожи и флаги — слишком много
       if (cat === 'flags') continue;
       if (path.includes('Skin Tone') || path.includes('No Skin Tone')) continue;
       if (cats[cat]) cats[cat].items.push(emoji);
     }
   } else {
-    // Fallback — стикерпаки
     MC_STICKER_PACKS.forEach(pack => {
       pack.stickers.forEach(s => { if (cats.ppl) cats.ppl.items.push(s); });
     });
   }
+  _mcEmojiCats = cats;
+  return cats;
+}
 
-  let html = `<div style="display:flex;gap:6px;padding:6px 0 10px;border-bottom:1px solid rgba(255,255,255,.07);overflow-x:auto;scrollbar-width:none">`;
+function mcRenderStickerPanel() {
+  const panel = document.getElementById('mc-sticker-panel');
+  if (!panel) return;
+  const cats = _mcBuildEmojiCats();
+
+  // ── Шапка с категориями ───────────────────────────────────────────
+  let html = `<div style="display:flex;gap:4px;padding:8px 0 8px;border-bottom:1px solid rgba(255,255,255,.07);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x">`;
   for (const [key, cat] of Object.entries(cats)) {
-    html += `<button onclick="mcScrollEmojiCat('${key}')" style="flex-shrink:0;background:none;border:none;color:var(--muted);font-size:13px;font-weight:600;padding:4px 8px;border-radius:8px;cursor:pointer;transition:color .15s,background .15s" id="mc-ecat-btn-${key}">${cat.label.split(' ')[0]}</button>`;
+    if (!cat.items.length) continue;
+    html += `<button ontouchend="mcScrollEmojiCat('${key}')" style="flex-shrink:0;background:none;border:none;color:var(--muted);font-size:18px;padding:4px 8px;border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:transparent" id="mc-ecat-btn-${key}">${cat.label.split(' ')[0]}</button>`;
   }
   html += `</div>`;
 
+  // ── Для каждой категории рисуем placeholder-блок ──────────────────
+  // Сами emoji НЕ рендерятся сразу — только пустые <span data-emoji="...">
   for (const [key, cat] of Object.entries(cats)) {
     if (!cat.items.length) continue;
+    const ITEM_SIZE = 44; // px
+    const cols = Math.floor((window.innerWidth - 24) / ITEM_SIZE) || 8;
+    const rows = Math.ceil(cat.items.length / cols);
+    const totalH = rows * ITEM_SIZE;
+    // Сохраняем список emoji в data-атрибуте как JSON (одна строка для IntersectionObserver)
+    const chunked = [];
+    for (let i = 0; i < cat.items.length; i += cols * 4) {
+      chunked.push(cat.items.slice(i, i + cols * 4));
+    }
     html += `<div id="mc-ecat-${key}" style="margin-top:8px">
-      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">${cat.label}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:2px">
-        ${cat.items.map(s => {
-          const img = typeof _emojiImg === 'function' ? _emojiImg(s, 32) : s;
-          return `<span style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:8px;transition:background .1s;-webkit-tap-highlight-color:transparent" ontouchstart="this.style.background='rgba(255,255,255,.1)'" ontouchend="this.style.background=''" onclick="mcSendStickerOrEmoji('${s.replace(/'/g,'\x27')}')">${img}</span>`;
-        }).join('')}
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;padding:0 4px">${cat.label}</div>
+      <div id="mc-ecat-grid-${key}" data-cat="${key}" style="display:flex;flex-wrap:wrap;gap:0;min-height:${Math.min(totalH, ITEM_SIZE * 3)}px">
+        <div class="mc-emoji-lazy-sentinel" data-cat="${key}" data-offset="0" style="width:100%;height:1px;flex-shrink:0"></div>
       </div>
     </div>`;
   }
   panel.innerHTML = html;
+
+  // ── Настраиваем IntersectionObserver для ленивой загрузки ─────────
+  const CHUNK = 40; // сколько emoji рендерим за раз
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const sentinel = entry.target;
+      observer.unobserve(sentinel);
+      const cat = sentinel.dataset.cat;
+      const offset = parseInt(sentinel.dataset.offset, 10) || 0;
+      const items = _mcEmojiCats?.[cat]?.items;
+      if (!items) return;
+      const grid = document.getElementById('mc-ecat-grid-' + cat);
+      if (!grid) return;
+      const chunk = items.slice(offset, offset + CHUNK);
+      const frag = document.createDocumentFragment();
+      chunk.forEach(s => {
+        const sp = document.createElement('span');
+        sp.style.cssText = 'width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:10px;flex-shrink:0;-webkit-tap-highlight-color:transparent';
+        sp.ontouchstart = () => { sp.style.background = 'rgba(255,255,255,.12)'; };
+        sp.ontouchend   = () => { sp.style.background = ''; mcSendStickerOrEmoji(s); };
+        sp.onclick      = () => mcSendStickerOrEmoji(s);
+        // Рендерим img только когда span попадает в viewport
+        const img = typeof _emojiImg === 'function' ? _emojiImg(s, 34) : s;
+        sp.innerHTML = img;
+        frag.appendChild(sp);
+      });
+      // Если есть ещё — добавляем следующий sentinel
+      if (offset + CHUNK < items.length) {
+        const nextSentinel = document.createElement('div');
+        nextSentinel.className = 'mc-emoji-lazy-sentinel';
+        nextSentinel.dataset.cat = cat;
+        nextSentinel.dataset.offset = String(offset + CHUNK);
+        nextSentinel.style.cssText = 'width:100%;height:1px;flex-shrink:0';
+        frag.appendChild(nextSentinel);
+        observer.observe(nextSentinel);
+      }
+      grid.appendChild(frag);
+    });
+  }, { root: panel, rootMargin: '200px', threshold: 0 });
+
+  // Запускаем наблюдение за первыми sentinel'ами каждой категории
+  panel.querySelectorAll('.mc-emoji-lazy-sentinel').forEach(s => observer.observe(s));
 }
 
 function mcScrollEmojiCat(key) {
@@ -9035,7 +9092,7 @@ function mcVoiceTouchStart(e) {
       // Ставим флаг ДО запуска — touchEnd увидит активную запись
       _mcVoiceNative = true;
       mcStartCircleRecord();
-      _mcVoiceShowUI();
+      // НЕ показываем VoiceUI — кружок управляется через Activity
     }, 280);
     return;
   }
