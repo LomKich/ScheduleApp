@@ -38,8 +38,9 @@ import java.util.Arrays;
 
 public class CircleRecordActivity extends Activity {
 
-    public static final String EXTRA_VIDEO_PATH = "video_path";
-    public static final int    REQUEST_CODE     = 2001;
+    public static final String EXTRA_VIDEO_PATH   = "video_path";
+    public static final String EXTRA_FRONT_CAMERA = "front_camera";
+    public static final int    REQUEST_CODE       = 2001;
     public static final int    MAX_SECONDS      = 60;
 
     // Флаги для связи JS → Activity через static volatile
@@ -612,6 +613,7 @@ public class CircleRecordActivity extends Activity {
             "Saved path="+videoFile.getAbsolutePath()+" len="+videoFile.length());
         Intent res = new Intent();
         res.putExtra(EXTRA_VIDEO_PATH, videoFile.getAbsolutePath());
+        res.putExtra(EXTRA_FRONT_CAMERA, isFrontCamera);
         setResult(RESULT_OK, res);
         finish();
     }

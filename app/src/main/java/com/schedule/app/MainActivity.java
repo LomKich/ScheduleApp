@@ -892,6 +892,7 @@ public class MainActivity extends Activity {
         } else if (requestCode == CIRCLE_RECORD_CODE) {
             if (resultCode == RESULT_OK && data != null) {
                 String videoPath = data.getStringExtra(CircleRecordActivity.EXTRA_VIDEO_PATH);
+                boolean isFrontCam = data.getBooleanExtra(CircleRecordActivity.EXTRA_FRONT_CAMERA, true);
                 if (videoPath != null && !videoPath.isEmpty()) {
                     log.i(TAG, "CircleRecord: got video path=" + videoPath);
                     // Уведомляем JS что видео снято, идёт загрузка
@@ -944,7 +945,7 @@ public class MainActivity extends Activity {
                                         log.i(TAG, "CircleRecord: CDN OK url=" + fileUrl);
                                         runOnUiThread(() -> webView.evaluateJavascript(
                                             "if(typeof onNativeCircleUploaded==='function')onNativeCircleUploaded('" +
-                                            fileUrl.replace("'", "\'") + "'," + fileSize + ")", null));
+                                            fileUrl.replace("'", "\'") + "'," + fileSize + "," + isFrontCam + ")", null));
                                         return;
                                     }
                                 } catch (Exception je) { log.e(TAG, "parse url: " + je.getMessage()); }
