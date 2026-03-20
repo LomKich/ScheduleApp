@@ -5637,12 +5637,15 @@ async function _applyHotPatch(manifest, toUpdate, version, silent) {
       const info = manifest.files[path];
       const url  = info?.url || info;
       setStatus(`⬇ Скачиваю ${path} (${++done}/${toUpdate.length})...`);
+      console.log('[hotpatch] downloading:', path, url?.slice(0,60));
       const content = await _hotFetchText(url);
       const result  = window.Android.hotPatchSaveFile(path, content);
       if (!result.startsWith('ok')) throw new Error('Ошибка сохранения ' + path + ': ' + result);
       installedFiles[path] = info?.sha || info;
+      console.log('[hotpatch] saved:', path, '(' + content.length + ' chars)');
     }
     _hotPatchSave({ version, files: installedFiles });
+    console.log('[hotpatch] all done, files:', toUpdate.length, '→ reload');
     if (silent) {
       // Тихая перезагрузка — никаких тостов и статусов
       if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();

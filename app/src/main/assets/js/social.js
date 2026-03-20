@@ -5278,7 +5278,11 @@ function donateSelectTier(i) {
 function donateOpenLink() {
   const tier = DONATE_TIERS[_selectedDoneTierIdx];
   // Строим СБП-ссылку с нужной суммой (сумма в копейках)
-  const url = `https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=+79966219426&bankCode=100000000004'_blank', 'noopener');
+  const url = `https://t.tb.ru/c2c-qr-choose-bank?requisiteNumber=+79966219426&bankCode=100000000004&sum=${tier.amount * 100}`;
+  if (window.Android?.openUrl) {
+    window.Android.openUrl(url);
+  } else {
+    window.open(url, '_blank', 'noopener');
   }
   toast(`💳 Переведи ${tier.amount}₽ через СБП на ${SBP_PHONE}`);
   // Показываем подтверждение через 2с
