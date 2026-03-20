@@ -8015,6 +8015,11 @@ function mcToggleStickerPanel() {
       <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/>
       <path d="M9 9h.01M15 9h.01"/><path d="M14 15c0 0 .5 1 2 .5"/>
     </svg>`;
+    // Фокусируем инпут чтобы показать клавиатуру
+    setTimeout(() => {
+      const inp = document.getElementById('mc-input');
+      if (inp) inp.focus();
+    }, 50);
   }
 }
 
@@ -8023,23 +8028,111 @@ document.addEventListener('DOMContentLoaded', () => {
   const inp = document.getElementById('mc-input');
   if (inp) inp.addEventListener('focus', () => {
     if (_mcStickerPanelOpen) mcToggleStickerPanel();
+  // Загружаем информацию о бэкапах при открытии настроек
+  setTimeout(_loadBackupInfo, 100);
   });
 });
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 💾 BACKUP SYSTEM
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _loadBackupInfo() {
+  const el = document.getElementById('backup-info-text');
+  if (!el) return;
+  if (!window.Android?.getBackupInfo) {
+    el.textContent = 'Недоступно в этой версии';
+    return;
+  }
+  try {
+    const info = JSON.parse(window.Android.getBackupInfo());
+    if (!info.hasBackup) {
+      el.innerHTML = '<span style="color:var(--muted)">Бэкапов нет — они создаются автоматически перед каждым обновлением</span>';
+    } else {
+      el.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:700;font-size:14px">v${info.lastVersion}</div>
+            <div style="font-size:11px;color:var(--muted)">${info.lastDate} · ${info.totalSize}</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);text-align:right">${info.count} файл${info.count === 1 ? '' : info.count < 5 ? 'а' : 'ов'}</div>
+        </div>`;
+    }
+  } catch(e) {
+    el.textContent = 'Ошибка загрузки';
+  }
+}
+
+function showBackupList() {
+  if (!window.Android?.getBackupInfo) { toast('ℹ️ Функция недоступна'); return; }
+  let info;
+  try { info = JSON.parse(window.Android.getBackupInfo()); } catch(e) { toast('❌ Ошибка'); return; }
+  if (!info.hasBackup || !info.backups?.length) {
+    toast('ℹ️ Бэкапов нет. Они создаются автоматически перед каждым обновлением');
+    return;
+  }
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center';
+  let rows = info.backups.map((b, i) => `
+    <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:14px;font-weight:700">${b.name.replace('backup_','').replace('.apk','')}</div>
+        <div style="font-size:11px;color:var(--muted)">${b.date} · ${b.size}</div>
+      </div>
+      <button onclick="this.disabled=true;this.textContent='⏳';window.Android?.restoreBackupByPath('${b.path.replace(/'/g,"\'")}');document.getElementById('backup-list-sheet')?.remove()"
+        style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">↩ Откат</button>
+    </div>`).join('');
+  d.innerHTML = `<div id="backup-list-sheet" style="background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding-bottom:calc(16px + var(--safe-bot));animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
+    <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:14px auto 16px"></div>
+    <div style="font-size:17px;font-weight:700;padding:0 16px 12px;border-bottom:1px solid rgba(255,255,255,.06)">💾 Резервные копии (${info.count})</div>
+    ${rows}
+    <button onclick="this.closest('[style*=fixed]').remove()" style="width:calc(100% - 32px);margin:12px 16px 0;padding:13px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer">Закрыть</button>
+  </div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+}
+
+function confirmRestoreBackup() {
+  if (!window.Android?.getBackupInfo) { toast('ℹ️ Функция недоступна'); return; }
+  let info;
+  try { info = JSON.parse(window.Android.getBackupInfo()); } catch(e) { toast('❌ Ошибка'); return; }
+  if (!info.hasBackup) { toast('ℹ️ Бэкапов нет'); return; }
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px';
+  d.innerHTML = `<div style="background:var(--surface);border-radius:20px;padding:24px;max-width:340px;width:100%;animation:mcSlideUp .22s ease">
+    <div style="font-size:22px;text-align:center;margin-bottom:8px">↩</div>
+    <div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:8px">Восстановить v${info.lastVersion}?</div>
+    <div style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px">Будет запущен установщик APK. Текущая версия будет заменена.</div>
+    <div style="display:flex;gap:10px">
+      <button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:12px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer">Отмена</button>
+      <button onclick="this.closest('[style*=fixed]').remove();window.Android?.restoreBackup()" style="flex:1;padding:12px;background:#ff6b6b;border:none;border-radius:14px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">Восстановить</button>
+    </div>
+  </div>`;
+  document.body.appendChild(d);
+}
 
 // Хранит данные категорий после первого build — не пересобираем каждый раз
 let _mcEmojiCats = null;
 
+// Порядок категорий как в Google Keyboard Android:
+// Смайлики → Люди → Природа → Еда → Активность → Путешествия → Объекты → Символы
+// (ppl разделён на "faces" и "people" — объединяем в одну вкладку как в Gboard)
+const _MC_EMOJI_CAT_ORDER = ['ppl', 'nat', 'food', 'act', 'travel', 'obj', 'sym'];
+const _MC_EMOJI_CAT_LABELS = {
+  ppl:    '😀 Смайлы',
+  nat:    '🐶 Природа',
+  food:   '🍕 Еда',
+  act:    '⚽ Активность',
+  travel: '🚗 Места',
+  obj:    '💡 Объекты',
+  sym:    '🔣 Символы',
+};
+
 function _mcBuildEmojiCats() {
   if (_mcEmojiCats) return _mcEmojiCats;
-  const cats = {
-    ppl:    { label: '😀 Люди',        items: [] },
-    nat:    { label: '🌿 Природа',     items: [] },
-    food:   { label: '🍎 Еда',         items: [] },
-    act:    { label: '⚽ Спорт',        items: [] },
-    travel: { label: '✈️ Путешествия', items: [] },
-    obj:    { label: '💡 Объекты',      items: [] },
-    sym:    { label: '🔣 Символы',      items: [] },
-  };
+  const cats = {};
+  _MC_EMOJI_CAT_ORDER.forEach(k => { cats[k] = { label: _MC_EMOJI_CAT_LABELS[k], items: [] }; });
   if (typeof IOS_EMOJI_MAP !== 'undefined') {
     for (const [emoji, path] of Object.entries(IOS_EMOJI_MAP)) {
       const cat = path.split('/')[0];
@@ -8108,11 +8201,22 @@ function mcRenderStickerPanel() {
       const frag = document.createDocumentFragment();
       chunk.forEach(s => {
         const sp = document.createElement('span');
-        sp.style.cssText = 'width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:10px;flex-shrink:0;-webkit-tap-highlight-color:transparent';
-        sp.ontouchstart = () => { sp.style.background = 'rgba(255,255,255,.12)'; };
-        sp.ontouchend   = () => { sp.style.background = ''; mcSendStickerOrEmoji(s); };
-        sp.onclick      = () => mcSendStickerOrEmoji(s);
-        // Рендерим img только когда span попадает в viewport
+        sp.style.cssText = 'width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:10px;flex-shrink:0;-webkit-tap-highlight-color:transparent;touch-action:auto';
+        // Отслеживаем свайп — если пользователь скролит, не отправляем
+        let _tx = 0, _ty = 0, _moved = false;
+        sp.addEventListener('touchstart', e => {
+          const t = e.touches[0];
+          _tx = t.clientX; _ty = t.clientY; _moved = false;
+          sp.style.background = 'rgba(255,255,255,.12)';
+        }, { passive: true });
+        sp.addEventListener('touchmove', e => {
+          const t = e.touches[0];
+          if (Math.abs(t.clientX - _tx) > 8 || Math.abs(t.clientY - _ty) > 8) _moved = true;
+        }, { passive: true });
+        sp.addEventListener('touchend', e => {
+          sp.style.background = '';
+          if (!_moved) { e.preventDefault(); mcSendStickerOrEmoji(s); }
+        });
         const img = typeof _emojiImg === 'function' ? _emojiImg(s, 34) : s;
         sp.innerHTML = img;
         frag.appendChild(sp);

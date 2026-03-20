@@ -5092,6 +5092,13 @@ showGreeting();
 // Запускается сразу после загрузки страницы, тихо (без UI)
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => checkForUpdates(true), 1500);
+  // Watchdog heartbeat — сообщаем Java что JS загрузился и работает
+  setTimeout(() => {
+    if (window.Android?.heartbeat) {
+      window.Android.heartbeat();
+      console.log('[Backup] heartbeat sent');
+    }
+  }, 4000);
 });
 
 // ══════════════════════════════════════════════════════════════════════
