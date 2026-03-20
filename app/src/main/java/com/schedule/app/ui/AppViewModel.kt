@@ -257,7 +257,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             )
         )
     }
-}
 
     // ── Социальные данные ────────────────────────────────────────────────────
     var userProfile by mutableStateOf<com.schedule.app.ui.screens.UserProfile?>(null)
@@ -385,3 +384,5 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleBgService() { bgServiceEnabled = !bgServiceEnabled }
     fun toggleNotif()     { notifEnabled = !notifEnabled }
+
+}

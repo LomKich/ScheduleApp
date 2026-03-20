@@ -1,5 +1,6 @@
 package com.schedule.app.ui.components
 
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -10,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -138,6 +140,7 @@ fun ListItemRow(
     selected: Boolean = false,
     onClick: () -> Unit,
     trailing: @Composable (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     val t = LocalTheme.current
     val bgColor = if (selected)
@@ -151,7 +154,7 @@ fun ListItemRow(
     val glowModifier = if (selected) Modifier.glowEffect(t.accent) else Modifier
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(bottom = 7.dp)
             .then(glowModifier)

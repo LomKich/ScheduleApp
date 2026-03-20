@@ -4,6 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -114,12 +115,12 @@ fun ScheduleScreen(
                 )
             }
 
-            Divider(color = Color(0x0FFFFFFF))
+            HorizontalDivider(color = Color(0x0FFFFFFF))
 
             // ── Live progress bar ──────────────────────────────────────
             if (currentPair != null) {
                 LiveProgressBar(pair = currentPair)
-                Divider(color = Color(0x0FFFFFFF))
+                HorizontalDivider(color = Color(0x0FFFFFFF))
             }
         }
 
@@ -268,7 +269,7 @@ fun PairCard(pair: Pair) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, bottom = 9.dp),
+            .padding(start = 18.dp, end = 18.dp, bottom = 9.dp),
     ) {
         Row(
             modifier = Modifier
