@@ -5321,6 +5321,110 @@ async function donateConfirm() {
 
 
 
+// ── Диагностика emoji-пака ──────────────────────────────────────────────────
+// Команда: /emoji_diag в девконсоли
+// Сравнивает файлы на диске с IOS_EMOJI_MAP и выводит отчёт в консоль
+async function emojiDiag() {
+  if (!window.Android?.getEmojiFileList) {
+    console.warn('[emoji_diag] Android.getEmojiFileList недоступен');
+    toast('❌ Метод getEmojiFileList не найден');
+    return;
+  }
+  if (typeof IOS_EMOJI_MAP === 'undefined') {
+    console.warn('[emoji_diag] IOS_EMOJI_MAP не определён');
+    toast('❌ IOS_EMOJI_MAP не загружен');
+    return;
+  }
+
+  toast('🔍 Диагностика emoji запущена...');
+
+  let diskFiles;
+  try {
+    diskFiles = JSON.parse(window.Android.getEmojiFileList());
+  } catch(e) {
+    console.error('[emoji_diag] Ошибка чтения списка файлов:', e);
+    toast('❌ Ошибка чтения файлов');
+    return;
+  }
+
+  const diskSet = new Set(diskFiles); // "food/Hot Beverage.png"
+  // Нормализованный сет для нечёткого сравнения
+  const diskLower = new Map(); // "food/hot beverage.png" -> "food/Hot Beverage.png"
+  diskFiles.forEach(f => diskLower.set(f.toLowerCase(), f));
+
+  const mapPaths = Object.values(IOS_EMOJI_MAP); // пути из карты
+  const mapSet   = new Set(mapPaths);
+
+  const missingExact   = []; // в карте есть, на диске нет (точное совпадение)
+  const missingButClose = []; // на диске есть похожий файл (регистр отличается)
+  const extraOnDisk    = []; // на диске есть, в карте нет
+
+  for (const path of mapSet) {
+    if (diskSet.has(path)) continue; // ✅ точное совпадение
+    const lower = path.toLowerCase();
+    if (diskLower.has(lower)) {
+      missingButClose.push({ mapPath: path, diskPath: diskLower.get(lower) });
+    } else {
+      missingExact.push(path);
+    }
+  }
+  for (const f of diskFiles) {
+    if (!mapSet.has(f)) extraOnDisk.push(f);
+  }
+
+  console.group('[emoji_diag] Результат');
+  console.log(`Файлов на диске: ${diskFiles.length}`);
+  console.log(`Записей в IOS_EMOJI_MAP: ${mapPaths.length} (уникальных путей: ${mapSet.size})`);
+  console.log(`✅ Точных совпадений: ${mapSet.size - missingExact.length - missingButClose.length}`);
+
+  if (missingButClose.length > 0) {
+    console.group(`⚠️ Разница в регистре (${missingButClose.length}) — карта ожидает один регистр, диск другой:`);
+    missingButClose.slice(0, 30).forEach(({mapPath, diskPath}) =>
+      console.log(`  карта: "${mapPath}" | диск: "${diskPath}"`)
+    );
+    if (missingButClose.length > 30) console.log(`  ... и ещё ${missingButClose.length - 30}`);
+    console.groupEnd();
+  }
+
+  if (missingExact.length > 0) {
+    console.group(`❌ Отсутствуют на диске (${missingExact.length}):`);
+    missingExact.slice(0, 30).forEach(p => console.log('  ' + p));
+    if (missingExact.length > 30) console.log(`  ... и ещё ${missingExact.length - 30}`);
+    console.groupEnd();
+  }
+
+  if (extraOnDisk.length > 0) {
+    console.group(`📂 На диске есть, но нет в карте (${extraOnDisk.length}) — примеры:`);
+    extraOnDisk.slice(0, 10).forEach(p => console.log('  ' + p));
+    if (extraOnDisk.length > 10) console.log(`  ... и ещё ${extraOnDisk.length - 10}`);
+    console.groupEnd();
+  }
+  console.groupEnd();
+
+  const msg = missingButClose.length > 0
+    ? `⚠️ Регистр: ${missingButClose.length} файлов. Диск: ${diskFiles.length}, Карта: ${mapSet.size}`
+    : missingExact.length > 0
+    ? `❌ Нет ${missingExact.length} файлов из ${mapSet.size}. Смотри консоль.`
+    : `✅ Все ${diskFiles.length} файлов совпадают!`;
+  toast(msg);
+
+  // Если есть проблема с регистром — исправляем карту в памяти
+  if (missingButClose.length > 0) {
+    console.log('[emoji_diag] Применяю авто-фикс регистра в IOS_EMOJI_MAP...');
+    let fixed = 0;
+    for (const [emoji, path] of Object.entries(IOS_EMOJI_MAP)) {
+      const lower = path.toLowerCase();
+      if (!diskSet.has(path) && diskLower.has(lower)) {
+        IOS_EMOJI_MAP[emoji] = diskLower.get(lower);
+        fixed++;
+      }
+    }
+    console.log(`[emoji_diag] Исправлено в памяти: ${fixed} записей. Перезапускаю парсер...`);
+    _localEmojiParse(document.body);
+    toast(`🔧 Авто-фикс: исправлено ${fixed} записей регистра`);
+  }
+}
+
 // CMD команда /vip
 // Добавляем в cmdExec   патч через хук
 const _origCmdExecForVip = window.cmdExec;
@@ -10206,6 +10310,11 @@ if (typeof cmdExec !== 'undefined') {
     const parts = raw.trim().split(/\s+/);
     const cmd = parts[0].toLowerCase();
     const arg = parts.slice(1).join(' ').trim();
+    if (cmd === '/emoji_diag') {
+      cmdPrint('info', '🔍 Запускаю диагностику emoji-пака...');
+      emojiDiag();
+      return;
+    }
     if (cmd === '/vip') {
       if (!arg) {
         cmdPrint('info', '👑 Использование:');
