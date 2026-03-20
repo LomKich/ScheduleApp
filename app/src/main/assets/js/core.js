@@ -5088,11 +5088,11 @@ showGreeting();
 
 // ── Автопроверка при запуске отключена — проверка вручную через кнопку в настройках ──
 
-// ── Единая проверка обновлений при запуске (через 5 сек) ──
-// Читает patch-manifest.json из релиза и решает:
-//   все файлы — JS/HTML/CSS  →  горячий патч (без переустановки)
-//   есть Java/Manifest/res/  →  полный APK через OTA-диалог
-setTimeout(() => checkForUpdates(true), 5000);
+// ── Автопроверка горячего патча при каждом запуске приложения ──
+// Запускается сразу после загрузки страницы, тихо (без UI)
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => checkForUpdates(true), 1500);
+});
 
 // ══════════════════════════════════════════════════════════════════════
 // 🔄 ЕДИНАЯ ПРОВЕРКА ОБНОВЛЕНИЙ
@@ -5239,9 +5239,8 @@ async function checkForUpdates(silent) {
       return;
     }
 
-    // Горячий патч: всегда показываем диалог — даже при автозапуске (silent=true).
-    // Пользователь должен сам подтвердить обновление файлов.
-    await _applyHotPatch(manifest, toUpdate, latestVer, false);
+    // Горячий патч: при silent=true — обновляем без диалога и уведомлений
+    await _applyHotPatch(manifest, toUpdate, latestVer, silent);
 
   } catch(e) {
     if (!silent) toast('❌ ' + e.message.slice(0, 80));
@@ -5602,11 +5601,11 @@ async function checkHotPatch(silent) {
 async function _applyHotPatch(manifest, toUpdate, version, silent) {
   if (!window.Android?.hotPatchSaveFile) return { updated: false };
   const statusEl = document.getElementById('hot-patch-status');
-  const setStatus = t => { if (statusEl) statusEl.textContent = t; };
+  const setStatus = t => { if (statusEl && !silent) statusEl.textContent = t; };
   const installed = _hotPatchLoad();
   const installedFiles = { ...(installed?.files || {}) };
   try {
-    // Диалог подтверждения
+    // Диалог подтверждения — только при ручном запуске (silent=false)
     if (!silent) {
       const fileList = toUpdate.map(f => '• ' + f).join('\n');
       const confirmed = await new Promise(resolve => {
@@ -5644,15 +5643,22 @@ async function _applyHotPatch(manifest, toUpdate, version, silent) {
       installedFiles[path] = info?.sha || info;
     }
     _hotPatchSave({ version, files: installedFiles });
-    setStatus('✅ Обновлено ' + toUpdate.length + ' файлов! Перезагружаю...');
-    setTimeout(() => {
+    if (silent) {
+      // Тихая перезагрузка — никаких тостов и статусов
       if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
       location.reload(true);
-    }, 1200);
+    } else {
+      setStatus('✅ Обновлено ' + toUpdate.length + ' файлов! Перезагружаю...');
+      setTimeout(() => {
+        if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
+        location.reload(true);
+      }, 1200);
+    }
     return { updated: true, count: toUpdate.length };
   } catch(e) {
     setStatus('');
     if (!silent) toast('❌ Hot-patch: ' + e.message.slice(0, 80));
+    console.error('[hotpatch] ошибка:', e.message);
     return { updated: false, error: e.message };
   }
 }

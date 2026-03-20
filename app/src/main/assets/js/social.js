@@ -5321,6 +5321,75 @@ async function donateConfirm() {
 
 
 
+// ── Проверка отображения всех emoji из карты ───────────────────────────────
+// Команда: /emoji_check в девконсоли
+// Выводит все emoji группами по категориям — можно визуально проверить каждый
+function emojiCheck() {
+  if (typeof IOS_EMOJI_MAP === 'undefined') {
+    cmdPrint('err', '❌ IOS_EMOJI_MAP не загружен');
+    return;
+  }
+
+  // Группируем emoji по категории (по пути файла)
+  const groups = {};
+  for (const [emoji, path] of Object.entries(IOS_EMOJI_MAP)) {
+    const cat = path.split('/')[0]; // act, food, nat, obj, ppl, sym, travel, flags
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push({ emoji, path });
+  }
+
+  const catOrder = ['ppl','nat','food','act','travel','obj','sym','flags'];
+  const catLabels = {
+    ppl: '👤 Люди и жесты',
+    nat: '🌿 Природа и животные',
+    food: '🍎 Еда и напитки',
+    act: '⚽ Активность и спорт',
+    travel: '✈️ Путешествия',
+    obj: '💡 Объекты',
+    sym: '🔣 Символы',
+    flags: '🏳️ Флаги',
+  };
+
+  cmdPrint('info', '══════════════════════════════════════════════');
+  cmdPrint('info', `  📦 Проверка emoji-пака  (всего: ${Object.keys(IOS_EMOJI_MAP).length})`);
+  cmdPrint('info', '  Скопируй вывод консоли и скинь если что-то');
+  cmdPrint('info', '  не отображается или отображается как □');
+  cmdPrint('info', '══════════════════════════════════════════════');
+
+  // Выводим каждую категорию построчно по 20 emoji в строке
+  const ROW = 20;
+  for (const cat of catOrder) {
+    const items = groups[cat];
+    if (!items || items.length === 0) continue;
+
+    cmdPrint('info', '');
+    cmdPrint('ok', `── ${catLabels[cat] || cat}  (${items.length}) ──`);
+
+    // Базовые emoji без вариантов кожи (оставляем только уникальные базовые)
+    // Для флагов и ppl это может быть много — показываем все
+    for (let i = 0; i < items.length; i += ROW) {
+      const chunk = items.slice(i, i + ROW);
+      const line = chunk.map(x => x.emoji).join(' ');
+      // Выводим emoji строку + номера для ориентира
+      cmdPrint('out', `${String(i+1).padStart(4,'0')}: ${line}`);
+    }
+
+    // Дополнительно: список имён файлов для тех кто не отображается
+    // Выводим по 5 в строку для читаемости
+    const names = items.map(x => x.path.split('/')[1].replace('.png',''));
+    for (let i = 0; i < names.length; i += 5) {
+      const chunk = names.slice(i, i + 5).join(' | ');
+      cmdPrint('muted', `      ${chunk}`);
+    }
+  }
+
+  cmdPrint('info', '');
+  cmdPrint('info', '══════════════════════════════════════════════');
+  cmdPrint('info', '  ✅ Готово. Если видишь □ вместо emoji —');
+  cmdPrint('info', '  запусти /emoji_diag для диагностики.');
+  cmdPrint('info', '══════════════════════════════════════════════');
+}
+
 // ── Диагностика emoji-пака ──────────────────────────────────────────────────
 // Команда: /emoji_diag в девконсоли
 // Сравнивает файлы на диске с IOS_EMOJI_MAP и выводит отчёт в консоль
@@ -10313,6 +10382,10 @@ if (typeof cmdExec !== 'undefined') {
     if (cmd === '/emoji_diag') {
       cmdPrint('info', '🔍 Запускаю диагностику emoji-пака...');
       emojiDiag();
+      return;
+    }
+    if (cmd === '/emoji_check') {
+      emojiCheck();
       return;
     }
     if (cmd === '/vip') {

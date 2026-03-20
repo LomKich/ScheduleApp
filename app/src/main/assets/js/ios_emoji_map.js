@@ -1,4 +1,4 @@
-// iOS Emoji Map — 3061 emoji
+// iOS Emoji Map — 3090 emoji
 // Paths relative to: android_asset/emoji/
 // Categories: act/ food/ nat/ ppl/ obj/ travel/ sym/ flags/
 const IOS_EMOJI_MAP={
@@ -3063,4 +3063,34 @@ const IOS_EMOJI_MAP={
 "\ud83e\uddc7":"food/Waffle.png",
 "\ud83c\udf49":"food/Watermelon.png",
 "\ud83c\udf77":"food/Wine Glass.png",
+,
+"\ud83d\udfe5":"sym/Large Red Square.png",
+"\ud83d\udfe7":"sym/Large Orange Square.png",
+"\ud83d\udfe8":"sym/Large Yellow Square.png",
+"\ud83d\udfe9":"sym/Large Green Square.png",
+"\ud83d\udfe6":"sym/Large Blue Square.png",
+"\ud83d\udfea":"sym/Large Purple Square.png",
+"\ud83d\udfeb":"sym/Large Brown Square.png",
+"\ud83d\udfe0":"sym/Large Orange Circle.png",
+"\ud83d\udfe1":"sym/Large Yellow Circle.png",
+"\ud83d\udfe2":"sym/Large Green Circle.png",
+"\ud83d\udfe3":"sym/Large Purple Circle.png",
+"\ud83d\udfe4":"sym/Large Brown Circle.png",
+"\ud83d\udd34":"sym/Large Red Circle.png",
+"0\ufe0f\u20e3":"sym/Keycap Digit Zero.png",
+"1\ufe0f\u20e3":"sym/Keycap Digit One.png",
+"2\ufe0f\u20e3":"sym/Keycap Digit Two.png",
+"3\ufe0f\u20e3":"sym/Keycap Digit Three.png",
+"4\ufe0f\u20e3":"sym/Keycap Digit Four.png",
+"5\ufe0f\u20e3":"sym/Keycap Digit Five.png",
+"6\ufe0f\u20e3":"sym/Keycap Digit Six.png",
+"7\ufe0f\u20e3":"sym/Keycap Digit Seven.png",
+"8\ufe0f\u20e3":"sym/Keycap Digit Eight.png",
+"9\ufe0f\u20e3":"sym/Keycap Digit Nine.png",
+"*\ufe0f\u20e3":"sym/Keycap Asterisk.png",
+"#\ufe0f\u20e3":"sym/Keycap Number Sign.png",
+"\u2753":"sym/Question Mark.png",
+"\u2757":"sym/Exclamation Mark.png",
+"\ud83c\udfaf":"act/Direct Hit.png",
+"\ud83d\udd2b":"obj/Pistol.png"
 };
