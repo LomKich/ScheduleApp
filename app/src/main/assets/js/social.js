@@ -6638,6 +6638,10 @@ function messengerRenderMessages(animateLast) {
     const isCircle  = msg.fileLink && msg.fileType === 'circle';
     const isFile    = msg.fileLink && msg.fileType === 'file' && !_isAudioFile(msg.fileName);
     const isAudio   = msg.fileLink && msg.fileType === 'file' && _isAudioFile(msg.fileName);
+    // Парсим extra для доп. флагов (front-камера у кружка и т.д.)
+    let _msgExtra = null;
+    try { if (msg.extra) _msgExtra = typeof msg.extra === 'string' ? JSON.parse(msg.extra) : msg.extra; } catch(_) {}
+    const isFrontCircle = isCircle && (_msgExtra?.front === true);
     const bubbleBg  = (isSticker || isImage || isVideo || isCircle) ? 'transparent' : (isMe ? 'var(--accent)' : 'var(--surface2)');
     const bubblePad = (isSticker || isImage || isVideo || isCircle) ? '0' : '8px 12px 6px';    const _fmtSize  = s => !s ? '' : s > 1048576 ? (s/1048576).toFixed(1)+' МБ' : s > 1024 ? (s/1024).toFixed(0)+' КБ' : s+' Б';
     const _fmtDur   = s => { const m=Math.floor((s||0)/60), sec=String((s||0)%60).padStart(2,'0'); return m+':'+sec; };
@@ -6722,13 +6726,14 @@ function messengerRenderMessages(animateLast) {
         ? (() => {
             const cid = 'circ_' + idx + '_' + msg.ts;
             const circumference = 2 * Math.PI * 97; // ≈609.7
+            const mirrorStyle = isFrontCircle ? 'transform:scaleX(-1);' : '';
             return `<div data-no-menu id="cw_${cid}"
                style="position:relative;width:200px;height:200px;border-radius:50%;overflow:hidden;cursor:pointer;background:#111;flex-shrink:0"
                onclick="mcCircleToggle('${cid}','${safeUrl}')">
              <div id="cposter_${cid}" style="position:absolute;inset:0">
                <div style="width:100%;height:100%;background:#000"></div>
              </div>
-             <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden"></div>
+             <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden;${mirrorStyle}"></div>
              <div id="cbtn_${cid}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
                <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center">
                  <svg id="cico_${cid}" width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
@@ -8550,7 +8555,7 @@ async function _catboxUpload(base64, fileName, mimeType, onProgress) {
 }
 
 // ┄┄ Отправка файла/видео/голоса как сообщения ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbData, _blob, _mime }) {
+function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbData, _blob, _mime, extra }) {
   // Немедленно кэшируем blob локально   файл доступен без сети
   if (_blob && url) {
     mcCacheSave(url, _blob, _mime || 'application/octet-stream').catch(() => {});
@@ -8580,6 +8585,7 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
     ...(duration  ? { duration  } : {}),
     ...(thumbData ? { thumbData } : {}),
     ...(replyTo   ? { replyTo   } : {}),
+    ...(extra     ? { extra: JSON.stringify(extra) } : {}),
   };
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
@@ -8602,7 +8608,8 @@ function _mcSendMediaMsg({ url, fileName, fileType, fileSize, duration, thumbDat
     extra: JSON.stringify({ fileLink: url, fileName, fileType,
       ...(fileSize  ? { fileSize  } : {}),
       ...(duration  ? { duration  } : {}),
-      ...(thumbData ? { thumbData } : {}) })
+      ...(thumbData ? { thumbData } : {}),
+      ...(extra     ? extra        : {}) })
   };
   const _mediaOutboxItem2 = {
     id: 'media_' + ts, type: 'media', localChat: _msgCurrentChat, ts,
@@ -8750,12 +8757,13 @@ window.onNativeCircleUploading = function() {
   _mcInChatSendingUpdate('circle', '⬆ Загружаю...');
 };
 
-window.onNativeCircleUploaded = function(url, fileSize) {
-  console.log('[Circle] uploaded url=' + url);
+window.onNativeCircleUploaded = function(url, fileSize, frontCamera) {
+  console.log('[Circle] uploaded url=' + url + ' front=' + frontCamera);
   _mcCircleActive = false;
   _mcInChatSendingHide();
   _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle',
-    fileSize: fileSize || 0, thumbData: null });
+    fileSize: fileSize || 0, thumbData: null,
+    extra: frontCamera !== false ? { front: true } : undefined });
 };
 
 window.onNativeCircleCancelled = function() {
