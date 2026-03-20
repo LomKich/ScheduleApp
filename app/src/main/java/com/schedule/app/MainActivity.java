@@ -163,6 +163,17 @@ public class MainActivity extends Activity {
         }
 
         prefs   = getSharedPreferences("schedule_prefs", Context.MODE_PRIVATE);
+
+        // ── Проверяем предпочтение интерфейса ────────────────────────────────────
+        boolean useNativeUi = getSharedPreferences("sapp_prefs", Context.MODE_PRIVATE)
+            .getBoolean("use_native_ui", false);
+        if (useNativeUi) {
+            startActivity(new Intent(this, com.schedule.app.ui.ComposeActivity.class));
+            finish();
+            return;
+        }
+        // ─────────────────────────────────────────────────────────────────────────
+
         webView = new WebView(this);
         setContentView(webView);
 
@@ -3657,6 +3668,33 @@ public class MainActivity extends Activity {
                 }
             });
         }
+
+        // ─── Переключение интерфейса ──────────────────────────────────────────────
+
+        /**
+         * JS: Android.switchToNativeUI()
+         * Сохраняет предпочтение и запускает ComposeActivity (нативный Kotlin UI).
+         */
+        @JavascriptInterface
+        public void switchToNativeUI() {
+            getSharedPreferences("sapp_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("use_native_ui", true).apply();
+            runOnUiThread(() -> {
+                Intent intent = new Intent(MainActivity.this,
+                    com.schedule.app.ui.ComposeActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(intent);
+                finish();
+            });
+        }
+
+        /**
+         * JS: Android.isNativeUIAvailable()
+         * Возвращает true — нативный интерфейс доступен.
+         */
+        @JavascriptInterface
+        public boolean isNativeUIAvailable() { return true; }
 
     }
     /**

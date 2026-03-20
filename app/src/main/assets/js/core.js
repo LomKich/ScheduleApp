@@ -373,6 +373,39 @@ document.addEventListener('pointerdown', e => {
   if (e.target.matches('input,textarea')) SFX.play('keyTap');
 });
 
+// ── Переключение на нативный Kotlin/Compose интерфейс ────────────────────────
+function switchToNativeUI() {
+  if (window.Android && typeof window.Android.switchToNativeUI === 'function') {
+    // Показываем диалог подтверждения
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:20px;animation:mcFadeIn .15s ease';
+    sheet.innerHTML = `
+      <div style="background:var(--surface);border-radius:20px;padding:24px 20px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,.7)" onclick="event.stopPropagation()">
+        <div style="font-size:38px;text-align:center;margin-bottom:12px">🚀</div>
+        <div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:6px">Нативный интерфейс</div>
+        <div style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px;line-height:1.5">
+          Приложение перезапустится в режиме<br><b style="color:var(--text)">Kotlin / Jetpack Compose</b>.<br>
+          Плавнее, быстрее, без провисаний.<br><br>
+          <span style="font-size:11px">Вернуться можно в Настройках нового интерфейса.</span>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button onclick="this.closest('[style*=fixed]').remove()"
+            style="flex:1;padding:12px;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:12px;color:var(--text);font-family:inherit;font-size:15px;cursor:pointer">
+            Отмена
+          </button>
+          <button onclick="this.closest('[style*=fixed]').remove();window.Android.switchToNativeUI()"
+            style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:12px;color:#000;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer">
+            Включить →
+          </button>
+        </div>
+      </div>`;
+    sheet.addEventListener('click', () => sheet.remove());
+    document.body.appendChild(sheet);
+  } else {
+    toast('⚠️ Нативный интерфейс недоступен');
+  }
+}
+
 function toggleMute(){
   const m = SFX.toggle();
   const lbl = document.getElementById('mute-label');
@@ -3196,6 +3229,11 @@ function cmdExec(raw){
       cmdPrint('out','  tiktok              — открыть TikTok');
       cmdPrint('out','  donate              — поддержать проект');
       cmdPrint('out','  vip <код>           — активировать VIP');
+      cmdPrint('out', '');
+      cmdPrint('info','── React Native UI (preview) ──');
+      cmdPrint('out','  rn home             — Главная (RN)');
+      cmdPrint('out','  rn groups           — Группы (RN)');
+      cmdPrint('out','  rn schedule         — Расписание (RN)');
     } break;
     case 'greeting': {
       const sec2=loadSecret();
@@ -3790,6 +3828,19 @@ function cmdExec(raw){
           document.body.appendChild(overlay);
         }
       }, 300);
+    } break;
+
+    case 'rn': {
+      const screens = { home: 'rnHome', groups: 'rnGroups', schedule: 'rnSchedule' };
+      if (!arg || !screens[arg]) {
+        cmdPrint('info','── React Native UI ──');
+        cmdPrint('out','  rn home     — Главная');
+        cmdPrint('out','  rn groups   — Список групп');
+        cmdPrint('out','  rn schedule — Расписание');
+      } else {
+        cmdPrint('ok', '▶ Открываю RN экран: ' + arg + '...');
+        setTimeout(() => { cmdClose(); rnOpenScreen(arg); }, 350);
+      }
     } break;
 
     default:
