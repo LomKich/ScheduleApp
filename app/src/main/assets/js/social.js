@@ -4924,6 +4924,9 @@ function _emojiImg(emoji, size, style) {
 
 // Заменяет emoji в строке text на <img> теги с локальными ассетами.
 // Возвращает HTML-строку, или null если emoji не найдено.
+// Заменяет emoji в строке text на <img> теги с локальными ассетами.
+// Возвращает HTML-строку, или null если emoji не найдено.
+const _emojiMissLog = new Set(); // дедупликация — не спамим одними символами
 function _localEmojiHtml(text) {
   if (!text || typeof IOS_EMOJI_MAP === 'undefined') return null;
   let result = '';
@@ -4931,14 +4934,11 @@ function _localEmojiHtml(text) {
   let i = 0;
   while (i < text.length) {
     let found = false;
-    // Пробуем от длинных последовательностей к коротким (макс 12 кодовых единиц)
     const maxLen = Math.min(12, text.length - i);
     for (let len = maxLen; len >= 1; len--) {
       const sub = text.substring(i, i + len);
       const path = IOS_EMOJI_MAP[sub];
       if (path) {
-        // Используем 1.15em вместо фиксированных px — emoji масштабируется вместе с
-        // родительским font-size: и в стикерах (52px→60px), и в кнопках (13px→15px)
         result += `<img src="${_EMOJI_BASE}${path}" alt="${sub}" ` +
           `class="emoji" draggable="false" onerror="this.replaceWith(document.createTextNode('${sub}'))">`;
         i += len;
@@ -4949,6 +4949,15 @@ function _localEmojiHtml(text) {
     }
     if (!found) {
       const c = text[i];
+      // Логируем emoji-символы которых нет в карте
+      const cp = c.codePointAt(0);
+      if (cp > 0x1F300 || (cp >= 0x2600 && cp <= 0x27BF)) {
+        const key = cp.toString(16);
+        if (!_emojiMissLog.has(key)) {
+          _emojiMissLog.add(key);
+          console.warn(`[emoji] не в карте: U+${key} "${c}" контекст: "${text.slice(Math.max(0,i-3), i+4).replace(/\n/g,' ')}"`);
+        }
+      }
       if      (c === '&') result += '&amp;';
       else if (c === '<') result += '&lt;';
       else if (c === '>') result += '&gt;';
@@ -4959,9 +4968,17 @@ function _localEmojiHtml(text) {
   return changed ? result : null;
 }
 
+
 // Обходит все текстовые узлы в node и заменяет emoji на <img>.
 function _localEmojiParse(root) {
-  if (typeof IOS_EMOJI_MAP === 'undefined') return;
+  if (typeof IOS_EMOJI_MAP === 'undefined') {
+    console.warn('[emoji] IOS_EMOJI_MAP не определён — ios_emoji_map.js не загружен?');
+    return;
+  }
+  if (!_emojiPackReady) {
+    console.warn('[emoji] _emojiPackReady=false — пак не готов, парсинг пропущен');
+    return;
+  }
   const SKIP_TAGS = new Set(['SCRIPT','STYLE','INPUT','TEXTAREA','CODE','PRE']);
   const walker = document.createTreeWalker(
     root || document.body,
@@ -4980,14 +4997,25 @@ function _localEmojiParse(root) {
   );
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
+
+  let replaced = 0, skipped = 0, errors = 0;
   for (const textNode of nodes) {
     const html = _localEmojiHtml(textNode.data);
-    if (!html) continue;
+    if (!html) { skipped++; continue; }
     const span = document.createElement('span');
     span.dataset.emojiDone = '1';
-    span.style.display = 'contents'; // не создаёт отдельный box, дети встают inline
+    span.style.display = 'contents';
     span.innerHTML = html;
-    try { textNode.parentNode.replaceChild(span, textNode); } catch(_) {}
+    try {
+      textNode.parentNode.replaceChild(span, textNode);
+      replaced++;
+    } catch(e) {
+      errors++;
+      console.warn('[emoji] replaceChild error:', e.message, '| text:', textNode.data?.slice(0,30));
+    }
+  }
+  if (replaced > 0 || errors > 0) {
+    console.log(`[emoji] parse(${(root||document.body).id||root?.tagName||'body'}): заменено=${replaced} пропущено=${skipped} ошибок=${errors}`);
   }
 }
 
