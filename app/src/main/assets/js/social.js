@@ -6727,13 +6727,14 @@ function messengerRenderMessages(animateLast) {
             const cid = 'circ_' + idx + '_' + msg.ts;
             const circumference = 2 * Math.PI * 97;
             const mirrorStyle = isFrontCircle ? 'transform:scaleX(-1);' : '';
-            // Маленький кружок (96px) в покое, расширяется до 280px при воспроизведении
-            return `<div data-no-menu id="cw_${cid}"
-               style="position:relative;width:96px;height:96px;border-radius:50%;overflow:hidden;cursor:pointer;background:#1a1a1a;flex-shrink:0;transition:width .28s cubic-bezier(.34,1.1,.64,1),height .28s cubic-bezier(.34,1.1,.64,1)"
-               onclick="mcCircleToggle('${cid}','${safeUrl}')">
+            // 160px в покое (density-independent), 280px при полном воспроизведении
+            const SZ = Math.round(160 * (window.devicePixelRatio > 2 ? 1.2 : 1));
+            return `<div data-no-menu id="cw_${cid}" data-circle-url="${safeUrl}"
+               style="position:relative;width:${SZ}px;height:${SZ}px;border-radius:50%;overflow:hidden;cursor:pointer;background:#1a1a1a;flex-shrink:0;transition:width .3s cubic-bezier(.34,1.1,.64,1),height .3s cubic-bezier(.34,1.1,.64,1)"
+               onclick="mcCircleToggle('${cid}','${safeUrl}',false)">
              <div id="cposter_${cid}" style="position:absolute;inset:0">
                <div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center">
-                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="rgba(255,255,255,.6)"/></svg>
+                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="rgba(255,255,255,.65)"/></svg>
                </div>
              </div>
              <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden;${mirrorStyle}"></div>
@@ -6744,15 +6745,15 @@ function messengerRenderMessages(animateLast) {
                  stroke-linecap="round" transform="rotate(-90 100 100)"
                  style="transition:stroke-dashoffset .12s linear"/>
              </svg>
-             <div style="position:absolute;bottom:5px;right:5px;display:flex;align-items:center;gap:2px;pointer-events:none">
-               <span id="ctime_${cid}" style="font-size:9px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.8)">${msgFormatTime(msg.ts)}</span>
-               <span style="font-size:9px;color:rgba(255,255,255,.85)">${status}</span>
+             <div style="position:absolute;bottom:6px;right:6px;display:flex;align-items:center;gap:2px;pointer-events:none">
+               <span id="ctime_${cid}" style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.8)">${msgFormatTime(msg.ts)}</span>
+               <span style="font-size:10px;color:rgba(255,255,255,.85)">${status}</span>
              </div>
            </div>`;
           })()
-      // ┄┄ ВИДЕО   превью + круглая play + duration badge ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+      // ┄┄ ВИДЕО   превью + круглая play + автоплей без звука при появлении ┄┄┄┄
       : isVideo
-        ? `<div data-no-menu style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;min-width:140px;cursor:pointer;background:#111"
+        ? `<div data-no-menu data-video-url="${safeUrl}" style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;min-width:140px;cursor:pointer;background:#111"
                onclick="mcVideoOpen('${safeUrl}','${safeName}')">
              ${msg.thumbData
                ? `<img src="${escHtml(msg.thumbData)}" style="display:block;width:100%;max-width:260px;min-height:80px;border-radius:14px;object-fit:cover" loading="lazy">`
@@ -6859,9 +6860,78 @@ function messengerRenderMessages(animateLast) {
       }
     }
   });
+  // Запускаем автоплей кружков и видео которые в поле зрения
+  requestAnimationFrame(_mcAttachAutoplayObserver);
 }
 
-// ┄┄ Отправка ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ── Автоплей кружков и видео при появлении в viewport ──────────────────────
+let _mcAutoplayObserver = null;
+
+function _mcAttachAutoplayObserver() {
+  const body = document.getElementById('mc-messages');
+  if (!body) return;
+
+  // Отключаем старый наблюдатель
+  if (_mcAutoplayObserver) { _mcAutoplayObserver.disconnect(); _mcAutoplayObserver = null; }
+
+  _mcAutoplayObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const el = entry.target;
+
+      // ── Кружки ──────────────────────────────────────────────────────
+      if (el.dataset.circleUrl) {
+        const cid = el.id.replace('cw_', '');
+        const url = el.dataset.circleUrl;
+        if (entry.isIntersecting) {
+          // Виден — запускаем беззвучно если не играет
+          const state = _circleState[cid];
+          if (!state) {
+            mcCircleToggle(cid, url, true); // muted=true
+          } else if (!state.playing) {
+            state.video.play().then(() => { state.playing = true; }).catch(() => {});
+          }
+        } else {
+          // Ушёл из поля зрения — паузируем беззвучный
+          const state = _circleState[cid];
+          if (state && state.muted && state.playing) {
+            state.video.pause();
+            state.playing = false;
+          }
+        }
+      }
+
+      // ── Видео ────────────────────────────────────────────────────────
+      if (el.dataset.videoUrl) {
+        const videoId = el.dataset.videoId;
+        let vid = el._autoVid;
+        if (entry.isIntersecting) {
+          if (!vid) {
+            vid = document.createElement('video');
+            vid.src = el.dataset.videoUrl;
+            vid.muted = true;
+            vid.playsInline = true;
+            vid.loop = true;
+            vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:14px;z-index:0';
+            el.appendChild(vid);
+            el._autoVid = vid;
+          }
+          vid.play().catch(() => {});
+        } else {
+          if (vid) { vid.pause(); }
+        }
+      }
+    });
+  }, {
+    root: body,
+    rootMargin: '60px',
+    threshold: 0.4
+  });
+
+  // Наблюдаем за всеми кружками
+  body.querySelectorAll('[data-circle-url]').forEach(el => _mcAutoplayObserver.observe(el));
+  // Наблюдаем за всеми видео
+  body.querySelectorAll('[data-video-url]').forEach(el => _mcAutoplayObserver.observe(el));
+}
 function messengerSend() {
   const inp = document.getElementById('mc-input');
   if (!inp || !_msgCurrentChat) return;
@@ -10081,11 +10151,49 @@ function peerProfileOpen(username) {
 // ┄┄ Inline-плеер кружков (как в Telegram   воспроизводится прямо в чате) ┄┄
 const _circleState = {}; // cid ↩ { video, playing, circumference }
 
-function mcCircleToggle(cid, url) {
+// Размер кружка в покое (px, density-aware)
+function _circleIdleSize() {
+  return Math.round(160 * (window.devicePixelRatio > 2 ? 1.2 : 1));
+}
+
+/**
+ * mcCircleToggle — запуск/пауза кружка
+ * @param {string}  cid     id кружка
+ * @param {string}  url     URL видео
+ * @param {boolean} muted   true = беззвучный автоплей (IntersectionObserver),
+ *                          false = полное воспроизведение со звуком (тап)
+ */
+function mcCircleToggle(cid, url, muted) {
   const wrap = document.getElementById('cw_' + cid);
   if (!wrap) return;
 
+  const fullPlay = (muted === false); // явный тап = полное воспроизведение
+
   let state = _circleState[cid];
+
+  // Если уже играет в muted-режиме, тап переключает в полный режим
+  if (state && state.muted && fullPlay) {
+    state.video.muted = false;
+    state.muted = false;
+    // Расширяем до 280px
+    wrap.style.width = '280px';
+    wrap.style.height = '280px';
+    if (!state.playing) {
+      state.video.play().then(() => { state.playing = true; }).catch(() => {});
+    }
+    return;
+  }
+
+  // Если уже играет в полном режиме — pause/resume
+  if (state && !state.muted) {
+    if (state.playing) {
+      state.video.pause();
+      state.playing = false;
+    } else {
+      state.video.play().then(() => { state.playing = true; }).catch(() => {});
+    }
+    return;
+  }
 
   if (!state) {
     const vid = document.createElement('video');
@@ -10094,35 +10202,36 @@ function mcCircleToggle(cid, url) {
     vid.setAttribute('playsinline', '');
     vid.preload = 'auto';
     vid.loop = false;
-    vid.muted = false;
+    vid.muted = !!muted; // muted только при автоплее
+
     vid.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
 
     const circumference = 2 * Math.PI * 96;
-    state = { video: vid, playing: false, circumference };
+    state = { video: vid, playing: false, circumference, muted: !!muted };
     _circleState[cid] = state;
 
     const vidWrap = document.getElementById('cvid_' + cid);
     if (vidWrap) { vidWrap.style.display = 'block'; vidWrap.appendChild(vid); }
 
-    // Скрываем постер и кнопку play
     const poster = document.getElementById('cposter_' + cid);
     if (poster) poster.style.display = 'none';
 
-    // Показываем кольцо прогресса
     const ring = document.getElementById('cring_' + cid);
-    if (ring) ring.style.display = 'block';
 
-    // Расширяем кружок до 280px
-    wrap.style.width = '280px';
-    wrap.style.height = '280px';
+    if (fullPlay) {
+      // Тап — расширяем и показываем кольцо
+      if (ring) ring.style.display = 'block';
+      wrap.style.width = '280px';
+      wrap.style.height = '280px';
+    }
+    // При muted-автоплее размер не меняем, кольцо не показываем
 
     vid.addEventListener('timeupdate', () => {
-      if (!vid.duration) return;
+      if (!vid.duration || state.muted) return;
       const pct = vid.currentTime / vid.duration;
       const ringProg = document.getElementById('cringp_' + cid);
       if (ringProg) {
-        const offset = circumference * (1 - pct);
-        ringProg.style.strokeDashoffset = offset.toFixed(1);
+        ringProg.style.strokeDashoffset = (circumference * (1 - pct)).toFixed(1);
       }
       const timeEl = document.getElementById('ctime_' + cid);
       if (timeEl) {
@@ -10134,10 +10243,10 @@ function mcCircleToggle(cid, url) {
 
     vid.addEventListener('ended', () => {
       state.playing = false;
-      // Сворачиваем обратно
-      wrap.style.width = '96px';
-      wrap.style.height = '96px';
-      if (poster) { poster.style.display = ''; }
+      const sz = _circleIdleSize();
+      wrap.style.width = sz + 'px';
+      wrap.style.height = sz + 'px';
+      if (poster) poster.style.display = '';
       if (ring) ring.style.display = 'none';
       vidWrap.style.display = 'none';
       delete _circleState[cid];
@@ -10146,15 +10255,6 @@ function mcCircleToggle(cid, url) {
     vid.play().then(() => {
       state.playing = true;
     }).catch(() => {});
-    return;
-  }
-
-  // Последующие тапы — pause/resume (нет кнопки, просто тап)
-  if (state.playing) {
-    state.video.pause();
-    state.playing = false;
-  } else {
-    state.video.play().then(() => { state.playing = true; }).catch(() => {});
   }
 }
 
