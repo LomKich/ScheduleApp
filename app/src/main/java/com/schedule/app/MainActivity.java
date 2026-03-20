@@ -1908,6 +1908,37 @@ public class MainActivity extends Activity {
         }
 
         /**
+         * Возвращает JSON-массив всех файлов в filesDir/emoji/ (рекурсивно).
+         * Пути относительные: "food/Hot Beverage.png", "nat/Fire.png" и т.д.
+         * Используется JS-диагностикой для сравнения с IOS_EMOJI_MAP.
+         */
+        @JavascriptInterface
+        public String getEmojiFileList() {
+            java.io.File emojiDir = new java.io.File(getFilesDir(), "emoji");
+            StringBuilder sb = new StringBuilder("[");
+            collectEmojiFiles(emojiDir, emojiDir, sb);
+            if (sb.length() > 1) sb.setLength(sb.length() - 1); // убрать последнюю запятую
+            sb.append("]");
+            return sb.toString();
+        }
+
+        private void collectEmojiFiles(java.io.File root, java.io.File dir, StringBuilder sb) {
+            java.io.File[] files = dir.listFiles();
+            if (files == null) return;
+            java.util.Arrays.sort(files);
+            for (java.io.File f : files) {
+                if (f.isDirectory()) {
+                    collectEmojiFiles(root, f, sb);
+                } else if (f.getName().endsWith(".png")) {
+                    String rel = f.getAbsolutePath().substring(root.getAbsolutePath().length() + 1);
+                    // JSON-экранирование
+                    rel = rel.replace("\\", "\\\\").replace("\"", "\\\"");
+                    sb.append("\"").append(rel).append("\",");
+                }
+            }
+        }
+
+        /**
          * Скачивает ZIP-архив emoji-пака и распаковывает в filesDir/emoji/.
          * Запускается в фоновом потоке — не блокирует UI.
          * Прогресс: вызывает JS-функцию onEmojiPackProgress(pct, label, isDone).
