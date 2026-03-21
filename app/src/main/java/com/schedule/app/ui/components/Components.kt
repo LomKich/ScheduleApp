@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -559,6 +560,117 @@ fun EmptyState(
 // GLOW EFFECT — Modifier extension
 // Реализует box-shadow через drawBehind с blur
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APP TEXT FIELD  — alias for AppInput, used in dialogs/forms
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+fun AppTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String = "",
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = true,
+    maxLines: Int = 1,
+) {
+    AppInput(
+        value         = value,
+        onValueChange = onValueChange,
+        placeholder   = placeholder,
+        modifier      = modifier,
+        singleLine    = singleLine,
+        maxLines      = maxLines,
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMOJI INPUT  — large single-char input for emoji picker
+// background:surface2; border animated to accent on focus; border-radius:12dp
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+fun EmojiInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String = "😊",
+    modifier: Modifier = Modifier,
+) {
+    val t = LocalTheme.current
+    var focused by remember { mutableStateOf(false) }
+    val borderColor by animateColorAsState(
+        targetValue = if (focused) t.accent else t.surface3,
+        animationSpec = tween(180),
+        label = "emojiBorder",
+    )
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(t.surface2)
+            .border(2.dp, borderColor, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (value.isEmpty()) {
+            Text(placeholder, color = t.muted, fontSize = 14.sp)
+        }
+        androidx.compose.foundation.text.BasicTextField(
+            value         = value,
+            onValueChange = onValueChange,
+            textStyle     = TextStyle(color = t.text, fontSize = 22.sp),
+            singleLine    = true,
+            modifier      = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focused = it.isFocused },
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AVATAR  — shows emoji or photo, clipped to circle
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+fun AvatarView(
+    avatar: String,
+    avatarType: String = "emoji",
+    avatarData: String? = null,
+    size: Dp = 40.dp,
+    borderColor: Color = Color.Transparent,
+    borderWidth: Dp = 0.dp,
+    modifier: Modifier = Modifier,
+) {
+    val t = LocalTheme.current
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(t.surface2)
+            .then(if (borderWidth > 0.dp) Modifier.border(borderWidth, borderColor, CircleShape) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (avatarType == "photo" && avatarData != null) {
+            // Decode base64 image
+            val bitmap = remember(avatarData) {
+                try {
+                    val clean = if (avatarData.contains(",")) avatarData.substringAfter(",") else avatarData
+                    val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                } catch (e: Exception) { null }
+            }
+            if (bitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap      = bitmap.asImageBitmap(),
+                    contentDescription = "avatar",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier    = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(avatar.ifEmpty { "😊" }, fontSize = (size.value * 0.5f).sp)
+            }
+        } else {
+            Text(avatar.ifEmpty { "😊" }, fontSize = (size.value * 0.5f).sp)
+        }
+    }
+}
+
 fun Modifier.glowEffect(
     color: Color,
     borderRadius: Dp = 10.dp,

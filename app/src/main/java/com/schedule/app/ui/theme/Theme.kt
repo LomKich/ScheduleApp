@@ -30,9 +30,21 @@ class ThemeState(initial: AppColors.ThemeDef = AppColors.themes.first()) {
 
 val LocalTheme = staticCompositionLocalOf { ThemeState() }
 
+// ── Шрифты — Google Fonts (нужны в build.gradle: implementation "androidx.compose.ui:ui-text-google-fonts") ──
+// Пока используем системные шрифты как fallback. Для реальных шрифтов — добавь зависимость.
+fun fontFamilyForId(id: String): androidx.compose.ui.text.font.FontFamily {
+    return when (id) {
+        "jetbrains_mono", "fira_code" -> androidx.compose.ui.text.font.FontFamily.Monospace
+        "caveat", "neucha", "lobster" -> androidx.compose.ui.text.font.FontFamily.Cursive
+        "pt_serif", "lora", "merriweather", "cormorant" -> androidx.compose.ui.text.font.FontFamily.Serif
+        else -> androidx.compose.ui.text.font.FontFamily.Default
+    }
+}
+
 @Composable
 fun AppTheme(
     themeState: ThemeState = remember { ThemeState() },
+    fontId: String = "default",
     content: @Composable () -> Unit,
 ) {
     val t = themeState
@@ -47,7 +59,20 @@ fun AppTheme(
         onPrimary        = t.btnText,
         error            = t.danger,
     )
+    val fontFamily = fontFamilyForId(fontId)
+    val typography = androidx.compose.material3.Typography().run {
+        copy(
+            bodyLarge  = bodyLarge.copy(fontFamily = fontFamily),
+            bodyMedium = bodyMedium.copy(fontFamily = fontFamily),
+            bodySmall  = bodySmall.copy(fontFamily = fontFamily),
+            titleLarge = titleLarge.copy(fontFamily = fontFamily),
+            titleMedium= titleMedium.copy(fontFamily = fontFamily),
+            titleSmall = titleSmall.copy(fontFamily = fontFamily),
+            labelLarge = labelLarge.copy(fontFamily = fontFamily),
+            labelMedium= labelMedium.copy(fontFamily = fontFamily),
+        )
+    }
     CompositionLocalProvider(LocalTheme provides themeState) {
-        MaterialTheme(colorScheme = colorScheme, content = content)
+        MaterialTheme(colorScheme = colorScheme, typography = typography, content = content)
     }
 }

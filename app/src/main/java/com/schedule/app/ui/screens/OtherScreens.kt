@@ -271,9 +271,15 @@ fun SettingsScreen(
     onToggleMute: () -> Unit,
     isGlassMode: Boolean,
     onToggleGlass: () -> Unit,
+    isGlassOptMode: Boolean = false,
+    onToggleGlassOpt: () -> Unit = {},
     appVersion: String,
     onBack: () -> Unit,
     onSwitchToWebView: () -> Unit = {},
+    onCheckUpdate: () -> Unit = {},
+    onOpenBackups: () -> Unit = {},
+    onOpenGames: () -> Unit = {},
+    visitStreak: Int = 0,
 ) {
     val t = LocalTheme.current
 
@@ -400,6 +406,15 @@ fun SettingsScreen(
                     ToggleSwitch(checked = isGlassMode, onCheckedChange = { onToggleGlass() })
                 },
             )
+            if (isGlassMode) {
+                SettingsRow(
+                    title = "⚡ Оптимизация блюра",
+                    subtitle = "Снижает нагрузку на GPU. Включай если лагает",
+                    trailing = {
+                        ToggleSwitch(checked = isGlassOptMode, onCheckedChange = { onToggleGlassOpt() })
+                    },
+                )
+            }
             Sep()
 
             // ── Звук ──────────────────────────────────────────────────
@@ -423,12 +438,39 @@ fun SettingsScreen(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(t.surface3)
-                            .clickable {}
+                            .clickable(onClick = onCheckUpdate)
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                     ) {
                         Text("🔄 Проверить", color = t.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 },
+            )
+
+            if (visitStreak > 0) {
+                Sep()
+                SectionLabel("Активность")
+                SettingsRow(
+                    title = "🔥 Стрик посещений",
+                    subtitle = "$visitStreak дней подряд",
+                )
+            }
+
+            Sep()
+            SectionLabel("Игры")
+            ListItemRow(
+                name = "🎮 Мини-игры",
+                sub  = "15 игр · секретный режим",
+                onClick = onOpenGames,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+
+            Sep()
+            SectionLabel("Резервные копии")
+            ListItemRow(
+                name = "💾 Управление бэкапами",
+                sub  = "Восстановить или экспортировать данные",
+                onClick = onOpenBackups,
+                modifier = Modifier.padding(bottom = 8.dp),
             )
 
             Spacer(Modifier.height(100.dp))
@@ -443,6 +485,8 @@ fun SettingsScreen(
 fun ThemesScreen(
     currentThemeId: String,
     onThemeSelect: (String) -> Unit,
+    currentFontId: String = "default",
+    onFontSelect: (String) -> Unit = {},
     onBack: () -> Unit,
 ) {
     val t = LocalTheme.current
@@ -465,6 +509,8 @@ fun ThemesScreen(
                 .padding(horizontal = 18.dp),
         ) {
             Spacer(Modifier.height(8.dp))
+            SectionLabel("Цветовая схема")
+            Spacer(Modifier.height(4.dp))
 
             AppColors.themes.forEach { theme ->
                 val isSelected = theme.id == currentThemeId
@@ -474,7 +520,62 @@ fun ThemesScreen(
                     onClick = { onThemeSelect(theme.id) },
                 )
             }
+
+            Spacer(Modifier.height(16.dp))
+            SectionLabel("Шрифт приложения")
+            Spacer(Modifier.height(4.dp))
+
+            FontPickerRow(
+                selectedFont = currentFontId,
+                onFontSelect = onFontSelect,
+            )
+
             Spacer(Modifier.height(100.dp))
+        }
+    }
+}
+
+// ── Font picker row ──────────────────────────────────────────────────────────
+@Composable
+private fun FontPickerRow(
+    selectedFont: String,
+    onFontSelect: (String) -> Unit,
+) {
+    val t = LocalTheme.current
+    AppColors.fonts.forEach { font ->
+        val isSelected = selectedFont == font.id
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 7.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (isSelected) t.accent.copy(alpha = 0.12f) else t.surface2)
+                .border(
+                    1.5.dp,
+                    if (isSelected) t.accent.copy(alpha = 0.70f) else t.surface3,
+                    RoundedCornerShape(10.dp),
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = rememberRipple(),
+                    onClick = { onFontSelect(font.id) },
+                )
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    font.name,
+                    color = if (isSelected) t.accent else t.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(font.sub, color = t.muted, fontSize = 11.sp)
+            }
+            if (isSelected) {
+                Text("✓", color = t.accent, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -727,5 +828,3 @@ private fun HwCard(
     }
 }
 
-// Добавляем modifier с аннотацией в конце файла
-private fun Modifier.padding(bottom: Dp): Modifier = this.padding(bottom = bottom)

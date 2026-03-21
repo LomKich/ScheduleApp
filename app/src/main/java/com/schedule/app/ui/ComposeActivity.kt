@@ -1,36 +1,34 @@
 package com.schedule.app.ui
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.schedule.app.ui.navigation.AppScreen
 import com.schedule.app.ui.theme.AppTheme
+import androidx.compose.runtime.LaunchedEffect
 
-/**
- * ComposeActivity — нативный Kotlin/Compose интерфейс.
- *
- * Запускается независимо от оригинального MainActivity (WebView).
- * Можно добавить в AndroidManifest как отдельный экран или заменить Main.
- *
- * Дизайн: 1-в-1 с оригинальным HTML/CSS интерфейсом.
- */
 class ComposeActivity : ComponentActivity() {
 
     private val vm: AppViewModel by viewModels()
 
-    /** Переключиться обратно на WebView: сбрасываем флаг и запускаем MainActivity */
     private fun switchToWebView() {
         getSharedPreferences("sapp_prefs", MODE_PRIVATE)
             .edit().putBoolean("use_native_ui", false).apply()
         startActivity(
-            android.content.Intent(this, com.schedule.app.MainActivity::class.java)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                          android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            Intent(this, com.schedule.app.MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         )
         finish()
     }
@@ -38,101 +36,54 @@ class ComposeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
         vm.loadFiles()
 
         setContent {
-            AppTheme(themeState = vm.themeState) {
+            AppTheme(themeState = vm.themeState, fontId = vm.currentFontId) {
+
+                // ── Photo picker launcher ─────────────────────────────────────
+                val photoLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.GetContent()
+                ) { uri: Uri? ->
+                    if (uri != null) {
+                        vm.onPhotoPicked(uri, contentResolver)
+                    }
+                }
+
+                // Share text via Android share sheet
+                val shareText = vm.pendingShareText
+                if (shareText != null) {
+                    LaunchedEffect(shareText) {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                        startActivity(Intent.createChooser(intent, "Поделиться расписанием"))
+                        vm.pendingShareText = null
+                    }
+                }
+
+                // Launch GamesActivity when requested
+                if (vm.pendingLaunchGames) {
+                    LaunchedEffect(Unit) {
+                        val intent = Intent(this@ComposeActivity, GamesActivity::class.java).apply {
+                            putExtra("theme_id", vm.themeState.current.id)
+                            putExtra("username", vm.userProfile?.username ?: "")
+                        }
+                        startActivity(intent)
+                        vm.onGamesLaunched()
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.statusBars),
                 ) {
                     AppScreen(
-                        // ── Schedule ──────────────────────────────────────────────
-                        files          = vm.files,
-                        selectedFile   = vm.selectedFile,
-                        groups         = vm.groups,
-                        selectedGroup  = vm.selectedGroup,
-                        scheduleDays   = vm.scheduleDays,
-                        hwItems        = vm.hwItems,
-                        bellSchedules  = vm.bellSchedules,
-                        yandexUrl      = vm.yandexUrl,
-                        isLoading      = vm.isLoading,
-                        loadProgress   = vm.loadProgress,
-                        statusText     = vm.statusText,
-                        isMuted        = vm.isMuted,
-                        isTeacher      = vm.isTeacher,
-                        isGlassMode    = vm.isGlassMode,
-                        currentThemeId = vm.themeState.current.id,
-                        appVersion     = "4.8.7",
-
-                        // ── Social ────────────────────────────────────────────────
-                        userProfile      = vm.userProfile,
-                        friends          = vm.friends,
-                        leaderboard      = vm.leaderboard,
-                        p2pConnected     = vm.p2pConnected,
-                        notifEnabled     = vm.notifEnabled,
-                        bgServiceEnabled = vm.bgServiceEnabled,
-
-                        // ── Register fields ───────────────────────────────────────
-                        regName             = vm.regName,
-                        onRegNameChange     = vm::onRegNameChange,
-                        regUsername         = vm.regUsername,
-                        onRegUsernameChange = vm::onRegUsernameChange,
-                        regUsernameStatus   = vm.regUsernameStatus,
-                        regUsernameValid    = vm.regUsernameValid,
-                        regEmoji            = vm.regEmoji,
-                        onRegEmojiChange    = vm::onRegEmojiChange,
-                        onRegRandomEmoji    = vm::onRegRandomEmoji,
-                        regPassword         = vm.regPassword,
-                        onRegPasswordChange = vm::onRegPasswordChange,
-                        onRegSubmit         = vm::doRegister,
-                        regError            = vm.regError,
-                        regEnabled          = vm.regEnabled,
-
-                        // ── Login fields ──────────────────────────────────────────
-                        authUsername        = vm.authUsername,
-                        onAuthUsernameChange= { vm.authUsername = it },
-                        authPassword        = vm.authPassword,
-                        onAuthPasswordChange= { vm.authPassword = it },
-                        onAuthSubmit        = vm::doLogin,
-                        authError           = vm.authError,
-
-                        // ── Profile edit ──────────────────────────────────────────
-                        editName          = vm.editName,
-                        onEditNameChange  = { vm.editName = it },
-                        editBio           = vm.editBio,
-                        onEditBioChange   = { vm.editBio = it },
-                        editEmoji         = vm.editEmoji,
-                        onEditEmojiChange = { vm.editEmoji = it },
-                        onEditRandomEmoji = vm::onEditRandomEmoji,
-                        editStatus        = vm.editStatus,
-                        onEditStatusChange= { vm.editStatus = it },
-                        onEditSave        = vm::saveEditProfile,
-
-                        // ── Actions ───────────────────────────────────────────────
-                        onUrlChange      = vm::setUrl,
-                        onUpdateFiles    = vm::loadFiles,
-                        onFileClick      = vm::selectFile,
-                        onGroupClick     = vm::selectGroup,
-                        onModeChange     = vm::setMode,
-                        onToggleMute     = vm::toggleMute,
-                        onToggleGlass    = { vm.isGlassMode = !vm.isGlassMode },
-                        onThemeSelect    = vm::setTheme,
-                        onToggleHwDone   = vm::toggleHwDone,
-                        onDeleteHw       = vm::deleteHw,
-                        onAddHw          = { /* TODO: AddHw bottom sheet */ },
-                        onRetry          = vm::loadFiles,
+                        vm               = vm,
                         onSwitchToWebView= ::switchToWebView,
-                        onReconnect      = { vm.p2pConnected = false },
-                        onToggleNotif    = vm::toggleNotif,
-                        onToggleBgService= vm::toggleBgService,
-                        onPickPhoto      = { /* TODO: photo picker */ },
-                        onFriendClick    = { /* TODO: open peer profile */ },
-                        onRefreshFriends = { /* TODO: refresh peers */ },
-                        friendsSearchQuery   = vm.friendsSearchQuery,
-                        onFriendsSearchChange= { vm.friendsSearchQuery = it },
+                        onPickPhoto      = { photoLauncher.launch("image/*") },
                     )
                 }
             }
