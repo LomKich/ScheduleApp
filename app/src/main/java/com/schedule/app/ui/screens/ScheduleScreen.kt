@@ -171,7 +171,7 @@ fun ScheduleScreen(
                     // Day header
                     DayHeaderRow(text = day.header)
                     day.pairs.forEach { pair ->
-                        PairCard(pair = pair)
+                        PairCard(pair = pair, starredPairs = starredPairs, pairNotes = pairNotes, focusMode = focusMode)
                     }
                 }
             }
@@ -270,7 +270,12 @@ private fun DayHeaderRow(text: String) {
 // .pair-details: 12.5px muted padding 0 14px 12px 50px
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun PairCard(pair: Pair) {
+fun PairCard(
+    pair: Pair,
+    starredPairs: Set<String> = emptySet(),
+    pairNotes: Map<String, String> = emptyMap(),
+    focusMode: Boolean = false,
+) {
     val t = LocalTheme.current
 
     val leftBorderColor = when {

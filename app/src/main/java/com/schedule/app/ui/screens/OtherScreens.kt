@@ -1,6 +1,6 @@
 package com.schedule.app.ui.screens
 
-import androidx.compose.material3.ripple
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
@@ -351,7 +351,7 @@ fun SettingsScreen(
                         .background(t.surface3)
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = ripple(),
+                            indication = androidx.compose.material.ripple.rememberRipple(),
                             onClick = onSwitchToWebView,
                         )
                         .padding(horizontal = 14.dp, vertical = 9.dp),
@@ -558,7 +558,7 @@ private fun FontPickerRow(
                 )
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(),
+                    indication = rememberRipple(),
                     onClick = { onFontSelect(font.id) },
                 )
                 .padding(horizontal = 16.dp, vertical = 12.dp),

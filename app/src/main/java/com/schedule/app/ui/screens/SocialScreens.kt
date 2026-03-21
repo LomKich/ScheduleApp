@@ -7,7 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.ripple
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -21,6 +21,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import com.schedule.app.ui.components.*
 import com.schedule.app.ui.theme.LocalTheme
+
+
+// ── Pluralization helpers ─────────────────────────────────────────────────────
+fun friendWord(n: Int): String = when {
+    n % 100 in 11..19 -> "друзей"
+    n % 10 == 1       -> "друг"
+    n % 10 in 2..4    -> "друга"
+    else              -> "друзей"
+}
+
+fun groupWord(n: Int): String = when {
+    n % 100 in 11..19 -> "групп"
+    n % 10 == 1       -> "группа"
+    n % 10 in 2..4    -> "группы"
+    else              -> "групп"
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA MODELS
@@ -259,7 +275,7 @@ private fun RegisterForm(
                 .border(2.dp, t.surface3, CircleShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(bounded = false),
+                    indication = rememberRipple(bounded = false),
                     onClick = onRandomEmoji,
                 ),
             contentAlignment = Alignment.Center,
@@ -737,7 +753,7 @@ fun ProfileScreen(
                                 .clip(CircleShape)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple(bounded = false),
+                                    indication = rememberRipple(bounded = false),
                                     onClick = onReconnect,
                                 )
                                 .padding(4.dp),
@@ -794,7 +810,7 @@ fun ProfileScreen(
                                 .background(t.surface3)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple(),
+                                    indication = rememberRipple(),
                                     onClick = onToggleNotif,
                                 )
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -881,7 +897,7 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
-                                indication        = ripple(),
+                                indication        = rememberRipple(),
                                 onClick           = onLogout,
                             )
                             .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -929,7 +945,7 @@ private fun ProfileActionBtn(
             .border(1.5.dp, t.surface3, RoundedCornerShape(14.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(),
+                indication = rememberRipple(),
                 onClick = onClick,
             )
             .padding(top = 12.dp, bottom = 10.dp, start = 6.dp, end = 6.dp),
@@ -974,7 +990,7 @@ private fun ProfileListRow(
                 .fillMaxWidth()
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(),
+                    indication = rememberRipple(),
                     onClick = onClick,
                 )
                 .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -1116,7 +1132,7 @@ fun ProfileEditScreen(
                                 .border(2.dp, t.surface3, CircleShape)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple(bounded = false),
+                                    indication = rememberRipple(bounded = false),
                                     onClick = onRandomEmoji,
                                 ),
                             contentAlignment = Alignment.Center,
@@ -1166,7 +1182,7 @@ fun ProfileEditScreen(
                             .background(if (selected) statusColor.copy(alpha = 0.08f) else Color.Transparent)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
-                                indication = ripple(),
+                                indication = rememberRipple(),
                                 onClick = { onStatusChange(statusId) },
                             )
                             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -1235,7 +1251,7 @@ fun FriendsScreen(
                         .clip(RoundedCornerShape(8.dp))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(bounded = false),
+                            indication = rememberRipple(bounded = false),
                             onClick = onRefresh,
                         )
                         .padding(horizontal = 8.dp, vertical = 8.dp),
@@ -1335,7 +1351,7 @@ private fun FriendRow(friend: FriendEntry, onClick: () -> Unit) {
             .border(1.5.dp, t.surface3, RoundedCornerShape(12.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(),
+                indication = rememberRipple(),
                 onClick = onClick,
             )
             .padding(horizontal = 14.dp, vertical = 12.dp),
