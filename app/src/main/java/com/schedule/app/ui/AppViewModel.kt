@@ -1356,7 +1356,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             "💀","🎃","⚡","🔥","💎","🌙","⭐","🌈","🎵","🎮","🏆"
         )
     }
-}
 
 // ── Модель сообщения ──────────────────────────────────────────────────────────
 data class ChatMessage(
@@ -1461,7 +1460,6 @@ data class ChatMessage(
             regError = "❌ ${e.message}"
         } finally { authLoading = false }
     }
-}
 
 
     fun doLogin(onSuccess: () -> Unit) {
@@ -1495,4 +1493,5 @@ data class ChatMessage(
             authError = "❌ ${e.message}"
         } finally { authLoading = false }
     }
+}
 }
