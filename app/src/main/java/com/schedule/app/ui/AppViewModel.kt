@@ -1357,19 +1357,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-// ── Модель сообщения ──────────────────────────────────────────────────────────
-data class ChatMessage(
-    val id: String,
-    val chatKey: String,
-    val fromUser: String,
-    val toUser: String,
-    val text: String,
-    val ts: Long,
-    val type: String = "text",
-    val fileUrl: String? = null,
-)
-
-
     // ══════════════════════════════════════════════════════════════════════════
     // UI ДИАЛОГИ
     // ══════════════════════════════════════════════════════════════════════════
@@ -1461,7 +1448,6 @@ data class ChatMessage(
         } finally { authLoading = false }
     }
 
-
     fun doLogin(onSuccess: () -> Unit) {
     val username = authUsername.trim().lowercase()
     val password = authPassword
@@ -1494,4 +1480,15 @@ data class ChatMessage(
         } finally { authLoading = false }
     }
 }
-}
+
+// ── Модель сообщения ──────────────────────────────────────────────────────────
+data class ChatMessage(
+    val id: String,
+    val chatKey: String,
+    val fromUser: String,
+    val toUser: String,
+    val text: String,
+    val ts: Long,
+    val type: String = "text",
+    val fileUrl: String? = null,
+)

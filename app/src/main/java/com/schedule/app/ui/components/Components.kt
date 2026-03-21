@@ -6,7 +6,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
-import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.ripple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -92,7 +92,7 @@ fun BackButton(label: String = "Назад", onClick: () -> Unit) {
         modifier = Modifier
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(bounded = false),
+                indication = ripple(bounded = false),
                 onClick = onClick,
             )
             .padding(end = 4.dp, top = 8.dp, bottom = 8.dp),
@@ -164,7 +164,7 @@ fun ListItemRow(
             .border(1.5.dp, borderColor, RoundedCornerShape(10.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(),
+                indication = ripple(),
                 onClick = onClick,
             )
             .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -462,7 +462,7 @@ fun SettingsRow(
             .border(1.5.dp, t.surface3, RoundedCornerShape(10.dp))
             .then(if (onClick != null) Modifier.clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(),
+                indication = ripple(),
                 onClick = onClick,
             ) else Modifier)
             .padding(horizontal = 16.dp, vertical = 14.dp),

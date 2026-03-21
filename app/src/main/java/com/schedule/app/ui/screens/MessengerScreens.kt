@@ -7,7 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
-import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.ripple
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -232,7 +232,7 @@ private fun ChatPreviewRow(chat: ChatPreview, onClick: () -> Unit) {
             .fillMaxWidth()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(),
+                indication = ripple(),
                 onClick = onClick,
             )
             .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -444,7 +444,7 @@ private fun OnlineUserRow(user: OnlineUser, onClick: () -> Unit) {
             .border(1.5.dp, t.surface3, RoundedCornerShape(14.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(),
+                indication = ripple(),
                 onClick = onClick,
             )
             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -785,7 +785,7 @@ private fun GroupChatRow(group: GroupChat, onClick: () -> Unit) {
             .fillMaxWidth()
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(),
+                indication = ripple(),
                 onClick = onClick,
             )
             .padding(horizontal = 16.dp, vertical = 10.dp),
