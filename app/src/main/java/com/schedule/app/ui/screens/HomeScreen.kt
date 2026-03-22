@@ -5,6 +5,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -15,15 +16,15 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
-import com.schedule.app.ui.components.*
+import com.schedule.app.ui.components.AppButton
+import com.schedule.app.ui.components.BtnVariant
 import com.schedule.app.ui.theme.LocalTheme
 import kotlinx.coroutines.delay
-import java.util.Calendar
-import kotlin.math.*
+import java.util.*
 
 data class ScheduleFile(
     val name: String,
@@ -173,7 +174,7 @@ fun HomeScreen(
                     .border(1.dp, t.surface3, RoundedCornerShape(12.dp))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(bounded = false, radius = 20.dp),
+                        indication = null,
                         onClick = onOpenSettings
                     ),
                 contentAlignment = Alignment.Center
@@ -275,6 +276,7 @@ fun HomeScreen(
 // ==========================================================================================
 // Hero‑карточка (точное соответствие веб‑стилю)
 // ==========================================================================================
+@OptIn(ExperimentalTextApi::class)
 @Composable
 private fun HomeHero(
     isTeacher: Boolean,
@@ -285,7 +287,7 @@ private fun HomeHero(
     var lastTapTime by remember { mutableStateOf(0L) }
     val title = if (isTeacher) "Расписание\nПедагогам" else "Расписание\nСтудентам"
 
-    // Радиальный градиент за карточкой (как в вебе)
+    // Радиальный градиент за карточкой
     Box(
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         contentAlignment = Alignment.Center
@@ -324,7 +326,6 @@ private fun HomeHero(
                 )
                 .padding(horizontal = 32.dp, vertical = 18.dp)
         ) {
-            // Текст с многослойной тенью (как в вебе)
             DrawTextWithShadows(
                 text = title,
                 color = t.accent,
@@ -346,6 +347,7 @@ private fun HomeHero(
 /**
  * Рисует текст с несколькими тенями (как text‑shadow в CSS).
  */
+@OptIn(ExperimentalTextApi::class)
 @Composable
 private fun DrawTextWithShadows(
     text: String,
@@ -376,19 +378,18 @@ private fun DrawTextWithShadows(
         val layoutWidth = layoutResult.size.width
         val layoutHeight = layoutResult.size.height
 
-        // Вычисляем позицию (центрируем)
         val x = (canvasWidth - layoutWidth) / 2
         val y = (canvasHeight - layoutHeight) / 2
 
-        // Рисуем тени в порядке от дальней к ближней
+        // Рисуем тени (от дальней к ближней)
         shadows.reversed().forEach { shadow ->
             drawIntoCanvas { canvas ->
                 canvas.save()
                 canvas.translate(shadow.offset.x, shadow.offset.y)
-                canvas.nativeCanvas.drawTextLayout(
-                    layoutResult,
+                canvas.nativeCanvas.drawText(
+                    text,
                     x + shadow.offset.x,
-                    y + shadow.offset.y,
+                    y + shadow.offset.y + (layoutResult.size.height - layoutResult.firstBaseline),
                     android.graphics.Paint().apply {
                         color = shadow.color.toArgb()
                         setShadowLayer(shadow.blurRadius, 0f, 0f, shadow.color.toArgb())
@@ -397,9 +398,14 @@ private fun DrawTextWithShadows(
                 canvas.restore()
             }
         }
-        // Рисуем основной текст
+        // Основной текст
         drawIntoCanvas { canvas ->
-            canvas.nativeCanvas.drawTextLayout(layoutResult, x, y, android.graphics.Paint())
+            canvas.nativeCanvas.drawText(
+                text,
+                x,
+                y + (layoutResult.size.height - layoutResult.firstBaseline),
+                android.graphics.Paint().apply { color = color.toArgb() }
+            )
         }
     }
 }
@@ -542,6 +548,14 @@ private fun PressableListItemRow(
         label = "listItemScale"
     )
 
+    // Отслеживаем нажатие через pointerInput
+    val interactionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collect { interaction ->
+            pressed = interaction is PressInteraction.Press
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -557,11 +571,9 @@ private fun PressableListItemRow(
                 RoundedCornerShape(10.dp)
             )
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true),
-                onClick = onClick,
-                onPress = { pressed = true },
-                onRelease = { pressed = false }
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
             )
             .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
@@ -608,6 +620,13 @@ private fun ContinueButton(
         label = "continueBtnScale"
     )
 
+    val interactionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collect { interaction ->
+            pressed = interaction is PressInteraction.Press
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -616,11 +635,9 @@ private fun ContinueButton(
             .background(t.surface2)
             .border(1.5.dp, t.surface3, RoundedCornerShape(10.dp))
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true),
-                onClick = onClick,
-                onPress = { pressed = true },
-                onRelease = { pressed = false }
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
             )
             .padding(vertical = 15.dp),
         contentAlignment = Alignment.Center
@@ -636,7 +653,7 @@ private fun ContinueButton(
 }
 
 // ==========================================================================================
-// Вспомогательные компоненты (уже существующие в проекте, оставляем как есть)
+// Вспомогательные компоненты (уже существующие в проекте)
 // ==========================================================================================
 @Composable
 private fun NoUrlHint(onOpenSettings: () -> Unit) {
@@ -755,49 +772,3 @@ private fun EmptyState(
         )
     }
 }
-
-@Composable
-private fun AppButton(
-    label: String,
-    onClick: () -> Unit,
-    variant: BtnVariant = BtnVariant.Accent
-) {
-    val t = LocalTheme.current
-    val (bg, textColor) = when (variant) {
-        BtnVariant.Accent -> t.accent to Color.White
-        BtnVariant.Surface -> t.surface2 to t.text
-        BtnVariant.Surface3 -> t.surface3 to t.accent
-    }
-    var pressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.97f else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
-        label = "btnScale"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale)
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true),
-                onClick = onClick,
-                onPress = { pressed = true },
-                onRelease = { pressed = false }
-            )
-            .padding(vertical = 15.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            color = textColor,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-enum class BtnVariant { Accent, Surface, Surface3 }
