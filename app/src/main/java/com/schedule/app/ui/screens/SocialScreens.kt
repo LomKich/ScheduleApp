@@ -4,10 +4,13 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -23,7 +26,6 @@ import com.schedule.app.ui.components.*
 import com.schedule.app.ui.theme.LocalTheme
 
 
-// ── Pluralization helpers ─────────────────────────────────────────────────────
 fun friendWord(n: Int): String = when {
     n % 100 in 11..19 -> "друзей"
     n % 10 == 1       -> "друг"
@@ -1014,7 +1016,7 @@ private fun ProfileListRow(
             Text("›", color = t.muted, fontSize = 18.sp)
         }
         if (showDivider) {
-            androidx.compose.material3.Divider(
+            HorizontalDivider(
                 color = t.surface3,
                 thickness = 1.dp,
             )
@@ -1026,10 +1028,18 @@ private fun ProfileListRow(
 // PROFILE EDIT SCREEN  (#s-profile-edit)
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
+val PROFILE_ACCENT_COLORS = listOf(
+    "#E87722", "#60CDFF", "#4CAF7D", "#C94F4F",
+    "#A78BFA", "#F5C518", "#FF6B9D", "#00BCD4",
+    "#FF7043", "#8BC34A", "#9C27B0", "#FFFFFF",
+)
+
 fun ProfileEditScreen(
     profile: UserProfile,
     editName: String,
     onNameChange: (String) -> Unit,
+    editUsername: String = "",
+    onUsernameChange: (String) -> Unit = {},
     editBio: String,
     onBioChange: (String) -> Unit,
     editEmoji: String,
@@ -1037,6 +1047,9 @@ fun ProfileEditScreen(
     onRandomEmoji: () -> Unit,
     editStatus: String,
     onStatusChange: (String) -> Unit,
+    editColor: String = "#E87722",
+    onColorChange: (String) -> Unit = {},
+    onDeleteAccount: () -> Unit = {},
     onSave: () -> Unit,
     onBack: () -> Unit,
     onPickPhoto: () -> Unit = {},
@@ -1202,12 +1215,78 @@ fun ProfileEditScreen(
                         }
                     }
                     if (idx < PROFILE_STATUSES.lastIndex) {
-                        androidx.compose.material3.Divider(
+                        HorizontalDivider(
                             color = t.surface3,
                             thickness = 1.dp,
                         )
                     }
                 }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Юзернейм
+            SectionLabel("Юзернейм")
+            AppInput(
+                value = editUsername,
+                onValueChange = onUsernameChange,
+                placeholder = "твой_ник",
+                prefix = "@",
+                modifier = Modifier.padding(bottom = 16.dp),
+            )
+
+            // Цвет профиля
+            SectionLabel("Цвет профиля")
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(bottom = 20.dp),
+            ) {
+                items(PROFILE_ACCENT_COLORS) { hex ->
+                    val selected = editColor.equals(hex, ignoreCase = true)
+                    val dotColor = try {
+                        Color(android.graphics.Color.parseColor(hex))
+                    } catch (e: Exception) { t.accent }
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                            .then(
+                                if (selected) Modifier.border(3.dp, Color.White, CircleShape)
+                                else Modifier.border(2.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = rememberRipple(bounded = false),
+                                onClick = { onColorChange(hex) },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (selected) Text("✓", color = Color.Black.copy(alpha = 0.7f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // Удалить аккаунт
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(t.danger.copy(alpha = 0.10f))
+                    .border(1.5.dp, t.danger.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = rememberRipple(),
+                        onClick = onDeleteAccount,
+                    )
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+                Text(
+                    "\uD83D\uDDD1 Выйти и удалить аккаунт",
+                    color = t.danger,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
 
             Spacer(Modifier.height(100.dp))

@@ -485,7 +485,7 @@ fun DevConsole(
                 .padding(horizontal = 12.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            androidx.compose.foundation.lazy.items(entries) { entry ->
+            items(entries) { entry ->
                 Text(
                     text = entry.text,
                     color = when (entry.type) {

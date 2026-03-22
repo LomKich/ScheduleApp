@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
-import androidx.compose.ui.draw.alpha
 import com.schedule.app.ui.components.*
 import com.schedule.app.ui.theme.LocalTheme
 

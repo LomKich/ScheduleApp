@@ -243,19 +243,24 @@ fun AppScreen(
                     val p = vm.userProfile
                     if (p != null) {
                         ProfileEditScreen(
-                            profile        = p,
-                            editName       = vm.editName,
-                            onNameChange   = vm::onEditNameChange,
-                            editBio        = vm.editBio,
-                            onBioChange    = vm::onEditBioChange,
-                            editEmoji      = vm.editEmoji,
-                            onEmojiChange  = vm::onEditEmojiChange,
-                            onRandomEmoji  = vm::onEditRandomEmoji,
-                            editStatus     = vm.editStatus,
-                            onStatusChange = vm::onEditStatusChange,
-                            onSave         = { vm.saveEditProfile(); goBack(Screen.Profile) },
-                            onBack         = { goBack(Screen.Profile) },
-                            onPickPhoto    = onPickPhoto,
+                            profile          = p,
+                            editName         = vm.editName,
+                            onNameChange     = vm::onEditNameChange,
+                            editUsername     = vm.editUsername,
+                            onUsernameChange = vm::onEditUsernameChange,
+                            editBio          = vm.editBio,
+                            onBioChange      = vm::onEditBioChange,
+                            editEmoji        = vm.editEmoji,
+                            onEmojiChange    = vm::onEditEmojiChange,
+                            onRandomEmoji    = vm::onEditRandomEmoji,
+                            editStatus       = vm.editStatus,
+                            onStatusChange   = vm::onEditStatusChange,
+                            editColor        = vm.editColor,
+                            onColorChange    = vm::onEditColorChange,
+                            onDeleteAccount  = { vm.processCommand("deleteaccount ПОДТВЕРЖДАЮ"); goBack(Screen.Profile) },
+                            onSave           = { vm.saveEditProfile(); goBack(Screen.Profile) },
+                            onBack           = { goBack(Screen.Profile) },
+                            onPickPhoto      = onPickPhoto,
                         )
                     } else {
                         goBack(Screen.Profile)

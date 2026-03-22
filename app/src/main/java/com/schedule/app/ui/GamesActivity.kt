@@ -29,7 +29,7 @@ import com.schedule.app.AppLogger
 class GamesActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
-    private val log by lazy { AppLogger(this) }
+    private val log by lazy { AppLogger.get(this) }
     private val TAG = "GamesActivity"
 
     @SuppressLint("SetJavaScriptEnabled")

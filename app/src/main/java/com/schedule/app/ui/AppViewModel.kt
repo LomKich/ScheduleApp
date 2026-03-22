@@ -23,10 +23,22 @@ import org.json.JSONObject
 import java.net.URL
 import java.net.URLEncoder
 
+// ── Модель сообщения ──────────────────────────────────────────────────────────
+data class ChatMessage(
+    val id: String,
+    val chatKey: String,
+    val fromUser: String,
+    val toUser: String,
+    val text: String,
+    val ts: Long,
+    val type: String = "text",
+    val fileUrl: String? = null,
+)
+
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = app.getSharedPreferences("sapp_prefs", Context.MODE_PRIVATE)
-    private val log   = AppLogger(app)
+    private val log   = AppLogger.get(app)
     val sb: SupabaseClient = SupabaseClient.get(app, log)
 
     // ── Тема ──────────────────────────────────────────────────────────────────
@@ -95,14 +107,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ── Группы ────────────────────────────────────────────────────────────────
     var groups        by mutableStateOf<List<String>>(emptyList())
     var selectedGroup by mutableStateOf<String?>(prefs.getString("last_group", null))
-
-    fun selectFile(file: ScheduleFile) {
-        selectedFile = file
-        groups = listOf(
-            "МПД-2-24","МПД-1-24","ПК-3-23","ПК-2-23","ИС-1-24",
-            "ИС-2-23","ТЭ-1-24","ТЭ-2-23","БД-1-24","СА-3-22",
-        )
-    }
 
     fun selectGroup(group: String) {
         selectedGroup = group
@@ -531,45 +535,65 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // SUPABASE — РЕДАКТИРОВАНИЕ ПРОФИЛЯ
     // ══════════════════════════════════════════════════════════════════════════
 
-    var editName   by mutableStateOf("")
-    var editBio    by mutableStateOf("")
-    var editEmoji  by mutableStateOf("😊")
-    var editStatus by mutableStateOf("online")
-    var editLoading by mutableStateOf(false)
+    var editName     by mutableStateOf("")
+    var editBio      by mutableStateOf("")
+    var editEmoji    by mutableStateOf("😊")
+    var editStatus   by mutableStateOf("online")
+    var editUsername by mutableStateOf("")
+    var editColor    by mutableStateOf("#E87722")
+    var editLoading  by mutableStateOf(false)
 
     fun startEditProfile() {
         val p = userProfile ?: return
-        editName   = p.name
-        editBio    = p.bio
-        editEmoji  = p.avatar
-        editStatus = p.status
+        editName     = p.name
+        editBio      = p.bio
+        editEmoji    = p.avatar
+        editStatus   = p.status
+        editUsername = p.username
+        // Convert accentColor back to hex
+        val argb = p.accentColor.value.toLong()
+        editColor = "#%06X".format(argb and 0xFFFFFF)
     }
 
-    fun onEditNameChange(v: String)   { editName = v }
-    fun onEditBioChange(v: String)    { editBio = v }
-    fun onEditEmojiChange(v: String)  { editEmoji = v }
-    fun onEditStatusChange(v: String) { editStatus = v }
+    fun onEditNameChange(v: String)     { editName = v }
+    fun onEditBioChange(v: String)      { editBio = v }
+    fun onEditEmojiChange(v: String)    { editEmoji = v }
+    fun onEditStatusChange(v: String)   { editStatus = v }
+    fun onEditUsernameChange(v: String) { editUsername = v.trim().lowercase() }
+    fun onEditColorChange(v: String)    { editColor = v }
 
     fun saveEditProfile() {
         val p = userProfile ?: return
-        val username = p.username
+        val oldUsername = p.username
+        val newUsername = editUsername.trim().lowercase().ifEmpty { oldUsername }
         viewModelScope.launch {
             editLoading = true
             try {
+                val accent = try {
+                    Color(android.graphics.Color.parseColor(editColor))
+                } catch (e: Exception) { p.accentColor }
+
                 val updateJson = JSONObject().apply {
                     put("name",   editName.trim().ifEmpty { p.name })
                     put("bio",    editBio.trim())
-                    put("avatar", editEmoji.ifEmpty { "😊" })
+                    put("avatar", editEmoji.ifEmpty { "\uD83D\uDE0A" })
                     put("status", editStatus)
+                    put("color",  editColor)
+                    if (newUsername != oldUsername) put("username", newUsername)
                 }.toString()
                 withContext(Dispatchers.IO) {
-                    sb.update("users", "username=eq.$username", updateJson)
+                    sb.update("users", "username=eq.$oldUsername", updateJson)
+                }
+                if (newUsername != oldUsername) {
+                    prefs.edit().putString("sb_username", newUsername).apply()
                 }
                 userProfile = p.copy(
-                    name   = editName.trim().ifEmpty { p.name },
-                    bio    = editBio.trim(),
-                    avatar = editEmoji.ifEmpty { "😊" },
-                    status = editStatus,
+                    name        = editName.trim().ifEmpty { p.name },
+                    bio         = editBio.trim(),
+                    avatar      = editEmoji.ifEmpty { "\uD83D\uDE0A" },
+                    status      = editStatus,
+                    username    = newUsername,
+                    accentColor = accent,
                 )
             } catch (e: Exception) {
                 log.e("AppViewModel", "saveEditProfile error: ${e.message}")
@@ -851,7 +875,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (chatUsernames.isEmpty()) { messengerLoading = false; return }
 
             // Загружаем профили собеседников
-            val unames = chatUsernames.joinToString(",") { ""$it"" }
+            val unames = chatUsernames.joinToString(",") { "\"$it\"" }
             val profilesResult = withContext(Dispatchers.IO) {
                 sb.select("users", "select=username,name,avatar,avatar_type,avatar_data,status,vip&username=in.($unames)&limit=100")
             }
@@ -928,7 +952,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }.filter { it != (userProfile?.username ?: "") }
                 if (onlineNames.isEmpty()) { onlineUsersList = emptyList(); return@launch }
 
-                val unames = onlineNames.joinToString(",") { ""$it"" }
+                val unames = onlineNames.joinToString(",") { "\"$it\"" }
                 val profilesResult = withContext(Dispatchers.IO) {
                     sb.select("users", "select=username,name,avatar,avatar_type,avatar_data,status,bio,vip&username=in.($unames)&limit=200")
                 }
@@ -1033,7 +1057,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             groupChatsLoading = true
             try {
                 val result = withContext(Dispatchers.IO) {
-                    sb.select("groups", "select=id,name,avatar,members&members=cs.{"$myUsername"}&order=updated_at.desc&limit=100")
+                    sb.select("groups", "select=id,name,avatar,members&members=cs.{\"$myUsername\"}&order=updated_at.desc&limit=100")
                 }
                 val json = JSONObject(result)
                 if (json.optBoolean("ok")) {
@@ -1345,8 +1369,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         lines.add(""); lines.add("📲 ScheduleApp")
-        return lines.joinToString("
-")
+        return lines.joinToString("\n")
     }
 
     companion object {
@@ -1396,6 +1419,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             log.e("AppViewModel", "onPhotoPicked error: ${e.message}")
         }
     }
+    } // end onPhotoPicked
 
     // ══════════════════════════════════════════════════════════════════════════
     // CALLBACKS С НАВИГАЦИЕЙ (принимают лямбду onSuccess)
@@ -1449,6 +1473,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             regError = "❌ ${e.message}"
         } finally { authLoading = false }
     }
+}
 
 
     fun doLogin(onSuccess: () -> Unit) {
@@ -1484,16 +1509,3 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 }
-
-// ── Модель сообщения ──────────────────────────────────────────────────────────
-data class ChatMessage(
-    val id: String,
-    val chatKey: String,
-    val fromUser: String,
-    val toUser: String,
-    val text: String,
-    val ts: Long,
-    val type: String = "text",
-    val fileUrl: String? = null,
-)
-

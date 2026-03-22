@@ -1,9 +1,11 @@
 package com.schedule.app.ui.screens
 
-import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -248,7 +250,7 @@ private fun BellRow(period: BellPeriod, isLastInGroup: Boolean) {
 
         // Divider между рядами (кроме последнего)
         if (!isLastInGroup) {
-            androidx.compose.material3.Divider(
+            HorizontalDivider(
                 color = Color(0x0FFFFFFF),
                 thickness = 1.dp,
                 modifier = Modifier.padding(horizontal = 0.dp),
