@@ -548,7 +548,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ══════════════════════════════════════════════════════════════════════════
 
     var leaderboard      by mutableStateOf<List<LeaderboardEntry>>(emptyList())
-    var leaderboardGame  by mutableStateOf("snake")
+    var leaderboardGame by mutableStateOf("snake")
+        private set
     var leaderboardLoading by mutableStateOf(false)
 
     private suspend fun loadLeaderboardFromSupabase() {
