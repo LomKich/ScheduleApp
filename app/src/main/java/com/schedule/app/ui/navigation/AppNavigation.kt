@@ -312,7 +312,6 @@ fun AppScreen(
     isLoading = vm.leaderboardLoading,
     onBack = { goBack(Screen.Profile) },
 )
-                )
 
                 is Screen.Chat -> {
                     ChatScreen(
