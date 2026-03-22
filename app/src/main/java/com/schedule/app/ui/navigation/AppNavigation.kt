@@ -306,11 +306,12 @@ fun AppScreen(
                 )
 
                 Screen.Leaderboard -> LeaderboardScreen(
-                    entries        = vm.leaderboard,
-                    selectedGame   = vm.leaderboardGame,
-                    onGameSelect   = vm::setLeaderboardGame,
-                    isLoading      = vm.leaderboardLoading,
-                    onBack         = { goBack(Screen.Profile) },
+    entries        = vm.leaderboard,
+    selectedGame   = vm.leaderboardGame,
+    onGameSelect   = { game -> vm.leaderboardGame = game },   // ✅ правильно
+    isLoading      = vm.leaderboardLoading,
+    onBack         = { goBack(Screen.Profile) },
+)
                 )
 
                 is Screen.Chat -> {
