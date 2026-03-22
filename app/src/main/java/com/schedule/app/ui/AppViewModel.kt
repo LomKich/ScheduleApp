@@ -163,6 +163,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var selectedGroup by mutableStateOf<String?>(prefs.getString("last_group", null))
 
     fun selectGroup(group: String) {
+        log.i("AppViewModel", "selectGroup: $group")
         selectedGroup = group
         prefs.edit().putString("last_group", group).apply()
         loadSchedule(group)
@@ -199,16 +200,109 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectFile(file: ScheduleFile) {
         selectedFile = file
-        // Demo  1�7 real impl would parse .docx for both groups and teachers
-        groups = listOf(
-            "МПД-2-24","МПД-1-24","ПК-3-23","ПК-2-23","ИС-1-24",
-            "ИС-2-23","ТЭ-1-24","ТЭ-2-23","БД-1-24","СА-3-22",
-        )
-        teachers = listOf(
-            "Иванова А.В.","Петров И.С.","Сидорова Е.М.",
-            "Козлов Д.А.","Николаева О.П.","Федоров В.Г.",
-            "Смирнова Л.Н.","Кузнецов А.Р.","Попов М.С.",
-        )
+        groups   = emptyList()
+        teachers = emptyList()
+        log.i("AppViewModel", "selectFile: ${file.name}")
+        viewModelScope.launch {
+            isLoading = true
+            statusText = "Разбираю файл..."
+            log.i("AppViewModel", "selectFile: скачиваем ${file.name}...")
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    DocParser.downloadFile(yandexUrl, file.path) { p ->
+                        loadProgress = 0.2f + p * 0.5f
+                    }
+                }
+                log.i("AppViewModel", "selectFile: скачан ${bytes.size} байт, разбираем группы...")
+                loadProgress = 0.8f
+                val detectedGroups = withContext(Dispatchers.IO) { DocParser.detectGroups(bytes) }
+                log.i("AppViewModel", "selectFile: найдено ${detectedGroups.size} групп")
+                groups = detectedGroups
+                loadProgress = 1f
+                statusText = "Найдено: ${groups.size} групп"
+                delay(1200); loadProgress = 0f; statusText = ""
+            } catch (e: Exception) {
+                log.e("AppViewModel", "selectFile error: ${e.message}", e)
+                loadProgress = 0f; statusText = "❌ ${e.message}"
+            } finally { isLoading = false }
+        }
+    }
+
+    // ┄1�7┄1�7 Расписание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    var scheduleDays by mutableStateOf<List<ScheduleDay>>(emptyList())
+
+    private fun loadSchedule(group: String) {
+        val file = selectedFile ?: run {
+            log.w("AppViewModel", "loadSchedule: нет выбранного файла")
+            return
+        }
+        viewModelScope.launch {
+            isLoading = true
+            scheduleDays = emptyList()
+            log.i("AppViewModel", "loadSchedule: group=$group file=${file.name}")
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    DocParser.downloadFile(yandexUrl, file.path) { p ->
+                        loadProgress = p * 0.7f
+                    }
+                }
+                log.i("AppViewModel", "loadSchedule: файл скачан ${bytes.size} байт, парсим...")
+                loadProgress = 0.8f
+                val (rawSched, header) = withContext(Dispatchers.IO) {
+                    DocParser.parseDoc(bytes, group)
+                }
+                if (rawSched.isEmpty()) {
+                    log.w("AppViewModel", "loadSchedule: группа $group не найдена в файле")
+                    scheduleDays = emptyList()
+                } else {
+                    log.i("AppViewModel", "loadSchedule: найдено ${rawSched.size} пар, header=$header")
+                    val days = withContext(Dispatchers.IO) {
+                        DocParser.buildScheduleDays(rawSched, header, file.name)
+                    }
+                    scheduleDays = days
+                    log.i("AppViewModel", "loadSchedule: ок — ${days.sumOf { it.pairs.size }} пар")
+                }
+                loadProgress = 1f; delay(400); loadProgress = 0f
+            } catch (e: Exception) {
+                log.e("AppViewModel", "loadSchedule error: ${e.message}", e)
+                loadProgress = 0f
+            } finally { isLoading = false }
+        }
+    }
+    private fun loadScheduleForTeacher(teacher: String) {
+        log.w("AppViewModel", "loadScheduleForTeacher: не реализован для $teacher")
+        // TODO: реализовать через DocParser.parseDocForTeacher
+        scheduleDays = emptyList()
+    }
+
+    fun selectFile(file: ScheduleFile) {
+        selectedFile = file
+        groups   = emptyList()
+        teachers = emptyList()
+        log.i("AppViewModel", "selectFile: ${file.name}")
+        viewModelScope.launch {
+            isLoading = true
+            statusText = "Разбираю файл..."
+            log.i("AppViewModel", "selectFile: скачиваем ${file.name}...")
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    DocParser.downloadFile(yandexUrl, file.path) { p ->
+                        loadProgress = 0.2f + p * 0.5f
+                    }
+                }
+                log.i("AppViewModel", "selectFile: скачан ${bytes.size} байт, разбираем группы...")
+                loadProgress = 0.8f
+                val detectedGroups = withContext(Dispatchers.IO) { DocParser.detectGroups(bytes) }
+                log.i("AppViewModel", "selectFile: найдено ${detectedGroups.size} групп")
+                groups = detectedGroups
+                loadProgress = 1f
+                statusText = "Найдено: ${groups.size} групп"
+                delay(1200); loadProgress = 0f; statusText = ""
+            } catch (e: Exception) {
+                log.e("AppViewModel", "selectFile error: ${e.message}", e)
+                loadProgress = 0f; statusText = "❌ ${e.message}"
+            } finally { isLoading = false }
+        }
     }
 
     // ┄1�7┄1�7 Расписание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
@@ -856,25 +950,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             )}
     }
 
-    private fun buildDemoSchedule(group: String): List<ScheduleDay> {
-        val nowMin = run {
-            val c = java.util.Calendar.getInstance()
-            c.get(java.util.Calendar.HOUR_OF_DAY)*60 + c.get(java.util.Calendar.MINUTE)
-        }
-        fun isNow(s: Int, e: Int) = nowMin in s until e
-        return listOf(
-            ScheduleDay(
-                header = "РАСПИСАНИЕ: $group",
-                pairs  = listOf(
-                    Pair("I",  "08:30","09:15","09:20","10:05","Математика","Иванова А.В.","ауд. 204",  isNow = isNow(8*60+30, 10*60+5)),
-                    Pair("II", "10:15","11:00","11:05","11:50","Информатика","Петров И.С.","ауд. 301 (пк)"),
-                    Pair("III","12:20","13:05","13:10","13:55","История","Сидорова Е.М.","ауд. 115"),
-                    Pair("IV", "14:05","15:05",null,null,"Окно", isWindow = true),
-                    Pair("V",  "15:15","16:15",null,null,"Физкультура","Козлов Д.А.","спортзал"),
-                )
-            )
-        )
-    }
 
 
     // ══════════════════════════════════════════════════════════════════════════
