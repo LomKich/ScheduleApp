@@ -552,6 +552,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private set
     var leaderboardLoading by mutableStateOf(false)
 
+    @JvmName("doSetLeaderboardGame")
+    fun setLeaderboardGame(game: String) {
+        leaderboardGame = game
+    }
+
     private suspend fun loadLeaderboardFromSupabase() {
         try {
             leaderboardLoading = true
