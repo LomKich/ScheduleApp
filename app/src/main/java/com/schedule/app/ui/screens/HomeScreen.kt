@@ -27,63 +27,6 @@ data class ScheduleFile(
 // HOME SCREEN  (#s-home)
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-private fun HomeHero(onSecretTap: () -> Unit = {}) {
-    val t = LocalTheme.current
-    var tapCount by remember { mutableStateOf(0) }
-    val glowColor = t.accent.copy(alpha = 0.55f)
-
-    Box(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        // Radial gradient glow (::before)
-        Canvas(modifier = Modifier.size(240.dp).align(Alignment.TopCenter)) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(t.accent.copy(alpha = 0.12f), Color.Transparent),
-                ),
-            )
-        }
-
-        // Hero card
-        Box(
-            modifier = Modifier
-                .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp), clip = false)
-                .clip(RoundedCornerShape(24.dp))
-                .background(t.surface2)
-                .border(1.5.dp, t.surface3, RoundedCornerShape(24.dp))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                        tapCount++
-                        if (tapCount >= 7) { tapCount = 0; onSecretTap() }
-                    },
-                )
-                .padding(horizontal = 32.dp, vertical = 18.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "Расписание\nСтудентам",
-                color = t.accent,
-                fontSize = 38.sp,
-                fontWeight = FontWeight(800),
-                lineHeight = 42.sp,
-                letterSpacing = (-0.03).em,
-                textAlign = TextAlign.Center,
-                style = TextStyle(
-                    shadow = Shadow(
-                        color = glowColor,
-                        offset = Offset.Zero,
-                        blurRadius = 20f,
-                    ),
-                ),
-            )
-        }
-    }
-}
-
-@Composable
 fun HomeScreen(
     files: List<ScheduleFile>,
     selectedFile: ScheduleFile?,
@@ -148,64 +91,70 @@ fun HomeScreen(
             Spacer(Modifier.height(8.dp))
 
             // ── Mode toggle pill ──
-            ModeTogglePill(
-                isTeacher = isTeacher,
-                onModeChange = onModeChange,
+@Composable
+fun ModeTogglePill(
+    isTeacher: Boolean,
+    onModeChange: (isTeacher: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val t = LocalTheme.current
+    val density = LocalDensity.current
+    var containerWidth by remember { mutableStateOf(0f) }
+
+    val pillOffsetX by animateDpAsState(
+        targetValue = with(density) {
+            if (!isTeacher) 3.dp
+            else (containerWidth / 2f).toDp() + 3.dp - 3.dp
+        },
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 380f),
+        label = "modePill",
+    )
+    val pillWidth by animateDpAsState(
+        targetValue = with(density) { (containerWidth / 2f - 6f).toDp() },
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 380f),
+        label = "modePillW",
+    )
+
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(t.surface2)
+            .border(1.5.dp, t.surface3, CircleShape)
+            .padding(3.dp)
+            .onGloballyPositioned { containerWidth = it.size.width.toFloat() },
+    ) {
+        // Sliding pill with shadow
+        if (containerWidth > 0f) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                    .padding(start = pillOffsetX)
+                    .width(pillWidth)
+                    .height(36.dp)
+                    .clip(CircleShape)
+                    .background(t.accent)
+                    .shadow(elevation = 4.dp, shape = CircleShape, clip = false),
             )
+        }
 
-            // ── Status + progress bar ──
-            if (statusText.isNotEmpty()) {
-                StatusText(text = statusText)
-            } else {
-                Spacer(Modifier.height(18.dp))
-            }
-            AppProgressBar(
-                progress = loadProgress,
-                modifier = Modifier.padding(vertical = 6.dp),
-            )
-
-            // ── Файлы ──
-            when {
-                yandexUrl.isEmpty() -> {
-                    // .no-url-hint
-                    NoUrlHint(onOpenSettings = onOpenSettings)
-                }
-                isLoading && files.isEmpty() -> {
-                    // Скелетоны
-                    SectionLabel("Файлы")
-                    repeat(4) { SkeletonItem() }
-                }
-                files.isEmpty() && !isLoading -> {
-                    // Ошибка / пустой список
-                    EmptyState(
-                        icon = "🔌",
-                        title = "Не удалось загрузить файлы",
-                        subtitle = "Проверь подключение к интернету",
-                    )
-                    AppButton(
-                        label = "🔄 Повторить",
-                        onClick = onRetry,
-                        variant = BtnVariant.Surface,
-                    )
-                }
-                else -> {
-                    // Список файлов
-                    SectionLabel("Файлы")
-                    files.forEach { file ->
-                        ListItemRow(
-                            name = file.name,
-                            sub = if (file.size > 0) "${file.size / 1024} КБ" else null,
-                            selected = file.name == selectedFile?.name,
-                            onClick = { onFileClick(file) },
+        // Buttons
+        Row {
+            listOf("Студенты" to false, "Педагоги" to true).forEach { (label, teacher) ->
+                Text(
+                    text = label,
+                    color = if (isTeacher == teacher) Color.White else t.muted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { onModeChange(teacher) },
                         )
-                    }
-                }
+                        .wrapContentSize(Alignment.Center),
+                )
             }
-
-            Spacer(Modifier.height(100.dp)) // отступ под nav bar
         }
     }
 }
@@ -220,25 +169,17 @@ fun HomeScreen(
 private fun HomeHero(onSecretTap: () -> Unit = {}) {
     val t = LocalTheme.current
     var tapCount by remember { mutableStateOf(0) }
+    val glowColor = t.accent.copy(alpha = 0.55f)
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // Radial gradient glow (::before pseudo-element)
-        Canvas(
-            modifier = Modifier
-                .size(240.dp)
-                .align(Alignment.TopCenter),
-        ) {
+        // Radial gradient glow (::before)
+        Canvas(modifier = Modifier.size(240.dp).align(Alignment.TopCenter)) {
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(
-                        t.accent.copy(alpha = 0.12f),
-                        Color.Transparent,
-                    ),
+                    colors = listOf(t.accent.copy(alpha = 0.12f), Color.Transparent),
                 ),
             )
         }
@@ -246,18 +187,18 @@ private fun HomeHero(onSecretTap: () -> Unit = {}) {
         // Hero card
         Box(
             modifier = Modifier
-                .shadow(
-                    elevation = 12.dp,
-                    shape = RoundedCornerShape(24.dp),
-                    ambientColor = Color.Black.copy(alpha = 0.32f),
-                )
+                .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp), clip = false)
                 .clip(RoundedCornerShape(24.dp))
                 .background(t.surface2)
                 .border(1.5.dp, t.surface3, RoundedCornerShape(24.dp))
-                .clickable {
-                    tapCount++
-                    if (tapCount >= 7) { tapCount = 0; onSecretTap() }
-                }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {
+                        tapCount++
+                        if (tapCount >= 7) { tapCount = 0; onSecretTap() }
+                    },
+                )
                 .padding(horizontal = 32.dp, vertical = 18.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -269,12 +210,10 @@ private fun HomeHero(onSecretTap: () -> Unit = {}) {
                 lineHeight = 42.sp,
                 letterSpacing = (-0.03).em,
                 textAlign = TextAlign.Center,
-                // text-shadow: glow — через drawBehind не делается точно,
-                // но достигаем похожего эффекта через Shadow
-                style = androidx.compose.ui.text.TextStyle(
+                style = TextStyle(
                     shadow = Shadow(
-                        color = t.accent.copy(alpha = 0.55f),
-                        offset = Offset(0f, 0f),
+                        color = glowColor,
+                        offset = Offset.Zero,
                         blurRadius = 20f,
                     ),
                 ),
