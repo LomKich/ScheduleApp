@@ -306,11 +306,11 @@ fun AppScreen(
                 )
 
                 Screen.Leaderboard -> LeaderboardScreen(
-    entries        = vm.leaderboard,
-    selectedGame   = vm.leaderboardGame,
-    onGameSelect = { vm.leaderboardGame = it },   // ✅ правильно
-    isLoading      = vm.leaderboardLoading,
-    onBack         = { goBack(Screen.Profile) },
+    entries = vm.leaderboard,
+    selectedGame = vm.leaderboardGame,
+    onGameSelect = { vm.leaderboardGame = it },
+    isLoading = vm.leaderboardLoading,
+    onBack = { goBack(Screen.Profile) },
 )
                 )
 
