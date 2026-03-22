@@ -146,3 +146,26 @@ jobs:
       - name: Cleanup keystore
         if: always()
         run: rm -f $RUNNER_TEMP/release.jks
+
+- name: Setup Android SDK
+  run: |
+    export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+    export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
+
+    mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+    cd $ANDROID_SDK_ROOT/cmdline-tools
+
+    # скачиваем cmdline-tools
+    curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+    unzip sdk-tools.zip
+    mv cmdline-tools latest
+
+    mkdir -p ~/.android
+    touch ~/.android/repositories.cfg
+
+    yes | sdkmanager --licenses > /dev/null
+
+    sdkmanager \
+      "platform-tools" \
+      "platforms;android-34" \
+      "build-tools;34.0.0"
