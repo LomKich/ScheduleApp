@@ -77,6 +77,14 @@ object AppColors {
             Color(0xFF000000),Color(0xFF111111),Color(0xFF1C1C1C),Color(0xFF2A2A2A),
             Color(0xFFFFFFFF),Color(0xFFCCCCCC),Color(0xFFFFFFFF),Color(0xFF666666),
             btnText = Color.Black),
+        ThemeDef("aero","Aero","💎",
+            Color(0xFF152030),Color(0xFF1A2D44),Color(0xFF1F3755),Color(0xFF274466),
+            Color(0xFF7FD7FF),Color(0xFF00A8E8),Color(0xFFE8F4FF),Color(0xFF7A9AB8),
+            btnText = Color.Black),
+        ThemeDef("glass","Liquid Glass","🫧",
+            Color(0xFF0A0F1E),Color(0x12FFFFFF),Color(0x1CFFFFFF),Color(0x2EFFFFFF),
+            Color(0xFFA0C4FF),Color(0xFF7B9FFF),Color(0xFFF0F4FF),Color(0xB4B4DCFF),
+            btnText = Color.Black),
         ThemeDef("ocean","Океан","🌊",
             Color(0xFF000D1A),Color(0xFF001628),Color(0xFF002038),Color(0xFF002D4F),
             Color(0xFF00C8FF),Color(0xFF0099CC),Color(0xFFD0F4FF),Color(0xFF446677),
@@ -92,4 +100,31 @@ object AppColors {
             Color(0xFFF4F4F4),Color(0xFFFFFFFF),Color(0xFFEBEBEB),Color(0xFFD8D8D8),
             Color(0xFFE87722),Color(0xFFC45F0A),Color(0xFF111111),Color(0xFF888888)),
     )
+
+    // ── Шрифты ─────────────────────────────────────────────────────────────────
+    data class FontDef(val id: String, val name: String, val sub: String, val isSerif: Boolean = false)
+
+    val fonts = listOf(
+        FontDef("default",       "По умолчанию",    "Geologica"),
+        FontDef("nunito",        "Nunito",           "Мягкий, скруглённый"),
+        FontDef("rubik",         "Rubik",            "Современный, геометричный"),
+        FontDef("manrope",       "Manrope",          "Строгий, технологичный"),
+        FontDef("inter",         "Inter",            "Читаемый, нейтральный"),
+        FontDef("montserrat",    "Montserrat",       "Стильный, акцентный"),
+        FontDef("unbounded",     "Unbounded",        "Широкий, брутальный"),
+        FontDef("space_grotesk", "Space Grotesk",    "Космический, техно"),
+        FontDef("comfortaa",     "Comfortaa",        "Дружелюбный, округлый"),
+        FontDef("raleway",       "Raleway",          "Элегантный, тонкий"),
+        FontDef("oswald",        "Oswald",           "Узкий, газетный"),
+        FontDef("caveat",        "Caveat",           "Рукописный, живой"),
+        FontDef("fira_code",     "Fira Code",        "Моно, программистский"),
+        FontDef("russo_one",     "Russo One",        "Жёсткий, русский гротеск"),
+        FontDef("jetbrains_mono","JetBrains Mono",   "Моношрифт, программистский"),
+        FontDef("pt_sans",       "PT Sans",          "Классический русский гротеск"),
+        FontDef("pt_serif",      "PT Serif",         "Классическая антиква", isSerif = true),
+        FontDef("lora",          "Lora",             "Элегантная книжная антиква", isSerif = true),
+        FontDef("golos_text",    "Golos Text",       "Современный русский дизайн"),
+        FontDef("ubuntu",        "Ubuntu",           "Открытый, Linux-стиль"),
+    )
+
 }

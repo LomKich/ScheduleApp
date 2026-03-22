@@ -4,10 +4,13 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -21,6 +24,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import com.schedule.app.ui.components.*
 import com.schedule.app.ui.theme.LocalTheme
+
+
+fun friendWord(n: Int): String = when {
+    n % 100 in 11..19 -> "друзей"
+    n % 10 == 1       -> "друг"
+    n % 10 in 2..4    -> "друга"
+    else              -> "друзей"
+}
+
+fun groupWord(n: Int): String = when {
+    n % 100 in 11..19 -> "групп"
+    n % 10 == 1       -> "группа"
+    n % 10 in 2..4    -> "группы"
+    else              -> "групп"
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA MODELS
@@ -424,9 +442,11 @@ fun ProfileScreen(
     onOpenLeaderboard: () -> Unit,
     onOpenFriends: () -> Unit,
     onOpenGroups: () -> Unit,
+    onOpenGames: () -> Unit = {},
     onReconnect: () -> Unit,
     onToggleNotif: () -> Unit,
     onToggleBgService: () -> Unit,
+    onLogout: () -> Unit = {},
 ) {
     val t = LocalTheme.current
 
@@ -510,10 +530,11 @@ fun ProfileScreen(
                                 .border(3.dp, profile.accentColor, CircleShape),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(
-                                text = profile.avatar,
-                                fontSize = 44.sp,
-                                textAlign = TextAlign.Center,
+                            AvatarView(
+                                avatar     = profile.avatar,
+                                avatarType = profile.avatarType,
+                                avatarData = profile.avatarData,
+                                size       = 90.dp,
                             )
                         }
                         // VIP crown
@@ -656,6 +677,13 @@ fun ProfileScreen(
                         .background(t.surface2)
                         .border(1.5.dp, t.surface3, RoundedCornerShape(16.dp)),
                 ) {
+                    ProfileListRow(
+                        icon = "🎮",
+                        title = "Игры",
+                        subtitle = "15 мини-игр · секретный режим",
+                        onClick = onOpenGames,
+                        showDivider = true,
+                    )
                     ProfileListRow(
                         icon = "🏆",
                         title = "Таблица лидеров",
@@ -856,6 +884,45 @@ fun ProfileScreen(
                     )
                 }
 
+                // ── Кнопка выхода ────────────────────────────────────────
+                Spacer(Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(t.surface2)
+                        .border(1.5.dp, t.surface3, RoundedCornerShape(16.dp)),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication        = rememberRipple(),
+                                onClick           = onLogout,
+                            )
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(t.danger.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("🚪", fontSize = 14.sp) }
+                        Text(
+                            "Выйти из аккаунта",
+                            color = t.danger,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text("›", color = t.muted, fontSize = 18.sp)
+                    }
+                }
                 Spacer(Modifier.height(100.dp))
             }
         }
@@ -949,7 +1016,7 @@ private fun ProfileListRow(
             Text("›", color = t.muted, fontSize = 18.sp)
         }
         if (showDivider) {
-            androidx.compose.material3.Divider(
+            HorizontalDivider(
                 color = t.surface3,
                 thickness = 1.dp,
             )
@@ -960,11 +1027,19 @@ private fun ProfileListRow(
 // ─────────────────────────────────────────────────────────────────────────────
 // PROFILE EDIT SCREEN  (#s-profile-edit)
 // ─────────────────────────────────────────────────────────────────────────────
+val PROFILE_ACCENT_COLORS = listOf(
+    "#E87722", "#60CDFF", "#4CAF7D", "#C94F4F",
+    "#A78BFA", "#F5C518", "#FF6B9D", "#00BCD4",
+    "#FF7043", "#8BC34A", "#9C27B0", "#FFFFFF",
+)
+
 @Composable
 fun ProfileEditScreen(
     profile: UserProfile,
     editName: String,
     onNameChange: (String) -> Unit,
+    editUsername: String = "",
+    onUsernameChange: (String) -> Unit = {},
     editBio: String,
     onBioChange: (String) -> Unit,
     editEmoji: String,
@@ -972,8 +1047,12 @@ fun ProfileEditScreen(
     onRandomEmoji: () -> Unit,
     editStatus: String,
     onStatusChange: (String) -> Unit,
+    editColor: String = "#E87722",
+    onColorChange: (String) -> Unit = {},
+    onDeleteAccount: () -> Unit = {},
     onSave: () -> Unit,
     onBack: () -> Unit,
+    onPickPhoto: () -> Unit = {},
 ) {
     val t = LocalTheme.current
 
@@ -1024,15 +1103,26 @@ fun ProfileEditScreen(
                         modifier = Modifier
                             .size(80.dp)
                             .clip(CircleShape)
-                            .background(t.surface2)
-                            .border(3.dp, profile.accentColor, CircleShape),
-                        contentAlignment = Alignment.Center,
+                            .clickable(onClick = onPickPhoto),
                     ) {
-                        Text(
-                            text = editEmoji.ifEmpty { profile.avatar },
-                            fontSize = 38.sp,
-                            textAlign = TextAlign.Center,
+                        AvatarView(
+                            avatar     = editEmoji.ifEmpty { profile.avatar },
+                            avatarType = profile.avatarType,
+                            avatarData = profile.avatarData,
+                            size       = 80.dp,
+                            borderColor= profile.accentColor,
+                            borderWidth= 3.dp,
                         )
+                        // Camera overlay hint
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("📷", fontSize = 22.sp)
+                        }
                     }
                     Spacer(Modifier.height(10.dp))
                     // Emoji edit row
@@ -1125,12 +1215,78 @@ fun ProfileEditScreen(
                         }
                     }
                     if (idx < PROFILE_STATUSES.lastIndex) {
-                        androidx.compose.material3.Divider(
+                        HorizontalDivider(
                             color = t.surface3,
                             thickness = 1.dp,
                         )
                     }
                 }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Юзернейм
+            SectionLabel("Юзернейм")
+            AppInput(
+                value = editUsername,
+                onValueChange = onUsernameChange,
+                placeholder = "твой_ник",
+                prefix = "@",
+                modifier = Modifier.padding(bottom = 16.dp),
+            )
+
+            // Цвет профиля
+            SectionLabel("Цвет профиля")
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(bottom = 20.dp),
+            ) {
+                items(PROFILE_ACCENT_COLORS) { hex ->
+                    val selected = editColor.equals(hex, ignoreCase = true)
+                    val dotColor = try {
+                        Color(android.graphics.Color.parseColor(hex))
+                    } catch (e: Exception) { t.accent }
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                            .then(
+                                if (selected) Modifier.border(3.dp, Color.White, CircleShape)
+                                else Modifier.border(2.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = rememberRipple(bounded = false),
+                                onClick = { onColorChange(hex) },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (selected) Text("✓", color = Color.Black.copy(alpha = 0.7f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // Удалить аккаунт
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(t.danger.copy(alpha = 0.10f))
+                    .border(1.5.dp, t.danger.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = rememberRipple(),
+                        onClick = onDeleteAccount,
+                    )
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+                Text(
+                    "\uD83D\uDDD1 Выйти и удалить аккаунт",
+                    color = t.danger,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
 
             Spacer(Modifier.height(100.dp))
@@ -1283,16 +1439,13 @@ private fun FriendRow(friend: FriendEntry, onClick: () -> Unit) {
     ) {
         // Avatar with online indicator
         Box(modifier = Modifier.size(44.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(t.surface3)
-                    .border(2.dp, t.surface3, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(friend.avatar, fontSize = 22.sp)
-            }
+            AvatarView(
+                avatar     = friend.avatar,
+                avatarType = "emoji",
+                size       = 44.dp,
+                borderColor = t.surface3,
+                borderWidth = 2.dp,
+            )
             // Online dot
             if (friend.isOnline) {
                 Box(
@@ -1356,142 +1509,3 @@ data class LeaderboardEntry(
     val game: String,
     val isMe: Boolean = false,
 )
-
-@Composable
-fun LeaderboardScreen(
-    entries: List<LeaderboardEntry>,
-    onBack: () -> Unit,
-) {
-    val t = LocalTheme.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(t.bg),
-    ) {
-        AppHeader(title = "🏆 Таблица лидеров", onBack = onBack)
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp),
-        ) {
-            Spacer(Modifier.height(8.dp))
-
-            if (entries.isEmpty()) {
-                EmptyState(
-                    icon = "🏆",
-                    title = "Нет рекордов",
-                    subtitle = "Сыграй в игры, чтобы попасть в таблицу",
-                )
-            } else {
-                entries.forEach { entry ->
-                    LeaderboardRow(entry = entry)
-                }
-            }
-            Spacer(Modifier.height(100.dp))
-        }
-    }
-}
-
-@Composable
-private fun LeaderboardRow(entry: LeaderboardEntry) {
-    val t = LocalTheme.current
-    val rankColor = when (entry.rank) {
-        1 -> Color(0xFFF5C518)   // gold
-        2 -> Color(0xFFB0B0B0)   // silver
-        3 -> Color(0xFFCD7F32)   // bronze
-        else -> t.muted
-    }
-    val rankIcon = when (entry.rank) {
-        1 -> "🥇"; 2 -> "🥈"; 3 -> "🥉"
-        else -> "#${entry.rank}"
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 7.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (entry.isMe) t.accent.copy(alpha = 0.10f) else t.surface2)
-            .border(
-                1.5.dp,
-                if (entry.isMe) t.accent.copy(alpha = 0.40f) else t.surface3,
-                RoundedCornerShape(12.dp),
-            )
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // Rank
-        Text(
-            text = rankIcon,
-            color = rankColor,
-            fontSize = if (entry.rank <= 3) 20.sp else 14.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(28.dp),
-        )
-
-        // Avatar
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(t.surface3),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(entry.avatar, fontSize = 20.sp)
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    entry.name,
-                    color = if (entry.isMe) t.accent else t.text,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (entry.isMe) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(t.accent.copy(alpha = 0.15f))
-                            .padding(horizontal = 5.dp, vertical = 2.dp),
-                    ) {
-                        Text("ты", color = t.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-            Text("${entry.game}", color = t.muted, fontSize = 11.sp)
-        }
-
-        // Score
-        Text(
-            text = "${entry.score}",
-            color = rankColor,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-private fun friendWord(count: Int): String = when {
-    count % 100 in 11..14 -> "человек"
-    count % 10 == 1 -> "человек"
-    count % 10 in 2..4 -> "человека"
-    else -> "человек"
-}
-
-private fun groupWord(count: Int): String = when {
-    count % 100 in 11..14 -> "групп"
-    count % 10 == 1 -> "группа"
-    count % 10 in 2..4 -> "группы"
-    else -> "групп"
-}

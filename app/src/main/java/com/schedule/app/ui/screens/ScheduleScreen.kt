@@ -48,9 +48,21 @@ fun ScheduleScreen(
     dateText: String,
     days: List<ScheduleDay>,
     isLoading: Boolean,
+    focusMode: Boolean = false,
+    searchQuery: String = "",
+    onSearchQueryChange: (String) -> Unit = {},
+    searchVisible: Boolean = false,
+    starredPairs: Set<String> = emptySet(),
+    pairNotes: Map<String, String> = emptyMap(),
     onBack: () -> Unit,
     onSearch: () -> Unit,
     onShare: () -> Unit,
+    onToggleFocus: () -> Unit = {},
+    onToggleStar: (String) -> Unit = {},
+    onOpenNote: (String) -> Unit = {},
+    onCopyPair: (String) -> Unit = {},
+    onConsole: () -> Unit = {},
+    onExcuse: () -> Unit = {},
 ) {
     val t = LocalTheme.current
 
@@ -130,6 +142,15 @@ fun ScheduleScreen(
                 .weight(1f)
                 .verticalScroll(rememberScrollState()),
         ) {
+            val displayDays = if (searchQuery.isEmpty()) days else days.map { day ->
+                day.copy(pairs = day.pairs.filter { 
+                    it.subject.contains(searchQuery, ignoreCase = true) ||
+                    (it.teacher?.contains(searchQuery, ignoreCase = true) == true) ||
+                    (it.room?.contains(searchQuery, ignoreCase = true) == true)
+                })
+            }.filter { it.pairs.isNotEmpty() }
+            val effectiveDays = if (searchQuery.isEmpty()) days else displayDays
+
             if (isLoading) {
                 Spacer(Modifier.height(16.dp))
                 repeat(5) { i ->
@@ -145,11 +166,11 @@ fun ScheduleScreen(
             } else if (days.isEmpty()) {
                 EmptyState(icon = "📭", title = "Расписание не найдено")
             } else {
-                days.forEach { day ->
+                effectiveDays.forEach { day ->
                     // Day header
                     DayHeaderRow(text = day.header)
                     day.pairs.forEach { pair ->
-                        PairCard(pair = pair)
+                        PairCard(pair = pair, starredPairs = starredPairs, pairNotes = pairNotes, focusMode = focusMode)
                     }
                 }
             }
@@ -248,7 +269,12 @@ private fun DayHeaderRow(text: String) {
 // .pair-details: 12.5px muted padding 0 14px 12px 50px
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
-fun PairCard(pair: Pair) {
+fun PairCard(
+    pair: Pair,
+    starredPairs: Set<String> = emptySet(),
+    pairNotes: Map<String, String> = emptyMap(),
+    focusMode: Boolean = false,
+) {
     val t = LocalTheme.current
 
     val leftBorderColor = when {
@@ -266,10 +292,14 @@ fun PairCard(pair: Pair) {
         else       -> t.surface3
     }
 
+    val pairKey = "${pair.num}_${pair.subject}"
+    val isStarred = starredPairs.contains(pairKey)
+    val hasNote   = pairNotes.containsKey(pairKey)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 18.dp, end = 18.dp, bottom = 9.dp),
+            .padding(start = 18.dp, end = 18.dp, bottom = 9.dp)
+            .then(if (focusMode && !pair.isNow && !pair.isNext) Modifier.alpha(0.25f) else Modifier),
     ) {
         Row(
             modifier = Modifier
