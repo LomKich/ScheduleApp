@@ -1,9 +1,13 @@
 package com.schedule.app.ui.screens
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,8 +31,9 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CHAT SCREEN
+// CHAT SCREEN — Telegram-style с reply, шапкой-аватаром, меню
 // ─────────────────────────────────────────────────────────────────────────────
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatScreen(
     withUsername: String,
@@ -42,6 +47,8 @@ fun ChatScreen(
 ) {
     val t = LocalTheme.current
     val listState = rememberLazyListState()
+    var replyTo by remember { mutableStateOf<ChatMessage?>(null) }
+    var showMenu by remember { mutableStateOf<ChatMessage?>(null) }
 
     // Автоскролл при новых сообщениях
     LaunchedEffect(messages.size) {
@@ -50,68 +57,196 @@ fun ChatScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(t.bg),
-    ) {
-        // Header
-        AppHeader(
-            title    = "@$withUsername",
-            subtitle = "Личные сообщения",
-            onBack   = onBack,
-        )
-
-        // Messages list
-        if (isLoading && messages.isEmpty()) {
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = t.accent, modifier = Modifier.size(32.dp))
-            }
-        } else if (messages.isEmpty()) {
-            Box(
-                Modifier.weight(1f).padding(horizontal = 24.dp),
-                contentAlignment = Alignment.Center,
+    Box(modifier = Modifier.fillMaxSize().background(t.bg)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // ── Header — как в Telegram: аватар + имя + статус ───────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(t.surface)
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("💬", fontSize = 40.sp)
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "Начни диалог с @$withUsername",
-                        color = t.muted,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center,
-                    )
+                // Назад
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("‹", color = t.accent, fontSize = 28.sp, fontWeight = FontWeight.Light)
+                }
+                // Аватар
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(t.accent.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(withUsername.take(1).uppercase(), color = t.accent,
+                        fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("@$withUsername", color = t.text, fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text("Личные сообщения", color = t.muted, fontSize = 11.sp)
+                }
+                // Info button
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .clickable { },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("⋮", color = t.muted, fontSize = 22.sp)
                 }
             }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-                contentPadding = PaddingValues(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                items(messages, key = { it.id }) { msg ->
-                    ChatBubble(
-                        message    = msg,
-                        isFromMe   = msg.fromUser == myUsername,
+
+            // ── Messages ──────────────────────────────────────────────────
+            if (isLoading && messages.isEmpty()) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = t.accent, modifier = Modifier.size(32.dp))
+                }
+            } else if (messages.isEmpty()) {
+                Box(
+                    Modifier.weight(1f).padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("💬", fontSize = 40.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text("Начни диалог с @$withUsername",
+                            color = t.muted, fontSize = 14.sp,
+                            textAlign = TextAlign.Center)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    // Group by date
+                    var lastDate = ""
+                    messages.forEach { msg ->
+                        val dateStr = SimpleDateFormat("d MMMM", Locale.getDefault())
+                            .format(Date(msg.ts))
+                        if (dateStr != lastDate) {
+                            lastDate = dateStr
+                            item(key = "date_$dateStr") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(vertical = 8.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(t.surface2.copy(alpha = 0.85f))
+                                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    ) {
+                                        Text(dateStr, color = t.muted, fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                        item(key = msg.id) {
+                            ChatBubble(
+                                message  = msg,
+                                isFromMe = msg.fromUser == myUsername,
+                                onReply  = { replyTo = msg },
+                                onLongPress = { showMenu = msg },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Reply bar ─────────────────────────────────────────────────
+            if (replyTo != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(t.surface)
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height(32.dp)
+                            .background(t.accent),
                     )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(replyTo!!.fromUser, color = t.accent,
+                            fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(replyTo!!.text, color = t.muted, fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                    Text("×", color = t.muted, fontSize = 22.sp,
+                        modifier = Modifier.clickable { replyTo = null })
+                }
+            }
+
+            // ── Input bar ─────────────────────────────────────────────────
+            ChatInputBar(
+                value     = messageInput,
+                onChanged = onInputChange,
+                onSend    = { onSend(); replyTo = null },
+            )
+        }
+
+        // ── Context menu overlay ──────────────────────────────────────────
+        if (showMenu != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clickable { showMenu = null },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 40.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(t.surface)
+                        .clickable(enabled = false) {}
+                        .padding(8.dp),
+                ) {
+                    listOf("↩ Ответить", "📋 Копировать").forEach { action ->
+                        Text(
+                            action, color = t.text, fontSize = 15.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (action.contains("Ответить")) replyTo = showMenu
+                                    showMenu = null
+                                }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                        )
+                    }
                 }
             }
         }
-
-        // Input bar
-        ChatInputBar(
-            value     = messageInput,
-            onChanged = onInputChange,
-            onSend    = onSend,
-        )
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChatBubble(
     message: ChatMessage,
     isFromMe: Boolean,
+    onReply: () -> Unit = {},
+    onLongPress: () -> Unit = {},
 ) {
     val t = LocalTheme.current
     val timeStr = remember(message.ts) {
@@ -119,7 +254,9 @@ private fun ChatBubble(
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
         horizontalArrangement = if (isFromMe) Arrangement.End else Arrangement.Start,
     ) {
         Box(
@@ -127,27 +264,39 @@ private fun ChatBubble(
                 .widthIn(max = 280.dp)
                 .clip(
                     RoundedCornerShape(
-                        topStart = 18.dp, topEnd = 18.dp,
+                        topStart    = 18.dp, topEnd = 18.dp,
                         bottomStart = if (isFromMe) 18.dp else 4.dp,
                         bottomEnd   = if (isFromMe) 4.dp  else 18.dp,
                     )
                 )
                 .background(if (isFromMe) t.accent else t.surface2)
+                .combinedClickable(
+                    onClick    = {},
+                    onLongClick = onLongPress,
+                )
                 .padding(horizontal = 14.dp, vertical = 9.dp),
         ) {
             Column {
                 Text(
-                    text     = message.text,
-                    color    = if (isFromMe) t.btnText else t.text,
-                    fontSize = 14.sp,
+                    text       = message.text,
+                    color      = if (isFromMe) t.btnText else t.text,
+                    fontSize   = 14.sp,
                     lineHeight = 20.sp,
                 )
-                Text(
-                    text      = timeStr,
-                    color     = if (isFromMe) t.btnText.copy(alpha = 0.65f) else t.muted,
-                    fontSize  = 11.sp,
-                    modifier  = Modifier.align(Alignment.End).padding(top = 2.dp),
-                )
+                Row(
+                    modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        timeStr,
+                        color    = if (isFromMe) t.btnText.copy(alpha = 0.65f) else t.muted,
+                        fontSize = 11.sp,
+                    )
+                    if (isFromMe) {
+                        Text("✓✓", color = t.btnText.copy(alpha = 0.65f), fontSize = 10.sp)
+                    }
+                }
             }
         }
     }
@@ -165,12 +314,12 @@ private fun ChatInputBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(t.surface)
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
             .navigationBarsPadding(),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Text field
+        // Input field
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -182,10 +331,17 @@ private fun ChatInputBar(
             if (value.isEmpty()) {
                 Text("Сообщение...", color = t.muted, fontSize = 14.sp)
             }
-            BasicTextFieldCompat(
-                value     = value,
-                onChanged = onChanged,
-                onSend    = onSend,
+            androidx.compose.foundation.text.BasicTextField(
+                value         = value,
+                onValueChange = onChanged,
+                textStyle     = androidx.compose.ui.text.TextStyle(color = t.text, fontSize = 14.sp),
+                maxLines      = 4,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction      = ImeAction.Send,
+                ),
+                keyboardActions = KeyboardActions(onSend = { onSend() }),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
 
@@ -200,36 +356,15 @@ private fun ChatInputBar(
         ) {
             Text(
                 "➤",
-                color     = if (value.trim().isNotEmpty()) t.btnText else t.muted,
-                fontSize  = 18.sp,
+                color    = if (value.trim().isNotEmpty()) t.btnText else t.muted,
+                fontSize = 18.sp,
             )
         }
     }
 }
 
-// Simple inline text field for chat
-@Composable
-private fun BasicTextFieldCompat(
-    value: String,
-    onChanged: (String) -> Unit,
-    onSend: () -> Unit,
-) {
-    val t = LocalTheme.current
-    androidx.compose.foundation.text.BasicTextField(
-        value         = value,
-        onValueChange = onChanged,
-        textStyle     = androidx.compose.ui.text.TextStyle(color = t.text, fontSize = 14.sp),
-        maxLines      = 4,
-        keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.Sentences,
-            imeAction = ImeAction.Send,
-        ),
-        keyboardActions = KeyboardActions(onSend = { onSend() }),
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
+// ADD HOMEWORK DIALOG// ─────────────────────────────────────────────────────────────────────────────
 // ADD HOMEWORK DIALOG
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable

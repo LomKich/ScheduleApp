@@ -2,6 +2,7 @@ package com.schedule.app.ui.screens
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
@@ -276,6 +277,16 @@ fun SettingsScreen(
     onToggleGlass: () -> Unit,
     isGlassOptMode: Boolean = false,
     onToggleGlassOpt: () -> Unit = {},
+    hasBgImage: Boolean = false,
+    bgImageData: String? = null,
+    isBgBlurEnabled: Boolean = true,
+    onToggleBgBlur: () -> Unit = {},
+    onPickBgImage: () -> Unit = {},
+    onRemoveBgImage: () -> Unit = {},
+    isIphoneEmoji: Boolean = false,
+    onToggleIphoneEmoji: () -> Unit = {},
+    hotPatchStatus: String = "",
+    onHotPatch: () -> Unit = {},
     appVersion: String,
     onBack: () -> Unit,
     onSwitchToWebView: () -> Unit = {},
@@ -301,73 +312,6 @@ fun SettingsScreen(
         ) {
             Spacer(Modifier.height(16.dp))
 
-            // ── Интерфейс ─────────────────────────────────────────────
-            SectionLabel("Интерфейс")
-            // Карточка переключения — акцентная рамка, чтобы выделялась
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(t.surface2)
-                    .border(1.5.dp, t.surface3, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            text = "🚀 Сейчас: Нативный",
-                            color = t.text,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(t.accent.copy(alpha = 0.15f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        ) {
-                            Text(
-                                "Kotlin",
-                                color = t.accent,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                    }
-                    Text(
-                        text = "Переключиться на HTML / WebView версию",
-                        color = t.muted,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(t.surface3)
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = androidx.compose.material.ripple.rememberRipple(),
-                            onClick = onSwitchToWebView,
-                        )
-                        .padding(horizontal = 14.dp, vertical = 9.dp),
-                ) {
-                    Text(
-                        "← WebView",
-                        color = t.muted,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-            Sep()
-
             // ── Яндекс Диск ──────────────────────────────────────────
             SectionLabel("Яндекс Диск")
             AppInput(
@@ -383,12 +327,8 @@ fun SettingsScreen(
                 modifier = Modifier.padding(bottom = 6.dp),
             )
             if (proxyStatus.isNotEmpty()) {
-                Text(
-                    proxyStatus,
-                    color = t.muted,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                )
+                Text(proxyStatus, color = t.muted, fontSize = 11.sp,
+                    modifier = Modifier.padding(bottom = 6.dp))
             }
             Sep()
 
@@ -402,22 +342,185 @@ fun SettingsScreen(
             )
 
             // ── Liquid Glass ──────────────────────────────────────────
-            SettingsRow(
-                title = "🫧 Liquid Glass",
-                subtitle = "⚠️ Экспериментально · влияет на производительность",
-                trailing = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(t.surface2)
+                    .border(1.5.dp, t.surface3, RoundedCornerShape(12.dp)),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            Text("🫧 Liquid Glass", color = t.text, fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(t.accent)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Text("БЕТА", color = androidx.compose.ui.graphics.Color.Black,
+                                    fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.06.em)
+                            }
+                        }
+                        Text("⚠️ Экспериментально · влияет на производительность",
+                            color = t.accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 3.dp))
+                    }
                     ToggleSwitch(checked = isGlassMode, onCheckedChange = { onToggleGlass() })
-                },
-            )
-            if (isGlassMode) {
-                SettingsRow(
-                    title = "⚡ Оптимизация блюра",
-                    subtitle = "Снижает нагрузку на GPU. Включай если лагает",
-                    trailing = {
+                }
+                if (isGlassMode) {
+                    androidx.compose.material3.HorizontalDivider(
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.07f))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("⚡ Оптимизация блюра", color = t.text, fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold)
+                            Text("Снижает нагрузку на GPU. Включай если лагает",
+                                color = t.muted, fontSize = 11.sp,
+                                modifier = Modifier.padding(top = 2.dp))
+                        }
                         ToggleSwitch(checked = isGlassOptMode, onCheckedChange = { onToggleGlassOpt() })
+                    }
+                }
+            }
+            Sep()
+
+            // ── Фон приложения ────────────────────────────────────────
+            SectionLabel("Фон приложения")
+            if (hasBgImage && bgImageData != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                ) {
+                    val bitmap = remember(bgImageData) {
+                        try {
+                            val clean = if (bgImageData.contains(",")) bgImageData.substringAfter(",") else bgImageData
+                            val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        } catch (e: Exception) { null }
+                    }
+                    if (bitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    listOf(androidx.compose.ui.graphics.Color.Transparent,
+                                        androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
+                                )
+                            ),
+                        contentAlignment = Alignment.BottomStart,
+                    ) {
+                        Text("Свой фон активен", color = androidx.compose.ui.graphics.Color.White,
+                            fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(8.dp, 8.dp))
+                    }
+                }
+            }
+            AppButton(
+                label = "🖼 Загрузить фон (PNG / JPG)",
+                onClick = onPickBgImage,
+                variant = BtnVariant.Surface,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+            if (hasBgImage) {
+                AppButton(
+                    label = "🗑 Удалить фон",
+                    onClick = onRemoveBgImage,
+                    variant = BtnVariant.Danger,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+                SettingsRow(
+                    title = "🌫 Блюр на элементах",
+                    subtitle = "Размытый фон под кнопками. Если лагает — выключи",
+                    trailing = {
+                        ToggleSwitch(checked = isBgBlurEnabled, onCheckedChange = { onToggleBgBlur() })
                     },
                 )
             }
+            Sep()
+
+            // ── Интерфейс ─────────────────────────────────────────────
+            SectionLabel("Интерфейс")
+            // WebView switch
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(t.surface2)
+                    .border(1.5.dp, t.surface3, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("🚀 Сейчас: Нативный", color = t.text, fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold)
+                        Box(modifier = Modifier.clip(RoundedCornerShape(4.dp))
+                            .background(t.accent.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)) {
+                            Text("Kotlin", color = t.accent, fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Text("Переключиться на HTML / WebView версию",
+                        color = t.muted, fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 2.dp))
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(t.surface3)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = rememberRipple(),
+                            onClick = onSwitchToWebView,
+                        )
+                        .padding(horizontal = 14.dp, vertical = 9.dp),
+                ) {
+                    Text("← WebView", color = t.muted, fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold)
+                }
+            }
+            SettingsRow(
+                title = "😊 Стиль эмодзи",
+                subtitle = if (isIphoneEmoji) "iPhone эмодзи" else "Системные эмодзи (по умолчанию)",
+                trailing = {
+                    ToggleSwitch(checked = isIphoneEmoji, onCheckedChange = { onToggleIphoneEmoji() })
+                },
+            )
             Sep()
 
             // ── Звук ──────────────────────────────────────────────────
@@ -444,10 +547,23 @@ fun SettingsScreen(
                             .clickable(onClick = onCheckUpdate)
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                     ) {
-                        Text("🔄 Проверить", color = t.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("🔄 Проверить", color = t.accent, fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold)
                     }
                 },
             )
+            Spacer(Modifier.height(4.dp))
+            AppButton(
+                label = "🔥 Горячий патч (только файлы)",
+                onClick = onHotPatch,
+                variant = BtnVariant.Surface,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            if (hotPatchStatus.isNotEmpty()) {
+                Text(hotPatchStatus, color = t.muted, fontSize = 11.sp,
+                    modifier = Modifier.padding(start = 2.dp, bottom = 4.dp))
+            }
+            Spacer(Modifier.height(12.dp))
 
             if (visitStreak > 0) {
                 Sep()
@@ -468,13 +584,24 @@ fun SettingsScreen(
             )
 
             Sep()
-            SectionLabel("Резервные копии")
-            ListItemRow(
-                name = "💾 Управление бэкапами",
-                sub  = "Восстановить или экспортировать данные",
-                onClick = onOpenBackups,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
+            SectionLabel("💾 Резервные копии")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppButton(
+                    label = "📋 Список",
+                    onClick = onOpenBackups,
+                    variant = BtnVariant.Surface,
+                    modifier = Modifier.weight(1f).padding(bottom = 0.dp),
+                )
+                AppButton(
+                    label = "↩ Восстановить",
+                    onClick = { },
+                    variant = BtnVariant.Surface3,
+                    modifier = Modifier.weight(1f).padding(bottom = 0.dp),
+                )
+            }
 
             Spacer(Modifier.height(100.dp))
         }

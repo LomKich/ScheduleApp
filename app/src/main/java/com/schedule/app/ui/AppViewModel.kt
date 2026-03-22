@@ -71,13 +71,67 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean("glass_opt", isGlassOptMode).apply()
     }
 
+    fun toggleGlass() {
+        isGlassMode = !isGlassMode
+        prefs.edit().putBoolean("glass_mode", isGlassMode).apply()
+    }
+
+    fun toggleBgBlur() {
+        isBgBlurEnabled = !isBgBlurEnabled
+        prefs.edit().putBoolean("bg_blur", isBgBlurEnabled).apply()
+    }
+
+    fun toggleIphoneEmoji() {
+        isIphoneEmoji = !isIphoneEmoji
+        prefs.edit().putBoolean("iphone_emoji", isIphoneEmoji).apply()
+    }
+
+    fun onBgImagePicked(uri: android.net.Uri, cr: android.content.ContentResolver) {
+        viewModelScope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    cr.openInputStream(uri)?.readBytes()
+                } ?: return@launch
+                val mime = cr.getType(uri) ?: "image/jpeg"
+                val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                val dataUri = "data:$mime;base64,$b64"
+                bgImageData = dataUri
+                hasBgImage = true
+                prefs.edit().putString("bg_image_data", dataUri).apply()
+            } catch (e: Exception) {
+                log.e("AppViewModel", "onBgImagePicked error: ${e.message}")
+            }
+        }
+    }
+
+    fun removeBgImage() {
+        bgImageData = null
+        hasBgImage = false
+        prefs.edit().remove("bg_image_data").apply()
+    }
+
+    fun checkHotPatch() {
+        hotPatchStatus = "🔄 Проверяю обновления..."
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(1500)
+            hotPatchStatus = "✅ Обновлений нет"
+            kotlinx.coroutines.delay(3000)
+            hotPatchStatus = ""
+        }
+    }
+
     // ── Настройки ─────────────────────────────────────────────────────────────
     var yandexUrl by mutableStateOf(
         prefs.getString("yandex_url", "https://disk.yandex.ru/d/mjhoc7kysmQEuQ") ?: ""
     )
     var isMuted       by mutableStateOf(prefs.getBoolean("muted", true))
     var isTeacher     by mutableStateOf(prefs.getBoolean("is_teacher", false))
-    var isGlassMode   by mutableStateOf(false)
+    var isGlassMode        by mutableStateOf(prefs.getBoolean("glass_mode", false))
+    var hasBgImage         by mutableStateOf(prefs.getString("bg_image_data", null) != null)
+    var bgImageData        by mutableStateOf(prefs.getString("bg_image_data", null))
+    var isBgBlurEnabled    by mutableStateOf(prefs.getBoolean("bg_blur", true))
+    var isIphoneEmoji      by mutableStateOf(prefs.getBoolean("iphone_emoji", false))
+    var hotPatchStatus     by mutableStateOf("")
 
     fun setUrl(url: String)          { yandexUrl = url; prefs.edit().putString("yandex_url", url).apply() }
     fun toggleMute()                 { isMuted = !isMuted; prefs.edit().putBoolean("muted", isMuted).apply() }

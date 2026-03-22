@@ -50,6 +50,15 @@ class ComposeActivity : ComponentActivity() {
                     }
                 }
 
+                // ── Background image picker ───────────────────────────────────
+                val bgLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.GetContent()
+                ) { uri: Uri? ->
+                    if (uri != null) {
+                        vm.onBgImagePicked(uri, contentResolver)
+                    }
+                }
+
                 // Share text via Android share sheet
                 val shareText = vm.pendingShareText
                 if (shareText != null) {
@@ -84,6 +93,7 @@ class ComposeActivity : ComponentActivity() {
                         vm               = vm,
                         onSwitchToWebView= ::switchToWebView,
                         onPickPhoto      = { photoLauncher.launch("image/*") },
+                        onPickBgImage    = { bgLauncher.launch("image/*") },
                     )
                 }
             }
