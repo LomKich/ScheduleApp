@@ -49,6 +49,27 @@ fun HomeScreen(
             .fillMaxSize()
             .background(t.bg),
     ) {
+        // ── Топ-бар с кнопкой настроек ──
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(t.bg)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(t.surface2)
+                    .border(1.dp, t.surface3, RoundedCornerShape(12.dp))
+                    .clickable(onClick = onOpenSettings),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("⚙️", fontSize = 20.sp)
+            }
+        }
+
         // Контент
         Column(
             modifier = Modifier
@@ -56,7 +77,7 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp, vertical = 0.dp),
         ) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
 
             // ── Hero section (.home-hero) ──
             HomeHero(onSecretTap = {})
