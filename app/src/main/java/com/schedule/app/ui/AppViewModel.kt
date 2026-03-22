@@ -269,53 +269,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             } finally { isLoading = false }
         }
     }
-    private fun loadScheduleForTeacher(teacher: String) {
-        log.w("AppViewModel", "loadScheduleForTeacher: не реализован для $teacher")
-        // TODO: реализовать через DocParser.parseDocForTeacher
-        scheduleDays = emptyList()
-    }
-
-    fun selectFile(file: ScheduleFile) {
-        selectedFile = file
-        groups   = emptyList()
-        teachers = emptyList()
-        log.i("AppViewModel", "selectFile: ${file.name}")
-        viewModelScope.launch {
-            isLoading = true
-            statusText = "Разбираю файл..."
-            log.i("AppViewModel", "selectFile: скачиваем ${file.name}...")
-            try {
-                val bytes = withContext(Dispatchers.IO) {
-                    DocParser.downloadFile(yandexUrl, file.path) { p ->
-                        loadProgress = 0.2f + p * 0.5f
-                    }
-                }
-                log.i("AppViewModel", "selectFile: скачан ${bytes.size} байт, разбираем группы...")
-                loadProgress = 0.8f
-                val detectedGroups = withContext(Dispatchers.IO) { DocParser.detectGroups(bytes) }
-                log.i("AppViewModel", "selectFile: найдено ${detectedGroups.size} групп")
-                groups = detectedGroups
-                loadProgress = 1f
-                statusText = "Найдено: ${groups.size} групп"
-                delay(1200); loadProgress = 0f; statusText = ""
-            } catch (e: Exception) {
-                log.e("AppViewModel", "selectFile error: ${e.message}", e)
-                loadProgress = 0f; statusText = "❌ ${e.message}"
-            } finally { isLoading = false }
-        }
-    }
 
     // ┄1�7┄1�7 Расписание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     
 
-    private fun loadSchedule(group: String) {
-        viewModelScope.launch {
-            isLoading = true
-            delay(400)
-            scheduleDays = buildDemoSchedule(group)
-            isLoading = false
-        }
-    }
 
     // ┄1�7┄1�7 Звонки ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     val bellSchedules: List<BellSchedule> by lazy {
