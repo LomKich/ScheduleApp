@@ -125,61 +125,166 @@ fun getWeekProgress(): String {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SPECIAL DATE GREETING OVERLAY  (показывается при запуске)
+// GREETING  (каждый запуск, как в WebView)
+// Для особых дат — карточка с кнопкой
+// Для обычных дней — полноэкранный оверлей с временем
 // ─────────────────────────────────────────────────────────────────────────────
+fun getGreeting(): Triple<String, String, String> {
+    getSpecialDateGreeting()?.let { return it }
+    val cal = Calendar.getInstance()
+    val h   = cal.get(Calendar.HOUR_OF_DAY)
+    val dow = cal.get(Calendar.DAY_OF_WEEK)
+    val isWeekend = dow == Calendar.SUNDAY || dow == Calendar.SATURDAY
+    return if (isWeekend) when {
+        h in 5..11  -> Triple("Доброе утро",  "🛋", "Сегодня выходной — отдыхай!")
+        h in 12..16 -> Triple("Добрый день",  "😎", "Хороших выходных!")
+        h in 17..21 -> Triple("Добрый вечер", "🌆", "Наслаждайся вечером 🎉")
+        else        -> Triple("Доброй ночи",  "🌙", "Выходные — не повод не спать 😅")
+    } else when {
+        h in 5..11  -> Triple("Доброе утро",  "🌤", "Хорошего учебного дня!")
+        h in 12..16 -> Triple("Добрый день",  "☀️", "Успехов на парах!")
+        h in 17..21 -> Triple("Добрый вечер", "🌇", "Время отдохнуть.")
+        else        -> Triple("Доброй ночи",  "🌙", "Не забудь поспать 😴")
+    }
+}
+
 @Composable
-fun SpecialDateGreetingOverlay(onDismiss: () -> Unit) {
-    val greeting = remember { getSpecialDateGreeting() } ?: return
+fun GreetingOverlay(onDismiss: () -> Unit) {
+    val t = LocalTheme.current
+    val isSpecial = remember { getSpecialDateGreeting() != null }
+    val (greet, icon, sub) = remember { getGreeting() }
+    val cal = remember { Calendar.getInstance() }
+    val timeStr = remember {
+        val h = cal.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
+        val m = cal.get(Calendar.MINUTE).toString().padStart(2, '0')
+        "$h:$m"
+    }
 
     var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(800)
-        visible = true
-    }
+    LaunchedEffect(Unit) { delay(600); visible = true }
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn() + slideInVertically(initialOffsetY = { it / 4 }),
-        exit  = fadeOut(),
+        enter = fadeIn(tween(350)),
+        exit  = fadeOut(tween(250)),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
-                .clickable(onClick = onDismiss),
-            contentAlignment = Alignment.Center,
-        ) {
-            val t = LocalTheme.current
-            Column(
+        if (isSpecial) {
+            // ── Особая дата: карточка с кнопкой ──────────────────────────
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 40.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(t.surface2)
-                    .border(1.5.dp, t.surface3, RoundedCornerShape(24.dp))
-                    .padding(32.dp)
-                    .clickable(enabled = false) {},
-                horizontalAlignment = Alignment.CenterHorizontally,
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .clickable(onClick = onDismiss),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(greeting.second, fontSize = 56.sp)
-                Spacer(Modifier.height(12.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 40.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(t.surface2)
+                        .border(1.5.dp, t.surface3, RoundedCornerShape(24.dp))
+                        .padding(32.dp)
+                        .clickable(enabled = false) {},
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(icon, fontSize = 56.sp)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        greet, color = t.accent, fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        sub, color = t.muted, fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    AppButton("Отлично! 🎉", onDismiss, BtnVariant.Accent)
+                }
+            }
+        } else {
+            // ── Обычный день: полноэкранный оверлей как в WebView ─────────
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(t.bg)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = onDismiss,
+                    ),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // Время
+                    Text(
+                        text = timeStr,
+                        color = t.muted,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.08.em,
+                    )
+                    Spacer(Modifier.height(28.dp))
+                    // Иконка
+                    Text(text = icon, fontSize = 80.sp)
+                    Spacer(Modifier.height(18.dp))
+                    // Приветствие
+                    Text(
+                        text = greet,
+                        color = t.text,
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight(800),
+                        letterSpacing = (-0.02).em,
+                        textAlign = TextAlign.Center,
+                        style = androidx.compose.ui.text.TextStyle(
+                            shadow = androidx.compose.ui.graphics.Shadow(
+                                color = t.accent.copy(alpha = 0.3f),
+                                blurRadius = 20f,
+                            ),
+                        ),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    // Подзаголовок
+                    Text(
+                        text = sub,
+                        color = t.muted,
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    // Мотивация дня
+                    Text(
+                        text = getDayMotivation(),
+                        color = t.muted.copy(alpha = 0.6f),
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp,
+                    )
+                }
+                // Подсказка внизу
                 Text(
-                    greeting.first,
-                    color = t.accent, fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                    text = "Нажми чтобы продолжить",
+                    color = t.muted.copy(alpha = 0.4f),
+                    fontSize = 12.sp,
+                    letterSpacing = 0.03.em,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 60.dp),
                 )
-                Text(
-                    greeting.third,
-                    color = t.muted, fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-                Spacer(Modifier.height(20.dp))
-                AppButton("Отлично! 🎉", onDismiss, BtnVariant.Accent)
             }
         }
     }
 }
+
+// Оставляем для обратной совместимости
+@Composable
+fun SpecialDateGreetingOverlay(onDismiss: () -> Unit) = GreetingOverlay(onDismiss)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOAST SYSTEM

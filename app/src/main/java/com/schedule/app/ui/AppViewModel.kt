@@ -23,7 +23,7 @@ import org.json.JSONObject
 import java.net.URL
 import java.net.URLEncoder
 
-// ── Модель сообщения ──────────────────────────────────────────────────────────
+// ┄1�7┄1�7 Модель сообщения ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
 data class ChatMessage(
     val id: String,
     val chatKey: String,
@@ -41,7 +41,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val log   = AppLogger.get(app)
     val sb: SupabaseClient = SupabaseClient.get(app, log)
 
-    // ── Тема ──────────────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Тема ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     val themeState = ThemeState(
         AppColors.themes.firstOrNull {
             it.id == (prefs.getString("theme_id", "orange") ?: "orange")
@@ -54,7 +54,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("theme_id", id).apply()
     }
 
-    // ── Шрифт ─────────────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Шрифт ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var currentFontId by mutableStateOf(prefs.getString("font_id", "default") ?: "default")
 
     fun setFont(id: String) {
@@ -63,7 +63,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         showToast("🔤 Шрифт: ${com.schedule.app.ui.theme.AppColors.fonts.firstOrNull { it.id == id }?.name ?: id}")
     }
 
-    // ── Liquid Glass optimization ──────────────────────────────────────────────
+    // ┄1�7┄1�7 Liquid Glass optimization ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var isGlassOptMode by mutableStateOf(prefs.getBoolean("glass_opt", false))
 
     fun toggleGlassOpt() {
@@ -114,13 +114,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         hotPatchStatus = "🔄 Проверяю обновления..."
         viewModelScope.launch {
             kotlinx.coroutines.delay(1500)
-            hotPatchStatus = "✅ Обновлений нет"
+            hotPatchStatus = "✄1�7 Обновлений нет"
             kotlinx.coroutines.delay(3000)
             hotPatchStatus = ""
         }
     }
 
-    // ── Настройки ─────────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Настройки ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var yandexUrl by mutableStateOf(
         prefs.getString("yandex_url", "https://disk.yandex.ru/d/mjhoc7kysmQEuQ") ?: ""
     )
@@ -137,7 +137,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleMute()                 { isMuted = !isMuted; prefs.edit().putBoolean("muted", isMuted).apply() }
     fun setMode(teacher: Boolean)    { isTeacher = teacher; prefs.edit().putBoolean("is_teacher", teacher).apply() }
 
-    // ── Файлы / расписание ────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Файлы / расписание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var files         by mutableStateOf<List<ScheduleFile>>(emptyList())
     var selectedFile  by mutableStateOf<ScheduleFile?>(null)
     var isLoading     by mutableStateOf(false)
@@ -153,22 +153,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 loadProgress = 1f; statusText = "Найдено: ${files.size} файлов"
                 delay(1200); loadProgress = 0f; statusText = ""
             } catch (e: Exception) {
-                loadProgress = 0f; statusText = "❌ ${e.message}"
+                loadProgress = 0f; statusText = "❄1�7 ${e.message}"
             } finally { isLoading = false }
         }
     }
 
-    // ── Группы ────────────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Группы ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var groups        by mutableStateOf<List<String>>(emptyList())
     var selectedGroup by mutableStateOf<String?>(prefs.getString("last_group", null))
 
     fun selectGroup(group: String) {
+        log.i("AppViewModel", "selectGroup: $group")
         selectedGroup = group
         prefs.edit().putString("last_group", group).apply()
         loadSchedule(group)
     }
 
-    // ── Преподаватели ──────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Преподаватели ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var teachers         by mutableStateOf<List<String>>(emptyList())
     var selectedTeacher  by mutableStateOf<String?>(prefs.getString("last_teacher", null))
     var teacherSearchQuery by mutableStateOf("")
@@ -199,20 +200,113 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectFile(file: ScheduleFile) {
         selectedFile = file
-        // Demo — real impl would parse .docx for both groups and teachers
-        groups = listOf(
-            "МПД-2-24","МПД-1-24","ПК-3-23","ПК-2-23","ИС-1-24",
-            "ИС-2-23","ТЭ-1-24","ТЭ-2-23","БД-1-24","СА-3-22",
-        )
-        teachers = listOf(
-            "Иванова А.В.","Петров И.С.","Сидорова Е.М.",
-            "Козлов Д.А.","Николаева О.П.","Федоров В.Г.",
-            "Смирнова Л.Н.","Кузнецов А.Р.","Попов М.С.",
-        )
+        groups   = emptyList()
+        teachers = emptyList()
+        log.i("AppViewModel", "selectFile: ${file.name}")
+        viewModelScope.launch {
+            isLoading = true
+            statusText = "Разбираю файл..."
+            log.i("AppViewModel", "selectFile: скачиваем ${file.name}...")
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    DocParser.downloadFile(yandexUrl, file.path) { p ->
+                        loadProgress = 0.2f + p * 0.5f
+                    }
+                }
+                log.i("AppViewModel", "selectFile: скачан ${bytes.size} байт, разбираем группы...")
+                loadProgress = 0.8f
+                val detectedGroups = withContext(Dispatchers.IO) { DocParser.detectGroups(bytes) }
+                log.i("AppViewModel", "selectFile: найдено ${detectedGroups.size} групп")
+                groups = detectedGroups
+                loadProgress = 1f
+                statusText = "Найдено: ${groups.size} групп"
+                delay(1200); loadProgress = 0f; statusText = ""
+            } catch (e: Exception) {
+                log.e("AppViewModel", "selectFile error: ${e.message}", e)
+                loadProgress = 0f; statusText = "❌ ${e.message}"
+            } finally { isLoading = false }
+        }
     }
 
-    // ── Расписание ────────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Расписание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var scheduleDays by mutableStateOf<List<ScheduleDay>>(emptyList())
+
+    private fun loadSchedule(group: String) {
+        val file = selectedFile ?: run {
+            log.w("AppViewModel", "loadSchedule: нет выбранного файла")
+            return
+        }
+        viewModelScope.launch {
+            isLoading = true
+            scheduleDays = emptyList()
+            log.i("AppViewModel", "loadSchedule: group=$group file=${file.name}")
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    DocParser.downloadFile(yandexUrl, file.path) { p ->
+                        loadProgress = p * 0.7f
+                    }
+                }
+                log.i("AppViewModel", "loadSchedule: файл скачан ${bytes.size} байт, парсим...")
+                loadProgress = 0.8f
+                val (rawSched, header) = withContext(Dispatchers.IO) {
+                    DocParser.parseDoc(bytes, group)
+                }
+                if (rawSched.isEmpty()) {
+                    log.w("AppViewModel", "loadSchedule: группа $group не найдена в файле")
+                    scheduleDays = emptyList()
+                } else {
+                    log.i("AppViewModel", "loadSchedule: найдено ${rawSched.size} пар, header=$header")
+                    val days = withContext(Dispatchers.IO) {
+                        DocParser.buildScheduleDays(rawSched, header, file.name)
+                    }
+                    scheduleDays = days
+                    log.i("AppViewModel", "loadSchedule: ок — ${days.sumOf { it.pairs.size }} пар")
+                }
+                loadProgress = 1f; delay(400); loadProgress = 0f
+            } catch (e: Exception) {
+                log.e("AppViewModel", "loadSchedule error: ${e.message}", e)
+                loadProgress = 0f
+            } finally { isLoading = false }
+        }
+    }
+    private fun loadScheduleForTeacher(teacher: String) {
+        log.w("AppViewModel", "loadScheduleForTeacher: не реализован для $teacher")
+        // TODO: реализовать через DocParser.parseDocForTeacher
+        scheduleDays = emptyList()
+    }
+
+    fun selectFile(file: ScheduleFile) {
+        selectedFile = file
+        groups   = emptyList()
+        teachers = emptyList()
+        log.i("AppViewModel", "selectFile: ${file.name}")
+        viewModelScope.launch {
+            isLoading = true
+            statusText = "Разбираю файл..."
+            log.i("AppViewModel", "selectFile: скачиваем ${file.name}...")
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    DocParser.downloadFile(yandexUrl, file.path) { p ->
+                        loadProgress = 0.2f + p * 0.5f
+                    }
+                }
+                log.i("AppViewModel", "selectFile: скачан ${bytes.size} байт, разбираем группы...")
+                loadProgress = 0.8f
+                val detectedGroups = withContext(Dispatchers.IO) { DocParser.detectGroups(bytes) }
+                log.i("AppViewModel", "selectFile: найдено ${detectedGroups.size} групп")
+                groups = detectedGroups
+                loadProgress = 1f
+                statusText = "Найдено: ${groups.size} групп"
+                delay(1200); loadProgress = 0f; statusText = ""
+            } catch (e: Exception) {
+                log.e("AppViewModel", "selectFile error: ${e.message}", e)
+                loadProgress = 0f; statusText = "❌ ${e.message}"
+            } finally { isLoading = false }
+        }
+    }
+
+    // ┄1�7┄1�7 Расписание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    
 
     private fun loadSchedule(group: String) {
         viewModelScope.launch {
@@ -223,7 +317,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ── Звонки ────────────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Звонки ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     val bellSchedules: List<BellSchedule> by lazy {
         val now = java.util.Calendar.getInstance()
         val dow = now.get(java.util.Calendar.DAY_OF_WEEK)
@@ -236,7 +330,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 BellPeriod("V",   "15:45","16:45",null,null),
                 BellPeriod("VI",  "16:55","17:55",null,null),
             )),
-            BellSchedule("Вторник – Пятница", dow in 3..6, listOf(
+            BellSchedule("Вторник  1�7 Пятница", dow in 3..6, listOf(
                 BellPeriod("I",   "08:30","09:15","09:20","10:05", isNow = dow in 3..6 && isNowPair(8*60+30, 10*60+5)),
                 BellPeriod("II",  "10:15","11:00","11:05","11:50"),
                 BellPeriod("III", "12:20","13:05","13:10","13:55"),
@@ -255,7 +349,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    // ── Домашнее задание ──────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Домашнее задание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var hwItems by mutableStateOf<List<HomeworkItem>>(emptyList())
         private set
 
@@ -273,12 +367,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         updateVisitStreak()
-        // Show greeting for special dates
-        if (com.schedule.app.ui.screens.getSpecialDateGreeting() != null) {
-            viewModelScope.launch {
-                kotlinx.coroutines.delay(1000)
-                showGreeting = true
-            }
+        // Показываем приветствие при каждом запуске (как в WebView)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(600)
+            showGreeting = true
         }
     }
 
@@ -319,7 +411,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE — АВТОРИЗАЦИЯ
+    // SUPABASE  1�7 АВТОРИЗАЦИЯ
     // ══════════════════════════════════════════════════════════════════════════
 
     var userProfile      by mutableStateOf<UserProfile?>(null)
@@ -352,7 +444,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         regUsernameStatus = when {
             v.isEmpty()  -> ""
             v.length < 3 -> "Минимум 3 символа"
-            else         -> "✓ Доступен"
+            else         -> "✄1�7 Доступен"
         }
         checkRegEnabled()
     }
@@ -367,7 +459,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun onAuthPasswordChange(v: String) { authPassword = v }
 
     /**
-     * Регистрация: проверяем что username не занят → создаём запись в users.
+     * Регистрация: проверяем что username не занят ↄ1�7 создаём запись в users.
      * Авторизация через email: username@sapp.local (Supabase требует email).
      */
 
@@ -422,7 +514,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             }
-            // После загрузки профиля — грузим друзей и лидерборд
+            // После загрузки профиля  1�7 грузим друзей и лидерборд
             loadFriendsFromSupabase(username)
             loadLeaderboardFromSupabase()
         } catch (e: Exception) {
@@ -431,7 +523,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE — PRESENCE (онлайн-статус)
+    // SUPABASE  1�7 PRESENCE (онлайн-статус)
     // ══════════════════════════════════════════════════════════════════════════
 
     var onlineUsers by mutableStateOf<List<String>>(emptyList())
@@ -480,7 +572,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE — ДРУЗЬЯ
+    // SUPABASE  1�7 ДРУЗЬЯ
     // ══════════════════════════════════════════════════════════════════════════
 
     var friends          by mutableStateOf<List<FriendEntry>>(emptyList())
@@ -544,7 +636,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE — ЛИДЕРБОРД
+    // SUPABASE  1�7 ЛИДЕРБОРД
     // ══════════════════════════════════════════════════════════════════════════
 
     var leaderboard      by mutableStateOf<List<LeaderboardEntry>>(emptyList())
@@ -581,13 +673,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setLeaderboardGame(game: String) {
-        leaderboardGame = game
-        viewModelScope.launch { loadLeaderboardFromSupabase() }
-    }
-
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE — РЕДАКТИРОВАНИЕ ПРОФИЛЯ
+    // SUPABASE  1�7 РЕДАКТИРОВАНИЕ ПРОФИЛЯ
     // ══════════════════════════════════════════════════════════════════════════
 
     var editName     by mutableStateOf("")
@@ -659,7 +746,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE — СООБЩЕНИЯ
+    // SUPABASE  1�7 СООБЩЕНИЯ
     // ══════════════════════════════════════════════════════════════════════════
 
     var messages         by mutableStateOf<List<ChatMessage>>(emptyList())
@@ -863,29 +950,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             )}
     }
 
-    private fun buildDemoSchedule(group: String): List<ScheduleDay> {
-        val nowMin = run {
-            val c = java.util.Calendar.getInstance()
-            c.get(java.util.Calendar.HOUR_OF_DAY)*60 + c.get(java.util.Calendar.MINUTE)
-        }
-        fun isNow(s: Int, e: Int) = nowMin in s until e
-        return listOf(
-            ScheduleDay(
-                header = "РАСПИСАНИЕ: $group",
-                pairs  = listOf(
-                    Pair("I",  "08:30","09:15","09:20","10:05","Математика","Иванова А.В.","ауд. 204",  isNow = isNow(8*60+30, 10*60+5)),
-                    Pair("II", "10:15","11:00","11:05","11:50","Информатика","Петров И.С.","ауд. 301 (пк)"),
-                    Pair("III","12:20","13:05","13:10","13:55","История","Сидорова Е.М.","ауд. 115"),
-                    Pair("IV", "14:05","15:05",null,null,"Окно", isWindow = true),
-                    Pair("V",  "15:15","16:15",null,null,"Физкультура","Козлов Д.А.","спортзал"),
-                )
-            )
-        )
-    }
 
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE — МЕССЕНДЖЕР (список чатов)
+    // SUPABASE  1�7 МЕССЕНДЖЕР (список чатов)
     // ══════════════════════════════════════════════════════════════════════════
 
     var messengerChats     by mutableStateOf<List<com.schedule.app.ui.screens.ChatPreview>>(emptyList())
@@ -984,7 +1052,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE — ОНЛАЙН ПОЛЬЗОВАТЕЛИ
+    // SUPABASE  1�7 ОНЛАЙН ПОЛЬЗОВАТЕЛИ
     // ══════════════════════════════════════════════════════════════════════════
 
     var onlineUsersList    by mutableStateOf<List<com.schedule.app.ui.screens.OnlineUser>>(emptyList())
@@ -1035,7 +1103,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ── Peer profile ──────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Peer profile ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var peerProfile        by mutableStateOf<com.schedule.app.ui.screens.OnlineUser?>(null)
     var peerProfileLoading by mutableStateOf(false)
 
@@ -1101,7 +1169,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ── Групп чаты ────────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Групп чаты ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var groupChats         by mutableStateOf<List<com.schedule.app.ui.screens.GroupChat>>(emptyList())
     var groupChatsLoading  by mutableStateOf(false)
     var showCreateGroupDialog by mutableStateOf(false)
@@ -1154,13 +1222,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // FUN FEATURES & EASTER EGGS
     // ══════════════════════════════════════════════════════════════════════════
 
-    // ── Dev Console ───────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Dev Console ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var showConsole       by mutableStateOf(false)
     var consoleInput      by mutableStateOf("")
     var consoleEntries    by mutableStateOf(listOf(
-        com.schedule.app.ui.screens.ConsoleEntry("info", "⚡ ScheduleApp Dev Console"),
+        com.schedule.app.ui.screens.ConsoleEntry("info", "⚄1�7 ScheduleApp Dev Console"),
         com.schedule.app.ui.screens.ConsoleEntry("muted", "Введи /help для списка команд"),
-        com.schedule.app.ui.screens.ConsoleEntry("muted", "──────────────────────────────"),
+        com.schedule.app.ui.screens.ConsoleEntry("muted", "┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7"),
     ))
 
     fun cmdPrint(type: String, text: String) {
@@ -1177,23 +1245,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         when (cmd) {
             "help" -> {
                 cmdPrint("info", "Доступные команды:")
-                cmdPrint("ok",   "  /help — этот список")
-                cmdPrint("ok",   "  /fact — случайный факт 💡")
-                cmdPrint("ok",   "  /haiku — хайку про учёбу 🌸")
-                cmdPrint("ok",   "  /excuse — отмазка для пропуска 📝")
-                cmdPrint("ok",   "  /quiz — тест по расписанию 🧠")
-                cmdPrint("ok",   "  /bpmtap — BPM тапалка 🥁")
-                cmdPrint("ok",   "  /taunt — реплика учителя 👩‍🏫")
-                cmdPrint("ok",   "  /stats — статистика приложения 📊")
-                cmdPrint("ok",   "  /motivation — мотивация на сегодня 💪")
-                cmdPrint("ok",   "  /greeting — праздничное приветствие 🎉")
-                cmdPrint("ok",   "  /focus — режим фокуса 🎯")
-                cmdPrint("ok",   "  /clear — очистить консоль")
-                cmdPrint("ok",   "  /version — версия приложения")
-                cmdPrint("ok",   "  /vip <КОД> — активировать VIP 👑")
-                cmdPrint("ok",   "  /logout — выйти из аккаунта")
-                cmdPrint("ok",   "  /theme <id> — сменить тему")
-                cmdPrint("ok",   "  /group — случайная группа 🎲")
+                cmdPrint("ok",   "  /help  1�7 этот список")
+                cmdPrint("ok",   "  /fact  1�7 случайный факт 💡")
+                cmdPrint("ok",   "  /haiku  1�7 хайку про учёбу 🌸")
+                cmdPrint("ok",   "  /excuse  1�7 отмазка для пропуска 📝")
+                cmdPrint("ok",   "  /quiz  1�7 тест по расписанию 🧠")
+                cmdPrint("ok",   "  /bpmtap  1�7 BPM тапалка 🥁")
+                cmdPrint("ok",   "  /taunt  1�7 реплика учителя 👩‍🏄1�7")
+                cmdPrint("ok",   "  /stats  1�7 статистика приложения 📊")
+                cmdPrint("ok",   "  /motivation  1�7 мотивация на сегодня 💪")
+                cmdPrint("ok",   "  /greeting  1�7 праздничное приветствие 🎉")
+                cmdPrint("ok",   "  /focus  1�7 режим фокуса 🎯")
+                cmdPrint("ok",   "  /clear  1�7 очистить консоль")
+                cmdPrint("ok",   "  /version  1�7 версия приложения")
+                cmdPrint("ok",   "  /vip <КОД>  1�7 активировать VIP 👑")
+                cmdPrint("ok",   "  /logout  1�7 выйти из аккаунта")
+                cmdPrint("ok",   "  /theme <id>  1�7 сменить тему")
+                cmdPrint("ok",   "  /group  1�7 случайная группа 🎲")
             }
             "fact" -> {
                 activeFunOverlay = com.schedule.app.ui.FunOverlay.None
@@ -1230,7 +1298,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (g != null) {
                     activeFunOverlay = com.schedule.app.ui.FunOverlay.Greeting
                     showGreeting = true
-                    cmdPrint("ok", "${g.second} ${g.first} — ${g.third}")
+                    cmdPrint("ok", "${g.second} ${g.first}  1�7 ${g.third}")
                 } else {
                     cmdPrint("warn", "Сегодня нет праздника 😢")
                 }
@@ -1241,7 +1309,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             "clear" -> {
                 consoleEntries = listOf(
-                    com.schedule.app.ui.screens.ConsoleEntry("muted", "── консоль очищена ──")
+                    com.schedule.app.ui.screens.ConsoleEntry("muted", "┄1�7┄1�7 консоль очищена ┄1�7┄1�7")
                 )
             }
             "version" -> {
@@ -1263,10 +1331,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         cmdPrint("ok", "👑 VIP активирован! Доступны: фото-аватар, рамки, значки, баннер")
                     } else {
-                        cmdPrint("err", "❌ Нужно войти в аккаунт")
+                        cmdPrint("err", "❄1�7 Нужно войти в аккаунт")
                     }
                 } else {
-                    cmdPrint("err", "❌ Неверный код VIP")
+                    cmdPrint("err", "❄1�7 Неверный код VIP")
                 }
             }
             "logout" -> {
@@ -1306,24 +1374,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             else -> {
-                cmdPrint("err", "❌ Неизвестная команда: /$cmd  (введи /help)")
+                cmdPrint("err", "❄1�7 Неизвестная команда: /$cmd  (введи /help)")
             }
         }
         consoleInput = ""
     }
 
-    // ── Fun Overlays ──────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Fun Overlays ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var activeFunOverlay  by mutableStateOf(com.schedule.app.ui.FunOverlay.None)
     var showGreeting      by mutableStateOf(false)
 
-    // ── Focus mode ────────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Focus mode ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var focusMode         by mutableStateOf(false)
 
-    // ── Schedule search ───────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Schedule search ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var schedSearchVisible by mutableStateOf(false)
     var schedSearchQuery   by mutableStateOf("")
 
-    // ── Starred pairs ─────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Starred pairs ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var starredPairs by mutableStateOf(
         prefs.getStringSet("starred_pairs_v1", emptySet()) ?: emptySet<String>()
     )
@@ -1337,7 +1405,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putStringSet("starred_pairs_v1", starredPairs).apply()
     }
 
-    // ── Pair notes ────────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Pair notes ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var pairNotes by mutableStateOf(
         try {
             val raw = prefs.getString("pair_notes", "{}") ?: "{}"
@@ -1354,7 +1422,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("pair_notes", json.toString()).apply()
     }
 
-    // ── Visit streak ──────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Visit streak ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var totalOpens  by mutableStateOf(0)
     var visitStreak by mutableStateOf(0)
 
@@ -1393,8 +1461,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {}
     }
 
-    // ── Toast ─────────────────────────────────────────────────────────────────
-    // ── Games launcher ───────────────────────────────────────────────────
+    // ┄1�7┄1�7 Toast ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ┄1�7┄1�7 Games launcher ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var pendingLaunchGames by mutableStateOf(false)
     fun openGames()      { pendingLaunchGames = true }
     fun onGamesLaunched() { pendingLaunchGames = false }
@@ -1412,7 +1480,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ── Share schedule ────────────────────────────────────────────────────────
+    // ┄1�7┄1�7 Share schedule ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var pendingShareText by mutableStateOf<String?>(null)
 
     fun buildShareText(): String {
@@ -1420,7 +1488,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val lines = mutableListOf("📅 $group", "")
         scheduleDays.firstOrNull()?.pairs?.forEach { pair ->
             if (!pair.isWindow) {
-                lines.add("${pair.num}. ${pair.subject}${if (pair.timeStart.isNotEmpty()) " · ${pair.timeStart}–${pair.timeEnd}" else ""}")
+                lines.add("${pair.num}. ${pair.subject}${if (pair.timeStart.isNotEmpty()) " · ${pair.timeStart} 1�7${pair.timeEnd}" else ""}")
             }
         }
         lines.add(""); lines.add("📲 ScheduleApp")
@@ -1431,7 +1499,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private val EMOJI_POOL = listOf(
             "😊","😎","🤓","🥳","😏","🤩","🦊","🐺","🦋","🐸",
             "🐱","🐶","🦁","🐼","🦄","🐉","🦅","🎭","🤖","👻",
-            "💀","🎃","⚡","🔥","💎","🌙","⭐","🌈","🎵","🎮","🏆"
+            "💀","🎃","⚄1�7","🔥","💎","🌙","⭄1�7","🌈","🎵","🎮","🏆"
         )
     }
 
@@ -1525,7 +1593,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             startPresencePoller()
             onSuccess()
         } catch (e: Exception) {
-            regError = "❌ ${e.message}"
+            regError = "❄1�7 ${e.message}"
         } finally { authLoading = false }
     }
 }
@@ -1559,8 +1627,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             startPresencePoller()
             onSuccess()
         } catch (e: Exception) {
-            authError = "❌ ${e.message}"
+            authError = "❄1�7 ${e.message}"
         } finally { authLoading = false }
     }
 }
+
+    fun setLeaderboardGame(game: String) {
+        leaderboardGame = game
+    }
 }
