@@ -153,7 +153,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 loadProgress = 1f; statusText = "Найдено: ${files.size} файлов"
                 delay(1200); loadProgress = 0f; statusText = ""
             } catch (e: Exception) {
-                loadProgress = 0f; statusText = "❌ ${e.message}"
+                loadProgress = 0f; statusText = "❄1�7 ${e.message}"
             } finally { isLoading = false }
         }
     }
@@ -273,12 +273,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         updateVisitStreak()
-        // Show greeting for special dates
-        if (com.schedule.app.ui.screens.getSpecialDateGreeting() != null) {
-            viewModelScope.launch {
-                kotlinx.coroutines.delay(1000)
-                showGreeting = true
-            }
+        // Показываем приветствие при каждом запуске (как в WebView)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(600)
+            showGreeting = true
         }
     }
 
@@ -551,11 +549,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var leaderboardGame by mutableStateOf("snake")
     private set
     var leaderboardLoading by mutableStateOf(false)
-
-    @JvmName("doSetLeaderboardGame")
-    fun setLeaderboardGame(game: String) {
-        leaderboardGame = game
-    }
 
     private suspend fun loadLeaderboardFromSupabase() {
         try {
@@ -1263,10 +1256,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         cmdPrint("ok", "👑 VIP активирован! Доступны: фото-аватар, рамки, значки, баннер")
                     } else {
-                        cmdPrint("err", "❌ Нужно войти в аккаунт")
+                        cmdPrint("err", "❄1�7 Нужно войти в аккаунт")
                     }
                 } else {
-                    cmdPrint("err", "❌ Неверный код VIP")
+                    cmdPrint("err", "❄1�7 Неверный код VIP")
                 }
             }
             "logout" -> {
@@ -1306,7 +1299,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             else -> {
-                cmdPrint("err", "❌ Неизвестная команда: /$cmd  (введи /help)")
+                cmdPrint("err", "❄1�7 Неизвестная команда: /$cmd  (введи /help)")
             }
         }
         consoleInput = ""
@@ -1525,7 +1518,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             startPresencePoller()
             onSuccess()
         } catch (e: Exception) {
-            regError = "❌ ${e.message}"
+            regError = "❄1�7 ${e.message}"
         } finally { authLoading = false }
     }
 }
@@ -1559,7 +1552,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             startPresencePoller()
             onSuccess()
         } catch (e: Exception) {
-            authError = "❌ ${e.message}"
+            authError = "❄1�7 ${e.message}"
         } finally { authLoading = false }
     }
 }
