@@ -1588,8 +1588,3 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } finally { authLoading = false }
     }
 }
-
-    fun setLeaderboardGame(game: String) {
-        leaderboardGame = game
-    }
-}
