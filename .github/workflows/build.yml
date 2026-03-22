@@ -12,56 +12,46 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ✅ Java
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ✅ FIX 1: нормальная инициализация SDK + лицензии
       - name: Install Android SDK components
         run: |
-          mkdir -p ~/.android
-          touch ~/.android/repositories.cfg
-
-          yes | sdkmanager --licenses > /dev/null
-
-          sdkmanager \
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
             "platform-tools" \
             "platforms;android-34" \
             "build-tools;34.0.0"
 
-      # ✅ Gradle (убрал фикс версии — используем wrapper)
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
 
-      # ✅ FIX 2: права на gradlew (у тебя не было!)
-      - name: Grant execute permission
-        run: chmod +x gradlew
-
-      # ✅ keystore
+      # Декодируем keystore из base64 (хранится в GitHub Secrets)
       - name: Decode keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > $RUNNER_TEMP/release.jks
           echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
 
-      # ✅ версия (улучшил парсинг)
+      # Читаем versionName из build.gradle
       - name: Read version
         id: get_version
         run: |
-          VERSION=$(grep versionName app/build.gradle | head -1 | cut -d '"' -f2)
+          VERSION=$(grep "versionName" app/build.gradle | sed 's/.*"\(.*\)".*/\1/' | tr -d '[:space:]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Версия: $VERSION"
 
-      # ✅ PATCH (оставил твою логику, она норм)
+      # Генерируем patch-manifest.json — SHA256 хэши обновляемых файлов assets
+      # Автоматически находит ВСЕ .html, .js, .css файлы в assets (включая новые)
+      # Приложение скачивает только файлы с изменившимся/отсутствующим хэшем
       - name: Generate patch-manifest.json
         id: gen_manifest
         run: |
@@ -77,95 +67,82 @@ jobs:
           echo "  \"files\": {" >> patch-manifest.json
 
           FIRST=true
-
+          # Автоматически собираем ВСЕ .html, .js, .css файлы из assets
+          # find возвращает относительные пути вида "js/social.js", "index.html"
           while IFS= read -r FILEPATH; do
+            # Относительный путь от корня assets
             FILE="${FILEPATH#${ASSETS_DIR}/}"
             SHA=$(sha256sum "$FILEPATH" | awk '{print $1}')
-            SAFE_NAME="patch$(echo "$FILE" | tr '/' '')"
+            # Имя файла для аттача к релизу: "js/social.js" -> "patch__js__social.js"
+            SAFE_NAME="patch__$(echo "$FILE" | tr '/' '__')"
             RAW_URL="https://github.com/${REPO}/releases/download/${TAG}/${SAFE_NAME}"
-
             if [ "$FIRST" = true ]; then FIRST=false; else printf ",\n" >> patch-manifest.json; fi
-
             printf "    \"%s\": { \"sha\": \"%s\", \"url\": \"%s\" }" "$FILE" "$SHA" "$RAW_URL" >> patch-manifest.json
-
+            # Копируем с безопасным именем для прикрепления к релизу
             cp "$FILEPATH" "${PATCH_DIR}/${SAFE_NAME}"
-
+            echo "  + $FILE ($SHA)"
           done < <(find "$ASSETS_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" \) | sort)
 
           printf "\n  }\n}\n" >> patch-manifest.json
 
+          echo "Манифест:"
+          cat patch-manifest.json
+          echo ""
+          echo "Файлов в патче: $(ls "$PATCH_DIR" | wc -l)"
+
+          # Сохраняем путь к директории с патч-файлами для следующего шага
           echo "patch_dir=$PATCH_DIR" >> $GITHUB_OUTPUT
 
-      # ✅ FIX 3: используем ./gradlew (а не gradle!)
+      # Собираем Release APK с постоянной подписью
       - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: schedule
-        run: ./gradlew assembleRelease
+        run: gradle assembleRelease
 
-      # ✅ rename
+      # Переименовываем APK
       - name: Rename APK
         run: |
           mv app/build/outputs/apk/release/app-release.apk \
              app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
 
-      # ✅ artifact
+      # Артефакт для скачивания из Actions
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ScheduleApp-v${{ steps.get_version.outputs.version }}
           path: app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
 
-      # ✅ delete old release
+      # Удаляем старый релиз с тем же тегом если есть
       - name: Delete existing release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "v${{ steps.get_version.outputs.version }}" --yes 2>/dev/null || true
           git push origin --delete "v${{ steps.get_version.outputs.version }}" 2>/dev/null || true
-# ✅ release
+
+      # Создаём GitHub Release с APK + все patch-файлы + манифест (динамически)
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
           name: "ScheduleApp v${{ steps.get_version.outputs.version }}"
           body: |
-            Автосборка из ветки ${{ github.ref_name }}
-            Коммит: ${{ github.sha }}
+            Автосборка из ветки `${{ github.ref_name }}`
+            Коммит: `${{ github.sha }}`
 
-            🔥 Поддержка hot-patch обновлений
+            **Горячий патч**: нажми 🔥 в настройках приложения — обновятся только изменённые файлы без переустановки APK.
           files: |
             app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
             patch-manifest.json
             ${{ steps.gen_manifest.outputs.patch_dir }}/*
+          prerelease: false
+          draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ✅ cleanup
+      # Чистим keystore из временной папки
       - name: Cleanup keystore
         if: always()
         run: rm -f $RUNNER_TEMP/release.jks
-
-- name: Setup Android SDK
-  run: |
-    export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-    export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
-
-    mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-    cd $ANDROID_SDK_ROOT/cmdline-tools
-
-    # скачиваем cmdline-tools
-    curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-    unzip sdk-tools.zip
-    mv cmdline-tools latest
-
-    mkdir -p ~/.android
-    touch ~/.android/repositories.cfg
-
-    yes | sdkmanager --licenses > /dev/null
-
-    sdkmanager \
-      "platform-tools" \
-      "platforms;android-34" \
-      "build-tools;34.0.0"
