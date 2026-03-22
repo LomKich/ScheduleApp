@@ -308,7 +308,7 @@ fun AppScreen(
                 Screen.Leaderboard -> LeaderboardScreen(
     entries        = vm.leaderboard,
     selectedGame   = vm.leaderboardGame,
-    onGameSelect   = { game -> vm.leaderboardGame = game },   // ✅ правильно
+    onGameSelect = { vm.leaderboardGame = it },   // ✅ правильно
     isLoading      = vm.leaderboardLoading,
     onBack         = { goBack(Screen.Profile) },
 )
