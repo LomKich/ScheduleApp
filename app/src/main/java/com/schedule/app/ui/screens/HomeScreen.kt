@@ -10,6 +10,9 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
@@ -91,6 +94,67 @@ fun HomeScreen(
             Spacer(Modifier.height(8.dp))
 
             // ── Mode toggle pill ──
+            ModeTogglePill(
+                isTeacher = isTeacher,
+                onModeChange = onModeChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+            )
+
+            // ── Status + progress bar ──
+            if (statusText.isNotEmpty()) {
+                StatusText(text = statusText)
+            } else {
+                Spacer(Modifier.height(18.dp))
+            }
+            AppProgressBar(
+                progress = loadProgress,
+                modifier = Modifier.padding(vertical = 6.dp),
+            )
+
+            // ── Файлы ──
+            when {
+                yandexUrl.isEmpty() -> {
+                    NoUrlHint(onOpenSettings = onOpenSettings)
+                }
+                isLoading && files.isEmpty() -> {
+                    SectionLabel("Файлы")
+                    repeat(4) { SkeletonItem() }
+                }
+                files.isEmpty() && !isLoading -> {
+                    EmptyState(
+                        icon = "🔌",
+                        title = "Не удалось загрузить файлы",
+                        subtitle = "Проверь подключение к интернету",
+                    )
+                    AppButton(
+                        label = "🔄 Повторить",
+                        onClick = onRetry,
+                        variant = BtnVariant.Surface,
+                    )
+                }
+                else -> {
+                    SectionLabel("Файлы")
+                    files.forEach { file ->
+                        ListItemRow(
+                            name = file.name,
+                            sub = if (file.size > 0) "${file.size / 1024} КБ" else null,
+                            selected = file.name == selectedFile?.name,
+                            onClick = { onFileClick(file) },
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(100.dp)) // отступ под nav bar
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODE TOGGLE PILL  (.mode-toggle-pill)
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun ModeTogglePill(
     isTeacher: Boolean,
@@ -123,7 +187,6 @@ fun ModeTogglePill(
             .padding(3.dp)
             .onGloballyPositioned { containerWidth = it.size.width.toFloat() },
     ) {
-        // Sliding pill with shadow
         if (containerWidth > 0f) {
             Box(
                 modifier = Modifier
@@ -136,7 +199,6 @@ fun ModeTogglePill(
             )
         }
 
-        // Buttons
         Row {
             listOf("Студенты" to false, "Педагоги" to true).forEach { (label, teacher) ->
                 Text(
@@ -160,10 +222,7 @@ fun ModeTogglePill(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HERO CARD  (.home-hero / .hero-card / .hero-title)
-//
-// Плашка «Расписание Студентам» с radial-gradient glow сверху
-// и accent text-shadow
+// HERO CARD
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun HomeHero(onSecretTap: () -> Unit = {}) {
@@ -175,7 +234,7 @@ private fun HomeHero(onSecretTap: () -> Unit = {}) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // Radial gradient glow (::before)
+        // Radial gradient glow
         Canvas(modifier = Modifier.size(240.dp).align(Alignment.TopCenter)) {
             drawCircle(
                 brush = Brush.radialGradient(
@@ -223,7 +282,7 @@ private fun HomeHero(onSecretTap: () -> Unit = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NO URL HINT  (#no-url-hint)
+// NO URL HINT
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun NoUrlHint(onOpenSettings: () -> Unit) {
@@ -252,8 +311,7 @@ private fun NoUrlHint(onOpenSettings: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOME STATUS LINE  (#home-status-line)
-// Показывает: «урок X · N мин» и «N заданий ДЗ»
+// HOME STATUS LINE  (урок · ДЗ)
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun HomeStatusLine(
