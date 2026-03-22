@@ -1027,9 +1027,13 @@ private fun ProfileListRow(
 // ─────────────────────────────────────────────────────────────────────────────
 // PROFILE EDIT SCREEN  (#s-profile-edit)
 // ─────────────────────────────────────────────────────────────────────────────
-
-
 @Composable
+val PROFILE_ACCENT_COLORS = listOf(
+    "#E87722", "#60CDFF", "#4CAF7D", "#C94F4F",
+    "#A78BFA", "#F5C518", "#FF6B9D", "#00BCD4",
+    "#FF7043", "#8BC34A", "#9C27B0", "#FFFFFF",
+)
+
 fun ProfileEditScreen(
     profile: UserProfile,
     editName: String,
