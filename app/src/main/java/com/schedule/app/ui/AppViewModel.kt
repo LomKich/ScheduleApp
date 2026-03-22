@@ -1527,6 +1527,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             regError = "❌ ${e.message}"
         } finally { authLoading = false }
     }
+}
 
 
     fun doLogin(onSuccess: () -> Unit) {
