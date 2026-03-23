@@ -17,18 +17,24 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * Логгер — пишет все события в Downloads/ScheduleApp_logs.txt
+ * Логгер — пишет все события в Downloads/расписание/<timestamp>_log.txt
+ * Каждый запуск приложения создаёт новый файл с уникальным именем.
  * Поддерживает Android 10+ (MediaStore) и старые версии (прямая запись).
  */
 public class AppLogger {
 
-    private static final String TAG      = "ScheduleApp";
-    private static final String FILE_NAME = "ScheduleApp_logs.txt";
-    private static final int    MAX_SIZE  = 512 * 1024; // 512 KB — потом очищаем
+    private static final String TAG          = "ScheduleApp";
+    private static final String SUBFOLDER    = "расписание";   // папка внутри Downloads
+    private static final int    MAX_SIZE     = 512 * 1024; // 512 KB — потом очищаем
+    private static final int    MAX_LOGS     = 4;          // хранить не более N файлов логов
 
     private static AppLogger instance;
     private final Context ctx;
-    private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault());
+    private final SimpleDateFormat sdf     = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault());
+    private final SimpleDateFormat sdFname = new SimpleDateFormat("yyyyMMdd_HHmmss",           Locale.getDefault());
+
+    // Уникальное имя файла для этой сессии
+    private final String FILE_NAME;
 
     // Для Android < 10
     private File legacyFile;
@@ -37,14 +43,16 @@ public class AppLogger {
 
     private AppLogger(Context ctx) {
         this.ctx = ctx.getApplicationContext();
+        // Уникальное имя: 20250318_143022_log.txt
+        this.FILE_NAME = sdFname.format(new Date()) + "_log.txt";
         try {
             initFile();
         } catch (Exception e) {
-            // Ни при каких обстоятельствах логгер не должен крашить приложение
             Log.e(TAG, "Logger init failed, will use logcat only: " + e.getMessage());
         }
         writeRaw("════════════════════════════════════════");
         writeRaw("  ScheduleApp — сессия начата");
+        writeRaw("  Файл лога: " + FILE_NAME);
         writeRaw("  Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
         writeRaw("  Устройство: " + Build.MANUFACTURER + " " + Build.MODEL);
         writeRaw("════════════════════════════════════════");
@@ -68,51 +76,62 @@ public class AppLogger {
     private void initMediaStore() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
 
-        // Шаг 1: ищем существующий файл в MediaStore
-        android.database.Cursor cursor = null;
+        // Удаляем старые логи перед созданием нового
+        pruneOldLogsMediaStore();
+
+        // Всегда создаём НОВЫЙ файл (уникальное имя на каждый запуск)
         try {
-            cursor = ctx.getContentResolver().query(
+            ContentValues cv = new ContentValues();
+            cv.put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME);
+            cv.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+            // Папка: Downloads/расписание/
+            cv.put(MediaStore.MediaColumns.RELATIVE_PATH,
+                   Environment.DIRECTORY_DOWNLOADS + "/" + SUBFOLDER);
+            mediaUri = ctx.getContentResolver()
+                .insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+        } catch (Exception e) {
+            Log.w(TAG, "MediaStore insert failed, falling back to internal storage: " + e.getMessage());
+            mediaUri = null;
+            initInternalFallback();
+        }
+    }
+
+    /** Удаляет старые логи через MediaStore (Android 10+), оставляет MAX_LOGS-1 (место для нового) */
+    private void pruneOldLogsMediaStore() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
+        try {
+            String selection = MediaStore.MediaColumns.RELATIVE_PATH + " LIKE ? AND "
+                + MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?";
+            String[] args = {
+                "%" + SUBFOLDER + "%",
+                "%_log.txt"
+            };
+            String[] projection = {
+                MediaStore.MediaColumns._ID,
+                MediaStore.MediaColumns.DISPLAY_NAME,
+                MediaStore.MediaColumns.DATE_ADDED
+            };
+            android.database.Cursor cursor = ctx.getContentResolver().query(
                 MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                new String[]{MediaStore.MediaColumns._ID, MediaStore.MediaColumns.SIZE},
-                MediaStore.MediaColumns.DISPLAY_NAME + "=?",
-                new String[]{FILE_NAME},
-                null
+                projection, selection, args,
+                MediaStore.MediaColumns.DATE_ADDED + " ASC"
             );
-            if (cursor != null && cursor.moveToFirst()) {
-                long id   = cursor.getLong(0);
-                long size = cursor.getLong(1);
-                Uri found = Uri.withAppendedPath(
-                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
-                if (size > MAX_SIZE) {
-                    // Файл слишком большой — удаляем, создадим ниже заново
-                    ctx.getContentResolver().delete(found, null, null);
-                } else {
-                    mediaUri = found; // переиспользуем существующий
-                }
+            if (cursor == null) return;
+            java.util.List<Uri> uris = new java.util.ArrayList<>();
+            while (cursor.moveToNext()) {
+                long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID));
+                uris.add(android.content.ContentUris.withAppendedId(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, id));
+            }
+            cursor.close();
+            // Удаляем самые старые, оставляем MAX_LOGS-1 (новый ещё не создан)
+            int toDelete = uris.size() - (MAX_LOGS - 1);
+            for (int i = 0; i < toDelete; i++) {
+                ctx.getContentResolver().delete(uris.get(i), null, null);
+                Log.i(TAG, "Pruned old log (MediaStore): " + uris.get(i));
             }
         } catch (Exception e) {
-            Log.w(TAG, "MediaStore query failed: " + e.getMessage());
-        } finally {
-            if (cursor != null) cursor.close();
-        }
-
-        // Шаг 2: если нет рабочего URI — создаём новый файл
-        if (mediaUri == null) {
-            try {
-                ContentValues cv = new ContentValues();
-                cv.put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME);
-                cv.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
-                cv.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-                mediaUri = ctx.getContentResolver()
-                    .insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
-            } catch (Exception e) {
-                // IllegalStateException: "Failed to build unique file" — файл с таким именем
-                // уже существует физически на диске, но MediaStore его не видит (рассинхрон).
-                // Это главная причина краша. Решение: откатываемся на внутреннее хранилище.
-                Log.w(TAG, "MediaStore insert failed, falling back to internal storage: " + e.getMessage());
-                mediaUri = null;
-                initInternalFallback();
-            }
+            Log.w(TAG, "pruneOldLogsMediaStore error: " + e.getMessage());
         }
     }
 
@@ -124,23 +143,35 @@ public class AppLogger {
         try {
             File dir = ctx.getFilesDir();
             if (!dir.exists()) dir.mkdirs();
+            pruneOldLogsDir(dir);
             legacyFile = new File(dir, FILE_NAME);
-            if (legacyFile.exists() && legacyFile.length() > MAX_SIZE) {
-                legacyFile.delete();
-            }
             Log.i(TAG, "Logger: using internal fallback at " + legacyFile.getAbsolutePath());
         } catch (Exception e) {
             Log.e(TAG, "Logger: all storage options failed: " + e.getMessage());
-            // legacyFile остаётся null — writeRaw() просто пропустит запись, без краша
         }
     }
 
     private void initLegacy() {
-        File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        File dir = new File(downloads, SUBFOLDER);
         if (!dir.exists()) dir.mkdirs();
+        pruneOldLogsDir(dir);
         legacyFile = new File(dir, FILE_NAME);
-        if (legacyFile.exists() && legacyFile.length() > MAX_SIZE) {
-            legacyFile.delete();
+    }
+
+    /** Удаляет старые логи в указанной папке, оставляет MAX_LOGS-1 файлов */
+    private void pruneOldLogsDir(File dir) {
+        try {
+            File[] logs = dir.listFiles(f -> f.getName().endsWith("_log.txt"));
+            if (logs == null || logs.length < MAX_LOGS) return;
+            java.util.Arrays.sort(logs, java.util.Comparator.comparingLong(File::lastModified));
+            int toDelete = logs.length - (MAX_LOGS - 1);
+            for (int i = 0; i < toDelete; i++) {
+                Log.i(TAG, "Pruned old log: " + logs[i].getName());
+                logs[i].delete();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "pruneOldLogsDir error: " + e.getMessage());
         }
     }
 

@@ -163,17 +163,6 @@ public class MainActivity extends Activity {
         }
 
         prefs   = getSharedPreferences("schedule_prefs", Context.MODE_PRIVATE);
-
-        // ── Проверяем предпочтение интерфейса ────────────────────────────────────
-        boolean useNativeUi = getSharedPreferences("sapp_prefs", Context.MODE_PRIVATE)
-            .getBoolean("use_native_ui", false);
-        if (useNativeUi) {
-            startActivity(new Intent(this, com.schedule.app.ui.ComposeActivity.class));
-            finish();
-            return;
-        }
-        // ─────────────────────────────────────────────────────────────────────────
-
         webView = new WebView(this);
         setContentView(webView);
 
@@ -396,19 +385,6 @@ public class MainActivity extends Activity {
                 startJavaPollTimer();
                 // Передаём реальную высоту статус-бара в CSS-переменную
                 injectStatusBarHeight();
-                // Watchdog: ждём heartbeat от JS — если не придёт, предлагаем откат
-                BackupManager.get(MainActivity.this).startWatchdog(new BackupManager.WatchdogCallback() {
-                    @Override public void onAppHealthy() {
-                        log.i(TAG, "Watchdog: приложение работает нормально ✅");
-                    }
-                    @Override public void onAppUnhealthy(String reason, String backupVer, String backupPath) {
-                        if (backupPath == null) {
-                            log.w(TAG, "Watchdog FAIL, но бэкапа нет — ничего не делаем");
-                            return;
-                        }
-                        runOnUiThread(() -> _showRestoreDialog(reason, backupVer, backupPath));
-                    }
-                });
             }
 
             @Override
@@ -428,23 +404,6 @@ public class MainActivity extends Activity {
                     log.i(TAG, "fetch → " + url);
                 }
                 // ── Hot-patch: если файл был обновлён — отдаём из filesDir ────────────
-                // ── Sounds: кастомная схема https://sounds.local/ ────────────────────
-                // fetch('file:///android_asset/sounds/') не работает в WebView — используем HTTPS
-                if (url.startsWith("https://sounds.local/")) {
-                    String soundFile = req.getUrl().getPath(); // напр. "/msg_send.ogg"
-                    if (soundFile != null && soundFile.startsWith("/")) {
-                        soundFile = soundFile.substring(1);
-                    }
-                    try {
-                        java.io.InputStream is = getAssets().open("sounds/" + soundFile);
-                        java.util.Map<String, String> h = new java.util.HashMap<>();
-                        h.put("Access-Control-Allow-Origin", "*");
-                        return new WebResourceResponse("audio/ogg", null, 200, "OK", h, is);
-                    } catch (Exception e) {
-                        log.w(TAG, "sound not found: sounds/" + soundFile);
-                        return null;
-                    }
-                }
                 // ── Emoji pack: кастомная схема https://emoji.local/ ──────────────────
                 // file:///android_asset/ не перехватывается надёжно — используем HTTPS
                 if (url.startsWith("https://emoji.local/")) {
@@ -916,7 +875,6 @@ public class MainActivity extends Activity {
         } else if (requestCode == CIRCLE_RECORD_CODE) {
             if (resultCode == RESULT_OK && data != null) {
                 String videoPath = data.getStringExtra(CircleRecordActivity.EXTRA_VIDEO_PATH);
-                boolean isFrontCam = data.getBooleanExtra(CircleRecordActivity.EXTRA_FRONT_CAMERA, true);
                 if (videoPath != null && !videoPath.isEmpty()) {
                     log.i(TAG, "CircleRecord: got video path=" + videoPath);
                     // Уведомляем JS что видео снято, идёт загрузка
@@ -969,7 +927,7 @@ public class MainActivity extends Activity {
                                         log.i(TAG, "CircleRecord: CDN OK url=" + fileUrl);
                                         runOnUiThread(() -> webView.evaluateJavascript(
                                             "if(typeof onNativeCircleUploaded==='function')onNativeCircleUploaded('" +
-                                            fileUrl.replace("'", "\'") + "'," + fileSize + "," + isFrontCam + ")", null));
+                                            fileUrl.replace("'", "\'") + "'," + fileSize + ")", null));
                                         return;
                                     }
                                 } catch (Exception je) { log.e(TAG, "parse url: " + je.getMessage()); }
@@ -1897,68 +1855,6 @@ public class MainActivity extends Activity {
             }
         }
 
-        // ── Backup & Watchdog ─────────────────────────────────────────────────
-
-        /** JS вызывает при каждом успешном старте (через 3-5 сек после инита) */
-        @JavascriptInterface
-        public void heartbeat() {
-            BackupManager.get(MainActivity.this).onHeartbeat();
-        }
-
-        /** Возвращает JSON с информацией о последнем бэкапе */
-        @JavascriptInterface
-        public String getBackupInfo() {
-            BackupManager bm = BackupManager.get(MainActivity.this);
-            java.io.File[] backups = bm.listBackups();
-            org.json.JSONObject obj = new org.json.JSONObject();
-            try {
-                obj.put("hasBackup",    bm.hasBackup());
-                obj.put("lastVersion",  bm.getLastBackupVersion() != null ? bm.getLastBackupVersion() : "");
-                obj.put("lastTs",       bm.getLastBackupTimestamp());
-                obj.put("lastDate",     bm.getLastBackupTimestamp() > 0
-                    ? BackupManager.formatDate(bm.getLastBackupTimestamp()) : "");
-                obj.put("totalSize",    BackupManager.formatSize(bm.getTotalBackupSize()));
-                obj.put("count",        backups.length);
-                org.json.JSONArray arr = new org.json.JSONArray();
-                for (java.io.File f : backups) {
-                    org.json.JSONObject b = new org.json.JSONObject();
-                    b.put("name",    f.getName());
-                    b.put("path",    f.getAbsolutePath());
-                    b.put("size",    BackupManager.formatSize(f.length()));
-                    b.put("date",    BackupManager.formatDate(f.lastModified()));
-                    arr.put(b);
-                }
-                obj.put("backups", arr);
-            } catch (Exception ignored) {}
-            return obj.toString();
-        }
-
-        /** Устанавливает последний бэкап */
-        @JavascriptInterface
-        public void restoreBackup() {
-            log.i(TAG, "restoreBackup called from JS");
-            BackupManager bm = BackupManager.get(MainActivity.this);
-            runOnUiThread(() -> {
-                boolean ok = bm.restoreLatestBackup(MainActivity.this);
-                if (!ok) {
-                    webView.evaluateJavascript("toast('❌ Бэкап не найден или повреждён')", null);
-                }
-            });
-        }
-
-        /** Устанавливает бэкап по пути */
-        @JavascriptInterface
-        public void restoreBackupByPath(String path) {
-            log.i(TAG, "restoreBackupByPath: " + path);
-            BackupManager bm = BackupManager.get(MainActivity.this);
-            runOnUiThread(() -> {
-                boolean ok = bm.restoreBackup(MainActivity.this, new java.io.File(path));
-                if (!ok) {
-                    webView.evaluateJavascript("toast('❌ Не удалось установить бэкап')", null);
-                }
-            });
-        }
-
         private void deleteRecursive(java.io.File f) {
             if (f.isDirectory()) {
                 java.io.File[] ch = f.listFiles();
@@ -1992,37 +1888,6 @@ public class MainActivity extends Activity {
             boolean ready = marker.exists();
             log.i(TAG, "isEmojiPackReady: " + ready);
             return ready;
-        }
-
-        /**
-         * Возвращает JSON-массив всех файлов в filesDir/emoji/ (рекурсивно).
-         * Пути относительные: "food/Hot Beverage.png", "nat/Fire.png" и т.д.
-         * Используется JS-диагностикой для сравнения с IOS_EMOJI_MAP.
-         */
-        @JavascriptInterface
-        public String getEmojiFileList() {
-            java.io.File emojiDir = new java.io.File(getFilesDir(), "emoji");
-            StringBuilder sb = new StringBuilder("[");
-            collectEmojiFiles(emojiDir, emojiDir, sb);
-            if (sb.length() > 1) sb.setLength(sb.length() - 1); // убрать последнюю запятую
-            sb.append("]");
-            return sb.toString();
-        }
-
-        private void collectEmojiFiles(java.io.File root, java.io.File dir, StringBuilder sb) {
-            java.io.File[] files = dir.listFiles();
-            if (files == null) return;
-            java.util.Arrays.sort(files);
-            for (java.io.File f : files) {
-                if (f.isDirectory()) {
-                    collectEmojiFiles(root, f, sb);
-                } else if (f.getName().endsWith(".png")) {
-                    String rel = f.getAbsolutePath().substring(root.getAbsolutePath().length() + 1);
-                    // JSON-экранирование
-                    rel = rel.replace("\\", "\\\\").replace("\"", "\\\"");
-                    sb.append("\"").append(rel).append("\",");
-                }
-            }
         }
 
         /**
@@ -2238,16 +2103,6 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void downloadAndInstallApk(String originalUrl) {
             log.i(TAG, "downloadAndInstallApk: " + originalUrl);
-
-            // Сохраняем текущую версию как бэкап ПЕРЕД скачиванием новой
-            new Thread(() -> {
-                String backupPath = BackupManager.get(MainActivity.this).backupCurrentApk();
-                if (backupPath != null) {
-                    log.i(TAG, "Pre-update backup saved: " + backupPath);
-                } else {
-                    log.w(TAG, "Pre-update backup FAILED — продолжаем без бэкапа");
-                }
-            }).start();
             final String[] candidates = {
                 originalUrl,
                 "https://ghproxy.com/"        + originalUrl,
@@ -2344,7 +2199,6 @@ public class MainActivity extends Activity {
                 _jsError("❌ Не удалось скачать: " + msg);
             }).start();
         }
-
 
         private void _jsProgress(int pct, String label) {
             final String js = String.format(
@@ -3574,7 +3428,6 @@ public class MainActivity extends Activity {
                         }, CAMERA_PERM_CODE);
                     return;
                 }
-                // Не скрываем клавиатуру — пользователь хочет её сохранить
                 // Сбрасываем флаги перед открытием
                 CircleRecordActivity.shouldStop   = false;
                 CircleRecordActivity.shouldCancel = false;
@@ -3669,66 +3522,5 @@ public class MainActivity extends Activity {
             });
         }
 
-        // ─── Переключение интерфейса ──────────────────────────────────────────────
-
-        /**
-         * JS: Android.switchToNativeUI()
-         * Сохраняет предпочтение и запускает ComposeActivity (нативный Kotlin UI).
-         */
-        @JavascriptInterface
-        public void switchToNativeUI() {
-            getSharedPreferences("sapp_prefs", Context.MODE_PRIVATE)
-                .edit().putBoolean("use_native_ui", true).apply();
-            runOnUiThread(() -> {
-                Intent intent = new Intent(MainActivity.this,
-                    com.schedule.app.ui.ComposeActivity.class);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
-                                Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                startActivity(intent);
-                finish();
-            });
-        }
-
-        /**
-         * JS: Android.isNativeUIAvailable()
-         * Возвращает true — нативный интерфейс доступен.
-         */
-        @JavascriptInterface
-        public boolean isNativeUIAvailable() { return true; }
-
     }
-    /**
-     * Нативный диалог восстановления бэкапа (вызывается из watchdog).
-     */
-    /**
-     * Показывает нативный диалог с предложением откатиться к предыдущей версии.
-     * Вызывается watchdog когда JS не прислал heartbeat.
-     */
-    private void _showRestoreDialog(String reason, String backupVersion, String backupPath) {
-        log.i(TAG, "_showRestoreDialog: " + reason);
-        String title   = "⚠️ Проблема с приложением";
-        String msg     = reason + "\n\n" +
-            "Доступна резервная версия: v" + (backupVersion != null ? backupVersion : "?") + "\n\n" +
-            "Установить предыдущую версию?";
-
-        new android.app.AlertDialog.Builder(MainActivity.this)
-            .setTitle(title)
-            .setMessage(msg)
-            .setPositiveButton("↩ Восстановить", (d, w) -> {
-                boolean ok = BackupManager.get(MainActivity.this)
-                    .restoreBackup(MainActivity.this, new java.io.File(backupPath));
-                if (!ok) {
-                    new android.app.AlertDialog.Builder(MainActivity.this)
-                        .setTitle("Ошибка")
-                        .setMessage("Не удалось запустить установку бэкапа.\nФайл: " + backupPath)
-                        .setPositiveButton("OK", null)
-                        .show();
-                }
-            })
-            .setNegativeButton("Пропустить", null)
-            .setCancelable(false)
-            .show();
-    }
-
-
 }

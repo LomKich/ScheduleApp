@@ -49,6 +49,50 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Версия: $VERSION"
 
+      # Генерируем patch-manifest.json — SHA256 хэши обновляемых файлов assets
+      # Автоматически находит ВСЕ .html, .js, .css файлы в assets (включая новые)
+      # Приложение скачивает только файлы с изменившимся/отсутствующим хэшем
+      - name: Generate patch-manifest.json
+        id: gen_manifest
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          ASSETS_DIR="app/src/main/assets"
+          REPO="LomKich/ScheduleApp"
+          TAG="v${VERSION}"
+          PATCH_DIR="patch_files"
+          mkdir -p "$PATCH_DIR"
+
+          echo "{" > patch-manifest.json
+          echo "  \"version\": \"${VERSION}\"," >> patch-manifest.json
+          echo "  \"files\": {" >> patch-manifest.json
+
+          FIRST=true
+          # Автоматически собираем ВСЕ .html, .js, .css файлы из assets
+          # find возвращает относительные пути вида "js/social.js", "index.html"
+          while IFS= read -r FILEPATH; do
+            # Относительный путь от корня assets
+            FILE="${FILEPATH#${ASSETS_DIR}/}"
+            SHA=$(sha256sum "$FILEPATH" | awk '{print $1}')
+            # Имя файла для аттача к релизу: "js/social.js" -> "patch__js__social.js"
+            SAFE_NAME="patch__$(echo "$FILE" | tr '/' '__')"
+            RAW_URL="https://github.com/${REPO}/releases/download/${TAG}/${SAFE_NAME}"
+            if [ "$FIRST" = true ]; then FIRST=false; else printf ",\n" >> patch-manifest.json; fi
+            printf "    \"%s\": { \"sha\": \"%s\", \"url\": \"%s\" }" "$FILE" "$SHA" "$RAW_URL" >> patch-manifest.json
+            # Копируем с безопасным именем для прикрепления к релизу
+            cp "$FILEPATH" "${PATCH_DIR}/${SAFE_NAME}"
+            echo "  + $FILE ($SHA)"
+          done < <(find "$ASSETS_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" \) | sort)
+
+          printf "\n  }\n}\n" >> patch-manifest.json
+
+          echo "Манифест:"
+          cat patch-manifest.json
+          echo ""
+          echo "Файлов в патче: $(ls "$PATCH_DIR" | wc -l)"
+
+          # Сохраняем путь к директории с патч-файлами для следующего шага
+          echo "patch_dir=$PATCH_DIR" >> $GITHUB_OUTPUT
+
       # Собираем Release APK с постоянной подписью
       - name: Build Release APK
         env:
@@ -78,7 +122,7 @@ jobs:
           gh release delete "v${{ steps.get_version.outputs.version }}" --yes 2>/dev/null || true
           git push origin --delete "v${{ steps.get_version.outputs.version }}" 2>/dev/null || true
 
-      # Создаём GitHub Release с APK
+      # Создаём GitHub Release с APK + все patch-файлы + манифест (динамически)
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -87,7 +131,12 @@ jobs:
           body: |
             Автосборка из ветки `${{ github.ref_name }}`
             Коммит: `${{ github.sha }}`
-          files: app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
+
+            **Горячий патч**: нажми 🔥 в настройках приложения — обновятся только изменённые файлы без переустановки APK.
+          files: |
+            app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
+            patch-manifest.json
+            ${{ steps.gen_manifest.outputs.patch_dir }}/*
           prerelease: false
           draft: false
         env:

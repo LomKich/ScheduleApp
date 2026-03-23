@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>// TERMINAL</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Courier New',Courier,monospace}
+#terminal{
+  position:fixed;inset:0;background:#000;display:flex;flex-direction:column;
+  outline:1px solid #00aa00;
+  box-shadow:0 0 60px rgba(0,200,0,0.12),inset 0 0 100px rgba(0,8,0,0.7);
+}
+#terminal::before{content:'';position:absolute;inset:0;z-index:300;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.22) 2px,rgba(0,0,0,0.22) 4px);}
+#terminal::after{content:'';position:absolute;inset:0;z-index:301;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 48%,rgba(0,0,0,0.82) 100%);}
+#sweep{position:absolute;left:0;right:0;height:4px;z-index:302;pointer-events:none;
+  background:linear-gradient(90deg,transparent 0%,rgba(0,255,0,0.07) 50%,transparent 100%);
+  animation:sweep 12s linear infinite;}
+@keyframes sweep{0%{top:-4px}100%{top:101%}}
+#titlebar{display:flex;align-items:center;justify-content:space-between;
+  padding:5px 12px;border-bottom:1px solid #002600;
+  background:rgba(0,10,0,0.96);flex-shrink:0;z-index:10;}
+#ttxt{color:#00bb00;font-size:10px;font-weight:700;letter-spacing:.1em;
+  text-shadow:0 0 10px rgba(0,255,0,0.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#btn-x{background:none;border:1px solid #004400;color:#00aa00;
+  padding:2px 10px;cursor:pointer;font-family:inherit;font-size:10px;
+  letter-spacing:.08em;flex-shrink:0;margin-left:8px;}
+#btn-x:active{background:rgba(0,255,0,0.12)}
+#boot{flex:1;padding:14px 16px 10px;color:#00bb00;font-size:11px;line-height:1.85;
+  overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;z-index:10;}
+#blog{white-space:pre-wrap;word-break:break-all;text-shadow:0 0 6px rgba(0,255,0,0.35);}
+.dim{color:#004400}.ok{color:#00ff44;text-shadow:0 0 12px rgba(0,255,68,0.7)}
+.warn{color:#aaff00;text-shadow:0 0 8px rgba(170,255,0,0.5)}
+#cur{display:inline-block;width:8px;height:12px;background:#00bb00;
+  animation:bl .7s step-end infinite;vertical-align:bottom;box-shadow:0 0 8px rgba(0,255,0,0.6);}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:0}}
+#vscreen{display:none;flex:1;position:relative;overflow:hidden;z-index:10;background:#000;}
+#vframe{position:absolute;inset:0;width:100%;height:100%;border:none;
+  filter:saturate(0) contrast(1.6) brightness(0.82) sepia(1) hue-rotate(70deg) saturate(2.8);}
+#vgrid{position:absolute;inset:0;pointer-events:none;z-index:1;
+  background-image:
+    repeating-linear-gradient(0deg,rgba(0,0,0,0.28) 0,rgba(0,0,0,0.28) 1px,transparent 1px,transparent 13px),
+    repeating-linear-gradient(90deg,rgba(0,0,0,0.12) 0,rgba(0,0,0,0.12) 1px,transparent 1px,transparent 7px);}
+#vvign{position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,0.72) 100%);}
+#vhud{position:absolute;inset:0;z-index:3;pointer-events:none;
+  padding:8px 10px;display:flex;flex-direction:column;justify-content:space-between;}
+.vhc{font-size:9px;color:rgba(0,190,0,0.7);letter-spacing:.1em;text-shadow:0 0 6px #00ff00}
+#pbw{height:2px;background:#001400;flex-shrink:0;z-index:10}
+#pb{height:2px;background:#00aa00;width:0;box-shadow:0 0 8px #00ff00}
+#bbar{display:flex;align-items:center;justify-content:space-between;
+  padding:4px 12px;border-top:1px solid #001c00;
+  background:rgba(0,7,0,0.96);flex-shrink:0;
+  font-size:9px;color:#005500;z-index:10;letter-spacing:.05em;}
+#brt{cursor:pointer;color:#008800;transition:color .15s}
+#brt:active{color:#00ff00}
+</style>
+</head>
+<body>
+<div id="terminal">
+  <div id="sweep"></div>
+  <div id="titlebar">
+    <span id="ttxt">// SCHEDULE_APP &gt; TERMINAL &gt; MEDIA_PLAYER_v2.1</span>
+    <button id="btn-x" onclick="closePlayer()">[ EXIT ]</button>
+  </div>
+  <div id="boot"><div id="blog"></div><span id="cur"></span></div>
+  <div id="vscreen">
+    <iframe id="vframe" allow="autoplay;encrypted-media;fullscreen" allowfullscreen></iframe>
+    <div id="vgrid"></div>
+    <div id="vvign"></div>
+    <div id="vhud">
+      <div class="vhc" id="vhl">ASCII_DECODE ████████░░ 81%</div>
+      <div class="vhc" style="text-align:right" id="vhr">SIG: ████ | BUF: OK | ERR: 0</div>
+    </div>
+  </div>
+  <div id="pbw"><div id="pb"></div></div>
+  <div id="bbar">
+    <span id="blt">TERM_v2.1 | FILTER: CRT_GREEN | 80x40</span>
+    <span id="brt" onclick="closePlayer()">[ TAP TO EXIT ]</span>
+  </div>
+</div>
+<script>
+'use strict';
+const MODE = new URLSearchParams(location.search).get('v') || 'kiss_me_again';
+const VIDEOS = {
+  kiss_me_again:{
+    id:'E0ICsZ6JR4o', dur:163,
+    label:'ROY_BEE // KISS_ME_AGAIN',
+    lines:[
+      ['dim','> SCHEDULE_APP TERMINAL v2.1'],
+      ['dim','> INIT VIDEO_SUBSYSTEM............'],['ok',' OK'],
+      ['dim','> LOAD CRT_FILTER: GREEN_PHOSPHOR.'],['ok',' OK'],
+      ['dim','> CONNECT STREAM_SOURCE...........'],['ok',' OK'],
+      ['warn','> SOURCE: ROY_BEE // KISS_ME_AGAIN'],
+      ['dim','> ORIGIN: 2009 // EURO_DANCE | BPM: 135'],
+      ['dim','> ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 100%'],
+      ['ok','> PLAYBACK_START'],['dim',''],
+    ],
+  },
+  bad_apple:{
+    id:'FtutLA63Cp8', dur:219,
+    label:'TOUHOU_PROJECT // BAD_APPLE',
+    lines:[
+      ['dim','> SCHEDULE_APP TERMINAL v2.1'],
+      ['dim','> INIT VIDEO_SUBSYSTEM............'],['ok',' OK'],
+      ['dim','> LOAD CRT_FILTER: MONOCHROME.....'],['ok',' OK'],
+      ['dim','> CONNECT STREAM_SOURCE...........'],['ok',' OK'],
+      ['warn','> SOURCE: ALSTROEMERIA_RECORDS // BAD_APPLE'],
+      ['dim','> ORIGIN: 2009 // TOUHOU_SHADOW_ART | BPM: 138'],
+      ['dim','> ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 100%'],
+      ['ok','> PLAYBACK_START'],['dim',''],
+    ],
+  },
+  rickroll:{
+    id:'dQw4w9WgXcQ', dur:212,
+    label:'R.ASTLEY // NEVER_GONNA_GIVE_YOU_UP',
+    lines:[
+      ['dim','> SCHEDULE_APP TERMINAL v2.1'],
+      ['dim','> INIT VIDEO_SUBSYSTEM............'],['ok',' OK'],
+      ['dim','> LOAD CRT_FILTER: GREEN_PHOSPHOR.'],['ok',' OK'],
+      ['warn','> WARNING: THIS FILE MAY CONTAIN TRAPS'],
+      ['dim','> CONNECT STREAM_SOURCE...........'],['ok',' OK'],
+      ['warn','> SOURCE: R.ASTLEY // NEVER_GONNA_GIVE_YOU_UP'],
+      ['dim','> ORIGIN: 1987 // POP_CLASSIC'],
+      ['dim','> ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 100%'],
+      ['ok','> PLAYBACK_START'],['dim',''],
+    ],
+  },
+};
+const vid  = VIDEOS[MODE] || VIDEOS.kiss_me_again;
+const blog = document.getElementById('blog');
+let _bi=0,_bci=0;
+function typeBoot(){
+  if(_bi>=vid.lines.length){startVideo();return;}
+  const[cls,text]=vid.lines[_bi];
+  if(_bci===0)blog.innerHTML+=`<span class="${cls}"></span>`;
+  const spans=blog.querySelectorAll('span');
+  const cur=spans[spans.length-1];
+  if(_bci<=text.length){
+    cur.textContent=text.slice(0,_bci); _bci++;
+    setTimeout(typeBoot,text.includes('▓')?9:text.startsWith(' OK')?4:3);
+  } else {
+    _bci=0;_bi++;
+    const next=vid.lines[_bi];
+    if(next&&!next[1].startsWith(' ')&&next[0]!=='ok')blog.innerHTML+='\n';
+    setTimeout(typeBoot,next&&next[1].startsWith('>')? 45:8);
+  }
+}
+function startVideo(){
+  document.getElementById('boot').style.display='none';
+  document.getElementById('vscreen').style.display='block';
+  document.getElementById('ttxt').textContent='// TERMINAL > STREAM > '+vid.label;
+  document.getElementById('blt').textContent=vid.label+' | CRT_MODE: ON';
+  const pb=document.getElementById('pb');
+  pb.style.transition='width '+vid.dur+'s linear';
+  pb.style.width='100%';
+  document.getElementById('vframe').src=
+    'https://www.youtube.com/embed/'+vid.id+
+    '?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1';
+  const bars=['▓▓▓▓▓▓▓▓░░','▓▓▓▓▓▓▓░░░','▓▓▓▓▓▓▓▓▓░','▓▓▓▓▓▓░░░░'];
+  const sigs=['████','███░','████','██░░'];
+  let tick=0;
+  setInterval(()=>{
+    tick++;
+    document.getElementById('vhl').textContent=
+      'ASCII_DECODE '+bars[tick%bars.length]+' '+(79+tick%12)+'%';
+    document.getElementById('vhr').textContent=
+      'PKT:'+(tick*128).toString(16).toUpperCase().padStart(4,'0')+
+      ' | SIG:'+sigs[tick%sigs.length]+' | ERR:0';
+  },1400);
+}
+function closePlayer(){
+  document.getElementById('vframe').src='about:blank';
+  window.parent.postMessage({type:'gameClose',game:'ascii_player'},'*');
+}
+setTimeout(typeBoot,300);
+</script>
+</body>
+</html>
