@@ -11,6 +11,7 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.*
 import com.schedule.app.ui.components.*
 import com.schedule.app.ui.theme.LocalTheme
 import java.util.Calendar
+import kotlin.math.abs
 
 data class ScheduleFile(
     val name: String,
@@ -45,36 +47,48 @@ fun HomeScreen(
     onRetry: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHomework: () -> Unit = {},
+    onOpenConsole: () -> Unit = {},
 ) {
     val t = LocalTheme.current
+
+    // Свайп вверх → консоль
+    // Отслеживаем жест на всём экране
+    var swipeStartY by remember { mutableStateOf(0f) }
+    var swipeStartX by remember { mutableStateOf(0f) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(t.bg),
-    ) {
-        // ── Топ-бар с кнопкой настроек ──
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(t.bg)
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(t.surface2)
-                    .border(1.dp, t.surface3, RoundedCornerShape(12.dp))
-                    .clickable(onClick = onOpenSettings),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("⚙️", fontSize = 20.sp)
-            }
-        }
+            .background(t.bg)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        swipeStartY = down.position.y
+                        swipeStartX = down.position.x
 
-        // Контент
+                        var lastY = swipeStartY
+                        var consumed = false
+
+                        do {
+                            val event = awaitPointerEvent()
+                            val pos = event.changes.firstOrNull()?.position ?: break
+                            val dy = swipeStartY - pos.y   // положительное = вверх
+                            val dx = abs(pos.x - swipeStartX)
+
+                            // Свайп вверх: вертикаль доминирует, прошли > 80dp
+                            if (!consumed && dy > 80.dp.toPx() && dy > dx * 2f) {
+                                onOpenConsole()
+                                consumed = true
+                                event.changes.forEach { it.consume() }
+                            }
+                            lastY = pos.y
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
+            },
+    ) {
+        // Контент (убрана кнопка ⚙️ — она была только для дебага)
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -86,7 +100,7 @@ fun HomeScreen(
             // ── Hero section (.home-hero) ──
             HomeHero(onSecretTap = {})
 
-            // ── Статус-строка (урок / ДЗ) ──
+            // ── Статус-строка (урок / ДЗ) — обновляется в реальном времени ──
             HomeStatusLine(hwActiveCount = hwActiveCount, onOpenHomework = onOpenHomework)
 
             // ── Прогресс недели ──
@@ -297,7 +311,7 @@ private fun NoUrlHint(onOpenSettings: () -> Unit) {
     ) {
         Text("⚙️", fontSize = 38.sp)
         Text(
-            text = "Укажи ссылку на Яндекс Диск\nв ",
+            text = "Укажи ссылку на Яндекс Диск\nв Настройках",
             color = t.muted,
             fontSize = 14.sp,
             lineHeight = 22.sp,
@@ -312,7 +326,7 @@ private fun NoUrlHint(onOpenSettings: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOME STATUS LINE  (урок · ДЗ)
+// HOME STATUS LINE  (урок · ДЗ)  — обновляется каждую минуту в реальном времени
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun HomeStatusLine(
@@ -321,48 +335,55 @@ private fun HomeStatusLine(
 ) {
     val t = LocalTheme.current
 
-    // Вычисляем ближайшую пару в реальном времени
-    val statusText = remember {
-        val now = Calendar.getInstance()
-        val h = now.get(Calendar.HOUR_OF_DAY)
-        val m = now.get(Calendar.MINUTE)
-        val nowMin = h * 60 + m
-        val dow = now.get(Calendar.DAY_OF_WEEK)
-
-        // Расписание пар: пн = 2, вт-пт = 3-6, сб = 7
-        val schedule = when {
-            dow == 2 -> listOf(
-                Triple("I",   9*60,    9*60+45),
-                Triple("II",  10*60+45, 11*60+30),
-                Triple("III", 12*60+50, 13*60+35),
-                Triple("IV",  14*60+35, 15*60+35),
-            )
-            dow in 3..6 -> listOf(
-                Triple("I",   8*60+30, 9*60+15),
-                Triple("II",  10*60+15, 11*60),
-                Triple("III", 12*60+20, 13*60+5),
-                Triple("IV",  14*60+5,  15*60+5),
-            )
-            else -> emptyList()
+    // Обновляем каждые 30 секунд чтобы статус был актуальным
+    var tick by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(30_000L)
+            tick++
         }
+    }
 
-        val parts = mutableListOf<String>()
+    val statusText by remember(tick) {
+        derivedStateOf {
+            val now = Calendar.getInstance()
+            val h = now.get(Calendar.HOUR_OF_DAY)
+            val m = now.get(Calendar.MINUTE)
+            val nowMin = h * 60 + m
+            val dow = now.get(Calendar.DAY_OF_WEEK)
 
-        // Текущая пара?
-        val current = schedule.firstOrNull { nowMin in it.second..it.third }
-        if (current != null) {
-            val left = current.third - nowMin
-            parts.add("урок ${current.first} · $left мин")
-        } else {
-            // Следующая пара
-            val next = schedule.firstOrNull { it.second > nowMin }
-            if (next != null) {
-                val toStart = next.second - nowMin
-                parts.add("до пары ${next.first} · $toStart мин")
+            val schedule = when {
+                dow == 2 -> listOf(
+                    Triple("I",   9*60,     9*60+45),
+                    Triple("II",  10*60+45, 11*60+30),
+                    Triple("III", 12*60+50, 13*60+35),
+                    Triple("IV",  14*60+35, 15*60+35),
+                )
+                dow in 3..6 -> listOf(
+                    Triple("I",   8*60+30, 9*60+15),
+                    Triple("II",  10*60+15, 11*60),
+                    Triple("III", 12*60+20, 13*60+5),
+                    Triple("IV",  14*60+5,  15*60+5),
+                )
+                else -> emptyList()
             }
-        }
 
-        parts.joinToString("  ·  ")
+            val parts = mutableListOf<String>()
+
+            val current = schedule.firstOrNull { nowMin in it.second..it.third }
+            if (current != null) {
+                val left = current.third - nowMin
+                parts.add("урок ${current.first} · $left мин")
+            } else {
+                val next = schedule.firstOrNull { it.second > nowMin }
+                if (next != null) {
+                    val toStart = next.second - nowMin
+                    parts.add("до пары ${next.first} · $toStart мин")
+                }
+            }
+
+            parts.joinToString("  ·  ")
+        }
     }
 
     if (statusText.isEmpty() && hwActiveCount == 0) return

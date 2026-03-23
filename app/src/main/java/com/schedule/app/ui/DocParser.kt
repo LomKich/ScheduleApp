@@ -301,9 +301,10 @@ object DocParser {
         val pairs = rawSched.map { (roman, lesson) ->
             val b = bell[roman]
 
-            var isNow  = false
-            var isNext = false
+            var isNow       = false
+            var isNext      = false
             var remainText: String? = null
+            var progressPct = 0f
 
             if (isToday && b != null && b[0] != null) {
                 val startMin = toMin(b[0]!!)
@@ -313,6 +314,9 @@ object DocParser {
                 if (isNow) {
                     val diff = endMin - nowMin
                     remainText = if (diff <= 0) "заканч." else "$diff мин"
+                    val totalDur = (endMin - startMin).coerceAtLeast(1)
+                    val elapsed  = (nowMin - startMin).coerceIn(0, totalDur)
+                    progressPct  = elapsed.toFloat() / totalDur.toFloat() * 100f
                 } else {
                     val diff = startMin - nowMin
                     isNext = diff in 1..30
@@ -362,6 +366,7 @@ object DocParser {
                 isNext      = isNext,
                 isWindow    = isEmpty,
                 remainText  = remainText,
+                progressPct = progressPct,
             )
         }
 

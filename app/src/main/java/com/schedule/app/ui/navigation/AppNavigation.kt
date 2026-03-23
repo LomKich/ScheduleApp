@@ -103,6 +103,7 @@ fun AppScreen(
                     onRetry        = vm::loadFiles,
                     onOpenSettings = { navigate(Screen.Settings) },
                     onOpenHomework = { navigate(Screen.Homework) },
+                    onOpenConsole  = { vm.showConsole = true },
                 )
 
                 Screen.Groups -> GroupsScreen(
@@ -439,6 +440,12 @@ fun AppScreen(
                     onClose       = { vm.showConsole = false },
                 )
             }
+        }
+
+        // ── Console /settings навигация ───────────────────────────────────────
+        if (vm.pendingNavigateToSettings) {
+            vm.pendingNavigateToSettings = false
+            navigate(Screen.Settings)
         }
 
         // ── Pair note dialog ──────────────────────────────────────────────────

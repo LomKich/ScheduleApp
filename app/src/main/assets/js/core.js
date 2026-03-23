@@ -2506,6 +2506,11 @@ showScreen = function(id, dir) {
           } else {
             g.mode = 'scroll';
           }
+        } else if (cur === 's-home' && ady > adx * 1.5 && dy < -80) {
+          // ── Свайп ВВЕРХ на главном экране → открыть консоль ──
+          g.mode   = 'scroll'; // не анимируем переход экрана
+          g.active = false;
+          logOpen();
         } else {
           g.mode = 'scroll';
         }
@@ -4433,6 +4438,72 @@ function logClear(){
   renderLogBody();
   toast('Лог очищен');
 }
+
+// ── Консоль: вывод строки ──────────────────────────────────────────────────
+function logPrint(cls, text) {
+  const ts = new Date().toISOString().slice(11,19);
+  const entry = { ts, level: cls, msg: String(text) };
+  _appLogs.push(entry);
+  if (_appLogs.length > _logMax) _appLogs.shift();
+  // Если консоль открыта — дописываем в реальном времени
+  const body = document.getElementById('log-body');
+  if (body) {
+    const div = document.createElement('div');
+    div.className = 'log-entry ' + cls;
+    div.textContent = '[' + ts + '] ' + text;
+    body.prepend(div);
+  }
+}
+
+// ── Консоль: обработчик команд ─────────────────────────────────────────────
+function logRunCmd(raw) {
+  const parts = raw.trim().split(' ');
+  const cmd   = parts[0].toLowerCase().replace(/^\//, '');
+  const arg   = parts.slice(1).join(' ').trim();
+
+  logPrint('out', '> ' + raw);
+
+  switch (cmd) {
+    case 'help':
+      logPrint('info', 'Доступные команды:');
+      logPrint('ok',   '  /help       — этот список');
+      logPrint('ok',   '  /settings   — открыть настройки ⚙️');
+      logPrint('ok',   '  /theme <id> — сменить тему');
+      logPrint('ok',   '  /clear      — очистить лог');
+      logPrint('ok',   '  /version    — версия');
+      logPrint('ok',   '  /logs       — показать последние логи');
+      break;
+    case 'settings':
+      logPrint('ok', '⚙️ Открываю настройки...');
+      logClose();
+      setTimeout(() => { try { navTo('s-settings', 'nav-settings'); } catch(e) { showScreen('s-settings'); } }, 150);
+      break;
+    case 'clear':
+      _appLogs.length = 0;
+      renderLogBody();
+      logPrint('muted', '— консоль очищена —');
+      break;
+    case 'theme':
+      if (!arg) {
+        logPrint('info', 'Темы: orange amoled win11 pixel forest rose gold purple sunset bw ocean candy light');
+      } else {
+        try { setTheme(arg); logPrint('ok', '🎨 Тема: ' + arg); } catch(e) { logPrint('err', '❌ Ошибка: ' + e.message); }
+      }
+      break;
+    case 'version':
+      logPrint('ok', '📦 ScheduleApp WebView');
+      logPrint('ok', '  UA: ' + navigator.userAgent.slice(0, 80));
+      break;
+    case 'logs':
+      logPrint('info', 'Последние ' + Math.min(_appLogs.length, 20) + ' записей:');
+      _appLogs.slice(-20).forEach(e => logPrint(e.level, '[' + e.ts + '] ' + e.msg));
+      break;
+    default:
+      logPrint('err', '❌ Неизвестная команда: /' + cmd + '  (введи /help)');
+  }
+}
+
+
 
 // ══════════════════════════════════════════════════════════════════════
 // 🚨 УМНЫЙ ПЕРЕХВАТЧИК КРИТИЧЕСКИХ ОШИБОК

@@ -1181,6 +1181,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ┄1�7┄1�7 Dev Console ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
     var showConsole       by mutableStateOf(false)
     var consoleInput      by mutableStateOf("")
+    var pendingNavigateToSettings by mutableStateOf(false)
     var consoleEntries    by mutableStateOf(listOf(
         com.schedule.app.ui.screens.ConsoleEntry("info", "⚄1�7 ScheduleApp Dev Console"),
         com.schedule.app.ui.screens.ConsoleEntry("muted", "Введи /help для списка команд"),
@@ -1216,6 +1217,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 cmdPrint("ok",   "  /version  1�7 версия приложения")
                 cmdPrint("ok",   "  /vip <КОД>  1�7 активировать VIP 👑")
                 cmdPrint("ok",   "  /logout  1�7 выйти из аккаунта")
+                cmdPrint("ok",   "  /settings  — открыть настройки ⚙️")
                 cmdPrint("ok",   "  /theme <id>  1�7 сменить тему")
                 cmdPrint("ok",   "  /group  1�7 случайная группа 🎲")
             }
@@ -1296,6 +1298,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             "logout" -> {
                 doLogout()
                 cmdPrint("ok", "👋 Выход выполнен")
+            }
+            "settings" -> {
+                cmdPrint("ok", "⚙️ Открываю настройки...")
+                showConsole = false
+                // Флаг для AppNavigation — навигация обрабатывается снаружи
+                pendingNavigateToSettings = true
             }
             "theme" -> {
                 if (arg.isEmpty()) {

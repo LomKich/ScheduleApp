@@ -4486,6 +4486,34 @@ html.notch-off #s-login {
 </div>
 
 
+
+<!-- ══ DEV CONSOLE / LOG OVERLAY ══ -->
+<div id="log-overlay" class="log-overlay" onclick="if(event.target===this)logClose()">
+  <div class="log-sheet">
+    <div class="log-handle"></div>
+    <div class="log-toolbar">
+      <button class="btn btn-surface3" style="flex:1;padding:8px 0;font-size:12px" onclick="logClear()">🗑 Очистить</button>
+      <button class="btn btn-surface3" style="flex:1;padding:8px 0;font-size:12px" onclick="logCopy()">📋 Копировать</button>
+      <button class="btn btn-surface3" style="flex:1;padding:8px 0;font-size:12px" onclick="logClose()">✕ Закрыть</button>
+    </div>
+    <!-- Поле ввода команды -->
+    <div style="display:flex;align-items:center;gap:8px;padding:0 16px 10px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.06)">
+      <span style="color:#00ff41;font-size:14px;font-family:'JetBrains Mono',monospace;flex-shrink:0">&gt;</span>
+      <input id="log-cmd-input" type="text"
+        placeholder="команда или /help..."
+        style="flex:1;background:rgba(0,255,65,.07);border:1px solid rgba(0,255,65,.18);border-radius:8px;
+               padding:8px 12px;color:#00ff41;font-family:'JetBrains Mono',monospace;font-size:12px;
+               outline:none"
+        onkeydown="if(event.key==='Enter'&&this.value.trim()){logRunCmd(this.value.trim());this.value='';}"
+      >
+      <button onclick="var i=document.getElementById('log-cmd-input');if(i.value.trim()){logRunCmd(i.value.trim());i.value='';}"
+        style="background:rgba(0,255,65,.15);border:1px solid rgba(0,255,65,.25);border-radius:8px;
+               padding:7px 12px;color:#00ff41;font-size:13px;cursor:pointer;flex-shrink:0">↵</button>
+    </div>
+    <div class="log-body" id="log-body"></div>
+  </div>
+</div>
+
 <script src="js/core.js"></script>
 <script src="js/games.js"></script>
 <script src="js/rn.js"></script>
