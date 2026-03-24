@@ -1,0 +1,74 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.schedule.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.schedule.app"
+        minSdk 23
+        targetSdk 34
+        versionCode 14
+        versionName "4.8.11"
+    }
+
+    signingConfigs {
+        release {
+            storeFile     file(System.getenv("KEYSTORE_PATH")     ?: project.findProperty("KEYSTORE_PATH")     ?: "dummy.jks")
+            storePassword (System.getenv("KEYSTORE_PASSWORD")     ?: project.findProperty("KEYSTORE_PASSWORD") ?: "")
+            keyAlias      (System.getenv("KEY_ALIAS")             ?: project.findProperty("KEY_ALIAS")         ?: "schedule")
+            keyPassword   (System.getenv("KEY_PASSWORD")          ?: project.findProperty("KEY_PASSWORD")      ?: "")
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.release
+            debuggable true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    buildFeatures {
+        compose true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.11'
+    }
+}
+
+dependencies {
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'org.json:json:20231013'
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.core:core-ktx:1.13.1'
+
+    def composeBom = platform('androidx.compose:compose-bom:2024.05.00')
+    implementation composeBom
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.activity:activity-compose:1.9.0'
+    implementation 'androidx.navigation:navigation-compose:2.7.7'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.0'
+
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+}
