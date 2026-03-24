@@ -312,11 +312,11 @@ object DocParser {
                 val endMin   = if (endRaw != null) toMin(endRaw) else startMin + 90
                 isNow = nowMin in startMin..endMin
                 if (isNow) {
-                    val diff = endMin - nowMin
-                    remainText = if (diff <= 0) "заканч." else "$diff мин"
-                    val totalDur = (endMin - startMin).coerceAtLeast(1)
-                    val elapsed  = (nowMin - startMin).coerceIn(0, totalDur)
-                    progressPct  = elapsed.toFloat() / totalDur.toFloat() * 100f
+                    val diff    = endMin - nowMin
+                    remainText  = if (diff <= 0) "заканч." else "$diff мин"
+                    val total   = (endMin - startMin).coerceAtLeast(1)
+                    val elapsed = (nowMin - startMin).coerceIn(0, total)
+                    progressPct = elapsed.toFloat() / total.toFloat() * 100f
                 } else {
                     val diff = startMin - nowMin
                     isNext = diff in 1..30
@@ -384,29 +384,65 @@ object DocParser {
 
     private val fileCache = mutableMapOf<String, ByteArray>()
 
+    /**
+     * Скачивает файл с Яндекс.Диска по публичной ссылке.
+     * filePath — путь внутри публичной папки (может начинаться с "disk:/", убираем).
+     */
     suspend fun downloadFile(
         publicKey: String,
         filePath: String,
         onProgress: (Float) -> Unit = {},
     ): ByteArray = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        val cacheKey = "$publicKey|$filePath"
+        // Яндекс возвращает path вида "disk:/folder/file.doc" — для публичных ресурсов
+        // endpoint /download ожидает путь без префикса "disk:", т.е. "/folder/file.doc"
+        val normalizedPath = when {
+            filePath.startsWith("disk:/") -> filePath.removePrefix("disk:")
+            filePath.startsWith("disk:") -> "/" + filePath.removePrefix("disk:")
+            filePath.startsWith("/") -> filePath
+            else -> "/$filePath"
+        }
+
+        val cacheKey = "$publicKey|$normalizedPath"
         fileCache[cacheKey]?.let { return@withContext it }
 
-        val enc = java.net.URLEncoder.encode(publicKey, "UTF-8")
-        val pathEnc = java.net.URLEncoder.encode(filePath, "UTF-8")
-        val dlUrl = "https://cloud-api.yandex.net/v1/disk/public/resources/download" +
-                    "?public_key=$enc&path=$pathEnc"
+        val enc     = java.net.URLEncoder.encode(publicKey,     "UTF-8")
+        val pathEnc = java.net.URLEncoder.encode(normalizedPath,"UTF-8")
+        val dlUrl   = "https://cloud-api.yandex.net/v1/disk/public/resources/download" +
+                      "?public_key=$enc&path=$pathEnc"
 
         onProgress(0.2f)
         val conn = java.net.URL(dlUrl).openConnection() as java.net.HttpURLConnection
-        conn.connectTimeout = 15_000; conn.readTimeout = 30_000
-        val dlJson = org.json.JSONObject(conn.inputStream.bufferedReader().readText())
-        val href = dlJson.optString("href")
-        if (href.isNullOrEmpty()) throw Exception("Яндекс не вернул ссылку: $filePath")
+        conn.connectTimeout = 15_000
+        conn.readTimeout    = 30_000
+
+        val code1 = conn.responseCode
+        val body1 = if (code1 in 200..299)
+            conn.inputStream.bufferedReader().readText()
+        else
+            (conn.errorStream ?: conn.inputStream).bufferedReader().readText()
+
+        if (code1 !in 200..299) {
+            val msg = try {
+                org.json.JSONObject(body1).optString("message", "HTTP $code1")
+            } catch (_: Exception) { "HTTP $code1" }
+            throw Exception("Яндекс: $msg (path=$normalizedPath)")
+        }
+
+        val dlJson = org.json.JSONObject(body1)
+        val href   = dlJson.optString("href")
+        if (href.isNullOrEmpty()) throw Exception("Яндекс не вернул ссылку (path=$normalizedPath)")
 
         onProgress(0.5f)
         val fc = java.net.URL(href).openConnection() as java.net.HttpURLConnection
-        fc.connectTimeout = 15_000; fc.readTimeout = 60_000
+        fc.connectTimeout = 15_000
+        fc.readTimeout    = 90_000
+        fc.instanceFollowRedirects = true
+
+        val code2 = fc.responseCode
+        if (code2 !in 200..299) {
+            throw Exception("Ошибка скачивания файла: HTTP $code2")
+        }
+
         val bytes = fc.inputStream.readBytes()
         onProgress(1.0f)
         fileCache[cacheKey] = bytes

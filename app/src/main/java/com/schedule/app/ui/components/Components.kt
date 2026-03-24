@@ -13,6 +13,8 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -290,6 +292,8 @@ fun AppInput(
     singleLine: Boolean = true,
     maxLines: Int = 1,
     prefix: String? = null,
+    isPassword: Boolean = false,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     val t = LocalTheme.current
     var focused by remember { mutableStateOf(false) }
@@ -309,6 +313,7 @@ fun AppInput(
             color = t.text,
             fontSize = 14.sp,
         ),
+        visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { focused = it.isFocused },
@@ -325,6 +330,7 @@ fun AppInput(
         leadingIcon = if (prefix != null) ({
             Text(prefix, color = t.muted, fontSize = 14.sp, modifier = Modifier.padding(start = 4.dp))
         }) else null,
+        trailingIcon = trailingIcon,
     )
 }
 

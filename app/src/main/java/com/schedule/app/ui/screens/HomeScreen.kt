@@ -31,6 +31,8 @@ data class ScheduleFile(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME SCREEN  (#s-home)
+// Pixel-perfect порт WebView: нет кнопки ⚙️ (debug), нет WeekProgress,
+// метка секции = "СТУДЕНТАМ"/"ПЕДАГОГАМ" как в setMode()
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun HomeScreen(
@@ -52,42 +54,32 @@ fun HomeScreen(
     val t = LocalTheme.current
     val density = LocalDensity.current
 
-    // ── Свайп вверх → консоль (PointerEventPass.Initial = наблюдаем первыми,
-    //   не потребляем — скролл продолжает работать нормально) ──────────────────
-    val swipeUpModifier = Modifier.pointerInput(onOpenConsole) {
+    // ── Свайп вверх → консоль ─────────────────────────────────────────────
+    val swipeModifier = Modifier.pointerInput(onOpenConsole) {
         var startY    = Float.NaN
         var startX    = Float.NaN
-        var pointerId = PointerId(0L)
+        var touchId   = PointerId(0L)
         var fired     = false
-
         awaitPointerEventScope {
             while (true) {
-                val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                for (change in event.changes) {
+                val ev = awaitPointerEvent(pass = PointerEventPass.Initial)
+                for (ch in ev.changes) {
                     when {
-                        // Палец опустился
-                        !change.previousPressed && change.pressed -> {
-                            startY    = change.position.y
-                            startX    = change.position.x
-                            pointerId = change.id
-                            fired     = false
+                        !ch.previousPressed && ch.pressed -> {
+                            startY = ch.position.y; startX = ch.position.x
+                            touchId = ch.id; fired = false
                         }
-                        // Палец движется — тот же указатель
-                        change.pressed && change.id == pointerId && !startY.isNaN() -> {
+                        ch.pressed && ch.id == touchId && !startY.isNaN() -> {
                             if (!fired) {
-                                val dy = startY - change.position.y   // + = вверх
-                                val dx = abs(change.position.x - startX)
-                                val thresholdPx = with(density) { 80.dp.toPx() }
-                                if (dy > thresholdPx && dy > dx * 2f) {
-                                    fired = true
-                                    onOpenConsole()
+                                val dy = startY - ch.position.y
+                                val dx = abs(ch.position.x - startX)
+                                if (dy > with(density) { 80.dp.toPx() } && dy > dx * 2f) {
+                                    fired = true; onOpenConsole()
                                 }
                             }
                         }
-                        // Палец поднялся
-                        !change.pressed && change.id == pointerId -> {
-                            startY = Float.NaN
-                            fired  = false
+                        !ch.pressed && ch.id == touchId -> {
+                            startY = Float.NaN; fired = false
                         }
                     }
                 }
@@ -99,29 +91,22 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(t.bg)
-            .then(swipeUpModifier),
+            .then(swipeModifier),
     ) {
-        // ── Контент (кнопка ⚙️ убрана) ────────────────────────────────────
+        // .body — единственный scrollable контейнер, padding 16px 18px как в CSS
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 0.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
         ) {
-            Spacer(Modifier.height(4.dp))
-
-            // ── Hero section (.home-hero) ──────────────────────────────────
+            // ── .home-hero ────────────────────────────────────────────────
             HomeHero(isTeacher = isTeacher, onSecretTap = {})
 
-            // ── Статус-строка (обновляется каждые 30 сек) ─────────────────
+            // ── #home-status-line (урок / ДЗ, обновляется каждые 30 сек) ─
             HomeStatusLine(hwActiveCount = hwActiveCount, onOpenHomework = onOpenHomework)
 
-            // ── Прогресс недели ───────────────────────────────────────────
-            WeekProgressWidget()
-
-            Spacer(Modifier.height(8.dp))
-
-            // ── Mode toggle pill ──────────────────────────────────────────
+            // ── .mode-switch-wrap / .mode-toggle-pill ─────────────────────
             ModeTogglePill(
                 isTeacher = isTeacher,
                 onModeChange = onModeChange,
@@ -130,24 +115,22 @@ fun HomeScreen(
                     .padding(bottom = 16.dp),
             )
 
-            // ── Status + progress bar ─────────────────────────────────────
+            // ── .status / .progress ───────────────────────────────────────
             if (statusText.isNotEmpty()) {
                 StatusText(text = statusText)
-            } else {
-                Spacer(Modifier.height(18.dp))
             }
             AppProgressBar(
                 progress = loadProgress,
                 modifier = Modifier.padding(vertical = 6.dp),
             )
 
-            // ── Файлы ─────────────────────────────────────────────────────
+            // ── #file-section ─────────────────────────────────────────────
             when {
                 yandexUrl.isEmpty() -> {
                     NoUrlHint(onOpenSettings = onOpenSettings)
                 }
                 isLoading && files.isEmpty() -> {
-                    // Метка соответствует режиму, как в WebView: setMode() меняет fsLabel
+                    // .section-label — id="file-section-label" меняется setMode()
                     SectionLabel(if (isTeacher) "Педагогам" else "Студентам")
                     repeat(4) { SkeletonItem() }
                 }
@@ -168,21 +151,23 @@ fun HomeScreen(
                     files.forEach { file ->
                         ListItemRow(
                             name = file.name,
-                            sub = if (file.size > 0) "${file.size / 1024} КБ" else null,
+                            sub  = if (file.size > 0) "${file.size / 1024} КБ" else null,
                             selected = file.name == selectedFile?.name,
-                            onClick = { onFileClick(file) },
+                            onClick  = { onFileClick(file) },
                         )
                     }
                 }
             }
 
-            Spacer(Modifier.height(100.dp))
+            Spacer(Modifier.height(100.dp)) // под nav bar
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODE TOGGLE PILL  (.mode-toggle-pill)
+// CSS: border-radius: 9999px; background: surface2; border: 1.5px surface3;
+//      ::before pill = accent; transition spring
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun ModeTogglePill(
@@ -190,7 +175,7 @@ fun ModeTogglePill(
     onModeChange: (isTeacher: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val t = LocalTheme.current
+    val t       = LocalTheme.current
     val density = LocalDensity.current
     var containerWidth by remember { mutableStateOf(0f) }
 
@@ -200,7 +185,7 @@ fun ModeTogglePill(
             else (containerWidth / 2f).toDp() + 3.dp - 3.dp
         },
         animationSpec = spring(dampingRatio = 0.65f, stiffness = 380f),
-        label = "modePill",
+        label = "modePillX",
     )
     val pillWidth by animateDpAsState(
         targetValue = with(density) { (containerWidth / 2f - 6f).toDp() },
@@ -216,6 +201,7 @@ fun ModeTogglePill(
             .padding(3.dp)
             .onGloballyPositioned { containerWidth = it.size.width.toFloat() },
     ) {
+        // Анимированный пилюля-индикатор (::before в CSS)
         if (containerWidth > 0f) {
             Box(
                 modifier = Modifier
@@ -227,12 +213,11 @@ fun ModeTogglePill(
                     .shadow(elevation = 4.dp, shape = CircleShape, clip = false),
             )
         }
-
         Row {
             listOf("Студенты" to false, "Педагоги" to true).forEach { (label, teacher) ->
                 Text(
-                    text = label,
-                    color = if (isTeacher == teacher) Color.White else t.muted,
+                    text     = label,
+                    color    = if (isTeacher == teacher) t.btnText else t.muted,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
@@ -251,23 +236,25 @@ fun ModeTogglePill(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HERO CARD  (.home-hero → .hero-card)
-// В WebView setMode() меняет hero-title: "Расписание Студентам" / "Расписание Педагогам"
+// HERO CARD  (.home-hero → .hero-card → .hero-title)
+// CSS: font-size:38px; font-weight:800; color:accent; letter-spacing:-.03em
+//      text-shadow glow; card: surface2, border surface3, shadow 12dp, r 24dp
+// В WebView setMode() меняет hero-title: "Студентам"/"Педагогам"
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun HomeHero(
     isTeacher: Boolean,
     onSecretTap: () -> Unit = {},
 ) {
-    val t = LocalTheme.current
-    var tapCount by remember { mutableStateOf(0) }
+    val t         = LocalTheme.current
     val glowColor = t.accent.copy(alpha = 0.55f)
+    var tapCount  by remember { mutableStateOf(0) }
 
     Box(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        modifier        = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        // Radial gradient glow
+        // Radial glow за карточкой (::before псевдо-элемент)
         Canvas(modifier = Modifier.size(240.dp).align(Alignment.TopCenter)) {
             drawCircle(
                 brush = Brush.radialGradient(
@@ -276,7 +263,6 @@ private fun HomeHero(
             )
         }
 
-        // Hero card
         Box(
             modifier = Modifier
                 .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp), clip = false)
@@ -285,8 +271,8 @@ private fun HomeHero(
                 .border(1.5.dp, t.surface3, RoundedCornerShape(24.dp))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
+                    indication        = null,
+                    onClick           = {
                         tapCount++
                         if (tapCount >= 7) { tapCount = 0; onSecretTap() }
                     },
@@ -294,20 +280,18 @@ private fun HomeHero(
                 .padding(horizontal = 32.dp, vertical = 18.dp),
             contentAlignment = Alignment.Center,
         ) {
-            // Меняется с режимом — как в WebView
-            val titleText = if (isTeacher) "Расписание\nПедагогам" else "Расписание\nСтудентам"
             Text(
-                text = titleText,
-                color = t.accent,
-                fontSize = 38.sp,
+                text       = if (isTeacher) "Расписание\nПедагогам" else "Расписание\nСтудентам",
+                color      = t.accent,
+                fontSize   = 38.sp,
                 fontWeight = FontWeight(800),
                 lineHeight = 42.sp,
                 letterSpacing = (-0.03).em,
-                textAlign = TextAlign.Center,
+                textAlign  = TextAlign.Center,
                 style = TextStyle(
                     shadow = Shadow(
-                        color = glowColor,
-                        offset = Offset.Zero,
+                        color      = glowColor,
+                        offset     = Offset.Zero,
                         blurRadius = 20f,
                     ),
                 ),
@@ -317,7 +301,7 @@ private fun HomeHero(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NO URL HINT
+// NO URL HINT  (#no-url-hint)
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun NoUrlHint(onOpenSettings: () -> Unit) {
@@ -331,14 +315,14 @@ private fun NoUrlHint(onOpenSettings: () -> Unit) {
     ) {
         Text("⚙️", fontSize = 38.sp)
         Text(
-            text = "Укажи ссылку на Яндекс Диск\nв Настройках",
-            color = t.muted,
-            fontSize = 14.sp,
+            text      = "Укажи ссылку на Яндекс Диск\nв Настройках",
+            color     = t.muted,
+            fontSize  = 14.sp,
             lineHeight = 22.sp,
             textAlign = TextAlign.Center,
         )
         AppButton(
-            label = "Открыть настройки →",
+            label   = "Открыть настройки →",
             onClick = onOpenSettings,
             variant = BtnVariant.Accent,
         )
@@ -346,7 +330,8 @@ private fun NoUrlHint(onOpenSettings: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOME STATUS LINE  — обновляется каждые 30 сек (derivedStateOf + LaunchedEffect)
+// HOME STATUS LINE  (#home-status-line)
+// Обновляется каждые 30 сек через LaunchedEffect + derivedStateOf
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun HomeStatusLine(
@@ -377,7 +362,7 @@ private fun HomeStatusLine(
                     Triple("IV",  14*60+35, 15*60+35),
                 )
                 dow in 3..6 -> listOf(
-                    Triple("I",   8*60+30, 9*60+15),
+                    Triple("I",   8*60+30,  9*60+15),
                     Triple("II",  10*60+15, 11*60),
                     Triple("III", 12*60+20, 13*60+5),
                     Triple("IV",  14*60+5,  15*60+5),
@@ -390,8 +375,7 @@ private fun HomeStatusLine(
                 "урок ${current.first} · ${current.third - nowMin} мин"
             } else {
                 val next = schedule.firstOrNull { it.second > nowMin }
-                if (next != null) "до пары ${next.first} · ${next.second - nowMin} мин"
-                else ""
+                if (next != null) "до пары ${next.first} · ${next.second - nowMin} мин" else ""
             }
         }
     }
@@ -401,9 +385,9 @@ private fun HomeStatusLine(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 4.dp),
+            .padding(bottom = 14.dp),
         horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment     = Alignment.CenterVertically,
     ) {
         if (statusText.isNotEmpty()) {
             Text(text = statusText, color = t.muted, fontSize = 12.sp)
@@ -420,10 +404,10 @@ private fun HomeStatusLine(
                         else                  -> "ий"
                     }
                 } ДЗ",
-                color = t.accent,
-                fontSize = 12.sp,
+                color      = t.accent,
+                fontSize   = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable(onClick = onOpenHomework),
+                modifier   = Modifier.clickable(onClick = onOpenHomework),
             )
         }
     }

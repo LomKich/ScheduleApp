@@ -293,10 +293,25 @@ private fun RegisterForm(
 
     // Пароль
     SectionLabel("Пароль")
+    var regPwVisible by remember { mutableStateOf(false) }
     AppInput(
         value = password,
         onValueChange = onPasswordChange,
         placeholder = "Придумай пароль",
+        isPassword = !regPwVisible,
+        trailingIcon = {
+            Text(
+                text = if (regPwVisible) "🙈" else "👁",
+                fontSize = 16.sp,
+                modifier = Modifier
+                    .padding(end = 12.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { regPwVisible = !regPwVisible },
+                    )
+            )
+        },
         modifier = Modifier.padding(bottom = 4.dp),
     )
     Text(
@@ -348,10 +363,25 @@ private fun AuthForm(
     )
 
     SectionLabel("Пароль")
+    var authPwVisible by remember { mutableStateOf(false) }
     AppInput(
         value = password,
         onValueChange = onPasswordChange,
         placeholder = "Пароль",
+        isPassword = !authPwVisible,
+        trailingIcon = {
+            Text(
+                text = if (authPwVisible) "🙈" else "👁",
+                fontSize = 16.sp,
+                modifier = Modifier
+                    .padding(end = 12.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { authPwVisible = !authPwVisible },
+                    )
+            )
+        },
         modifier = Modifier.padding(bottom = 20.dp),
     )
 
@@ -459,28 +489,45 @@ fun ProfileScreen(
         AppHeader(title = "Профиль")
 
         if (profile == null) {
-            // Not logged in
-            Column(
+            // Не авторизован — как в WebView: минимальный UI, только кнопка по центру
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                contentAlignment = Alignment.Center,
             ) {
-                Text("👤", fontSize = 56.sp)
-                Spacer(Modifier.height(20.dp))
-                Text(
-                    "Войди или создай аккаунт",
-                    color = t.muted,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 24.dp),
-                )
-                AppButton(
-                    label = "Войти / Создать аккаунт",
-                    onClick = onLogin,
-                    variant = BtnVariant.Accent,
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    // Аватар-заглушка в стиле приложения (акцентный цвет, без Material icon)
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(t.surface2)
+                            .border(2.dp, t.surface3, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "👤",
+                            fontSize = 40.sp,
+                        )
+                    }
+                    Text(
+                        text = "Войди или создай аккаунт",
+                        color = t.muted,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp,
+                    )
+                    AppButton(
+                        label   = "Войти / Создать аккаунт",
+                        onClick = onLogin,
+                        variant = BtnVariant.Accent,
+                        modifier = Modifier.fillMaxWidth(0.85f),
+                    )
+                }
             }
         } else {
             val statusEntry = PROFILE_STATUSES.firstOrNull { it.first == profile.status }

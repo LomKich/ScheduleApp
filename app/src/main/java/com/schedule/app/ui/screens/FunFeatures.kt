@@ -205,6 +205,12 @@ fun GreetingOverlay(onDismiss: () -> Unit) {
             }
         } else {
             // ── Обычный день: полноэкранный оверлей как в WebView ─────────
+            // Автозакрытие через 1800мс — точно как в WebView (skipGreeting через setTimeout 1800)
+            LaunchedEffect(Unit) {
+                delay(1800L)
+                onDismiss()
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
