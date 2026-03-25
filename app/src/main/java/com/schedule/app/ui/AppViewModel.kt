@@ -23,7 +23,7 @@ import org.json.JSONObject
 import java.net.URL
 import java.net.URLEncoder
 
-// ┄1�7┄1�7 Модель сообщения ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+// ── Модель сообщения ──────────────────────────────────────────────────────────
 data class ChatMessage(
     val id: String,
     val chatKey: String,
@@ -41,7 +41,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val log   = AppLogger.get(app)
     val sb: SupabaseClient = SupabaseClient.get(app, log)
 
-    // ┄1�7┄1�7 Тема ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Тема ──────────────────────────────────────────────────────────────────
     val themeState = ThemeState(
         AppColors.themes.firstOrNull {
             it.id == (prefs.getString("theme_id", "orange") ?: "orange")
@@ -54,7 +54,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("theme_id", id).apply()
     }
 
-    // ┄1�7┄1�7 Шрифт ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Шрифт ─────────────────────────────────────────────────────────────────
     var currentFontId by mutableStateOf(prefs.getString("font_id", "default") ?: "default")
 
     fun setFont(id: String) {
@@ -63,7 +63,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         showToast("🔤 Шрифт: ${com.schedule.app.ui.theme.AppColors.fonts.firstOrNull { it.id == id }?.name ?: id}")
     }
 
-    // ┄1�7┄1�7 Liquid Glass optimization ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Liquid Glass optimization ──────────────────────────────────────────────
     var isGlassOptMode by mutableStateOf(prefs.getBoolean("glass_opt", false))
 
     fun toggleGlassOpt() {
@@ -114,13 +114,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         hotPatchStatus = "🔄 Проверяю обновления..."
         viewModelScope.launch {
             kotlinx.coroutines.delay(1500)
-            hotPatchStatus = "✄1�7 Обновлений нет"
+            hotPatchStatus = "✓ Обновлений нет"
             kotlinx.coroutines.delay(3000)
             hotPatchStatus = ""
         }
     }
 
-    // ┄1�7┄1�7 Настройки ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Настройки ─────────────────────────────────────────────────────────────
     var yandexUrl by mutableStateOf(
         prefs.getString("yandex_url", "https://disk.yandex.ru/d/mjhoc7kysmQEuQ") ?: ""
     )
@@ -137,7 +137,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleMute()                 { isMuted = !isMuted; prefs.edit().putBoolean("muted", isMuted).apply() }
     fun setMode(teacher: Boolean)    { isTeacher = teacher; prefs.edit().putBoolean("is_teacher", teacher).apply() }
 
-    // ┄1�7┄1�7 Файлы / расписание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Файлы / расписание ────────────────────────────────────────────────────
     var files         by mutableStateOf<List<ScheduleFile>>(emptyList())
     var selectedFile  by mutableStateOf<ScheduleFile?>(null)
     var isLoading     by mutableStateOf(false)
@@ -153,12 +153,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 loadProgress = 1f; statusText = "Найдено: ${files.size} файлов"
                 delay(1200); loadProgress = 0f; statusText = ""
             } catch (e: Exception) {
-                loadProgress = 0f; statusText = "❄1�7 ${e.message}"
+                loadProgress = 0f; statusText = "⚠️ ${e.message}"
             } finally { isLoading = false }
         }
     }
 
-    // ┄1�7┄1�7 Группы ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Группы ────────────────────────────────────────────────────────────────
     var groups        by mutableStateOf<List<String>>(emptyList())
     var selectedGroup by mutableStateOf<String?>(prefs.getString("last_group", null))
 
@@ -169,7 +169,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadSchedule(group)
     }
 
-    // ┄1�7┄1�7 Преподаватели ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Преподаватели ──────────────────────────────────────────────────────────
     var teachers         by mutableStateOf<List<String>>(emptyList())
     var selectedTeacher  by mutableStateOf<String?>(prefs.getString("last_teacher", null))
     var teacherSearchQuery by mutableStateOf("")
@@ -228,7 +228,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ┄1�7┄1�7 Расписание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Расписание ────────────────────────────────────────────────────────────
     var scheduleDays by mutableStateOf<List<ScheduleDay>>(emptyList())
 
     private fun loadSchedule(group: String) {
@@ -270,11 +270,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ┄1�7┄1�7 Расписание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Расписание ────────────────────────────────────────────────────────────
     
 
 
-    // ┄1�7┄1�7 Звонки ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Звонки ────────────────────────────────────────────────────────────────
     val bellSchedules: List<BellSchedule> by lazy {
         val now = java.util.Calendar.getInstance()
         val dow = now.get(java.util.Calendar.DAY_OF_WEEK)
@@ -287,7 +287,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 BellPeriod("V",   "15:45","16:45",null,null),
                 BellPeriod("VI",  "16:55","17:55",null,null),
             )),
-            BellSchedule("Вторник  1�7 Пятница", dow in 3..6, listOf(
+            BellSchedule("Вторник — Пятница", dow in 3..6, listOf(
                 BellPeriod("I",   "08:30","09:15","09:20","10:05", isNow = dow in 3..6 && isNowPair(8*60+30, 10*60+5)),
                 BellPeriod("II",  "10:15","11:00","11:05","11:50"),
                 BellPeriod("III", "12:20","13:05","13:10","13:55"),
@@ -306,7 +306,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    // ┄1�7┄1�7 Домашнее задание ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Домашнее задание ──────────────────────────────────────────────────────
     var hwItems by mutableStateOf<List<HomeworkItem>>(emptyList())
         private set
 
@@ -368,7 +368,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE  1�7 АВТОРИЗАЦИЯ
+    // SUPABASE — АВТОРИЗАЦИЯ
     // ══════════════════════════════════════════════════════════════════════════
 
     var userProfile      by mutableStateOf<UserProfile?>(null)
@@ -401,7 +401,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         regUsernameStatus = when {
             v.isEmpty()  -> ""
             v.length < 3 -> "Минимум 3 символа"
-            else         -> "✄1�7 Доступен"
+            else         -> "✓ Доступен"
         }
         checkRegEnabled()
     }
@@ -416,7 +416,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun onAuthPasswordChange(v: String) { authPassword = v }
 
     /**
-     * Регистрация: проверяем что username не занят ↄ1�7 создаём запись в users.
+     * Регистрация: проверяем что username не занят → создаём запись в users.
      * Авторизация через email: username@sapp.local (Supabase требует email).
      */
 
@@ -471,7 +471,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             }
-            // После загрузки профиля  1�7 грузим друзей и лидерборд
+            // После загрузки профиля — грузим друзей и лидерборд
             loadFriendsFromSupabase(username)
             loadLeaderboardFromSupabase()
         } catch (e: Exception) {
@@ -480,7 +480,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE  1�7 PRESENCE (онлайн-статус)
+    // SUPABASE — PRESENCE (онлайн-статус)
     // ══════════════════════════════════════════════════════════════════════════
 
     var onlineUsers by mutableStateOf<List<String>>(emptyList())
@@ -529,7 +529,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE  1�7 ДРУЗЬЯ
+    // SUPABASE — ДРУЗЬЯ
     // ══════════════════════════════════════════════════════════════════════════
 
     var friends          by mutableStateOf<List<FriendEntry>>(emptyList())
@@ -593,7 +593,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE  1�7 ЛИДЕРБОРД
+    // SUPABASE — ЛИДЕРБОРД
     // ══════════════════════════════════════════════════════════════════════════
 
     var leaderboard      by mutableStateOf<List<LeaderboardEntry>>(emptyList())
@@ -630,7 +630,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE  1�7 РЕДАКТИРОВАНИЕ ПРОФИЛЯ
+    // SUPABASE — РЕДАКТИРОВАНИЕ ПРОФИЛЯ
     // ══════════════════════════════════════════════════════════════════════════
 
     var editName     by mutableStateOf("")
@@ -702,7 +702,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE  1�7 СООБЩЕНИЯ
+    // SUPABASE — СООБЩЕНИЯ
     // ══════════════════════════════════════════════════════════════════════════
 
     var messages         by mutableStateOf<List<ChatMessage>>(emptyList())
@@ -909,7 +909,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE  1�7 МЕССЕНДЖЕР (список чатов)
+    // SUPABASE — МЕССЕНДЖЕР (список чатов)
     // ══════════════════════════════════════════════════════════════════════════
 
     var messengerChats     by mutableStateOf<List<com.schedule.app.ui.screens.ChatPreview>>(emptyList())
@@ -1008,7 +1008,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SUPABASE  1�7 ОНЛАЙН ПОЛЬЗОВАТЕЛИ
+    // SUPABASE — ОНЛАЙН ПОЛЬЗОВАТЕЛИ
     // ══════════════════════════════════════════════════════════════════════════
 
     var onlineUsersList    by mutableStateOf<List<com.schedule.app.ui.screens.OnlineUser>>(emptyList())
@@ -1059,7 +1059,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ┄1�7┄1�7 Peer profile ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Peer profile ──────────────────────────────────────────────────────────
     var peerProfile        by mutableStateOf<com.schedule.app.ui.screens.OnlineUser?>(null)
     var peerProfileLoading by mutableStateOf(false)
 
@@ -1125,7 +1125,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ┄1�7┄1�7 Групп чаты ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Групп чаты ────────────────────────────────────────────────────────────
     var groupChats         by mutableStateOf<List<com.schedule.app.ui.screens.GroupChat>>(emptyList())
     var groupChatsLoading  by mutableStateOf(false)
     var showCreateGroupDialog by mutableStateOf(false)
@@ -1178,14 +1178,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // FUN FEATURES & EASTER EGGS
     // ══════════════════════════════════════════════════════════════════════════
 
-    // ┄1�7┄1�7 Dev Console ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Dev Console ───────────────────────────────────────────────────────────
     var showConsole       by mutableStateOf(false)
     var consoleInput      by mutableStateOf("")
     var pendingNavigateToSettings by mutableStateOf(false)
     var consoleEntries    by mutableStateOf(listOf(
-        com.schedule.app.ui.screens.ConsoleEntry("info", "⚄1�7 ScheduleApp Dev Console"),
+        com.schedule.app.ui.screens.ConsoleEntry("info", "🎲 ScheduleApp Dev Console"),
         com.schedule.app.ui.screens.ConsoleEntry("muted", "Введи /help для списка команд"),
-        com.schedule.app.ui.screens.ConsoleEntry("muted", "┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7"),
+        com.schedule.app.ui.screens.ConsoleEntry("muted", "──────────────────────────────"),
     ))
 
     fun cmdPrint(type: String, text: String) {
@@ -1202,24 +1202,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         when (cmd) {
             "help" -> {
                 cmdPrint("info", "Доступные команды:")
-                cmdPrint("ok",   "  /help  1�7 этот список")
-                cmdPrint("ok",   "  /fact  1�7 случайный факт 💡")
-                cmdPrint("ok",   "  /haiku  1�7 хайку про учёбу 🌸")
-                cmdPrint("ok",   "  /excuse  1�7 отмазка для пропуска 📝")
-                cmdPrint("ok",   "  /quiz  1�7 тест по расписанию 🧠")
-                cmdPrint("ok",   "  /bpmtap  1�7 BPM тапалка 🥁")
-                cmdPrint("ok",   "  /taunt  1�7 реплика учителя 👩‍🏄1�7")
-                cmdPrint("ok",   "  /stats  1�7 статистика приложения 📊")
-                cmdPrint("ok",   "  /motivation  1�7 мотивация на сегодня 💪")
-                cmdPrint("ok",   "  /greeting  1�7 праздничное приветствие 🎉")
-                cmdPrint("ok",   "  /focus  1�7 режим фокуса 🎯")
-                cmdPrint("ok",   "  /clear  1�7 очистить консоль")
-                cmdPrint("ok",   "  /version  1�7 версия приложения")
-                cmdPrint("ok",   "  /vip <КОД>  1�7 активировать VIP 👑")
-                cmdPrint("ok",   "  /logout  1�7 выйти из аккаунта")
+                cmdPrint("ok",   "  /help — этот список")
+                cmdPrint("ok",   "  /fact — случайный факт 💡")
+                cmdPrint("ok",   "  /haiku — хайку про учёбу 🌸")
+                cmdPrint("ok",   "  /excuse — отмазка для пропуска 📝")
+                cmdPrint("ok",   "  /quiz — тест по расписанию 🧠")
+                cmdPrint("ok",   "  /bpmtap — BPM тапалка 🥁")
+                cmdPrint("ok",   "  /taunt — реплика учителя 👩‍🏫")
+                cmdPrint("ok",   "  /stats — статистика приложения 📊")
+                cmdPrint("ok",   "  /motivation — мотивация на сегодня 💪")
+                cmdPrint("ok",   "  /greeting — праздничное приветствие 🎉")
+                cmdPrint("ok",   "  /focus — режим фокуса 🎯")
+                cmdPrint("ok",   "  /clear — очистить консоль")
+                cmdPrint("ok",   "  /version — версия приложения")
+                cmdPrint("ok",   "  /vip <КОД> — активировать VIP 👑")
+                cmdPrint("ok",   "  /logout — выйти из аккаунта")
                 cmdPrint("ok",   "  /settings  — открыть настройки ⚙️")
-                cmdPrint("ok",   "  /theme <id>  1�7 сменить тему")
-                cmdPrint("ok",   "  /group  1�7 случайная группа 🎲")
+                cmdPrint("ok",   "  /theme <id> — сменить тему")
+                cmdPrint("ok",   "  /group — случайная группа 🎲")
             }
             "fact" -> {
                 activeFunOverlay = com.schedule.app.ui.FunOverlay.None
@@ -1256,7 +1256,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (g != null) {
                     activeFunOverlay = com.schedule.app.ui.FunOverlay.Greeting
                     showGreeting = true
-                    cmdPrint("ok", "${g.second} ${g.first}  1�7 ${g.third}")
+                    cmdPrint("ok", "${g.second} ${g.first} — ${g.third}")
                 } else {
                     cmdPrint("warn", "Сегодня нет праздника 😢")
                 }
@@ -1267,7 +1267,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
             "clear" -> {
                 consoleEntries = listOf(
-                    com.schedule.app.ui.screens.ConsoleEntry("muted", "┄1�7┄1�7 консоль очищена ┄1�7┄1�7")
+                    com.schedule.app.ui.screens.ConsoleEntry("muted", "── консоль очищена ──")
                 )
             }
             "version" -> {
@@ -1289,10 +1289,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         cmdPrint("ok", "👑 VIP активирован! Доступны: фото-аватар, рамки, значки, баннер")
                     } else {
-                        cmdPrint("err", "❄1�7 Нужно войти в аккаунт")
+                        cmdPrint("err", "⚠️ Нужно войти в аккаунт")
                     }
                 } else {
-                    cmdPrint("err", "❄1�7 Неверный код VIP")
+                    cmdPrint("err", "⚠️ Неверный код VIP")
                 }
             }
             "logout" -> {
@@ -1338,24 +1338,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             else -> {
-                cmdPrint("err", "❄1�7 Неизвестная команда: /$cmd  (введи /help)")
+                cmdPrint("err", "⚠️ Неизвестная команда: /$cmd  (введи /help)")
             }
         }
         consoleInput = ""
     }
 
-    // ┄1�7┄1�7 Fun Overlays ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Fun Overlays ──────────────────────────────────────────────────────────
     var activeFunOverlay  by mutableStateOf(com.schedule.app.ui.FunOverlay.None)
     var showGreeting      by mutableStateOf(false)
 
-    // ┄1�7┄1�7 Focus mode ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Focus mode ────────────────────────────────────────────────────────────
     var focusMode         by mutableStateOf(false)
 
-    // ┄1�7┄1�7 Schedule search ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Schedule search ───────────────────────────────────────────────────────
     var schedSearchVisible by mutableStateOf(false)
     var schedSearchQuery   by mutableStateOf("")
 
-    // ┄1�7┄1�7 Starred pairs ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Starred pairs ─────────────────────────────────────────────────────────
     var starredPairs by mutableStateOf(
         prefs.getStringSet("starred_pairs_v1", emptySet()) ?: emptySet<String>()
     )
@@ -1369,7 +1369,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putStringSet("starred_pairs_v1", starredPairs).apply()
     }
 
-    // ┄1�7┄1�7 Pair notes ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Pair notes ────────────────────────────────────────────────────────────
     var pairNotes by mutableStateOf(
         try {
             val raw = prefs.getString("pair_notes", "{}") ?: "{}"
@@ -1386,7 +1386,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putString("pair_notes", json.toString()).apply()
     }
 
-    // ┄1�7┄1�7 Visit streak ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Visit streak ──────────────────────────────────────────────────────────
     var totalOpens  by mutableStateOf(0)
     var visitStreak by mutableStateOf(0)
 
@@ -1425,8 +1425,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {}
     }
 
-    // ┄1�7┄1�7 Toast ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
-    // ┄1�7┄1�7 Games launcher ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    // ── Games launcher ───────────────────────────────────────────────────
     var pendingLaunchGames by mutableStateOf(false)
     fun openGames()      { pendingLaunchGames = true }
     fun onGamesLaunched() { pendingLaunchGames = false }
@@ -1444,7 +1444,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ┄1�7┄1�7 Share schedule ┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7┄1�7
+    // ── Share schedule ────────────────────────────────────────────────────────
     var pendingShareText by mutableStateOf<String?>(null)
 
     fun buildShareText(): String {
@@ -1452,7 +1452,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val lines = mutableListOf("📅 $group", "")
         scheduleDays.firstOrNull()?.pairs?.forEach { pair ->
             if (!pair.isWindow) {
-                lines.add("${pair.num}. ${pair.subject}${if (pair.timeStart.isNotEmpty()) " · ${pair.timeStart} 1�7${pair.timeEnd}" else ""}")
+                lines.add("${pair.num}. ${pair.subject}${if (pair.timeStart.isNotEmpty()) " · ${pair.timeStart}—${pair.timeEnd}" else ""}")
             }
         }
         lines.add(""); lines.add("📲 ScheduleApp")
@@ -1463,7 +1463,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         private val EMOJI_POOL = listOf(
             "😊","😎","🤓","🥳","😏","🤩","🦊","🐺","🦋","🐸",
             "🐱","🐶","🦁","🐼","🦄","🐉","🦅","🎭","🤖","👻",
-            "💀","🎃","⚄1�7","🔥","💎","🌙","⭄1�7","🌈","🎵","🎮","🏆"
+            "💀","🎃","🎲","🔥","💎","🌙","⭐","🌈","🎵","🎮","🏆"
         )
     }
 
@@ -1557,7 +1557,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             startPresencePoller()
             onSuccess()
         } catch (e: Exception) {
-            regError = "❄1�7 ${e.message}"
+            regError = "⚠️ ${e.message}"
         } finally { authLoading = false }
     }
 }
@@ -1591,7 +1591,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             startPresencePoller()
             onSuccess()
         } catch (e: Exception) {
-            authError = "❄1�7 ${e.message}"
+            authError = "⚠️ ${e.message}"
         } finally { authLoading = false }
     }
 }
