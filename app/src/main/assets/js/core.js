@@ -835,6 +835,32 @@ const S={
   customBgBlurEnabled:true // вкл/выкл blur для обычного режима (с custom bg, без glass)
 };
 const FILE_CACHE={};
+
+// ══ PERSISTENT FILE CACHE (IndexedDB) ══
+const IDB_NAME='ScheduleFileCache';
+const IDB_STORE='files';
+let _idb=null;
+function idbOpen(){
+  if(_idb)return Promise.resolve(_idb);
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(IDB_NAME,1);
+    req.onupgradeneeded=e=>{e.target.result.createObjectStore(IDB_STORE);};
+    req.onsuccess=e=>{_idb=e.target.result;res(_idb);};
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+async function idbGet(key){
+  try{const db=await idbOpen();return new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const req=tx.objectStore(IDB_STORE).get(key);req.onsuccess=()=>res(req.result||null);req.onerror=()=>res(null);});}catch(e){return null;}
+}
+async function idbSet(key,val){
+  try{const db=await idbOpen();return new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(val,key);tx.oncomplete=()=>res();tx.onerror=()=>res();});}catch(e){}
+}
+async function idbDel(key){
+  try{const db=await idbOpen();return new Promise(res=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).delete(key);tx.oncomplete=()=>res();tx.onerror=()=>res();});}catch(e){}
+}
+async function idbClear(){
+  try{const db=await idbOpen();return new Promise(res=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).clear();tx.oncomplete=()=>res();tx.onerror=()=>res();});}catch(e){}
+}
 let allGroups=[];
 
 const _mem={};
@@ -871,6 +897,11 @@ function loadLocal(){
     S.customProxy=d.customProxy||'';
     S.proxyProvider=d.proxyProvider||'corsproxy';
     S.appIcon=d.appIcon||'orange';
+    // Загружаем кэшированный список файлов для офлайн-режима
+    try{
+      const cf=stor.get('sched_files_cache');
+      if(cf){const parsed=JSON.parse(cf);if(Array.isArray(parsed)&&parsed.length>0)S.files=parsed;}
+    }catch(e){}
     const inp=document.getElementById('url-input');
     if(inp)inp.value=S.url;
     const pi=document.getElementById('proxy-input');
@@ -888,6 +919,10 @@ function saveLocal(){
     customBgBlurEnabled:S.customBgBlurEnabled,
     hasBg: !!S.customBg
   }));
+  // Кэш списка файлов — для офлайн-режима
+  try{
+    if(S.files&&S.files.length>0) stor.set('sched_files_cache',JSON.stringify(S.files.map(f=>({name:f.name,path:f.path,size:f.size,resourceId:f.resourceId}))));
+  }catch(e){}
   // Фон хранится отдельно (может быть >1МБ base64)
   try {
     if(S.customBg) stor.set('sched_bg', S.customBg);
@@ -2660,20 +2695,35 @@ async function loadFiles(){
   appLog('info','loadFiles: start, url='+S.url?.slice(0,40));
   if(!S.url){showHomeState('no-url');return;}
   hideHomeHints();
-  setStatus('home-status','Загружаю файлы...');setBar('home-bar',30);
+
+  // Если есть кэшированный список — показываем сразу, не ждём сеть
+  const hasCached=S.files&&S.files.length>0;
+  if(hasCached){
+    renderFileList(true);
+    setStatus('home-status','📦 Из кэша, обновляю...');
+  }else{
+    setStatus('home-status','Загружаю файлы...');setBar('home-bar',30);
+  }
+
   try{
     const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
     S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&/\.(doc|docx)$/i.test(i.name))
       .map(i=>({name:i.name,path:i.path||('/'+i.name),size:i.size||0,resourceId:i.resource_id||''}));
     setBar('home-bar',100);setStatus('home-status',`Найдено: ${S.files.length} файлов`);
     setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
+    saveLocal(); // сохраняем обновлённый список файлов в кэш
     appLog('ok','loadFiles: loaded '+S.files.length+' files');
-    renderFileList();
+    renderFileList(false);
   }catch(e){
     appLog('err','loadFiles error: '+e.message);
-    setBar('home-bar',0);
-    setStatus('home-status','');
-    showHomeState('error',e.message);
+    setBar('home-bar',0);setStatus('home-status','');
+    if(hasCached){
+      // Есть кэш — не ломаем UI, просто показываем офлайн-бейдж
+      renderFileList(true);
+      toast('📡 Нет интернета — расписание из кэша');
+    }else{
+      showHomeState('error',e.message);
+    }
   }
 }
 function hideHomeHints(){
@@ -2689,15 +2739,21 @@ function showHomeState(type,msg){
     if(el){const em=el.querySelector('.error-msg');if(em)em.textContent=msg||'Ошибка подключения';el.classList.remove('hidden');}
   }
 }
-function renderFileList(){
+function renderFileList(isOffline=false){
   const list=document.getElementById('file-list');list.innerHTML='';
+  if(isOffline){
+    const badge=document.createElement('div');
+    badge.style.cssText='text-align:center;padding:6px 12px;margin-bottom:8px;background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:10px;font-size:12px;color:var(--muted)';
+    badge.textContent='📦 Офлайн — файлы из кэша';
+    list.appendChild(badge);
+  }
   S.files.forEach(f=>{
     const item=document.createElement('div');
     item.className='list-item'+(S.selectedFile?.name===f.name?' selected':'');
     item.innerHTML=`<span class="item-name">${f.name}</span>`;
     item.onclick=()=>{
       S.selectedFile=f;
-      renderFileList();
+      renderFileList(isOffline);
       // Сразу переходим к группам/педагогам без подтверждения
       goToGroups();
     };
@@ -2710,11 +2766,38 @@ async function getFileBuf(){
   if(S.selectedFile&&S.selectedFile._localBuf){return S.selectedFile._localBuf;}
   const key=S.selectedFile.path||S.selectedFile.name;
   if(FILE_CACHE[key])return FILE_CACHE[key];
+
+  // Проверяем персистентный кэш в IndexedDB
+  const cached=await idbGet('file:'+key);
+  if(cached){
+    appLog('info','getFileBuf: из IndexedDB: '+key);
+    FILE_CACHE[key]=cached;
+    // Фоновое обновление если есть интернет
+    _refreshFileBufInBackground(key,S.selectedFile);
+    return cached;
+  }
+
+  // Загружаем из сети
   const filePath=S.selectedFile.path||('/'+S.selectedFile.name);
   const dl=await yadGet('/v1/disk/public/resources/download',{public_key:S.url,path:filePath});
   if(!dl||!dl.href) throw new Error('Яндекс не вернул ссылку на файл. Путь: '+filePath);
   const buf=await yadDownload(dl.href, S.selectedFile.name);
-  FILE_CACHE[key]=buf;return buf;
+  FILE_CACHE[key]=buf;
+  idbSet('file:'+key,buf).catch(()=>{}); // сохраняем в фоне
+  return buf;
+}
+
+async function _refreshFileBufInBackground(key,fileRef){
+  try{
+    if(!navigator.onLine)return;
+    const filePath=fileRef.path||('/'+key);
+    const dl=await yadGet('/v1/disk/public/resources/download',{public_key:S.url,path:filePath});
+    if(!dl||!dl.href)return;
+    const buf=await yadDownload(dl.href,fileRef.name);
+    FILE_CACHE[key]=buf;
+    await idbSet('file:'+key,buf);
+    appLog('ok','Файл обновлён в фоне: '+key);
+  }catch(e){ /* тихо */ }
 }
 
 // ══ ГРУППЫ ══
@@ -3445,7 +3528,7 @@ function cmdExec(raw){
     case 'optimize': {
       cmdPrint('warn','🚀 ЯДЕРНАЯ ОПТИМИЗАЦИЯ ЗАПУЩЕНА...');
       let freed=0;
-      setTimeout(()=>{const cacheCount=Object.keys(FILE_CACHE).length;Object.keys(FILE_CACHE).forEach(k=>delete FILE_CACHE[k]);freed+=cacheCount;cmdPrint('ok',`  ✓ Файловый кэш очищен (${cacheCount} записей)`);},300);
+      setTimeout(()=>{const cacheCount=Object.keys(FILE_CACHE).length;Object.keys(FILE_CACHE).forEach(k=>delete FILE_CACHE[k]);freed+=cacheCount;idbClear().then(()=>cmdPrint('ok',`  ✓ Файловый кэш очищен (${cacheCount} записей, IndexedDB тоже)`)).catch(()=>cmdPrint('ok',`  ✓ Файловый кэш очищен (${cacheCount} записей)`));},300);
       setTimeout(()=>{cmdPrint('ok','  ✓ Неактивные canvas-буферы очищены');},700);
       setTimeout(()=>{const uwuStyle=document.getElementById('uwu-style');if(uwuStyle){uwuStyle.remove();freed++;}cmdPrint('ok','  ✓ Временные стили сброшены');},1100);
       setTimeout(()=>{cmdPrint('ok',`🏁 Готово. Очищено ~${freed} объектов.`);},1600);
