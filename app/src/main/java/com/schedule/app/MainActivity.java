@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     // Java-side poll timer — работает даже когда WebView заморожен в фоне
     private android.os.Handler     pollHandler;
     private Runnable               pollRunnable;
-    private static final int       POLL_INTERVAL_FG = 2000;  // мс foreground
+    private static final int       POLL_INTERVAL_FG = 5000;  // мс foreground
     private static final int       POLL_INTERVAL_BG = 5000;  // мс background
     private boolean                appInForeground  = false;
 
@@ -735,6 +735,19 @@ public class MainActivity extends Activity {
             if (nm != null) nm.cancelAll();
             // Обновляем lastTs чтобы не показывать прочитанное снова
             prefs.edit().putLong(PREF_SB_LAST_TS, System.currentTimeMillis()).apply();
+        }
+
+        /**
+         * JS вызывает при логине чтобы сохранить конфиг для фонового сервиса.
+         * Совместимость с вызовом window.Android.savePushConfig(username, url, key) из social.js.
+         */
+        @JavascriptInterface
+        public void savePushConfig(String username, String sbUrl, String sbKey) {
+            if (username == null || username.isEmpty()) return;
+            prefs.edit()
+                .putString(PREF_SB_USER, username)
+                .apply();
+            log.i(TAG, "savePushConfig: username=" + username);
         }
 
         /** Возвращает сохранённый username для фонового поллинга */
