@@ -136,16 +136,32 @@ function profileBootstrap() {
       }
     }, 1200);
   } else {
-    profileConnect(p);
-    // Сообщаем Java username для фоновых уведомлений
+    // ── Offline-aware startup ─────────────────────────────────────────
+    // Сообщаем Java username сразу (до коннекта) для фоновых уведомлений
     try { window.Android?.setCurrentUser?.(p.username); } catch(_) {}
-    // Синхронизируем список групп с Java для фонового поллинга
     try {
       if (window.Android?.saveUserGroups) {
         const _grps = groupsLoad().filter(g => g.id && g.id.startsWith('grp_'));
         window.Android.saveUserGroups(p.username, JSON.stringify(_grps));
       }
     } catch(_) {}
+
+    if (navigator.onLine === false || !_netOnline) {
+      // Нет сети — показываем кэшированные данные без попытки подключиться.
+      // UI полностью работает: расписание, сообщения, профиль — всё из localStorage.
+      profileUpdateP2PStatus('🔌 Не в сети · кэш');
+      sLog('INFO', '[Bootstrap] offline — работаем из кэша, не подключаемся');
+      // Ждём восстановления сети и тогда подключаемся
+      const _onOnline = () => {
+        window.removeEventListener('online', _onOnline);
+        sLog('INFO', '[Bootstrap] сеть появилась — запускаю profileConnect');
+        const _p = profileLoad();
+        if (_p) profileConnect(_p);
+      };
+      window.addEventListener('online', _onOnline);
+    } else {
+      profileConnect(p);
+    }
   }
 }
 
@@ -2468,10 +2484,18 @@ async function sbPresencePut(p) {
   } catch(e) {}
 }
 
+let _presenceCacheTs = 0;
+let _presenceCacheData = null;
+const PRESENCE_CACHE_TTL = 30000; // 30 сек — не опрашиваем чаще
+
 async function sbPollPresence() {
   if (!sbReady()) return;
-  const data = await sbGet('presence', 'select=*&order=ts.desc&limit=500');
+  // Не загружаем presence чаще чем раз в 30 секунд
+  if (_presenceCacheData && (Date.now() - _presenceCacheTs) < PRESENCE_CACHE_TTL) return;
+  const data = await sbGet('presence', 'select=*&order=ts.desc&limit=100');
   if (!Array.isArray(data)) return;
+  _presenceCacheTs = Date.now();
+  _presenceCacheData = data;
   const p = profileLoad();
   const now = Date.now();
   const myUsername = p?.username;
@@ -10871,6 +10895,7 @@ if (typeof cmdExec !== 'undefined') {
         cmdPrint('info', '  /vip <КОД>            активировать себе VIP');
         cmdPrint('info', '  /vip give @ник        выдать VIP пользователю');
         cmdPrint('info', '  /vip revoke @ник      забрать VIP у пользователя');
+        cmdPrint('info', '  /vip remove           снять VIP с себя');
         cmdPrint('info', '  /vip list             список VIP пользователей');
         return;
       }
@@ -10900,6 +10925,23 @@ if (typeof cmdExec !== 'undefined') {
         if (list.length === 0) { cmdPrint('info', 'Нет VIP пользователей'); return; }
         cmdPrint('info', `👑 VIP пользователи (${list.length}):`);
         list.forEach(u => cmdPrint('out', `  @${u}`));
+        return;
+      }
+      // /vip remove — забрать VIP у себя
+      if (arg.toLowerCase() === 'remove' || arg.toLowerCase() === 'revoke me') {
+        const _me = profileLoad();
+        if (!_me) { cmdPrint('err', '❌ Нет активного профиля'); return; }
+        localStorage.removeItem(VIP_KEY);
+        _me.vip = false;
+        profileSave(_me);
+        if (sbReady()) {
+          _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(_me.username)}`,
+            { vip: false }, { 'Content-Type':'application/json', 'Prefer':'return=minimal' }).catch(()=>{});
+          _sbFetch('PATCH', `/rest/v1/presence?username=eq.${encodeURIComponent(_me.username)}`,
+            { vip: false }, { 'Content-Type':'application/json', 'Prefer':'return=minimal' }).catch(()=>{});
+        }
+        cmdPrint('ok', `✅ VIP снят с вашего аккаунта @${_me.username}`);
+        setTimeout(profileRenderScreen, 200);
         return;
       }
       // /vip КОД   активировать себе
