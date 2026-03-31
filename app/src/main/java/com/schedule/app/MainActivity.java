@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     // Java-side poll timer — работает даже когда WebView заморожен в фоне
     private android.os.Handler     pollHandler;
     private Runnable               pollRunnable;
-    private static final int       POLL_INTERVAL_FG = 5000;  // мс foreground
+    private static final int       POLL_INTERVAL_FG = 2000;  // мс foreground
     private static final int       POLL_INTERVAL_BG = 5000;  // мс background
     private boolean                appInForeground  = false;
 
@@ -706,11 +706,17 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setCurrentUser(String username) {
             log.i(TAG, "setCurrentUser: " + username);
-            prefs.edit()
-                .putString(PREF_SB_USER, username != null ? username : "")
-                // Начинаем отслеживать с текущего момента (не уведомляем о старых)
-                .putLong(PREF_SB_LAST_TS, System.currentTimeMillis())
-                .apply();
+            String prevUser = prefs.getString(PREF_SB_USER, "");
+            boolean sameUser = username != null && username.equals(prevUser);
+            SharedPreferences.Editor ed = prefs.edit()
+                .putString(PREF_SB_USER, username != null ? username : "");
+            if (!sameUser) {
+                // Новый пользователь — начинаем с текущего момента, не уведомляем о старых
+                ed.putLong(PREF_SB_LAST_TS, System.currentTimeMillis());
+            }
+            // Тот же пользователь — не трогаем lastTs, чтобы не пропустить
+            // сообщения пришедшие с момента последнего poll
+            ed.apply();
         }
 
         /**
@@ -733,21 +739,9 @@ public class MainActivity extends Activity {
         public void dismissNotifications() {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm != null) nm.cancelAll();
-            // Обновляем lastTs чтобы не показывать прочитанное снова
-            prefs.edit().putLong(PREF_SB_LAST_TS, System.currentTimeMillis()).apply();
-        }
-
-        /**
-         * JS вызывает при логине чтобы сохранить конфиг для фонового сервиса.
-         * Совместимость с вызовом window.Android.savePushConfig(username, url, key) из social.js.
-         */
-        @JavascriptInterface
-        public void savePushConfig(String username, String sbUrl, String sbKey) {
-            if (username == null || username.isEmpty()) return;
-            prefs.edit()
-                .putString(PREF_SB_USER, username)
-                .apply();
-            log.i(TAG, "savePushConfig: username=" + username);
+            // Не трогаем PREF_SB_LAST_TS — JS управляет им через _inboxTsSave.
+            // Перезапись на System.currentTimeMillis() здесь приводила бы к потере
+            // сообщений, пришедших между последним poll и открытием чата.
         }
 
         /** Возвращает сохранённый username для фонового поллинга */
@@ -1114,7 +1108,10 @@ public class MainActivity extends Activity {
         // Снимаем все уведомления когда пользователь вернулся в приложение
         NotificationManager nm2 = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm2 != null) nm2.cancelAll();
-        prefs.edit().putLong(PREF_SB_LAST_TS, System.currentTimeMillis()).apply();
+        // НЕ сбрасываем PREF_SB_LAST_TS — сервис уже сохранил корректный ts последнего
+        // обработанного сообщения. Если перезаписать на System.currentTimeMillis(), JS получит
+        // «сейчас» как javaTs и при getJavaSbLastTs() откатится назад только на 2 мин,
+        // потеряв все сообщения за время фонового ожидания.
         // Ускоряем интервал — приложение на экране
         if (pollHandler != null && pollRunnable != null) {
             pollHandler.removeCallbacks(pollRunnable);
