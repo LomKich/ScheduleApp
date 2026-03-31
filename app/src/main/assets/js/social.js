@@ -3194,13 +3194,13 @@ function profileRenderOnline() {
     });
     peers = friendUsers;
   } else if (isAtSearch) {
-    // @поиск   по username среди всех (не только друзей)
+    // @поиск — только точное совпадение по полному нику
     peers = _allKnownUsers.filter(u =>
       u.username !== p?.username &&
-      u.username?.toLowerCase().includes(searchVal)
+      u.username?.toLowerCase() === searchVal
     );
   } else {
-    // Обычный поиск   по имени только среди друзей
+    // Обычный поиск — по имени только среди друзей
     peers = _allKnownUsers.filter(u =>
       friends.includes(u.username) &&
       (u.name?.toLowerCase().includes(searchVal) || u.username?.toLowerCase().includes(searchVal))
@@ -3210,25 +3210,26 @@ function profileRenderOnline() {
   const hintEl = document.getElementById('online-search-hint');
   if (hintEl) {
     if (!raw)            hintEl.textContent = '';
-    else if (isAtSearch) hintEl.textContent = '🔍 Поиск по @юзернейму среди всех пользователей';
+    else if (isAtSearch) hintEl.textContent = '🔍 Введи точный @юзернейм для поиска';
     else                 hintEl.textContent = '👥 Поиск по имени/нику среди друзей';
   }
 
   if (peers.length === 0) {
     let emptyText = !raw
       ? '👥 Нет друзей. Найди людей через @поиск и добавь в друзья!'
-      : isAtSearch ? 'Ищем @' + searchVal + '...'
+      : isAtSearch ? '🔍 Введи полный ник: @' + searchVal
                    : 'Друзей с именем «' + raw + '» не найдено';
     list.innerHTML = `<div style="color:var(--muted);text-align:center;padding:30px;font-size:13px;line-height:1.6" id="online-empty-msg">${emptyText}</div>`;
   }
 
-  // Supabase-поиск при @поиске или когда друг неизвестен
+  // Supabase-поиск при @поиске — только точное совпадение
   if (isAtSearch && searchVal && sbReady()) {
     clearTimeout(_onlineSearchTimer);
     _onlineSearchTimer = setTimeout(async () => {
       try {
         const q = encodeURIComponent(searchVal);
-        const rows = await sbGet('presence', `select=*&username=ilike.*${q}*&limit=20`);
+        // ilike.val — точное совпадение (без звёздочек), нечувствительно к регистру
+        const rows = await sbGet('presence', `select=*&username=ilike.${q}&limit=5`);
         if (!Array.isArray(rows)) return;
         let added = false;
         rows.forEach(u => {
