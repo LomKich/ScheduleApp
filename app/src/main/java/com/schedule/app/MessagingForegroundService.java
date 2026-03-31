@@ -121,6 +121,14 @@ public class MessagingForegroundService extends Service {
         }
     }
 
+    private void releaseWakeLock() {
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+        } catch (Exception ignored) {}
+    }
+
     // ── Restart on kill ───────────────────────────────────────────────────────
 
     private void scheduleRestart() {
