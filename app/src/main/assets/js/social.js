@@ -136,32 +136,16 @@ function profileBootstrap() {
       }
     }, 1200);
   } else {
-    // ── Offline-aware startup ─────────────────────────────────────────
-    // Сообщаем Java username сразу (до коннекта) для фоновых уведомлений
+    profileConnect(p);
+    // Сообщаем Java username для фоновых уведомлений
     try { window.Android?.setCurrentUser?.(p.username); } catch(_) {}
+    // Синхронизируем список групп с Java для фонового поллинга
     try {
       if (window.Android?.saveUserGroups) {
         const _grps = groupsLoad().filter(g => g.id && g.id.startsWith('grp_'));
         window.Android.saveUserGroups(p.username, JSON.stringify(_grps));
       }
     } catch(_) {}
-
-    if (navigator.onLine === false || !_netOnline) {
-      // Нет сети — показываем кэшированные данные без попытки подключиться.
-      // UI полностью работает: расписание, сообщения, профиль — всё из localStorage.
-      profileUpdateP2PStatus('🔌 Не в сети · кэш');
-      sLog('INFO', '[Bootstrap] offline — работаем из кэша, не подключаемся');
-      // Ждём восстановления сети и тогда подключаемся
-      const _onOnline = () => {
-        window.removeEventListener('online', _onOnline);
-        sLog('INFO', '[Bootstrap] сеть появилась — запускаю profileConnect');
-        const _p = profileLoad();
-        if (_p) profileConnect(_p);
-      };
-      window.addEventListener('online', _onOnline);
-    } else {
-      profileConnect(p);
-    }
   }
 }
 
@@ -1624,8 +1608,25 @@ let _e2eEnabled = false;
 // ┄┄ Инициализация: генерация или загрузка ключей ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 async function e2eInit() {
   try {
-    const storedPriv = localStorage.getItem(E2E_PRIVKEY_KEY);
-    const storedPub  = localStorage.getItem(E2E_PUBKEY_KEY);
+    // Пробуем localStorage, затем IndexedDB как резерв (переживает полную очистку)
+    let storedPriv = localStorage.getItem(E2E_PRIVKEY_KEY);
+    let storedPub  = localStorage.getItem(E2E_PUBKEY_KEY);
+
+    if (!storedPriv || !storedPub) {
+      // localStorage пуст — пробуем IndexedDB
+      try {
+        const idbPriv = await idbGet('e2e_priv_v1');
+        const idbPub  = await idbGet('e2e_pub_v1');
+        if (idbPriv && idbPub) {
+          storedPriv = idbPriv;
+          storedPub  = idbPub;
+          // Восстанавливаем обратно в localStorage для быстрого доступа
+          localStorage.setItem(E2E_PRIVKEY_KEY, storedPriv);
+          localStorage.setItem(E2E_PUBKEY_KEY,  storedPub);
+          console.log('[E2E] ключи восстановлены из IndexedDB');
+        }
+      } catch(_) {}
+    }
 
     if (storedPriv && storedPub) {
       // Загружаем существующие ключи
@@ -1647,11 +1648,16 @@ async function e2eInit() {
       );
       _e2ePrivKey = pair.privateKey;
       _e2ePubKey  = pair.publicKey;
-      // Сохраняем
+      // Сохраняем в оба хранилища
       const privJwk = await crypto.subtle.exportKey('jwk', _e2ePrivKey);
       const pubJwk  = await crypto.subtle.exportKey('jwk', _e2ePubKey);
-      localStorage.setItem(E2E_PRIVKEY_KEY, JSON.stringify(privJwk));
-      localStorage.setItem(E2E_PUBKEY_KEY,  JSON.stringify(pubJwk));
+      const privStr = JSON.stringify(privJwk);
+      const pubStr  = JSON.stringify(pubJwk);
+      localStorage.setItem(E2E_PRIVKEY_KEY, privStr);
+      localStorage.setItem(E2E_PUBKEY_KEY,  pubStr);
+      // IndexedDB — резервная копия, переживает localStorage.clear()
+      idbSet('e2e_priv_v1', privStr).catch(()=>{});
+      idbSet('e2e_pub_v1',  pubStr).catch(()=>{});
     }
     _e2eEnabled = true;
   } catch(e) {
@@ -1854,7 +1860,21 @@ async function outboxFlush() {
 }
 
 // ┄┄ Слушатели сети ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-window.addEventListener('online',  () => { _netOnline = true;  setTimeout(outboxFlush, 600); });
+window.addEventListener('online', () => {
+  _netOnline = true;
+  setTimeout(outboxFlush, 600);
+  // Переподключаемся к Supabase при появлении сети (как Telegram)
+  setTimeout(() => {
+    const p = profileLoad();
+    if (p && sbReady() && !_profilePeerReady) {
+      console.log('[NET] Сеть появилась — переподключаюсь');
+      profileConnect(p);
+    } else if (p && sbReady() && _profilePeerReady) {
+      // Уже подключены — просто форс-тик для быстрой доставки
+      if (typeof window._javaTick === 'function') window._javaTick();
+    }
+  }, 1000);
+});
 window.addEventListener('offline', () => { _netOnline = false; });
 
 // Также пытаемся сбрасывать очередь каждые 12 секунд пока есть pending
@@ -1997,6 +2017,25 @@ function _inboxTsLoad() {
 }
 function _inboxTsSave(ts) {
   try { localStorage.setItem(INBOX_TS_KEY, String(ts)); } catch(e) {}
+  // Дублируем в IndexedDB — переживает полную очистку localStorage
+  if (typeof idbSet === 'function') idbSet('inbox_last_ts', String(ts)).catch(()=>{});
+}
+// Восстанавливает lastTs из IndexedDB если localStorage был очищен
+// Вызывается при входе/connect, предотвращает повторное получение старых сообщений
+async function _inboxTsRecover() {
+  if (_fbInboxLastTs > 0) return; // уже есть — не нужно
+  try {
+    if (typeof idbGet !== 'function') return;
+    const cached = await idbGet('inbox_last_ts');
+    if (cached) {
+      const ts = parseInt(cached) || 0;
+      if (ts > 0) {
+        _fbInboxLastTs = ts;
+        localStorage.setItem(INBOX_TS_KEY, String(ts));
+        console.log('[INBOX] lastTs восстановлен из IndexedDB:', ts);
+      }
+    }
+  } catch(e) {}
 }
 let _fbInboxLastTs = _inboxTsLoad();
 let _superPoller         = null; // единый таймер вместо всех отдельных
@@ -2106,7 +2145,10 @@ async function profileConnect(p) {
     _profilePeerReady = true;
     profileUpdateP2PStatus('🟢 @' + p.username + ' · 🔗 Прямое');
 
-    if (!_fbInboxLastTs) _fbInboxLastTs = _inboxTsLoad() || (Date.now() - 30 * 24 * 60 * 60 * 1000);
+    if (!_fbInboxLastTs) {
+      await _inboxTsRecover(); // восстанавливаем из IndexedDB если localStorage пуст
+      _fbInboxLastTs = _fbInboxLastTs || _inboxTsLoad() || (Date.now() - 30 * 24 * 60 * 60 * 1000);
+    }
 
     await sbPollPresence();
     if (sessionId !== _connectSessionId) return;
@@ -2357,13 +2399,22 @@ window._javaTick = async function() {
 };
 // Каждые 2 сек: inbox + открытый чат
 // Каждые 10 сек: presence heartbeat + список онлайн
-// Android убивает кучу мелких таймеров, но один активный   живёт
+// Основной механизм — Java Handler через window._javaTick()
+// JS setInterval — запасной fallback когда нет Android моста
 let _superPollerTick = 0;
 function _startSuperPoller(p, sessionId) {
-  // Отключён   всю работу делает Java Handler через window._javaTick()
-  // Java Handler не замораживается Android в отличие от JS setInterval
   clearInterval(_superPoller);
-  _superPoller = null;
+  // Если есть Android Java Handler — он делает всё сам, JS таймер не нужен
+  if (window.Android && typeof Android.startBackgroundService === 'function') {
+    _superPoller = null;
+    return;
+  }
+  // Fallback: JS setInterval для браузера / устройств без Java Handler
+  _superPollerTick = 0;
+  _superPoller = setInterval(async () => {
+    if (sessionId !== _connectSessionId) { clearInterval(_superPoller); return; }
+    if (typeof window._javaTick === 'function') await window._javaTick();
+  }, 2500);
 }
 
 // ┄┄ Удаление медиа-сообщений старше 3 дней из Supabase ┄┄┄┄┄┄┄┄┄┄┄
@@ -2484,18 +2535,10 @@ async function sbPresencePut(p) {
   } catch(e) {}
 }
 
-let _presenceCacheTs = 0;
-let _presenceCacheData = null;
-const PRESENCE_CACHE_TTL = 30000; // 30 сек — не опрашиваем чаще
-
 async function sbPollPresence() {
   if (!sbReady()) return;
-  // Не загружаем presence чаще чем раз в 30 секунд
-  if (_presenceCacheData && (Date.now() - _presenceCacheTs) < PRESENCE_CACHE_TTL) return;
-  const data = await sbGet('presence', 'select=*&order=ts.desc&limit=100');
+  const data = await sbGet('presence', 'select=*&order=ts.desc&limit=500');
   if (!Array.isArray(data)) return;
-  _presenceCacheTs = Date.now();
-  _presenceCacheData = data;
   const p = profileLoad();
   const now = Date.now();
   const myUsername = p?.username;
@@ -7026,17 +7069,12 @@ function messengerSend() {
 
   const chatKey = sbChatKey(p.username, _msgCurrentChat);
 
-  // Шифруем текст перед отправкой:
-  // — если чат помечен как секретный → всегда шифруем (e2eEncrypt форсированно)
-  // — иначе → e2eEncrypt сам решит на основе _e2eEnabled
+  // Шифруем текст перед отправкой ТОЛЬКО для секретных чатов
   const _sendEncrypted = async () => {
-    let encText;
+    let encText = text; // по умолчанию — открытый текст
     if (isChatEncrypted(_msgCurrentChat)) {
-      // Форсируем шифрование: временно включаем E2E если не включён
-      const wasEnabled = _e2eEnabled;
-      if (!wasEnabled) { await e2eInit(); }
-      encText = await e2eEncrypt(text, _msgCurrentChat);
-    } else {
+      // Секретный чат — форсируем E2E шифрование
+      if (!_e2eEnabled) await e2eInit();
       encText = await e2eEncrypt(text, _msgCurrentChat);
     }
     const outboxItem = {
@@ -10895,7 +10933,6 @@ if (typeof cmdExec !== 'undefined') {
         cmdPrint('info', '  /vip <КОД>            активировать себе VIP');
         cmdPrint('info', '  /vip give @ник        выдать VIP пользователю');
         cmdPrint('info', '  /vip revoke @ник      забрать VIP у пользователя');
-        cmdPrint('info', '  /vip remove           снять VIP с себя');
         cmdPrint('info', '  /vip list             список VIP пользователей');
         return;
       }
@@ -10925,23 +10962,6 @@ if (typeof cmdExec !== 'undefined') {
         if (list.length === 0) { cmdPrint('info', 'Нет VIP пользователей'); return; }
         cmdPrint('info', `👑 VIP пользователи (${list.length}):`);
         list.forEach(u => cmdPrint('out', `  @${u}`));
-        return;
-      }
-      // /vip remove — забрать VIP у себя
-      if (arg.toLowerCase() === 'remove' || arg.toLowerCase() === 'revoke me') {
-        const _me = profileLoad();
-        if (!_me) { cmdPrint('err', '❌ Нет активного профиля'); return; }
-        localStorage.removeItem(VIP_KEY);
-        _me.vip = false;
-        profileSave(_me);
-        if (sbReady()) {
-          _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(_me.username)}`,
-            { vip: false }, { 'Content-Type':'application/json', 'Prefer':'return=minimal' }).catch(()=>{});
-          _sbFetch('PATCH', `/rest/v1/presence?username=eq.${encodeURIComponent(_me.username)}`,
-            { vip: false }, { 'Content-Type':'application/json', 'Prefer':'return=minimal' }).catch(()=>{});
-        }
-        cmdPrint('ok', `✅ VIP снят с вашего аккаунта @${_me.username}`);
-        setTimeout(profileRenderScreen, 200);
         return;
       }
       // /vip КОД   активировать себе
