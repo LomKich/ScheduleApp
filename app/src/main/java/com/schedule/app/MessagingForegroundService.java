@@ -52,18 +52,17 @@ public class MessagingForegroundService extends Service {
         prefs = getSharedPreferences("schedule_prefs", MODE_PRIVATE);
         log.i(TAG, "Service created");
         createNotificationChannel();
-        // startForeground ОБЯЗАН быть вызван в течение 5 секунд от onCreate
-        startForeground(FG_NOTIF_ID, buildFgNotification("Подключено · ожидаю сообщения"));
+        // startForeground ОБЯЗАН быть вызван в течение 5 секунд от onCreate (требование Android)
+        // Сразу же вызываем stopForeground — уведомление скрывается, сервис продолжает работать.
+        // AlarmManager перезапустит нас при необходимости, так что потеря foreground-статуса не критична.
+        startForeground(FG_NOTIF_ID, buildFgNotification(""));
+        stopForeground(true); // true = убрать уведомление
         acquireWakeLock();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         log.i(TAG, "onStartCommand flags=" + flags);
-        // Обновляем уведомление — оно могло пропасть
-        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (nm != null) nm.notify(FG_NOTIF_ID, buildFgNotification("Подключено · ожидаю сообщения"));
-
         if (!isPolling) startPolling();
 
         // START_STICKY: Android перезапустит сервис если убьёт его
