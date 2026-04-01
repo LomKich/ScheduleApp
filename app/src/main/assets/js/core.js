@@ -6282,3 +6282,459 @@ function updateWeekProgress() {
   el.innerHTML = `${bar} <span style="color:var(--accent);font-weight:700">${pct}%</span> недели · осталось ${left} дн.`;
 }
 updateWeekProgress();
+
+// ══════════════════════════════════════════════════════════════════════
+// ██╗    ██╗██╗███████╗ █████╗ ██████╗ ██████╗
+// ██║    ██║██║╚══███╔╝██╔══██╗██╔══██╗██╔══██╗
+// ██║ █╗ ██║██║  ███╔╝ ███████║██████╔╝██║  ██║
+// ██║███╗██║██║ ███╔╝  ██╔══██║██╔══██╗██║  ██║
+// ╚███╔███╔╝██║███████╗██║  ██║██║  ██║██████╔╝
+//  ╚══╝╚══╝ ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝
+//  Telegram-style registration wizard
+// ══════════════════════════════════════════════════════════════════════
+
+let _wizardStep = 0;     // текущий шаг регистрации
+let _wizardTab  = 'reg'; // 'reg' | 'auth'
+
+// Переключение таба (Регистрация / Войти)
+function wizardSwitchTab(tab) {
+  _wizardTab = tab;
+  const tabbar   = document.getElementById('login-tabbar');
+  const viewReg  = document.getElementById('login-view-reg');
+  const viewAuth = document.getElementById('login-view-auth');
+  const tabReg   = document.getElementById('login-tab-reg');
+  const tabAuth  = document.getElementById('login-tab-auth');
+  const backBtn  = document.getElementById('login-back-btn');
+
+  if (tab === 'reg') {
+    viewReg.style.display  = '';
+    viewAuth.style.display = 'none';
+    tabReg.style.background  = 'var(--accent)';
+    tabReg.style.color       = 'var(--btn-text,#fff)';
+    tabAuth.style.background = 'transparent';
+    tabAuth.style.color      = 'var(--muted)';
+    _wizardStep = 0;
+    wizardGoTo(0);
+  } else {
+    viewReg.style.display  = 'none';
+    viewAuth.style.display = '';
+    tabReg.style.background  = 'transparent';
+    tabReg.style.color       = 'var(--muted)';
+    tabAuth.style.background = 'var(--accent)';
+    tabAuth.style.color      = 'var(--btn-text,#fff)';
+    if (backBtn) backBtn.style.visibility = 'hidden';
+    setTimeout(() => document.getElementById('login-auth-username')?.focus(), 250);
+  }
+}
+
+// Перейти на нужный шаг
+function wizardGoTo(step) {
+  _wizardStep = step;
+  const track   = document.getElementById('wizard-track');
+  const backBtn = document.getElementById('login-back-btn');
+  const title   = document.getElementById('login-hdr-title');
+  const tabbar  = document.getElementById('login-tabbar');
+
+  if (!track) return;
+  track.style.transform = `translateX(-${step * 100}%)`;
+
+  // Обновляем точки прогресса
+  for (let i = 0; i < 3; i++) {
+    const dot = document.getElementById('wdot-' + i);
+    if (!dot) continue;
+    dot.className = 'wdot' + (i === step ? ' wdot-active' : '');
+  }
+
+  // Кнопка назад
+  if (backBtn) backBtn.style.visibility = step > 0 ? 'visible' : 'hidden';
+
+  // Скрыть таббар на шагах 1 и 2
+  if (tabbar) tabbar.style.display = step === 0 ? '' : 'none';
+
+  // Заголовок хедера
+  const titles = ['Регистрация', 'Твой профиль', 'Придумай пароль'];
+  if (title) title.textContent = titles[step] || 'Аккаунт';
+
+  // Анимация иконки текущего шага
+  const icon = document.querySelector('#wstep-' + step + ' .wstep-icon');
+  if (icon) {
+    icon.style.transform = 'scale(0.4) rotate(-15deg)';
+    requestAnimationFrame(() => {
+      icon.style.transition = 'transform .35s cubic-bezier(.34,1.56,.64,1)';
+      icon.style.transform = '';
+      setTimeout(() => { icon.style.transition = ''; }, 400);
+    });
+  }
+
+  // Фокус на поле
+  setTimeout(() => {
+    if (step === 0) document.getElementById('login-name')?.focus();
+    if (step === 1) document.getElementById('login-username')?.focus();
+    if (step === 2) document.getElementById('login-password')?.focus();
+  }, 350);
+}
+
+// Кнопка Назад в wizard
+function wizardBack() {
+  if (_wizardStep > 0) wizardGoTo(_wizardStep - 1);
+}
+
+// Валидация шага 0 (имя)
+function wizardValidateStep0() {
+  const name = (document.getElementById('login-name')?.value || '').trim();
+  const btn  = document.getElementById('wbtn-0');
+  const hint = document.getElementById('wstep0-hint');
+  const ok   = name.length >= 2;
+  if (btn) btn.disabled = !ok;
+  if (hint) {
+    if (!name) { hint.textContent = 'Минимум 2 символа'; hint.style.color = 'var(--muted)'; }
+    else if (!ok) { hint.textContent = '⚠️ Слишком короткое имя'; hint.style.color = 'var(--danger,#c94f4f)'; }
+    else { hint.textContent = '✅ Отлично!'; hint.style.color = '#4caf7d'; }
+  }
+}
+
+// Следующий шаг
+function wizardNext() {
+  if (_wizardStep === 0) {
+    const name = (document.getElementById('login-name')?.value || '').trim();
+    if (name.length < 2) return;
+    wizardGoTo(1);
+  } else if (_wizardStep === 1) {
+    const un = (document.getElementById('login-username')?.value || '').trim();
+    if (un.length < 3) return;
+    const btn = document.getElementById('wbtn-1');
+    if (btn && btn.disabled) return;
+    wizardGoTo(2);
+  }
+}
+
+// Валидация шага 2 (пароль)
+function wizardValidateStep2() {
+  const p1   = document.getElementById('login-password')?.value  || '';
+  const p2   = document.getElementById('login-password2')?.value || '';
+  const btn  = document.getElementById('wbtn-2');
+  const hint = document.getElementById('wstep2-hint');
+  if (p1.length === 0) {
+    if (hint) { hint.textContent = 'Минимум 4 символа'; hint.style.color = 'var(--muted)'; }
+    if (btn) btn.disabled = true;
+  } else if (p1.length < 4) {
+    if (hint) { hint.textContent = '⚠️ Пароль слишком короткий'; hint.style.color = 'var(--danger,#c94f4f)'; }
+    if (btn) btn.disabled = true;
+  } else if (p2 && p1 !== p2) {
+    if (hint) { hint.textContent = '❌ Пароли не совпадают'; hint.style.color = 'var(--danger,#c94f4f)'; }
+    if (btn) btn.disabled = true;
+  } else if (p2 && p1 === p2) {
+    if (hint) { hint.textContent = '✅ Пароли совпадают'; hint.style.color = '#4caf7d'; }
+    if (btn) btn.disabled = false;
+  } else {
+    // p2 ещё не заполнен
+    if (hint) { hint.textContent = 'Повтори пароль ещё раз'; hint.style.color = 'var(--muted)'; }
+    if (btn) btn.disabled = true;
+  }
+}
+
+// Финиш: создать аккаунт (вызывает существующую profileCreate)
+function wizardFinish() {
+  const p1 = document.getElementById('login-password')?.value  || '';
+  const p2 = document.getElementById('login-password2')?.value || '';
+  if (p1.length < 4 || p1 !== p2) return;
+  profileCreate(); // существующая функция в social.js
+}
+
+// При загрузке страницы: инициализируем wizard
+(function initWizardOnLoad() {
+  // Ждём DOM
+  const check = () => {
+    if (document.getElementById('wizard-track')) {
+      wizardSwitchTab('reg');
+      wizardGoTo(0);
+    } else {
+      setTimeout(check, 100);
+    }
+  };
+  check();
+})();
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 🍅  POMODORO ТАЙМЕР
+// ══════════════════════════════════════════════════════════════════════
+
+const POMO_WORK_SEC  = 25 * 60;
+const POMO_BREAK_SEC = 5  * 60;
+
+let _pomoState = {
+  running: false,
+  isWork:  true,
+  secsLeft: POMO_WORK_SEC,
+  session:  1,
+  interval: null,
+};
+
+function pomodoroToggle() {
+  // Открываем оверлей при первом нажатии
+  const ov = document.getElementById('pomodoro-overlay');
+  if (ov) ov.style.display = 'flex';
+
+  if (_pomoState.running) {
+    // Пауза
+    clearInterval(_pomoState.interval);
+    _pomoState.running = false;
+    _pomoRender();
+  } else {
+    // Запуск / продолжение
+    _pomoState.running = true;
+    _pomoState.interval = setInterval(_pomoTick, 1000);
+    _pomoRender();
+  }
+}
+
+function pomodoroReset() {
+  clearInterval(_pomoState.interval);
+  _pomoState = { running: false, isWork: true,
+    secsLeft: POMO_WORK_SEC, session: 1, interval: null };
+  _pomoRender();
+}
+
+function _pomoTick() {
+  if (_pomoState.secsLeft > 0) {
+    _pomoState.secsLeft--;
+    _pomoRender();
+  } else {
+    // Смена режима
+    clearInterval(_pomoState.interval);
+    if (_pomoState.isWork) {
+      _pomoState.isWork   = false;
+      _pomoState.secsLeft = POMO_BREAK_SEC;
+      toast('🎉 Перерыв 5 минут! Отдыхай');
+    } else {
+      _pomoState.isWork   = true;
+      _pomoState.secsLeft = POMO_WORK_SEC;
+      _pomoState.session++;
+      toast('🍅 Фокус! Сессия ' + _pomoState.session);
+    }
+    _pomoState.running  = true;
+    _pomoState.interval = setInterval(_pomoTick, 1000);
+    _pomoRender();
+  }
+}
+
+function _pomoRender() {
+  const total = _pomoState.isWork ? POMO_WORK_SEC : POMO_BREAK_SEC;
+  const left  = _pomoState.secsLeft;
+  const pct   = left / total;
+  const mins  = String(Math.floor(left / 60)).padStart(2, '0');
+  const secs  = String(left % 60).padStart(2, '0');
+  const timeStr = `${mins}:${secs}`;
+  const emoji   = _pomoState.isWork ? '🍅' : '☕';
+  const modeStr = _pomoState.isWork ? 'ФОКУС 🍅' : 'ПЕРЕРЫВ ☕';
+
+  // Мини-виджет на главной
+  const ringFill = document.getElementById('pomodoro-ring-fill');
+  const ringLabel = document.getElementById('pomodoro-ring-label');
+  const subEl   = document.getElementById('pomodoro-sub');
+  const titleEl = document.getElementById('pomodoro-title');
+  const btnIcon = document.getElementById('pomodoro-btn-icon');
+  const CIRCUM  = 138.2; // 2π×22
+  if (ringFill)  ringFill.style.strokeDashoffset  = String(CIRCUM * (1 - pct));
+  if (ringLabel) ringLabel.textContent = timeStr;
+  if (subEl)     subEl.textContent = (_pomoState.isWork ? '🍅 Фокус' : '☕ Перерыв') +
+    ' · сессия ' + _pomoState.session;
+  if (titleEl)   titleEl.textContent = 'Помодоро — ' + timeStr;
+  if (btnIcon)   btnIcon.textContent  = _pomoState.running ? '⏸️' : '▶️';
+
+  // Большой оверлей
+  const ovTime = document.getElementById('pomo-ov-time');
+  const ovEmoji = document.getElementById('pomo-ov-emoji');
+  const ovRing  = document.getElementById('pomo-ov-ring');
+  const ovLabel = document.getElementById('pomo-mode-label');
+  const ovSess  = document.getElementById('pomo-ov-session');
+  const ovBtn   = document.getElementById('pomo-ov-main-btn');
+  const CIRCUM2 = 376.99; // 2π×60
+  if (ovTime)  ovTime.textContent  = timeStr;
+  if (ovEmoji) ovEmoji.textContent = emoji;
+  if (ovRing)  ovRing.style.strokeDashoffset  = String(CIRCUM2 * (1 - pct));
+  if (ovLabel) ovLabel.textContent = modeStr;
+  if (ovSess)  ovSess.textContent  = 'Сессия ' + _pomoState.session +
+    (_pomoState.running ? '' : ' · на паузе');
+  if (ovBtn) {
+    ovBtn.textContent = _pomoState.running ? '⏸ Пауза' : '▶ Продолжить';
+  }
+}
+
+// Инициализация виджета
+_pomoRender();
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 📅  СЧЁТЧИК ДО ПЯТНИЦЫ + ПРОГРЕСС НЕДЕЛИ
+// ══════════════════════════════════════════════════════════════════════
+
+function homeUpdateWeekBar() {
+  const fridayEl   = document.getElementById('home-friday-count');
+  const weekPctEl  = document.getElementById('home-week-pct');
+  const weekFillEl = document.getElementById('home-week-fill');
+  const weekLblEl  = document.getElementById('home-week-label');
+  if (!fridayEl) return;
+
+  const now  = new Date();
+  const dow  = now.getDay(); // 0=вс, 1=пн...6=сб
+  const DAYS = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+
+  // Дней до пятницы (5)
+  let toFri;
+  if (dow === 5)       toFri = '🎉 Сегодня!';
+  else if (dow === 6)  toFri = 'Вчера была 😅';
+  else if (dow === 0)  toFri = '5 дней';
+  else                 toFri = (5 - dow) + ' ' + (5 - dow === 1 ? 'день' : (5 - dow < 5 ? 'дня' : 'дней'));
+
+  fridayEl.textContent = toFri;
+
+  // Прогресс недели: пн=0% ... сб=100%
+  // Учебные дни 1(пн)…6(сб) — 6 дней
+  const pct = dow === 0 ? 0 : Math.round(Math.min(dow, 6) / 6 * 100);
+  if (weekPctEl)  weekPctEl.textContent  = pct + '%';
+  if (weekFillEl) weekFillEl.style.width = pct + '%';
+  if (weekLblEl) {
+    const dayName = DAYS[dow];
+    const left    = dow === 0 ? 6 : Math.max(0, 6 - dow);
+    weekLblEl.textContent = dow === 0
+      ? 'Воскресенье — впереди всё!'
+      : dayName + ' · осталось ' + left + ' ' + (left === 1 ? 'день' : left < 5 ? 'дня' : 'дней');
+  }
+}
+
+homeUpdateWeekBar();
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 😤  ЖАЛОБНАЯ КНИГА (смешные студенческие жалобы)
+// ══════════════════════════════════════════════════════════════════════
+
+const COMPLAINTS = [
+  'Почему пары начинаются в 8:30?! Это нарушение прав человека.',
+  'Преподаватель снова перенёс пару. За 5 минут до начала. В 8 утра.',
+  'В расписании написано «аудитория уточняется». Уточнили в 9:03 — пара уже шла.',
+  'Зачёт «автоматом» за посещаемость, но в расписании 6 пар в день.',
+  'ДЗ задали в пятницу. Сдавать в понедельник. Это не выходные, это рабочая смена.',
+  'Столовая открыта с 12 до 13. Перемена с 12:05 до 12:20. Математика тут курит.',
+  'Потерял ручку прямо перед контрольной. Попросил у соседа — у него тоже нет.',
+  'Библиотека: нужная книга есть в 1 экземпляре, он на руках до 2027 года.',
+  'Wi-Fi в корпусе работает только если стоять у окна на третьем этаже, ногой касаясь батареи.',
+  'Экзамен в 9:00. Добираться 1:20. Первый автобус в 7:30. Математика снова курит.',
+  'Пересдача назначена на 31 декабря. Удачи тебе и всем нам.',
+  'Сосед на паре жуёт так громко, что я потерял нить лекции.',
+  'Преподаватель: «Это проходили на первом курсе». Мы на первом курсе.',
+  'Проектор не работает. Преподаватель рисует схему на доске. Маркер тоже не работает.',
+  'Пара перенесена на субботу. Суббота — тоже учебный день. Открытие семестра.',
+  '«Самостоятельная работа» — это когда преподаватель пьёт кофе, а ты решаешь 40 задач.',
+  'В деканате сказали: «Приходи завтра». Пришёл. «Приходи послезавтра».',
+  'Пара отменена, но узнал об этом когда уже приехал.',
+  'Распечатка на 80 страниц. Принтер в кабинете замдекана. Замдекан «занят».',
+  '«Нам поставят зачёт если все придут на субботник». Суббота, 8 утра, грабли.',
+];
+
+let _lastComplaint = '';
+
+function funShowComplaint() {
+  const ov = document.getElementById('complaint-overlay');
+  const el = document.getElementById('complaint-text');
+  if (!ov || !el) return;
+
+  let c;
+  do { c = COMPLAINTS[Math.floor(Math.random() * COMPLAINTS.length)]; }
+  while (c === _lastComplaint && COMPLAINTS.length > 1);
+  _lastComplaint = c;
+  el.textContent = c;
+  ov.style.display = 'flex';
+}
+
+function funCopyComplaint() {
+  const text = document.getElementById('complaint-text')?.textContent || '';
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => toast('📋 Скопировано!'));
+  }
+  document.getElementById('complaint-overlay').style.display = 'none';
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 🎲  РАНДОМАЙЗЕР «КТО ОТВЕЧАЕТ?»
+// ══════════════════════════════════════════════════════════════════════
+
+const RAND_EMOJIS = ['🎯','🎲','⚡','🏆','🔥','💀','🎪','🤡','🫡','😬','🧨','🎭'];
+
+function funGroupRandomizer() {
+  const ov = document.getElementById('randomizer-overlay');
+  if (!ov) return;
+  // Сброс результата
+  const res = document.getElementById('rand-result');
+  if (res) res.style.display = 'none';
+  ov.style.display = 'flex';
+  setTimeout(() => document.getElementById('rand-names-input')?.focus(), 300);
+}
+
+function funGroupRandomizerSpin() {
+  const inp = document.getElementById('rand-names-input');
+  const res = document.getElementById('rand-result');
+  const nameEl  = document.getElementById('rand-result-name');
+  const emojiEl = document.getElementById('rand-result-emoji');
+  if (!inp || !res) return;
+
+  const names = inp.value.split('\n')
+    .map(n => n.trim()).filter(n => n.length > 0);
+
+  if (names.length === 0) {
+    toast('Добавь хотя бы одного участника!'); return;
+  }
+
+  // Анимация «вращения»
+  let ticks = 0;
+  const maxTicks = 14;
+  const chosen = names[Math.floor(Math.random() * names.length)];
+  const interval = setInterval(() => {
+    ticks++;
+    const temp = names[Math.floor(Math.random() * names.length)];
+    if (nameEl)  nameEl.textContent  = temp;
+    if (emojiEl) emojiEl.textContent = RAND_EMOJIS[ticks % RAND_EMOJIS.length];
+    if (ticks >= maxTicks) {
+      clearInterval(interval);
+      if (nameEl)  nameEl.textContent  = chosen;
+      if (emojiEl) emojiEl.textContent = '🎯';
+      if (res) {
+        res.style.display = 'block';
+        nameEl.style.transform = 'scale(1.25)';
+        setTimeout(() => { nameEl.style.transform = ''; nameEl.style.transition = 'transform .2s'; }, 120);
+      }
+    }
+  }, 80);
+
+  if (res) res.style.display = 'block';
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 📝  ОБЁРТКА: funShowExcuse — вызывает существующий getExcuse()
+// ══════════════════════════════════════════════════════════════════════
+
+function funShowExcuse() {
+  // Используем существующую функцию из core.js
+  if (typeof getExcuse === 'function') {
+    const excuse = getExcuse();
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9100;display:flex;align-items:center;justify-content:center;padding:24px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+      <div style="background:var(--surface2);border-radius:20px;padding:22px;width:100%;max-width:340px;border:1.5px solid var(--surface3)">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);margin-bottom:10px">📝 ГЕНЕРАТОР ОТМАЗКИ</div>
+        <div style="font-size:15px;line-height:1.55;color:var(--text);margin-bottom:18px">${excuse}</div>
+        <div style="display:flex;gap:10px">
+          <button onclick="this.closest('[style]').remove();funShowExcuse()" class="btn btn-surface" style="flex:1">🔄 Другую</button>
+          <button onclick="navigator.clipboard&&navigator.clipboard.writeText('${excuse.replace(/'/g,"\\'")}').then(()=>toast('📋 Скопировано'));this.closest('[style]').remove()"
+            class="btn btn-accent" style="flex:1">📋 Скопировать</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+}
+

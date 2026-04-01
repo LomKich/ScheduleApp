@@ -168,16 +168,15 @@ let _loginSelectedEmoji = '😊';
 
 function profileInitLoginScreen() {
   _loginSelectedEmoji = '😊';
-  // Reset custom emoji input
   const customInput = document.getElementById('login-custom-emoji-input');
   const customPreview = document.getElementById('login-custom-emoji-preview');
   const customErr = document.getElementById('login-custom-emoji-error');
-  if (customInput) { customInput.value = ''; customInput.style.borderColor = 'var(--surface3)'; }
+  if (customInput) { customInput.value = ''; customInput.style.borderColor = ''; }
   if (customPreview) customPreview.textContent = '';
   if (customErr) customErr.textContent = '';
-  // Reset tabs to register view
-  loginShowRegister();
-  // Emoji grid removed - user inputs emoji via keyboard
+  // Сбрасываем wizard на шаг 0
+  wizardGoTo(0);
+  wizardSwitchTab('reg');
 }
 
 // ┄┄ Валидация эмодзи ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -293,6 +292,13 @@ function randomEmojiPick(ctx) {
     const inp     = document.getElementById('login-custom-emoji-input');
     if (preview) preview.textContent = emoji;
     if (inp)     inp.value           = emoji;
+    // Обновляем большой аватар в wizard
+    const bigAvatar = document.getElementById('wizard-avatar-big');
+    if (bigAvatar) {
+      bigAvatar.textContent = emoji;
+      bigAvatar.style.transform = 'scale(1.3) rotate(-8deg)';
+      setTimeout(() => { bigAvatar.style.transform = ''; }, 250);
+    }
   }
   // Маленькая анимация
   const previewEl = document.getElementById(ctx + '-custom-emoji-preview');
@@ -331,7 +337,9 @@ function loginCustomEmojiInput(el) {
     if (preview) preview.textContent = emoji;
     if (errEl) errEl.textContent = '';
     el.style.borderColor = 'var(--accent)';
-    // Deselect preset grid
+    // Обновляем большой аватар wizard
+    const bigAvatar = document.getElementById('wizard-avatar-big');
+    if (bigAvatar) bigAvatar.textContent = emoji;
     document.querySelectorAll('#login-emoji-grid button').forEach(b => b.style.borderColor = 'var(--surface3)');
   } else {
     if (errEl) errEl.textContent = 'Это не эмодзи   вставь символ с клавиатуры';
@@ -463,22 +471,10 @@ function profileCreate() {
   try { window.Android?.setCurrentUser?.(username); } catch(_) {}
 }
 
-function loginShowRegister() {
-  document.getElementById('login-register-form').style.display = '';
-  document.getElementById('login-auth-form').style.display = 'none';
-  const tabReg = document.getElementById('login-tab-reg');
-  const tabAuth = document.getElementById('login-tab-auth');
-  if (tabReg) { tabReg.style.background = 'var(--accent)'; tabReg.style.color = 'var(--btn-text,#fff)'; }
-  if (tabAuth) { tabAuth.style.background = 'transparent'; tabAuth.style.color = 'var(--muted)'; }
-}
+function loginShowRegister() { wizardSwitchTab('reg'); }
 
 function loginShowAuth(username) {
-  document.getElementById('login-register-form').style.display = 'none';
-  document.getElementById('login-auth-form').style.display = '';
-  const tabReg = document.getElementById('login-tab-reg');
-  const tabAuth = document.getElementById('login-tab-auth');
-  if (tabReg) { tabReg.style.background = 'transparent'; tabReg.style.color = 'var(--muted)'; }
-  if (tabAuth) { tabAuth.style.background = 'var(--accent)'; tabAuth.style.color = 'var(--btn-text,#fff)'; }
+  wizardSwitchTab('auth');
   const unEl = document.getElementById('login-auth-username');
   if (unEl && username) unEl.value = username;
   setTimeout(() => {
@@ -486,7 +482,7 @@ function loginShowAuth(username) {
       ? document.getElementById('login-auth-password')
       : document.getElementById('login-auth-username');
     focus?.focus();
-  }, 200);
+  }, 300);
 }
 
 function loginAuthUsernameInput(val) {
