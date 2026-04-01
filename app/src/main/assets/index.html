@@ -2987,6 +2987,70 @@ html.notch-on #s-login {
   padding-top: 0 !important;
 }
 
+/* ═══ WIZARD REGISTRATION ═══ */
+#s-login { display:flex;flex-direction:column; }
+.wdot {
+  width:8px;height:8px;border-radius:50%;
+  background:var(--surface3);transition:all .3s cubic-bezier(.4,0,.2,1);
+}
+.wdot-active {
+  width:24px;border-radius:4px;background:var(--accent);
+}
+#wizard-track {
+  width:100%;
+}
+.wstep {
+  min-width:100%;box-sizing:border-box;
+  padding:8px 18px 32px;
+  display:flex;flex-direction:column;align-items:stretch;
+}
+.wstep-icon {
+  font-size:72px;text-align:center;margin:8px 0 14px;
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1);
+}
+.wstep-title {
+  font-size:22px;font-weight:800;color:var(--text);
+  text-align:center;margin-bottom:6px;
+  letter-spacing:-.02em;
+}
+.wstep-sub {
+  font-size:13px;color:var(--muted);text-align:center;
+  margin-bottom:22px;line-height:1.5;
+}
+/* Pomodoro виджет */
+#pomodoro-widget {
+  background:var(--surface2);border-radius:16px;
+  border:1.5px solid var(--surface3);
+  padding:14px 16px;margin-bottom:12px;
+  display:flex;align-items:center;gap:14px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:opacity .15s;
+}
+#pomodoro-widget:active { opacity:.7; }
+#pomodoro-ring {
+  width:52px;height:52px;flex-shrink:0;position:relative;
+}
+#pomodoro-ring svg { position:absolute;inset:0; }
+#pomodoro-ring-track { stroke:var(--surface3); }
+#pomodoro-ring-fill  { stroke:var(--accent);stroke-linecap:round;
+  transition:stroke-dashoffset .8s linear; transform-origin:center;transform:rotate(-90deg); }
+#pomodoro-ring-label {
+  position:absolute;inset:0;display:flex;align-items:center;
+  justify-content:center;font-size:11px;font-weight:700;color:var(--text);
+}
+/* Fun features bar под расписанием */
+.fun-bar {
+  display:flex;gap:8px;flex-wrap:wrap;
+  padding:12px 0 4px;
+}
+.fun-chip {
+  background:var(--surface2);border:1.5px solid var(--surface3);
+  border-radius:20px;padding:6px 13px;font-size:12px;font-weight:600;
+  color:var(--text);cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:background .15s,transform .1s;white-space:nowrap;
+}
+.fun-chip:active { transform:scale(.94);background:var(--surface3); }
+
 /* ── notch-off: никакого учёта выреза */
 html.notch-off .screen {
   padding-top: 0;
@@ -3078,6 +3142,49 @@ html.notch-off #s-login {
 
     <!-- Одна чистая строка статуса -->
     <div id="home-status-line" style="display:none;text-align:center;margin:-4px 0 14px;font-size:12px;color:var(--muted)"></div>
+
+    <!-- ── Pomodoro виджет ─────────────────────────────────────── -->
+    <div id="pomodoro-widget" onclick="pomodoroToggle()" title="Таймер Помодоро">
+      <div id="pomodoro-ring">
+        <svg viewBox="0 0 52 52" width="52" height="52">
+          <circle id="pomodoro-ring-track" cx="26" cy="26" r="22" fill="none" stroke-width="4"/>
+          <circle id="pomodoro-ring-fill"  cx="26" cy="26" r="22" fill="none" stroke-width="4"
+            stroke-dasharray="138.2" stroke-dashoffset="0"/>
+        </svg>
+        <div id="pomodoro-ring-label">🍅</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div id="pomodoro-title" style="font-size:14px;font-weight:700;color:var(--text)">Помодоро</div>
+        <div id="pomodoro-sub" style="font-size:12px;color:var(--muted);margin-top:2px">25 мин фокуса · нажми чтобы начать</div>
+      </div>
+      <div id="pomodoro-btn-icon" style="font-size:22px">▶️</div>
+    </div>
+
+    <!-- ── Счётчик до пятницы + прогресс недели ───────────────── -->
+    <div id="home-week-bar" style="display:flex;gap:8px;margin-bottom:12px">
+      <div style="flex:1;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:10px 14px">
+        <div id="home-friday-count" style="font-size:18px;font-weight:800;color:var(--accent)">—</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">до пятницы</div>
+      </div>
+      <div style="flex:2;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:10px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted)">НЕДЕЛЯ</div>
+          <div id="home-week-pct" style="font-size:11px;font-weight:700;color:var(--accent)">0%</div>
+        </div>
+        <div style="height:5px;background:var(--surface3);border-radius:3px;overflow:hidden">
+          <div id="home-week-fill" style="height:100%;background:var(--accent);border-radius:3px;transition:width .6s ease;width:0%"></div>
+        </div>
+        <div id="home-week-label" style="font-size:10px;color:var(--muted);margin-top:4px"></div>
+      </div>
+    </div>
+
+    <!-- ── Фан-кнопки ─────────────────────────────────────────── -->
+    <div class="fun-bar" id="home-fun-bar">
+      <button class="fun-chip" onclick="funShowExcuse()">📝 Отмазка</button>
+      <button class="fun-chip" onclick="funShowComplaint()">😤 Пожаловаться</button>
+      <button class="fun-chip" onclick="funGroupRandomizer()">🎲 Кто отвечает?</button>
+      <button class="fun-chip" onclick="funHaiku()">🌸 Хайку</button>
+    </div>
 
     <div class="mode-switch-wrap">
       <div class="mode-toggle-pill student" id="mode-toggle-pill">
@@ -3486,78 +3593,152 @@ html.notch-off #s-login {
 
 <!-- ЭКРАН ВХОДА/РЕГИСТРАЦИИ -->
 <div class="screen" id="s-login">
-  <div class="hdr">
-    <div class="hdr-title">Аккаунт</div>
+  <!-- Шапка с динамической кнопкой Назад -->
+  <div class="hdr" id="login-hdr">
+    <button id="login-back-btn" class="hdr-back"
+      style="visibility:hidden"
+      onclick="wizardBack()">Назад</button>
+    <div class="hdr-title" id="login-hdr-title">Аккаунт</div>
+    <div style="width:60px"></div>
   </div>
-  <div class="body" style="display:flex;flex-direction:column;align-items:center;padding-top:32px">
-    <div style="font-size:56px;margin-bottom:12px">👤</div>
 
-    <!-- Переключатель вкладок -->
-    <div style="display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:28px;width:100%;max-width:300px">
-      <button id="login-tab-reg" onclick="loginShowRegister()"
-        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .18s,color .18s;background:var(--accent);color:var(--btn-text,#fff)">
+  <!-- ═══════════════════════════════════════════
+       ТАББАР: Регистрация / Войти
+  ════════════════════════════════════════════ -->
+  <div id="login-tabbar" style="padding:0 18px 0;flex-shrink:0">
+    <div style="display:flex;background:var(--surface2);border-radius:12px;padding:3px;width:100%">
+      <button id="login-tab-reg" onclick="wizardSwitchTab('reg')"
+        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;background:var(--accent);color:var(--btn-text,#fff)">
         Регистрация
       </button>
-      <button id="login-tab-auth" onclick="loginShowAuth()"
-        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .18s,color .18s;background:transparent;color:var(--muted)">
+      <button id="login-tab-auth" onclick="wizardSwitchTab('auth')"
+        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;background:transparent;color:var(--muted)">
         Войти
       </button>
     </div>
-
-    <!-- ФОРМА РЕГИСТРАЦИИ -->
-    <div id="login-register-form" style="width:100%;max-width:340px">
-      <div class="section-label">Имя</div>
-      <input class="inp" id="login-name" placeholder="Как тебя зовут?" maxlength="32" style="margin-bottom:12px">
-
-      <div class="section-label">Юзернейм</div>
-      <div style="position:relative;margin-bottom:4px">
-        <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)">@</span>
-        <input class="inp" id="login-username" placeholder="твой_ник" maxlength="24"
-               style="padding-left:28px" oninput="loginCheckUsername(this.value)">
-      </div>
-      <div id="login-username-status" style="font-size:11px;min-height:16px;margin-bottom:16px;padding-left:4px"></div>
-
-      <div class="section-label">Аватар</div>
-      <!-- Поле ввода произвольного эмодзи -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <input id="login-custom-emoji-input"
-          placeholder="Введи любой эмодзи 😎"
-          maxlength="8"
-          style="background:var(--surface2);border:2px solid var(--surface3);border-radius:12px;padding:10px 14px;font-size:22px;color:var(--text);font-family:inherit;outline:none;flex:1;min-width:0;transition:border-color .15s"
-          oninput="loginCustomEmojiInput(this)">
-        <div id="login-custom-emoji-preview"
-          onclick="randomEmojiPick('login')"
-          title="Случайный эмодзи"
-          style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;cursor:pointer;transition:transform .15s,border-color .15s"
-          ontouchstart="this.style.transform='scale(.88)'" ontouchend="this.style.transform=''">🎲</div>
-      </div>
-      <div id="login-custom-emoji-error" style="font-size:11px;color:var(--danger,#c94f4f);min-height:14px;margin-bottom:6px;padding-left:4px"></div>
-      <div id="login-emoji-grid" style="display:none"></div>
-
-      <div class="section-label">Пароль</div>
-      <input class="inp" id="login-password" type="password" placeholder="Придумай пароль" maxlength="64" style="margin-bottom:4px">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:20px;padding-left:4px">Пароль нужен для входа с этого устройства</div>
-
-      <button class="btn btn-accent" id="login-submit-btn" onclick="profileCreate()" disabled>Создать аккаунт</button>
-      <div id="login-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:8px;min-height:16px"></div>
-    </div>
-
-    <!-- ФОРМА ВХОДА -->
-    <div id="login-auth-form" style="width:100%;max-width:340px;display:none">
-      <div class="section-label">Юзернейм</div>
-      <div style="position:relative;margin-bottom:16px">
-        <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)">@</span>
-        <input class="inp" id="login-auth-username" placeholder="твой_ник" maxlength="24"
-               style="padding-left:28px" oninput="loginAuthUsernameInput(this.value)">
-      </div>
-
-      <div class="section-label">Пароль</div>
-      <input class="inp" id="login-auth-password" type="password" placeholder="Пароль" maxlength="64" style="margin-bottom:20px" onkeydown="if(event.key==='Enter')loginDoAuth()">
-
-      <button class="btn btn-accent" onclick="loginDoAuth()">Войти</button>
-      <div id="login-auth-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:8px;min-height:16px"></div>
-    </div>
   </div>
+
+  <!-- ═══════════════════════════════════════════
+       КОНТЕНТ — слайдер шагов
+  ════════════════════════════════════════════ -->
+  <div id="login-slider-wrap" style="flex:1;overflow:hidden;position:relative">
+
+    <!-- ── ВИД: РЕГИСТРАЦИЯ (wizard) ── -->
+    <div id="login-view-reg" style="position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch">
+
+      <!-- Прогресс-точки -->
+      <div id="wizard-dots" style="display:flex;justify-content:center;gap:8px;padding:18px 0 6px">
+        <div class="wdot wdot-active" id="wdot-0"></div>
+        <div class="wdot" id="wdot-1"></div>
+        <div class="wdot" id="wdot-2"></div>
+      </div>
+
+      <!-- Слайды шагов -->
+      <div id="wizard-track" style="display:flex;transition:transform .3s cubic-bezier(.4,0,.2,1);will-change:transform">
+
+        <!-- ── ШАГ 0: Имя ── -->
+        <div class="wstep" id="wstep-0">
+          <div class="wstep-icon">👋</div>
+          <div class="wstep-title">Как тебя зовут?</div>
+          <div class="wstep-sub">Это имя увидят другие пользователи</div>
+          <input class="inp" id="login-name" placeholder="Имя или псевдоним" maxlength="32"
+            style="margin-bottom:6px;font-size:16px"
+            oninput="wizardValidateStep0()"
+            onkeydown="if(event.key==='Enter')wizardNext()">
+          <div id="wstep0-hint" style="font-size:11px;color:var(--muted);min-height:14px;padding-left:4px;margin-bottom:20px">Минимум 2 символа</div>
+          <button class="btn btn-accent" id="wbtn-0" onclick="wizardNext()" disabled style="width:100%">Далее →</button>
+        </div>
+
+        <!-- ── ШАГ 1: Никнейм + Аватар ── -->
+        <div class="wstep" id="wstep-1">
+          <div class="wstep-icon" id="wizard-avatar-big" onclick="randomEmojiPick('login')"
+            title="Нажми чтобы сменить"
+            style="cursor:pointer;transition:transform .15s"
+            ontouchstart="this.style.transform='scale(.85)'" ontouchend="this.style.transform=''">😊</div>
+          <div class="wstep-title">Выбери никнейм</div>
+          <div class="wstep-sub">Используется для входа и в чатах</div>
+
+          <div style="position:relative;margin-bottom:4px">
+            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:700">@</span>
+            <input class="inp" id="login-username" placeholder="твой_ник" maxlength="24"
+              style="padding-left:28px;font-size:15px;letter-spacing:.02em"
+              oninput="loginCheckUsername(this.value)"
+              onkeydown="if(event.key==='Enter')wizardNext()">
+          </div>
+          <div id="login-username-status" style="font-size:11px;min-height:16px;margin-bottom:14px;padding-left:4px"></div>
+
+          <!-- Эмодзи аватар -->
+          <div style="background:var(--surface2);border-radius:14px;padding:12px 14px;margin-bottom:4px">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:10px">АВАТАР</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <input id="login-custom-emoji-input"
+                placeholder="Вставь эмодзи 😎"
+                maxlength="8"
+                style="background:var(--surface3);border:2px solid transparent;border-radius:10px;padding:8px 12px;font-size:20px;color:var(--text);font-family:inherit;outline:none;flex:1;min-width:0;transition:border-color .15s"
+                oninput="loginCustomEmojiInput(this)">
+              <div id="login-custom-emoji-preview"
+                onclick="randomEmojiPick('login')"
+                style="width:44px;height:44px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;cursor:pointer;transition:transform .15s"
+                ontouchstart="this.style.transform='scale(.88)'" ontouchend="this.style.transform=''">🎲</div>
+            </div>
+            <div id="login-custom-emoji-error" style="font-size:11px;color:var(--danger,#c94f4f);min-height:12px;margin-top:4px"></div>
+          </div>
+          <div id="login-emoji-grid" style="display:none"></div>
+
+          <button class="btn btn-accent" id="wbtn-1" onclick="wizardNext()" disabled style="width:100%;margin-top:16px">Далее →</button>
+        </div>
+
+        <!-- ── ШАГ 2: Пароль ── -->
+        <div class="wstep" id="wstep-2">
+          <div class="wstep-icon">🔒</div>
+          <div class="wstep-title">Придумай пароль</div>
+          <div class="wstep-sub">Нужен для входа с нового устройства</div>
+
+          <input class="inp" id="login-password" type="password" placeholder="Пароль" maxlength="64"
+            style="margin-bottom:6px;font-size:16px"
+            oninput="wizardValidateStep2()"
+            onkeydown="if(event.key==='Enter')wizardFinish()">
+          <input class="inp" id="login-password2" type="password" placeholder="Повтори пароль" maxlength="64"
+            style="margin-bottom:6px;font-size:16px"
+            oninput="wizardValidateStep2()"
+            onkeydown="if(event.key==='Enter')wizardFinish()">
+          <div id="wstep2-hint" style="font-size:11px;color:var(--muted);min-height:14px;padding-left:4px;margin-bottom:20px">Минимум 4 символа</div>
+
+          <button class="btn btn-accent" id="wbtn-2" onclick="wizardFinish()" disabled style="width:100%">Создать аккаунт 🎉</button>
+          <div id="login-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:10px;min-height:16px"></div>
+        </div>
+
+      </div><!-- /wizard-track -->
+    </div><!-- /login-view-reg -->
+
+    <!-- ── ВИД: ВХОД ── -->
+    <div id="login-view-auth" style="position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none">
+      <div style="display:flex;flex-direction:column;align-items:center;padding:32px 18px 0">
+        <div style="font-size:64px;margin-bottom:16px">👤</div>
+        <div style="font-size:20px;font-weight:800;color:var(--text);margin-bottom:6px">С возвращением!</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:28px;text-align:center">Введи свои данные для входа</div>
+
+        <div style="width:100%;max-width:340px">
+          <div class="section-label">Юзернейм</div>
+          <div style="position:relative;margin-bottom:16px">
+            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:700">@</span>
+            <input class="inp" id="login-auth-username" placeholder="твой_ник" maxlength="24"
+              style="padding-left:28px" oninput="loginAuthUsernameInput(this.value)"
+              onkeydown="if(event.key==='Enter')document.getElementById('login-auth-password').focus()">
+          </div>
+
+          <div class="section-label">Пароль</div>
+          <input class="inp" id="login-auth-password" type="password" placeholder="Пароль" maxlength="64"
+            style="margin-bottom:20px"
+            onkeydown="if(event.key==='Enter')loginDoAuth()">
+
+          <button class="btn btn-accent" onclick="loginDoAuth()" style="width:100%">Войти</button>
+          <div id="login-auth-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:10px;min-height:16px"></div>
+        </div>
+      </div>
+    </div><!-- /login-view-auth -->
+
+  </div><!-- /login-slider-wrap -->
 </div>
 
 <!-- ЭКРАН ОНЛАЙН-ПОЛЬЗОВАТЕЛЕЙ -->
@@ -3617,6 +3798,64 @@ html.notch-off #s-login {
 </div>
 
 <!-- PHOTO ZOOM OVERLAY -->
+<!-- ══ ПОМОДОРО оверлей ══ -->
+<div id="pomodoro-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9200;align-items:center;justify-content:center;padding:24px">
+  <div style="background:var(--surface2);border-radius:24px;padding:28px 24px;width:100%;max-width:320px;text-align:center;border:1.5px solid var(--surface3)">
+    <div id="pomo-mode-label" style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--accent);margin-bottom:12px">ФОКУС 🍅</div>
+    <div style="position:relative;width:140px;height:140px;margin:0 auto 20px">
+      <svg viewBox="0 0 140 140" width="140" height="140" style="position:absolute;inset:0">
+        <circle cx="70" cy="70" r="60" fill="none" stroke="var(--surface3)" stroke-width="10"/>
+        <circle id="pomo-ov-ring" cx="70" cy="70" r="60" fill="none" stroke="var(--accent)" stroke-width="10"
+          stroke-linecap="round" stroke-dasharray="376.99" stroke-dashoffset="0"
+          style="transform-origin:center;transform:rotate(-90deg);transition:stroke-dashoffset .8s linear"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <div id="pomo-ov-time" style="font-size:36px;font-weight:800;color:var(--text);letter-spacing:-.02em">25:00</div>
+        <div id="pomo-ov-emoji" style="font-size:22px">🍅</div>
+      </div>
+    </div>
+    <div id="pomo-ov-session" style="font-size:12px;color:var(--muted);margin-bottom:18px"></div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button id="pomo-ov-main-btn" onclick="pomodoroToggle()" class="btn btn-accent" style="flex:1">⏸ Пауза</button>
+      <button onclick="pomodoroReset()" class="btn btn-surface" style="flex:1">↺ Сброс</button>
+    </div>
+    <button onclick="document.getElementById('pomodoro-overlay').style.display='none'"
+      style="margin-top:14px;background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;font-family:inherit">Свернуть</button>
+  </div>
+</div>
+
+<!-- ══ ЖАЛОБНАЯ КНИГА оверлей ══ -->
+<div id="complaint-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9100;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--surface2);border-radius:20px;padding:22px;width:100%;max-width:340px;border:1.5px solid var(--surface3)">
+    <div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);margin-bottom:10px">😤 ЖАЛОБНАЯ КНИГА</div>
+    <div id="complaint-text" style="font-size:15px;line-height:1.55;color:var(--text);margin-bottom:18px;min-height:60px"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="funShowComplaint()" class="btn btn-surface" style="flex:1">🔄 Ещё</button>
+      <button onclick="funCopyComplaint()" class="btn btn-accent" style="flex:1">📋 Скопировать</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ РАНДОМАЙЗЕР ГРУППЫ ══ -->
+<div id="randomizer-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9100;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--surface2);border-radius:20px;padding:22px;width:100%;max-width:340px;border:1.5px solid var(--surface3)">
+    <div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);margin-bottom:12px">🎲 КТО ОТВЕЧАЕТ?</div>
+    <div id="rand-names-wrap" style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Участники (по одному на строку):</div>
+      <textarea id="rand-names-input" rows="5" placeholder="Иван&#10;Мария&#10;Дмитрий&#10;..."
+        style="width:100%;box-sizing:border-box;background:var(--surface3);border:none;border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;resize:none"></textarea>
+    </div>
+    <div id="rand-result" style="display:none;text-align:center;padding:16px 0">
+      <div style="font-size:48px" id="rand-result-emoji">🎯</div>
+      <div id="rand-result-name" style="font-size:22px;font-weight:800;color:var(--accent);margin-top:8px"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button onclick="funGroupRandomizerSpin()" class="btn btn-accent" style="flex:1">🎲 Выбрать!</button>
+      <button onclick="document.getElementById('randomizer-overlay').style.display='none'" class="btn btn-surface">✕</button>
+    </div>
+  </div>
+</div>
+
 <div id="photo-zoom-overlay">
   <!-- Хедер -->
   <div id="pz-header">
