@@ -4688,7 +4688,9 @@ function getNextBreakInfo(){
   const nowMin=now.getHours()*60+now.getMinutes();
   const dow=now.getDay(); // 0=вс,6=сб
   const bell=dow===1?BELL_MON:dow===6?BELL_SAT:BELL_TUE;
-  for(const[roman,times] of Object.entries(bell)){
+  const entries=Object.entries(bell);
+  for(let i=0;i<entries.length;i++){
+    const[roman,times]=entries[i];
     if(!times[0])continue;
     const[eh,em]=(times[3]||times[1]).split(':').map(Number);
     const endMin=eh*60+em;
@@ -4713,33 +4715,66 @@ function getNextBreakInfo(){
             lessonLeft=endMin-nowMin; // идёт урок 2
           }
         }
-        return{type:'pair',roman,left,lessonLeft,end:times[3]||times[1]};
+        const pct=Math.min(100,Math.round((nowMin-startMin)/(endMin-startMin)*100));
+        return{type:'pair',roman,left,lessonLeft,end:times[3]||times[1],pct};
       }
       if(nowMin<startMin){
         const toStart=startMin-nowMin;
-        return{type:'break',roman,toStart,start:times[0]};
+        // Вычисляем прогресс перерыва (сколько перерыва прошло)
+        let pct=null;
+        if(i>0){
+          const prev=entries[i-1][1];
+          const[pe,pm]=(prev[3]||prev[1]).split(':').map(Number);
+          const prevEndMin=pe*60+pm;
+          const breakTotal=startMin-prevEndMin;
+          if(breakTotal>0) pct=Math.min(100,Math.round((nowMin-prevEndMin)/breakTotal*100));
+        }
+        return{type:'break',roman,toStart,start:times[0],pct};
       }
     }
   }
   return null;
 }
 
-// 📌 Показываем инфо о текущей/следующей паре под hero-card
+// 📌 Показываем инфо о текущей/следующей паре под hero-card — два прогресс-бара
 function updateHeroWidget(){
   let el=document.getElementById('hero-widget');
   if(!el){
     el=document.createElement('div');
     el.id='hero-widget';
-    el.style.cssText='margin-top:12px;font-size:12px;color:var(--muted);text-align:center;font-family:var(--app-font,Geologica),sans-serif;letter-spacing:.01em;min-height:18px';
+    el.style.cssText='margin-top:14px;width:100%;font-family:var(--app-font,Geologica),sans-serif';
     const hero=document.querySelector('.home-hero');
     if(hero)hero.appendChild(el);
   }
   const info=getNextBreakInfo();
-  if(!info){el.textContent='';return;}
+  if(!info){el.innerHTML='';return;}
+
   if(info.type==='pair'){
-    el.innerHTML=`⏱ Пара ${info.roman} заканчивается в <b style="color:var(--accent)">${info.end}</b> · осталось ${info.left} мин`;
+    // Бар 1: прогресс текущей пары
+    const pct=info.pct??0;
+    el.innerHTML=`
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--muted)">⏱ Пара ${info.roman} · до ${info.end}</span>
+          <span style="font-size:11px;font-weight:700;color:var(--accent)">${info.left} мин</span>
+        </div>
+        <div style="height:5px;background:var(--surface3);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px;transition:width .6s ease"></div>
+        </div>
+      </div>`;
   } else {
-    el.innerHTML=`☕ До пары ${info.roman} осталось <b style="color:var(--accent)">${info.toStart} мин</b> (начало в ${info.start})`;
+    // Бар 1: прогресс перерыва (сколько прошло)
+    const breakPct=info.pct??0;
+    el.innerHTML=`
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--muted)">☕ До пары ${info.roman} · начало в ${info.start}</span>
+          <span style="font-size:11px;font-weight:700;color:var(--accent)">${info.toStart} мин</span>
+        </div>
+        <div style="height:5px;background:var(--surface3);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${breakPct}%;background:var(--accent);border-radius:3px;transition:width .6s ease"></div>
+        </div>
+      </div>`;
   }
 }
 // Обновляем каждую минуту
@@ -5885,22 +5920,9 @@ function getAccent() {
 function updateHomeWidgets() {
   const el = document.getElementById('home-status-line');
   if (!el) return;
-  const info = getNextBreakInfo();
   const hwActive = typeof hwLoad === 'function' ? hwLoad().filter(h => !h.done).length : 0;
-  let parts = [];
-  if (info) {
-    if (info.type === 'pair') {
-      // Показываем время до конца УРОКА (не пары)
-      // getNextBreakInfo возвращает .lessonLeft — если есть, используем его
-      const mins = info.lessonLeft !== undefined ? info.lessonLeft : info.left;
-      parts.push(`урок ${info.roman} · ${mins} мин`);
-    } else {
-      parts.push(`до пары ${info.roman} · ${info.toStart} мин`);
-    }
-  }
-  if (hwActive > 0) parts.push(`${hwActive} задан${hwActive === 1 ? 'ие' : hwActive < 5 ? 'ия' : 'ий'} ДЗ`);
-  if (parts.length) {
-    el.textContent = parts.join('  ·  ');
+  if (hwActive > 0) {
+    el.textContent = `${hwActive} задан${hwActive === 1 ? 'ие' : hwActive < 5 ? 'ия' : 'ий'} ДЗ`;
     el.style.display = '';
   } else {
     el.style.display = 'none';
