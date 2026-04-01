@@ -3143,49 +3143,6 @@ html.notch-off #s-login {
     <!-- Одна чистая строка статуса -->
     <div id="home-status-line" style="display:none;text-align:center;margin:-4px 0 14px;font-size:12px;color:var(--muted)"></div>
 
-    <!-- ── Pomodoro виджет ─────────────────────────────────────── -->
-    <div id="pomodoro-widget" onclick="pomodoroToggle()" title="Таймер Помодоро">
-      <div id="pomodoro-ring">
-        <svg viewBox="0 0 52 52" width="52" height="52">
-          <circle id="pomodoro-ring-track" cx="26" cy="26" r="22" fill="none" stroke-width="4"/>
-          <circle id="pomodoro-ring-fill"  cx="26" cy="26" r="22" fill="none" stroke-width="4"
-            stroke-dasharray="138.2" stroke-dashoffset="0"/>
-        </svg>
-        <div id="pomodoro-ring-label">🍅</div>
-      </div>
-      <div style="flex:1;min-width:0">
-        <div id="pomodoro-title" style="font-size:14px;font-weight:700;color:var(--text)">Помодоро</div>
-        <div id="pomodoro-sub" style="font-size:12px;color:var(--muted);margin-top:2px">25 мин фокуса · нажми чтобы начать</div>
-      </div>
-      <div id="pomodoro-btn-icon" style="font-size:22px">▶️</div>
-    </div>
-
-    <!-- ── Счётчик до пятницы + прогресс недели ───────────────── -->
-    <div id="home-week-bar" style="display:flex;gap:8px;margin-bottom:12px">
-      <div style="flex:1;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:10px 14px">
-        <div id="home-friday-count" style="font-size:18px;font-weight:800;color:var(--accent)">—</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:1px">до пятницы</div>
-      </div>
-      <div style="flex:2;background:var(--surface2);border:1.5px solid var(--surface3);border-radius:14px;padding:10px 14px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <div style="font-size:11px;font-weight:700;color:var(--muted)">НЕДЕЛЯ</div>
-          <div id="home-week-pct" style="font-size:11px;font-weight:700;color:var(--accent)">0%</div>
-        </div>
-        <div style="height:5px;background:var(--surface3);border-radius:3px;overflow:hidden">
-          <div id="home-week-fill" style="height:100%;background:var(--accent);border-radius:3px;transition:width .6s ease;width:0%"></div>
-        </div>
-        <div id="home-week-label" style="font-size:10px;color:var(--muted);margin-top:4px"></div>
-      </div>
-    </div>
-
-    <!-- ── Фан-кнопки ─────────────────────────────────────────── -->
-    <div class="fun-bar" id="home-fun-bar">
-      <button class="fun-chip" onclick="funShowExcuse()">📝 Отмазка</button>
-      <button class="fun-chip" onclick="funShowComplaint()">😤 Пожаловаться</button>
-      <button class="fun-chip" onclick="funGroupRandomizer()">🎲 Кто отвечает?</button>
-      <button class="fun-chip" onclick="funHaiku()">🌸 Хайку</button>
-    </div>
-
     <div class="mode-switch-wrap">
       <div class="mode-toggle-pill student" id="mode-toggle-pill">
         <button class="mode-pill-btn active" id="mode-btn-student" onclick="setMode('student')">Студенты</button>
