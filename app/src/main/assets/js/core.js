@@ -835,6 +835,32 @@ const S={
   customBgBlurEnabled:true // вкл/выкл blur для обычного режима (с custom bg, без glass)
 };
 const FILE_CACHE={};
+
+// ══ PERSISTENT FILE CACHE (IndexedDB) ══
+const IDB_NAME='ScheduleFileCache';
+const IDB_STORE='files';
+let _idb=null;
+function idbOpen(){
+  if(_idb)return Promise.resolve(_idb);
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(IDB_NAME,1);
+    req.onupgradeneeded=e=>{e.target.result.createObjectStore(IDB_STORE);};
+    req.onsuccess=e=>{_idb=e.target.result;res(_idb);};
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+async function idbGet(key){
+  try{const db=await idbOpen();return new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const req=tx.objectStore(IDB_STORE).get(key);req.onsuccess=()=>res(req.result||null);req.onerror=()=>res(null);});}catch(e){return null;}
+}
+async function idbSet(key,val){
+  try{const db=await idbOpen();return new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(val,key);tx.oncomplete=()=>res();tx.onerror=()=>res();});}catch(e){}
+}
+async function idbDel(key){
+  try{const db=await idbOpen();return new Promise(res=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).delete(key);tx.oncomplete=()=>res();tx.onerror=()=>res();});}catch(e){}
+}
+async function idbClear(){
+  try{const db=await idbOpen();return new Promise(res=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).clear();tx.oncomplete=()=>res();tx.onerror=()=>res();});}catch(e){}
+}
 let allGroups=[];
 
 const _mem={};
@@ -871,6 +897,11 @@ function loadLocal(){
     S.customProxy=d.customProxy||'';
     S.proxyProvider=d.proxyProvider||'corsproxy';
     S.appIcon=d.appIcon||'orange';
+    // Загружаем кэшированный список файлов для офлайн-режима
+    try{
+      const cf=stor.get('sched_files_cache');
+      if(cf){const parsed=JSON.parse(cf);if(Array.isArray(parsed)&&parsed.length>0)S.files=parsed;}
+    }catch(e){}
     const inp=document.getElementById('url-input');
     if(inp)inp.value=S.url;
     const pi=document.getElementById('proxy-input');
@@ -888,6 +919,10 @@ function saveLocal(){
     customBgBlurEnabled:S.customBgBlurEnabled,
     hasBg: !!S.customBg
   }));
+  // Кэш списка файлов — для офлайн-режима
+  try{
+    if(S.files&&S.files.length>0) stor.set('sched_files_cache',JSON.stringify(S.files.map(f=>({name:f.name,path:f.path,size:f.size,resourceId:f.resourceId}))));
+  }catch(e){}
   // Фон хранится отдельно (может быть >1МБ base64)
   try {
     if(S.customBg) stor.set('sched_bg', S.customBg);
@@ -1044,8 +1079,17 @@ async function yadGet(path, params) {
   const qs = new URLSearchParams(params).toString();
   const raw = `https://cloud-api.yandex.net${path}?${qs}`;
 
+  // Desktop (Electron): webSecurity=false — прямой fetch без CORS, без прокси
+  if (window.__desktopMode) {
+    const r = await fetch(raw, {signal: AbortSignal.timeout(15000)});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const el = document.getElementById('proxy-status');
+    if (el) el.textContent = '✅ Прямое подключение';
+    return r.json();
+  }
+
   if (window.Android && window.Android.nativeFetch) {
-    // Нативный путь — без CORS
+    // Нативный путь — без CORS (Android)
     const data = await nativeGet(raw);
     const el = document.getElementById('proxy-status');
     if (el) el.textContent = '✅ Прямое подключение';
@@ -1064,6 +1108,13 @@ async function yadGet(path, params) {
 }
 
 async function yadDownload(rawUrl, filename) {
+  // Desktop (Electron): webSecurity=false — прямой fetch
+  if (window.__desktopMode) {
+    const r = await fetch(rawUrl, {signal: AbortSignal.timeout(30000)});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.arrayBuffer();
+  }
+
   if (window.Android && window.Android.nativeDownloadBase64) {
     // Нативный путь — без CORS, надёжно
     return await nativeDownloadBuf(rawUrl);
@@ -2660,20 +2711,35 @@ async function loadFiles(){
   appLog('info','loadFiles: start, url='+S.url?.slice(0,40));
   if(!S.url){showHomeState('no-url');return;}
   hideHomeHints();
-  setStatus('home-status','Загружаю файлы...');setBar('home-bar',30);
+
+  // Если есть кэшированный список — показываем сразу, не ждём сеть
+  const hasCached=S.files&&S.files.length>0;
+  if(hasCached){
+    renderFileList(true);
+    setStatus('home-status','📦 Из кэша, обновляю...');
+  }else{
+    setStatus('home-status','Загружаю файлы...');setBar('home-bar',30);
+  }
+
   try{
     const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
     S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&/\.(doc|docx)$/i.test(i.name))
       .map(i=>({name:i.name,path:i.path||('/'+i.name),size:i.size||0,resourceId:i.resource_id||''}));
     setBar('home-bar',100);setStatus('home-status',`Найдено: ${S.files.length} файлов`);
     setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
+    saveLocal(); // сохраняем обновлённый список файлов в кэш
     appLog('ok','loadFiles: loaded '+S.files.length+' files');
-    renderFileList();
+    renderFileList(false);
   }catch(e){
     appLog('err','loadFiles error: '+e.message);
-    setBar('home-bar',0);
-    setStatus('home-status','');
-    showHomeState('error',e.message);
+    setBar('home-bar',0);setStatus('home-status','');
+    if(hasCached){
+      // Есть кэш — не ломаем UI, просто показываем офлайн-бейдж
+      renderFileList(true);
+      toast('📡 Нет интернета — расписание из кэша');
+    }else{
+      showHomeState('error',e.message);
+    }
   }
 }
 function hideHomeHints(){
@@ -2689,15 +2755,21 @@ function showHomeState(type,msg){
     if(el){const em=el.querySelector('.error-msg');if(em)em.textContent=msg||'Ошибка подключения';el.classList.remove('hidden');}
   }
 }
-function renderFileList(){
+function renderFileList(isOffline=false){
   const list=document.getElementById('file-list');list.innerHTML='';
+  if(isOffline){
+    const badge=document.createElement('div');
+    badge.style.cssText='text-align:center;padding:6px 12px;margin-bottom:8px;background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:10px;font-size:12px;color:var(--muted)';
+    badge.textContent='📦 Офлайн — файлы из кэша';
+    list.appendChild(badge);
+  }
   S.files.forEach(f=>{
     const item=document.createElement('div');
     item.className='list-item'+(S.selectedFile?.name===f.name?' selected':'');
     item.innerHTML=`<span class="item-name">${f.name}</span>`;
     item.onclick=()=>{
       S.selectedFile=f;
-      renderFileList();
+      renderFileList(isOffline);
       // Сразу переходим к группам/педагогам без подтверждения
       goToGroups();
     };
@@ -2710,11 +2782,38 @@ async function getFileBuf(){
   if(S.selectedFile&&S.selectedFile._localBuf){return S.selectedFile._localBuf;}
   const key=S.selectedFile.path||S.selectedFile.name;
   if(FILE_CACHE[key])return FILE_CACHE[key];
+
+  // Проверяем персистентный кэш в IndexedDB
+  const cached=await idbGet('file:'+key);
+  if(cached){
+    appLog('info','getFileBuf: из IndexedDB: '+key);
+    FILE_CACHE[key]=cached;
+    // Фоновое обновление если есть интернет
+    _refreshFileBufInBackground(key,S.selectedFile);
+    return cached;
+  }
+
+  // Загружаем из сети
   const filePath=S.selectedFile.path||('/'+S.selectedFile.name);
   const dl=await yadGet('/v1/disk/public/resources/download',{public_key:S.url,path:filePath});
   if(!dl||!dl.href) throw new Error('Яндекс не вернул ссылку на файл. Путь: '+filePath);
   const buf=await yadDownload(dl.href, S.selectedFile.name);
-  FILE_CACHE[key]=buf;return buf;
+  FILE_CACHE[key]=buf;
+  idbSet('file:'+key,buf).catch(()=>{}); // сохраняем в фоне
+  return buf;
+}
+
+async function _refreshFileBufInBackground(key,fileRef){
+  try{
+    if(!navigator.onLine)return;
+    const filePath=fileRef.path||('/'+key);
+    const dl=await yadGet('/v1/disk/public/resources/download',{public_key:S.url,path:filePath});
+    if(!dl||!dl.href)return;
+    const buf=await yadDownload(dl.href,fileRef.name);
+    FILE_CACHE[key]=buf;
+    await idbSet('file:'+key,buf);
+    appLog('ok','Файл обновлён в фоне: '+key);
+  }catch(e){ /* тихо */ }
 }
 
 // ══ ГРУППЫ ══
@@ -3445,7 +3544,7 @@ function cmdExec(raw){
     case 'optimize': {
       cmdPrint('warn','🚀 ЯДЕРНАЯ ОПТИМИЗАЦИЯ ЗАПУЩЕНА...');
       let freed=0;
-      setTimeout(()=>{const cacheCount=Object.keys(FILE_CACHE).length;Object.keys(FILE_CACHE).forEach(k=>delete FILE_CACHE[k]);freed+=cacheCount;cmdPrint('ok',`  ✓ Файловый кэш очищен (${cacheCount} записей)`);},300);
+      setTimeout(()=>{const cacheCount=Object.keys(FILE_CACHE).length;Object.keys(FILE_CACHE).forEach(k=>delete FILE_CACHE[k]);freed+=cacheCount;idbClear().then(()=>cmdPrint('ok',`  ✓ Файловый кэш очищен (${cacheCount} записей, IndexedDB тоже)`)).catch(()=>cmdPrint('ok',`  ✓ Файловый кэш очищен (${cacheCount} записей)`));},300);
       setTimeout(()=>{cmdPrint('ok','  ✓ Неактивные canvas-буферы очищены');},700);
       setTimeout(()=>{const uwuStyle=document.getElementById('uwu-style');if(uwuStyle){uwuStyle.remove();freed++;}cmdPrint('ok','  ✓ Временные стили сброшены');},1100);
       setTimeout(()=>{cmdPrint('ok',`🏁 Готово. Очищено ~${freed} объектов.`);},1600);
@@ -4605,7 +4704,9 @@ function getNextBreakInfo(){
   const nowMin=now.getHours()*60+now.getMinutes();
   const dow=now.getDay(); // 0=вс,6=сб
   const bell=dow===1?BELL_MON:dow===6?BELL_SAT:BELL_TUE;
-  for(const[roman,times] of Object.entries(bell)){
+  const entries=Object.entries(bell);
+  for(let i=0;i<entries.length;i++){
+    const[roman,times]=entries[i];
     if(!times[0])continue;
     const[eh,em]=(times[3]||times[1]).split(':').map(Number);
     const endMin=eh*60+em;
@@ -4630,33 +4731,66 @@ function getNextBreakInfo(){
             lessonLeft=endMin-nowMin; // идёт урок 2
           }
         }
-        return{type:'pair',roman,left,lessonLeft,end:times[3]||times[1]};
+        const pct=Math.min(100,Math.round((nowMin-startMin)/(endMin-startMin)*100));
+        return{type:'pair',roman,left,lessonLeft,end:times[3]||times[1],pct};
       }
       if(nowMin<startMin){
         const toStart=startMin-nowMin;
-        return{type:'break',roman,toStart,start:times[0]};
+        // Вычисляем прогресс перерыва (сколько перерыва прошло)
+        let pct=null;
+        if(i>0){
+          const prev=entries[i-1][1];
+          const[pe,pm]=(prev[3]||prev[1]).split(':').map(Number);
+          const prevEndMin=pe*60+pm;
+          const breakTotal=startMin-prevEndMin;
+          if(breakTotal>0) pct=Math.min(100,Math.round((nowMin-prevEndMin)/breakTotal*100));
+        }
+        return{type:'break',roman,toStart,start:times[0],pct};
       }
     }
   }
   return null;
 }
 
-// 📌 Показываем инфо о текущей/следующей паре под hero-card
+// 📌 Показываем инфо о текущей/следующей паре под hero-card — два прогресс-бара
 function updateHeroWidget(){
   let el=document.getElementById('hero-widget');
   if(!el){
     el=document.createElement('div');
     el.id='hero-widget';
-    el.style.cssText='margin-top:12px;font-size:12px;color:var(--muted);text-align:center;font-family:var(--app-font,Geologica),sans-serif;letter-spacing:.01em;min-height:18px';
+    el.style.cssText='margin-top:14px;width:100%;font-family:var(--app-font,Geologica),sans-serif';
     const hero=document.querySelector('.home-hero');
     if(hero)hero.appendChild(el);
   }
   const info=getNextBreakInfo();
-  if(!info){el.textContent='';return;}
+  if(!info){el.innerHTML='';return;}
+
   if(info.type==='pair'){
-    el.innerHTML=`⏱ Пара ${info.roman} заканчивается в <b style="color:var(--accent)">${info.end}</b> · осталось ${info.left} мин`;
+    // Бар 1: прогресс текущей пары
+    const pct=info.pct??0;
+    el.innerHTML=`
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--muted)">⏱ Пара ${info.roman} · до ${info.end}</span>
+          <span style="font-size:11px;font-weight:700;color:var(--accent)">${info.left} мин</span>
+        </div>
+        <div style="height:5px;background:var(--surface3);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px;transition:width .6s ease"></div>
+        </div>
+      </div>`;
   } else {
-    el.innerHTML=`☕ До пары ${info.roman} осталось <b style="color:var(--accent)">${info.toStart} мин</b> (начало в ${info.start})`;
+    // Бар 1: прогресс перерыва (сколько прошло)
+    const breakPct=info.pct??0;
+    el.innerHTML=`
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--muted)">☕ До пары ${info.roman} · начало в ${info.start}</span>
+          <span style="font-size:11px;font-weight:700;color:var(--accent)">${info.toStart} мин</span>
+        </div>
+        <div style="height:5px;background:var(--surface3);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${breakPct}%;background:var(--accent);border-radius:3px;transition:width .6s ease"></div>
+        </div>
+      </div>`;
   }
 }
 // Обновляем каждую минуту
@@ -5290,10 +5424,10 @@ showGreeting();
 
 // ── Автопроверка при запуске отключена — проверка вручную через кнопку в настройках ──
 
-// ── Автопроверка горячего патча при каждом запуске приложения ──
-// Запускается сразу после загрузки страницы, тихо (без UI)
+// ── Автопроверка обновлений при каждом запуске ──
+// Показывает iOS-уведомление сверху если есть новый APK (silent=true → без тоста при отсутствии)
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => checkForUpdates(true), 1500);
+  setTimeout(() => checkForUpdates(true), 3000);
   // Watchdog heartbeat — сообщаем Java что JS загрузился и работает
   setTimeout(() => {
     if (window.Android?.heartbeat) {
@@ -5304,54 +5438,17 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════
-// 🔄 ЕДИНАЯ ПРОВЕРКА ОБНОВЛЕНИЙ
+// 🔄 ПРОВЕРКА ОБНОВЛЕНИЙ
 // ══════════════════════════════════════════════════════════════════════
 
-// Расширения/пути которые нельзя обновить горячим патчем — нужен APK
-const _HOTPATCH_BLOCKED_RE = /\.(java|kt|so|aar|gradle|class|dex|xml)$/i;
-const _HOTPATCH_BLOCKED_PATHS = ['java/', 'res/', 'src/', 'app/src/'];
-const _HOTPATCH_ALLOWED_XML  = /^(index|[^/]+\.(html|svg))$/i; // xml в assets — ок
-
 /**
- * Можно ли этот файл из манифеста обновить горячим патчем?
- * Правило: всё что в assets (js/, html, css) — можно.
- * Java, Manifest, res/, нативные библиотеки — только APK.
- */
-function _canHotPatch(path) {
-  if (!path) return false;
-  const lower = path.toLowerCase();
-  // Запрещённые пути (Java, ресурсы Android)
-  if (_HOTPATCH_BLOCKED_PATHS.some(p => lower.startsWith(p))) return false;
-  // AndroidManifest — только APK
-  if (lower.includes('androidmanifest')) return false;
-  // .xml — разрешаем только если это HTML-like файл в корне assets
-  if (lower.endsWith('.xml')) {
-    const basename = lower.split('/').pop();
-    return _HOTPATCH_ALLOWED_XML.test(basename);
-  }
-  // Все остальные запрещённые расширения
-  if (_HOTPATCH_BLOCKED_RE.test(lower)) return false;
-  return true;
-}
-
-/**
- * Единая точка проверки обновлений.
- * Один запрос к GitHub → читает patch-manifest.json из релиза →
- * решает: горячий патч или полный APK.
- *
+ * Проверяет GitHub на наличие нового APK релиза.
+ * При silent=false — показывает iOS-уведомление если есть обновление.
  * @param {boolean} silent  true = без тоста если всё актуально
  */
 async function checkForUpdates(silent) {
-  // Обновляем кнопки в настройках
-  const btnOta = document.querySelector('[onclick="checkOtaUpdate()"]');
-  const btnHot = document.querySelector('[onclick="checkHotPatch(false)"]');
-  if (!silent) {
-    if (btnOta) { btnOta.disabled = true; btnOta.textContent = '⏳'; }
-    if (btnHot) { btnHot.disabled = true; btnHot.textContent = '⏳'; }
-  }
-
   try {
-    // ── Вспомогательные: fetch через GitHub зеркала ───────────────────────
+    // Fetch через GitHub зеркала
     async function ghApiFetch(path) {
       const errs = [];
       for (const base of GH_API_MIRRORS) {
@@ -5369,7 +5466,7 @@ async function checkForUpdates(silent) {
       throw new Error('GitHub недоступен (' + errs[0] + ')');
     }
 
-    // ── 1. Последний релиз ────────────────────────────────────────────────
+    // Последний релиз
     let release;
     try { release = await ghApiFetch('/latest'); }
     catch(e) {
@@ -5391,121 +5488,30 @@ async function checkForUpdates(silent) {
       return;
     }
 
-    // ── 2. Ищем patch-manifest.json среди assets релиза ──────────────────
-    const manifestAsset = (release.assets || [])
-      .find(a => a.name === 'patch-manifest.json');
-
-    // ── 3. Нет манифеста → только APK (старый формат релиза) ─────────────
-    if (!manifestAsset) {
-      const apkAsset = (release.assets || []).find(a => a.name?.endsWith('.apk'));
-      if (apkAsset) {
-        otaOpen(latestVer, apkAsset.browser_download_url, release.body || '');
-      } else if (!silent) {
-        toast('🆕 v' + latestVer + ' — APK не прикреплён к релизу');
-      }
+    const apkAsset = (release.assets || []).find(a => a.name?.endsWith('.apk'));
+    if (!apkAsset) {
+      if (!silent) toast('🆕 v' + latestVer + ' — APK не прикреплён к релизу');
       return;
     }
 
-    // ── 4. Скачиваем манифест и проверяем файлы ───────────────────────────
-    const manifestText = await _hotFetchText(manifestAsset.browser_download_url);
-    const manifest = JSON.parse(manifestText);
-    // Манифест: { version, requiresApk?: bool, files: { "js/social.js": { sha, url } } }
-
-    // ── 5. Явный флаг requiresApk ─────────────────────────────────────────
-    if (manifest.requiresApk === true) {
-      const apkAsset = (release.assets || []).find(a => a.name?.endsWith('.apk'));
-      _showUpdateDecisionDialog(latestVer, release.body || '',
-        '⚠️ Это обновление изменяет системные компоненты приложения и требует переустановки.',
-        apkAsset?.browser_download_url || null);
-      return;
+    // Показываем iOS-уведомление сверху (как обычные сообщения)
+    if (typeof showIosNotif === 'function') {
+      showIosNotif({
+        avatar: '🆕',
+        avatarType: 'emoji',
+        color: 'var(--accent)',
+        sender: 'Обновление v' + latestVer,
+        text: 'Доступна новая версия — нажми чтобы установить',
+        onTap: () => otaOpen(latestVer, apkAsset.browser_download_url, release.body || '')
+      });
+    } else {
+      otaOpen(latestVer, apkAsset.browser_download_url, release.body || '');
     }
-
-    // ── 6. Смотрим список файлов — есть ли непатчабельные ─────────────────
-    const allFiles  = Object.keys(manifest.files || {});
-    const blockedFiles = allFiles.filter(f => !_canHotPatch(f));
-
-    if (blockedFiles.length > 0) {
-      // Есть Java/Manifest/нативные — нужен APK
-      const apkAsset = (release.assets || []).find(a => a.name?.endsWith('.apk'));
-      const reason = 'Изменены системные файлы:\n' +
-        blockedFiles.slice(0, 5).map(f => '• ' + f).join('\n') +
-        (blockedFiles.length > 5 ? '\n• …ещё ' + (blockedFiles.length - 5) : '');
-      _showUpdateDecisionDialog(latestVer, release.body || '', reason,
-        apkAsset?.browser_download_url || null);
-      return;
-    }
-
-    // ── 7. Все файлы — assets → горячий патч ─────────────────────────────
-    // Проверяем: а есть ли реально что обновлять (сравниваем sha)
-    const installed = _hotPatchLoad();
-    const installedFiles = installed?.files || {};
-    const toUpdate = allFiles.filter(f =>
-      installedFiles[f] !== (manifest.files[f]?.sha || manifest.files[f])
-    );
-
-    if (toUpdate.length === 0) {
-      if (!silent) toast('✅ Все файлы актуальны (v' + latestVer + ')');
-      return;
-    }
-
-    // Горячий патч: при silent=true — обновляем без диалога и уведомлений
-    await _applyHotPatch(manifest, toUpdate, latestVer, silent);
 
   } catch(e) {
     if (!silent) toast('❌ ' + e.message.slice(0, 80));
-  } finally {
-    if (!silent) {
-      if (btnOta) { btnOta.disabled = false; btnOta.textContent = '🔄 Проверить'; }
-      if (btnHot) { btnHot.disabled = false; btnHot.textContent = '🔥 Горячий патч (только файлы)'; }
-    }
   }
 }
-
-/**
- * Диалог когда нужен полный APK — объясняет причину и предлагает скачать.
- */
-function _showUpdateDecisionDialog(version, notes, reason, apkUrl) {
-  const d = document.createElement('div');
-  d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);' +
-    'display:flex;align-items:flex-end;justify-content:center';
-  d.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px
-      calc(24px + var(--safe-bot));max-width:480px;width:100%;
-      animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
-      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="font-size:22px;text-align:center;margin-bottom:8px">⬆️</div>
-      <div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:6px">
-        Доступно обновление v${escHtml(version)}
-      </div>
-      <div style="font-size:12px;color:var(--danger,#e05555);background:rgba(224,85,85,.1);
-        border-radius:10px;padding:10px 12px;margin:12px 0;white-space:pre-line;line-height:1.5">
-        ${escHtml(reason)}
-      </div>
-      ${notes.trim() ? `<div style="font-size:13px;color:var(--muted);max-height:80px;
-        overflow-y:auto;margin-bottom:14px;line-height:1.5">${escHtml(notes.trim())}</div>` : ''}
-      <div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:16px">
-        Горячий патч невозможен — требуется переустановка APK
-      </div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        ${apkUrl
-          ? `<button onclick="otaOpen('${escHtml(version)}','${escHtml(apkUrl)}','');this.closest('[style*=fixed]').remove()"
-              style="padding:14px;background:var(--accent);border:none;border-radius:14px;
-                color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
-              ⬇ Скачать APK v${escHtml(version)}
-            </button>`
-          : `<div style="color:var(--muted);text-align:center;font-size:13px">APK не прикреплён к релизу</div>`
-        }
-        <button onclick="this.closest('[style*=fixed]').remove()"
-          style="padding:12px;background:var(--surface2);border:none;border-radius:14px;
-            color:var(--text);font-size:14px;cursor:pointer;font-family:inherit">
-          Позже
-        </button>
-      </div>
-    </div>`;
-  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
-  document.body.appendChild(d);
-}
-
 
 
 // ── Состояние OTA ──
@@ -5694,273 +5700,8 @@ function clearCacheAndReload() {
   setTimeout(() => location.reload(true), 200);
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// 🔥 HOT-PATCH: обновление только изменённых файлов без переустановки APK
-// ══════════════════════════════════════════════════════════════════════
-// Схема:
-//   1. При каждом релизе GitHub Actions публикует patch-manifest.json
-//      рядом с APK. В манифесте: { version, files: { "js/social.js": "sha256" } }
-//   2. Приложение скачивает манифест, сравнивает хэши с текущими
-//   3. Только изменённые файлы скачиваются и сохраняются через Android.hotPatchSaveFile
-//   4. После сохранения — reload страницы (без переустановки APK!)
-//   5. shouldInterceptRequest в Java отдаёт патченые файлы вместо assets
 
-const HOT_PATCH_MANIFEST = 'patch-manifest.json';
-const HOT_PATCH_INSTALLED_KEY = 'sapp_hotpatch_v1'; // { version, files: {path: sha} }
 
-function _hotPatchLoad() {
-  try { return JSON.parse(localStorage.getItem(HOT_PATCH_INSTALLED_KEY) || 'null'); } catch(e) { return null; }
-}
-function _hotPatchSave(d) { localStorage.setItem(HOT_PATCH_INSTALLED_KEY, JSON.stringify(d)); }
-
-// Скачать текстовый файл через нативный fetch (с зеркалами)
-async function _hotFetchText(url) {
-  const mirrors = [
-    url,
-    'https://ghproxy.com/' + url,
-    'https://mirror.ghproxy.com/' + url,
-    'https://ghfast.top/' + url,
-  ];
-  for (const u of mirrors) {
-    try {
-      if (window.Android?.nativeFetch) {
-        const res = JSON.parse(window.Android.nativeFetch(u));
-        if (res.ok) return res.body;
-      } else {
-        const r = await _fetchTimeout(fetch(u), 10000);
-        if (r.ok) return await r.text();
-      }
-    } catch(e) { /* пробуем следующее */ }
-  }
-  throw new Error('Не удалось скачать: ' + url);
-}
-
-// Основная функция проверки и применения горячего патча
-// Ручная проверка горячего патча (кнопка в настройках).
-async function checkHotPatch(silent) {
-  if (!window.Android?.hotPatchSaveFile) {
-    if (!silent) toast('ℹ️ Hot-patch не поддерживается этой версией');
-    return { updated: false };
-  }
-  const statusEl = document.getElementById('hot-patch-status');
-  const setStatus = t => { if (statusEl) statusEl.textContent = t; };
-  try {
-    setStatus('⏳ Проверяю обновления файлов...');
-    async function ghFetch(path) {
-      const errs = [];
-      for (const base of GH_API_MIRRORS) {
-        try {
-          if (window.Android?.nativeFetch) {
-            const res = JSON.parse(window.Android.nativeFetch(base + path));
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return JSON.parse(res.body);
-          }
-          const r = await _fetchTimeout(fetch(base + path), 7000);
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.json();
-        } catch(e) { errs.push(e.message); }
-      }
-      throw new Error('GitHub недоступен (' + errs[0] + ')');
-    }
-    let release;
-    try { release = await ghFetch('/latest'); }
-    catch(e) {
-      const all = await ghFetch('?per_page=1');
-      if (!Array.isArray(all) || !all.length) throw new Error('Нет релизов');
-      release = all[0];
-    }
-    const manifestAsset = (release.assets || []).find(a => a.name === HOT_PATCH_MANIFEST);
-    if (!manifestAsset) {
-      if (!silent) toast('ℹ️ Манифест патчей не найден в релизе');
-      setStatus(''); return { updated: false };
-    }
-    const manifest = JSON.parse(await _hotFetchText(manifestAsset.browser_download_url));
-    // Если в манифесте есть непатчабельные файлы — перенаправляем на OTA
-    const blocked = Object.keys(manifest.files || {}).filter(f => !_canHotPatch(f));
-    if (blocked.length > 0 || manifest.requiresApk) {
-      if (!silent) {
-        const reason = manifest.requiresApk
-          ? 'Флаг requiresApk в манифесте'
-          : 'Системные файлы: ' + blocked.slice(0, 3).join(', ');
-        toast('⚠️ Требуется полное обновление APK\n' + reason);
-      }
-      setStatus(''); return { updated: false };
-    }
-    const installed = _hotPatchLoad();
-    const installedFiles = installed?.files || {};
-    const toUpdate = Object.keys(manifest.files || {}).filter(
-      f => installedFiles[f] !== (manifest.files[f]?.sha || manifest.files[f])
-    );
-    if (toUpdate.length === 0) {
-      if (!silent) toast('✅ Все файлы актуальны (v' + manifest.version + ')');
-      setStatus(''); return { updated: false };
-    }
-    return await _applyHotPatch(manifest, toUpdate, manifest.version, silent);
-  } catch(e) {
-    setStatus('');
-    if (!silent) toast('❌ Hot-patch: ' + e.message.slice(0, 80));
-    return { updated: false, error: e.message };
-  }
-}
-
-/**
- * Применяет горячий патч — диалог подтверждения, скачивание, перезагрузка.
- * Вызывается из checkHotPatch() и checkForUpdates().
- */
-async function _applyHotPatch(manifest, toUpdate, version, silent) {
-  if (!window.Android?.hotPatchSaveFile) return { updated: false };
-  const statusEl = document.getElementById('hot-patch-status');
-  const setStatus = t => { if (statusEl && !silent) statusEl.textContent = t; };
-  const installed = _hotPatchLoad();
-  const installedFiles = { ...(installed?.files || {}) };
-  try {
-    // Диалог подтверждения — только при ручном запуске (silent=false)
-    if (!silent) {
-      const fileList = toUpdate.map(f => '• ' + f).join('\n');
-      const confirmed = await new Promise(resolve => {
-        const d = document.createElement('div');
-        d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center';
-        d.innerHTML = `
-          <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + var(--safe-bot));max-width:480px;width:100%;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
-            <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
-            <div style="font-size:22px;text-align:center;margin-bottom:8px">🔥</div>
-            <div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:4px">Горячий патч v${version}</div>
-            <div style="font-size:13px;color:var(--accent);text-align:center;margin-bottom:14px">Изменено файлов: ${toUpdate.length}</div>
-            <div style="font-size:12px;color:var(--muted);white-space:pre-line;max-height:120px;overflow-y:auto;background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:14px">${fileList}</div>
-            <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:16px">Обновление без переустановки APK</div>
-            <div style="display:flex;gap:10px">
-              <button onclick="this.closest('[style*=fixed]').remove();window._hpResolve(false)"
-                style="flex:1;padding:13px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Позже</button>
-              <button onclick="this.closest('[style*=fixed]').remove();window._hpResolve(true)"
-                style="flex:1;padding:13px;background:var(--accent);border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">🔥 Обновить</button>
-            </div>
-          </div>`;
-        window._hpResolve = resolve;
-        document.body.appendChild(d);
-      });
-      if (!confirmed) { setStatus(''); return { updated: false }; }
-    }
-    // Скачиваем файлы
-    let done = 0;
-    for (const path of toUpdate) {
-      const info = manifest.files[path];
-      const url  = info?.url || info;
-      setStatus(`⬇ Скачиваю ${path} (${++done}/${toUpdate.length})...`);
-      console.log('[hotpatch] downloading:', path, url?.slice(0,60));
-      const content = await _hotFetchText(url);
-      const result  = window.Android.hotPatchSaveFile(path, content);
-      if (!result.startsWith('ok')) throw new Error('Ошибка сохранения ' + path + ': ' + result);
-      installedFiles[path] = info?.sha || info;
-      console.log('[hotpatch] saved:', path, '(' + content.length + ' chars)');
-    }
-    _hotPatchSave({ version, files: installedFiles });
-    console.log('[hotpatch] all done, files:', toUpdate.length, '→ reload');
-    if (silent) {
-      // Сохраняем флаг «только что применён патч» — покажем диалог после перезагрузки
-      try {
-        localStorage.setItem('sapp_just_patched', JSON.stringify({
-          version,
-          files: toUpdate,
-          ts: Date.now()
-        }));
-      } catch(e) {}
-      if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
-      location.reload(true);
-    } else {
-      setStatus('✅ Обновлено ' + toUpdate.length + ' файлов! Перезагружаю...');
-      setTimeout(() => {
-        if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
-        location.reload(true);
-      }, 1200);
-    }
-    return { updated: true, count: toUpdate.length };
-  } catch(e) {
-    setStatus('');
-    if (!silent) toast('❌ Hot-patch: ' + e.message.slice(0, 80));
-    console.error('[hotpatch] ошибка:', e.message);
-    return { updated: false, error: e.message };
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════
-// 🆕 ДИАЛОГ «ГОРЯЧИЙ ПАТЧ ПРИМЕНЁН» — показывается через 5 сек после
-//    перезагрузки, если в прошлой сессии был успешный silent hot-patch
-// ══════════════════════════════════════════════════════════════════════
-
-function _showJustPatchedDialog(version, files) {
-  const d = document.createElement('div');
-  d.style.cssText = [
-    'position:fixed;inset:0;z-index:9998',
-    'background:rgba(0,0,0,.6)',
-    'display:flex;align-items:flex-end;justify-content:center',
-  ].join(';');
-
-  const fileLines = files.map(f =>
-    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">
-       <span style="font-size:13px;color:var(--accent)">•</span>
-       <span style="font-size:13px;color:var(--text);font-family:monospace;word-break:break-all">${escHtml(f)}</span>
-     </div>`
-  ).join('');
-
-  d.innerHTML = `
-    <div style="background:var(--surface);border-radius:22px 22px 0 0;width:100%;max-width:480px;
-      padding-bottom:calc(20px + var(--safe-bot,0px));animation:mcSlideUp .28s cubic-bezier(.34,1.1,.64,1)">
-      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:14px auto 18px"></div>
-      <div style="padding:0 20px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <span style="font-size:26px">🔥</span>
-          <div>
-            <div style="font-size:17px;font-weight:700;color:var(--text)">Приложение обновлено</div>
-            <div style="font-size:12px;color:var(--accent);font-weight:600;margin-top:1px">Горячий патч v${escHtml(version)}</div>
-          </div>
-        </div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
-          Изменено файлов: <strong style="color:var(--text)">${files.length}</strong>
-        </div>
-        <div style="background:var(--surface2);border-radius:12px;padding:8px 12px;
-          max-height:180px;overflow-y:auto;margin-bottom:18px">
-          ${fileLines}
-        </div>
-        <button id="jpatch-close-btn"
-          style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:14px;
-            color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
-          Отлично!
-        </button>
-      </div>
-    </div>`;
-
-  document.body.appendChild(d);
-
-  document.getElementById('jpatch-close-btn')
-    .addEventListener('click', () => d.remove());
-  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
-}
-
-// Проверяем флаг при старте приложения
-(function _checkJustPatched() {
-  try {
-    const raw = localStorage.getItem('sapp_just_patched');
-    if (!raw) return;
-    localStorage.removeItem('sapp_just_patched');
-    const data = JSON.parse(raw);
-    // Флаг актуален только если создан < 60 секунд назад (свежая перезагрузка)
-    if (!data?.version || !Array.isArray(data.files)) return;
-    if (Date.now() - (data.ts || 0) > 60000) return;
-    setTimeout(() => _showJustPatchedDialog(data.version, data.files), 5000);
-  } catch(e) {}
-})();
-
-// Сброс горячих патчей (откат к встроенным файлам)
-function hotPatchRollback() {
-  if (!window.Android?.hotPatchClearAll) { toast('❌ Недоступно'); return; }
-  window.Android.hotPatchClearAll();
-  _hotPatchSave(null);
-  toast('🔄 Патчи сброшены, перезагружаю...');
-  setTimeout(() => {
-    if (window.Android?.clearWebViewCache) window.Android.clearWebViewCache();
-    location.reload(true);
-  }, 800);
-}
 
 
 
@@ -6034,6 +5775,7 @@ function gameWindowOpen(titleText) {
 
 function gameWindowClose() {
   eggStopAll();
+  window._activeGame = null;
   if (_gameWindowEl) { _gameWindowEl.remove(); _gameWindowEl = null; }
   // Возвращаемся в пикер
   eggOpen();
@@ -6041,6 +5783,7 @@ function gameWindowClose() {
 
 function gameWindowDestroy() {
   eggStopAll();
+  window._activeGame = null;
   if (_gameWindowEl) { _gameWindowEl.remove(); _gameWindowEl = null; }
 }
 
@@ -6081,6 +5824,7 @@ function eggStartGame(name) {
     breakout:'🏏 Арканоид', bubbles:'🎵 osu! Режим', flappy:'🐦 Флаппи птица',
     '2048':'🔢 2048', coin:'🪙 Монетка', dice:'🎲 Кубик',
     basket:'🏀 Баскетбол', geodash:'🟥 Geometry Dash', tanks:'🪖 Танчики',
+    checkers:'🔴 Шашки', chess:'♟ Шахматы',
   };
 
   eggStopAll();
@@ -6099,11 +5843,15 @@ function eggStartGame(name) {
     dino:'egg-dino', blockblast:'egg-blockblast', breakout:'egg-breakout',
     flappy:'egg-flappy', '2048':'egg-2048', coin:'egg-coin', dice:'egg-dice',
     basket:'egg-basket', geodash:'egg-geodash', tanks:'egg-tanks',
+    checkers:'egg-checkers', chess:'egg-chess',
   };
   const gameId = idMap[name];
   if (!gameId) return;
   const el = document.getElementById(gameId);
   if (!el) return;
+
+  // Устанавливаем активную игру для клавиатурного контроллера
+  window._activeGame = name;
 
   // Перемещаем игровой div в game-window-body
   el.style.display = '';
@@ -6115,6 +5863,7 @@ function eggStartGame(name) {
     dino: dinoInit, blockblast: bbInit, breakout: brInit, flappy: flappyInit,
     '2048': g2048Init, coin: coinInit, dice: diceInit, basket: basketInit,
     geodash: geoInit, tanks: tanksInit,
+    checkers: chkInit, chess: chessInit,
   };
   if (inits[name]) inits[name]();
 }
@@ -6141,13 +5890,16 @@ function eggStopAll() {
   basketStop();
   geoStop();
   tanksStop();
+  chkStop();
+  chessStop();
   if (document.getElementById('overlay-doom')?.classList.contains('active'))  doomStop();
   if (document.getElementById('overlay-minecraft')?.classList.contains('active')) minecraftStop();
   // Если game-window открыт — возвращаем игровые div-ы обратно в egg-overlay
   if (_gameWindowEl) {
     const ids = ['egg-snake','egg-ttt','egg-pong','egg-tetris','egg-dino',
                  'egg-blockblast','egg-breakout','egg-flappy','egg-2048',
-                 'egg-coin','egg-dice','egg-basket','egg-geodash','egg-tanks'];
+                 'egg-coin','egg-dice','egg-basket','egg-geodash','egg-tanks',
+                 'egg-checkers','egg-chess'];
     const eggOv = document.getElementById('egg-overlay');
     ids.forEach(id => {
       const el = document.getElementById(id);
@@ -6195,22 +5947,9 @@ function getAccent() {
 function updateHomeWidgets() {
   const el = document.getElementById('home-status-line');
   if (!el) return;
-  const info = getNextBreakInfo();
   const hwActive = typeof hwLoad === 'function' ? hwLoad().filter(h => !h.done).length : 0;
-  let parts = [];
-  if (info) {
-    if (info.type === 'pair') {
-      // Показываем время до конца УРОКА (не пары)
-      // getNextBreakInfo возвращает .lessonLeft — если есть, используем его
-      const mins = info.lessonLeft !== undefined ? info.lessonLeft : info.left;
-      parts.push(`урок ${info.roman} · ${mins} мин`);
-    } else {
-      parts.push(`до пары ${info.roman} · ${info.toStart} мин`);
-    }
-  }
-  if (hwActive > 0) parts.push(`${hwActive} задан${hwActive === 1 ? 'ие' : hwActive < 5 ? 'ия' : 'ий'} ДЗ`);
-  if (parts.length) {
-    el.textContent = parts.join('  ·  ');
+  if (hwActive > 0) {
+    el.textContent = `${hwActive} задан${hwActive === 1 ? 'ие' : hwActive < 5 ? 'ия' : 'ий'} ДЗ`;
     el.style.display = '';
   } else {
     el.style.display = 'none';
@@ -6592,3 +6331,459 @@ function updateWeekProgress() {
   el.innerHTML = `${bar} <span style="color:var(--accent);font-weight:700">${pct}%</span> недели · осталось ${left} дн.`;
 }
 updateWeekProgress();
+
+// ══════════════════════════════════════════════════════════════════════
+// ██╗    ██╗██╗███████╗ █████╗ ██████╗ ██████╗
+// ██║    ██║██║╚══███╔╝██╔══██╗██╔══██╗██╔══██╗
+// ██║ █╗ ██║██║  ███╔╝ ███████║██████╔╝██║  ██║
+// ██║███╗██║██║ ███╔╝  ██╔══██║██╔══██╗██║  ██║
+// ╚███╔███╔╝██║███████╗██║  ██║██║  ██║██████╔╝
+//  ╚══╝╚══╝ ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝
+//  Telegram-style registration wizard
+// ══════════════════════════════════════════════════════════════════════
+
+let _wizardStep = 0;     // текущий шаг регистрации
+let _wizardTab  = 'reg'; // 'reg' | 'auth'
+
+// Переключение таба (Регистрация / Войти)
+function wizardSwitchTab(tab) {
+  _wizardTab = tab;
+  const tabbar   = document.getElementById('login-tabbar');
+  const viewReg  = document.getElementById('login-view-reg');
+  const viewAuth = document.getElementById('login-view-auth');
+  const tabReg   = document.getElementById('login-tab-reg');
+  const tabAuth  = document.getElementById('login-tab-auth');
+  const backBtn  = document.getElementById('login-back-btn');
+
+  if (tab === 'reg') {
+    viewReg.style.display  = '';
+    viewAuth.style.display = 'none';
+    tabReg.style.background  = 'var(--accent)';
+    tabReg.style.color       = 'var(--btn-text,#fff)';
+    tabAuth.style.background = 'transparent';
+    tabAuth.style.color      = 'var(--muted)';
+    _wizardStep = 0;
+    wizardGoTo(0);
+  } else {
+    viewReg.style.display  = 'none';
+    viewAuth.style.display = '';
+    tabReg.style.background  = 'transparent';
+    tabReg.style.color       = 'var(--muted)';
+    tabAuth.style.background = 'var(--accent)';
+    tabAuth.style.color      = 'var(--btn-text,#fff)';
+    if (backBtn) backBtn.style.visibility = 'hidden';
+    setTimeout(() => document.getElementById('login-auth-username')?.focus(), 250);
+  }
+}
+
+// Перейти на нужный шаг
+function wizardGoTo(step) {
+  _wizardStep = step;
+  const track   = document.getElementById('wizard-track');
+  const backBtn = document.getElementById('login-back-btn');
+  const title   = document.getElementById('login-hdr-title');
+  const tabbar  = document.getElementById('login-tabbar');
+
+  if (!track) return;
+  track.style.transform = `translateX(-${step * 100}%)`;
+
+  // Обновляем точки прогресса
+  for (let i = 0; i < 3; i++) {
+    const dot = document.getElementById('wdot-' + i);
+    if (!dot) continue;
+    dot.className = 'wdot' + (i === step ? ' wdot-active' : '');
+  }
+
+  // Кнопка назад
+  if (backBtn) backBtn.style.visibility = step > 0 ? 'visible' : 'hidden';
+
+  // Скрыть таббар на шагах 1 и 2
+  if (tabbar) tabbar.style.display = step === 0 ? '' : 'none';
+
+  // Заголовок хедера
+  const titles = ['Регистрация', 'Твой профиль', 'Придумай пароль'];
+  if (title) title.textContent = titles[step] || 'Аккаунт';
+
+  // Анимация иконки текущего шага
+  const icon = document.querySelector('#wstep-' + step + ' .wstep-icon');
+  if (icon) {
+    icon.style.transform = 'scale(0.4) rotate(-15deg)';
+    requestAnimationFrame(() => {
+      icon.style.transition = 'transform .35s cubic-bezier(.34,1.56,.64,1)';
+      icon.style.transform = '';
+      setTimeout(() => { icon.style.transition = ''; }, 400);
+    });
+  }
+
+  // Фокус на поле
+  setTimeout(() => {
+    if (step === 0) document.getElementById('login-name')?.focus();
+    if (step === 1) document.getElementById('login-username')?.focus();
+    if (step === 2) document.getElementById('login-password')?.focus();
+  }, 350);
+}
+
+// Кнопка Назад в wizard
+function wizardBack() {
+  if (_wizardStep > 0) wizardGoTo(_wizardStep - 1);
+}
+
+// Валидация шага 0 (имя)
+function wizardValidateStep0() {
+  const name = (document.getElementById('login-name')?.value || '').trim();
+  const btn  = document.getElementById('wbtn-0');
+  const hint = document.getElementById('wstep0-hint');
+  const ok   = name.length >= 2;
+  if (btn) btn.disabled = !ok;
+  if (hint) {
+    if (!name) { hint.textContent = 'Минимум 2 символа'; hint.style.color = 'var(--muted)'; }
+    else if (!ok) { hint.textContent = '⚠️ Слишком короткое имя'; hint.style.color = 'var(--danger,#c94f4f)'; }
+    else { hint.textContent = '✅ Отлично!'; hint.style.color = '#4caf7d'; }
+  }
+}
+
+// Следующий шаг
+function wizardNext() {
+  if (_wizardStep === 0) {
+    const name = (document.getElementById('login-name')?.value || '').trim();
+    if (name.length < 2) return;
+    wizardGoTo(1);
+  } else if (_wizardStep === 1) {
+    const un = (document.getElementById('login-username')?.value || '').trim();
+    if (un.length < 3) return;
+    const btn = document.getElementById('wbtn-1');
+    if (btn && btn.disabled) return;
+    wizardGoTo(2);
+  }
+}
+
+// Валидация шага 2 (пароль)
+function wizardValidateStep2() {
+  const p1   = document.getElementById('login-password')?.value  || '';
+  const p2   = document.getElementById('login-password2')?.value || '';
+  const btn  = document.getElementById('wbtn-2');
+  const hint = document.getElementById('wstep2-hint');
+  if (p1.length === 0) {
+    if (hint) { hint.textContent = 'Минимум 4 символа'; hint.style.color = 'var(--muted)'; }
+    if (btn) btn.disabled = true;
+  } else if (p1.length < 4) {
+    if (hint) { hint.textContent = '⚠️ Пароль слишком короткий'; hint.style.color = 'var(--danger,#c94f4f)'; }
+    if (btn) btn.disabled = true;
+  } else if (p2 && p1 !== p2) {
+    if (hint) { hint.textContent = '❌ Пароли не совпадают'; hint.style.color = 'var(--danger,#c94f4f)'; }
+    if (btn) btn.disabled = true;
+  } else if (p2 && p1 === p2) {
+    if (hint) { hint.textContent = '✅ Пароли совпадают'; hint.style.color = '#4caf7d'; }
+    if (btn) btn.disabled = false;
+  } else {
+    // p2 ещё не заполнен
+    if (hint) { hint.textContent = 'Повтори пароль ещё раз'; hint.style.color = 'var(--muted)'; }
+    if (btn) btn.disabled = true;
+  }
+}
+
+// Финиш: создать аккаунт (вызывает существующую profileCreate)
+function wizardFinish() {
+  const p1 = document.getElementById('login-password')?.value  || '';
+  const p2 = document.getElementById('login-password2')?.value || '';
+  if (p1.length < 4 || p1 !== p2) return;
+  profileCreate(); // существующая функция в social.js
+}
+
+// При загрузке страницы: инициализируем wizard
+(function initWizardOnLoad() {
+  // Ждём DOM
+  const check = () => {
+    if (document.getElementById('wizard-track')) {
+      wizardSwitchTab('reg');
+      wizardGoTo(0);
+    } else {
+      setTimeout(check, 100);
+    }
+  };
+  check();
+})();
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 🍅  POMODORO ТАЙМЕР
+// ══════════════════════════════════════════════════════════════════════
+
+const POMO_WORK_SEC  = 25 * 60;
+const POMO_BREAK_SEC = 5  * 60;
+
+let _pomoState = {
+  running: false,
+  isWork:  true,
+  secsLeft: POMO_WORK_SEC,
+  session:  1,
+  interval: null,
+};
+
+function pomodoroToggle() {
+  // Открываем оверлей при первом нажатии
+  const ov = document.getElementById('pomodoro-overlay');
+  if (ov) ov.style.display = 'flex';
+
+  if (_pomoState.running) {
+    // Пауза
+    clearInterval(_pomoState.interval);
+    _pomoState.running = false;
+    _pomoRender();
+  } else {
+    // Запуск / продолжение
+    _pomoState.running = true;
+    _pomoState.interval = setInterval(_pomoTick, 1000);
+    _pomoRender();
+  }
+}
+
+function pomodoroReset() {
+  clearInterval(_pomoState.interval);
+  _pomoState = { running: false, isWork: true,
+    secsLeft: POMO_WORK_SEC, session: 1, interval: null };
+  _pomoRender();
+}
+
+function _pomoTick() {
+  if (_pomoState.secsLeft > 0) {
+    _pomoState.secsLeft--;
+    _pomoRender();
+  } else {
+    // Смена режима
+    clearInterval(_pomoState.interval);
+    if (_pomoState.isWork) {
+      _pomoState.isWork   = false;
+      _pomoState.secsLeft = POMO_BREAK_SEC;
+      toast('🎉 Перерыв 5 минут! Отдыхай');
+    } else {
+      _pomoState.isWork   = true;
+      _pomoState.secsLeft = POMO_WORK_SEC;
+      _pomoState.session++;
+      toast('🍅 Фокус! Сессия ' + _pomoState.session);
+    }
+    _pomoState.running  = true;
+    _pomoState.interval = setInterval(_pomoTick, 1000);
+    _pomoRender();
+  }
+}
+
+function _pomoRender() {
+  const total = _pomoState.isWork ? POMO_WORK_SEC : POMO_BREAK_SEC;
+  const left  = _pomoState.secsLeft;
+  const pct   = left / total;
+  const mins  = String(Math.floor(left / 60)).padStart(2, '0');
+  const secs  = String(left % 60).padStart(2, '0');
+  const timeStr = `${mins}:${secs}`;
+  const emoji   = _pomoState.isWork ? '🍅' : '☕';
+  const modeStr = _pomoState.isWork ? 'ФОКУС 🍅' : 'ПЕРЕРЫВ ☕';
+
+  // Мини-виджет на главной
+  const ringFill = document.getElementById('pomodoro-ring-fill');
+  const ringLabel = document.getElementById('pomodoro-ring-label');
+  const subEl   = document.getElementById('pomodoro-sub');
+  const titleEl = document.getElementById('pomodoro-title');
+  const btnIcon = document.getElementById('pomodoro-btn-icon');
+  const CIRCUM  = 138.2; // 2π×22
+  if (ringFill)  ringFill.style.strokeDashoffset  = String(CIRCUM * (1 - pct));
+  if (ringLabel) ringLabel.textContent = timeStr;
+  if (subEl)     subEl.textContent = (_pomoState.isWork ? '🍅 Фокус' : '☕ Перерыв') +
+    ' · сессия ' + _pomoState.session;
+  if (titleEl)   titleEl.textContent = 'Помодоро — ' + timeStr;
+  if (btnIcon)   btnIcon.textContent  = _pomoState.running ? '⏸️' : '▶️';
+
+  // Большой оверлей
+  const ovTime = document.getElementById('pomo-ov-time');
+  const ovEmoji = document.getElementById('pomo-ov-emoji');
+  const ovRing  = document.getElementById('pomo-ov-ring');
+  const ovLabel = document.getElementById('pomo-mode-label');
+  const ovSess  = document.getElementById('pomo-ov-session');
+  const ovBtn   = document.getElementById('pomo-ov-main-btn');
+  const CIRCUM2 = 376.99; // 2π×60
+  if (ovTime)  ovTime.textContent  = timeStr;
+  if (ovEmoji) ovEmoji.textContent = emoji;
+  if (ovRing)  ovRing.style.strokeDashoffset  = String(CIRCUM2 * (1 - pct));
+  if (ovLabel) ovLabel.textContent = modeStr;
+  if (ovSess)  ovSess.textContent  = 'Сессия ' + _pomoState.session +
+    (_pomoState.running ? '' : ' · на паузе');
+  if (ovBtn) {
+    ovBtn.textContent = _pomoState.running ? '⏸ Пауза' : '▶ Продолжить';
+  }
+}
+
+// Инициализация виджета
+_pomoRender();
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 📅  СЧЁТЧИК ДО ПЯТНИЦЫ + ПРОГРЕСС НЕДЕЛИ
+// ══════════════════════════════════════════════════════════════════════
+
+function homeUpdateWeekBar() {
+  const fridayEl   = document.getElementById('home-friday-count');
+  const weekPctEl  = document.getElementById('home-week-pct');
+  const weekFillEl = document.getElementById('home-week-fill');
+  const weekLblEl  = document.getElementById('home-week-label');
+  if (!fridayEl) return;
+
+  const now  = new Date();
+  const dow  = now.getDay(); // 0=вс, 1=пн...6=сб
+  const DAYS = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+
+  // Дней до пятницы (5)
+  let toFri;
+  if (dow === 5)       toFri = '🎉 Сегодня!';
+  else if (dow === 6)  toFri = 'Вчера была 😅';
+  else if (dow === 0)  toFri = '5 дней';
+  else                 toFri = (5 - dow) + ' ' + (5 - dow === 1 ? 'день' : (5 - dow < 5 ? 'дня' : 'дней'));
+
+  fridayEl.textContent = toFri;
+
+  // Прогресс недели: пн=0% ... сб=100%
+  // Учебные дни 1(пн)…6(сб) — 6 дней
+  const pct = dow === 0 ? 0 : Math.round(Math.min(dow, 6) / 6 * 100);
+  if (weekPctEl)  weekPctEl.textContent  = pct + '%';
+  if (weekFillEl) weekFillEl.style.width = pct + '%';
+  if (weekLblEl) {
+    const dayName = DAYS[dow];
+    const left    = dow === 0 ? 6 : Math.max(0, 6 - dow);
+    weekLblEl.textContent = dow === 0
+      ? 'Воскресенье — впереди всё!'
+      : dayName + ' · осталось ' + left + ' ' + (left === 1 ? 'день' : left < 5 ? 'дня' : 'дней');
+  }
+}
+
+homeUpdateWeekBar();
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 😤  ЖАЛОБНАЯ КНИГА (смешные студенческие жалобы)
+// ══════════════════════════════════════════════════════════════════════
+
+const COMPLAINTS = [
+  'Почему пары начинаются в 8:30?! Это нарушение прав человека.',
+  'Преподаватель снова перенёс пару. За 5 минут до начала. В 8 утра.',
+  'В расписании написано «аудитория уточняется». Уточнили в 9:03 — пара уже шла.',
+  'Зачёт «автоматом» за посещаемость, но в расписании 6 пар в день.',
+  'ДЗ задали в пятницу. Сдавать в понедельник. Это не выходные, это рабочая смена.',
+  'Столовая открыта с 12 до 13. Перемена с 12:05 до 12:20. Математика тут курит.',
+  'Потерял ручку прямо перед контрольной. Попросил у соседа — у него тоже нет.',
+  'Библиотека: нужная книга есть в 1 экземпляре, он на руках до 2027 года.',
+  'Wi-Fi в корпусе работает только если стоять у окна на третьем этаже, ногой касаясь батареи.',
+  'Экзамен в 9:00. Добираться 1:20. Первый автобус в 7:30. Математика снова курит.',
+  'Пересдача назначена на 31 декабря. Удачи тебе и всем нам.',
+  'Сосед на паре жуёт так громко, что я потерял нить лекции.',
+  'Преподаватель: «Это проходили на первом курсе». Мы на первом курсе.',
+  'Проектор не работает. Преподаватель рисует схему на доске. Маркер тоже не работает.',
+  'Пара перенесена на субботу. Суббота — тоже учебный день. Открытие семестра.',
+  '«Самостоятельная работа» — это когда преподаватель пьёт кофе, а ты решаешь 40 задач.',
+  'В деканате сказали: «Приходи завтра». Пришёл. «Приходи послезавтра».',
+  'Пара отменена, но узнал об этом когда уже приехал.',
+  'Распечатка на 80 страниц. Принтер в кабинете замдекана. Замдекан «занят».',
+  '«Нам поставят зачёт если все придут на субботник». Суббота, 8 утра, грабли.',
+];
+
+let _lastComplaint = '';
+
+function funShowComplaint() {
+  const ov = document.getElementById('complaint-overlay');
+  const el = document.getElementById('complaint-text');
+  if (!ov || !el) return;
+
+  let c;
+  do { c = COMPLAINTS[Math.floor(Math.random() * COMPLAINTS.length)]; }
+  while (c === _lastComplaint && COMPLAINTS.length > 1);
+  _lastComplaint = c;
+  el.textContent = c;
+  ov.style.display = 'flex';
+}
+
+function funCopyComplaint() {
+  const text = document.getElementById('complaint-text')?.textContent || '';
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => toast('📋 Скопировано!'));
+  }
+  document.getElementById('complaint-overlay').style.display = 'none';
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 🎲  РАНДОМАЙЗЕР «КТО ОТВЕЧАЕТ?»
+// ══════════════════════════════════════════════════════════════════════
+
+const RAND_EMOJIS = ['🎯','🎲','⚡','🏆','🔥','💀','🎪','🤡','🫡','😬','🧨','🎭'];
+
+function funGroupRandomizer() {
+  const ov = document.getElementById('randomizer-overlay');
+  if (!ov) return;
+  // Сброс результата
+  const res = document.getElementById('rand-result');
+  if (res) res.style.display = 'none';
+  ov.style.display = 'flex';
+  setTimeout(() => document.getElementById('rand-names-input')?.focus(), 300);
+}
+
+function funGroupRandomizerSpin() {
+  const inp = document.getElementById('rand-names-input');
+  const res = document.getElementById('rand-result');
+  const nameEl  = document.getElementById('rand-result-name');
+  const emojiEl = document.getElementById('rand-result-emoji');
+  if (!inp || !res) return;
+
+  const names = inp.value.split('\n')
+    .map(n => n.trim()).filter(n => n.length > 0);
+
+  if (names.length === 0) {
+    toast('Добавь хотя бы одного участника!'); return;
+  }
+
+  // Анимация «вращения»
+  let ticks = 0;
+  const maxTicks = 14;
+  const chosen = names[Math.floor(Math.random() * names.length)];
+  const interval = setInterval(() => {
+    ticks++;
+    const temp = names[Math.floor(Math.random() * names.length)];
+    if (nameEl)  nameEl.textContent  = temp;
+    if (emojiEl) emojiEl.textContent = RAND_EMOJIS[ticks % RAND_EMOJIS.length];
+    if (ticks >= maxTicks) {
+      clearInterval(interval);
+      if (nameEl)  nameEl.textContent  = chosen;
+      if (emojiEl) emojiEl.textContent = '🎯';
+      if (res) {
+        res.style.display = 'block';
+        nameEl.style.transform = 'scale(1.25)';
+        setTimeout(() => { nameEl.style.transform = ''; nameEl.style.transition = 'transform .2s'; }, 120);
+      }
+    }
+  }, 80);
+
+  if (res) res.style.display = 'block';
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 📝  ОБЁРТКА: funShowExcuse — вызывает существующий getExcuse()
+// ══════════════════════════════════════════════════════════════════════
+
+function funShowExcuse() {
+  // Используем существующую функцию из core.js
+  if (typeof getExcuse === 'function') {
+    const excuse = getExcuse();
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9100;display:flex;align-items:center;justify-content:center;padding:24px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+      <div style="background:var(--surface2);border-radius:20px;padding:22px;width:100%;max-width:340px;border:1.5px solid var(--surface3)">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);margin-bottom:10px">📝 ГЕНЕРАТОР ОТМАЗКИ</div>
+        <div style="font-size:15px;line-height:1.55;color:var(--text);margin-bottom:18px">${excuse}</div>
+        <div style="display:flex;gap:10px">
+          <button onclick="this.closest('[style]').remove();funShowExcuse()" class="btn btn-surface" style="flex:1">🔄 Другую</button>
+          <button onclick="navigator.clipboard&&navigator.clipboard.writeText('${excuse.replace(/'/g,"\\'")}').then(()=>toast('📋 Скопировано'));this.closest('[style]').remove()"
+            class="btn btn-accent" style="flex:1">📋 Скопировать</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+}
+

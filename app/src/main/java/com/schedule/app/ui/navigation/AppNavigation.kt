@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.schedule.app.ui.AppViewModel
 import com.schedule.app.ui.FunOverlay
 import com.schedule.app.ui.components.*
@@ -58,7 +59,17 @@ fun AppScreen(
     var searchQuery   by remember { mutableStateOf("") }
 
     fun navigate(screen: Screen) { currentScreen = screen }
-    fun goBack(to: Screen)       { currentScreen = to }
+    fun goBack(to: Screen) {
+        currentScreen = to
+        // Синхронизируем нижнюю панель при возврате на корневой экран
+        when (to) {
+            Screen.Home      -> activeNavTab = NavTab.Home
+            Screen.Bells     -> activeNavTab = NavTab.Bells
+            Screen.Messenger -> activeNavTab = NavTab.Messages
+            Screen.Profile   -> activeNavTab = NavTab.Profile
+            else             -> {}
+        }
+    }
 
     val rootScreens = setOf(Screen.Home, Screen.Bells, Screen.Messenger, Screen.Profile)
     val showNavBar  = currentScreen in rootScreens
@@ -275,7 +286,9 @@ fun AppScreen(
                             onPickPhoto      = onPickPhoto,
                         )
                     } else {
-                        goBack(Screen.Profile)
+                        // ФИКС: нельзя вызывать goBack() прямо в else-ветке composable
+                        LaunchedEffect(Unit) { navigate(Screen.Profile) }
+                        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(t.bg))
                     }
                 }
 
@@ -394,10 +407,20 @@ fun AppScreen(
                 )
 
                 Screen.Games -> {
-                    // Запускаем GamesActivity через LaunchedEffect
-                    LaunchedEffect(Unit) { vm.openGames() }
-                    // Пока активити грузится — возвращаемся назад
-                    goBack(Screen.Profile)
+                    // ФИКС: goBack() НЕЛЬЗЯ вызывать прямо в теле composable —
+                    // это вызывает IllegalStateException во время composition.
+                    // Оба вызова перенесены в LaunchedEffect.
+                    LaunchedEffect(Unit) {
+                        vm.openGames()
+                        navigate(Screen.Profile)
+                    }
+                    // Пустой Box пока идёт переход
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.fillMaxSize().background(t.bg),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        androidx.compose.material3.Text("🎮", fontSize = 64.sp)
+                    }
                 }
             }
         }

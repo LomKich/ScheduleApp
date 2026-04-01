@@ -1,3 +1,114 @@
+// ══════════════════════════════════════════════════════════════════
+// ── ⌨️  ЕДИНЫЙ ОБРАБОТЧИК КЛАВИАТУРЫ (только Desktop) ─────────────
+// ══════════════════════════════════════════════════════════════════
+// На мобиле (touch-only) клавиши недоступны — ничего не делаем.
+// На десктопе WASD / ← → ↑ ↓ маршрутизируются в активную игру.
+// ──────────────────────────────────────────────────────────────────
+(function() {
+  // Определяем, есть ли физическая клавиатура (десктоп)
+  const isDesktop = () => !('ontouchstart' in window) || navigator.maxTouchPoints === 0 || window.__desktopMode;
+
+  // Текущая активная игра (ставится через gameWindowOpen / eggStartGame)
+  window._activeGame = null;
+
+  const DIR = {
+    ArrowUp:    [0, -1], ArrowDown:  [0,  1], ArrowLeft:  [-1, 0], ArrowRight: [1,  0],
+    KeyW:       [0, -1], KeyS:       [0,  1], KeyA:       [-1, 0], KeyD:       [1,  0],
+    'w':        [0, -1], 's':        [0,  1], 'a':        [-1, 0], 'd':        [1,  0],
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if (!isDesktop()) return;
+
+    // Не перехватываем если фокус в поле ввода
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    const game = window._activeGame;
+    if (!game) return;
+
+    const code = e.code; // e.g. 'ArrowUp', 'KeyW', 'Space'
+
+    // ── Змейка ──────────────────────────────────────────────────
+    if (game === 'snake') {
+      const d = DIR[code];
+      if (d) { e.preventDefault(); snakeDir(d[0], d[1]); return; }
+      if (code === 'Space' || code === 'Enter') { e.preventDefault(); snakeTogglePause(); }
+    }
+
+    // ── Понг ────────────────────────────────────────────────────
+    // Горизонтальное управление: ← A → D двигают ракетку
+    if (game === 'pong') {
+      if (!window._pongKeys) window._pongKeys = {};
+      if (code === 'ArrowLeft'  || code === 'KeyA') { e.preventDefault(); window._pongKeys.left  = true; }
+      if (code === 'ArrowRight' || code === 'KeyD') { e.preventDefault(); window._pongKeys.right = true; }
+      if (code === 'ArrowUp'    || code === 'KeyW') { e.preventDefault(); window._pongKeys.up    = true; }
+      if (code === 'ArrowDown'  || code === 'KeyS') { e.preventDefault(); window._pongKeys.down  = true; }
+      if (code === 'Space' || code === 'Enter') { e.preventDefault(); if (!pongRunning && !pongMissed) pongStart(); }
+    }
+
+    // ── Тетрис ──────────────────────────────────────────────────
+    if (game === 'tetris') {
+      if (code === 'ArrowLeft'  || code === 'KeyA') { e.preventDefault(); tetMove(-1); }
+      if (code === 'ArrowRight' || code === 'KeyD') { e.preventDefault(); tetMove(1); }
+      if (code === 'ArrowDown'  || code === 'KeyS') { e.preventDefault(); tetDrop(); }
+      if (code === 'ArrowUp'    || code === 'KeyW') { e.preventDefault(); tetRotate(); }
+      if (code === 'Space')                         { e.preventDefault(); tetHardDrop(); }
+      if (code === 'Enter')                         { e.preventDefault(); tetTogglePause(); }
+    }
+
+    // ── Динозаврик ──────────────────────────────────────────────
+    if (game === 'dino') {
+      if (code === 'Space' || code === 'ArrowUp' || code === 'KeyW') { e.preventDefault(); _cdTap(); }
+      if (code === 'ArrowDown' || code === 'KeyS') { e.preventDefault(); _cdDuck(true); }
+    }
+
+    // ── Флаппи ──────────────────────────────────────────────────
+    if (game === 'flappy') {
+      if (code === 'Space' || code === 'ArrowUp' || code === 'KeyW') { e.preventDefault(); flappyFlap(); }
+    }
+
+    // ── Geometry Dash ───────────────────────────────────────────
+    if (game === 'geodash') {
+      if (code === 'Space' || code === 'ArrowUp' || code === 'KeyW') { e.preventDefault(); geoJump(); }
+    }
+
+    // ── 2048 ────────────────────────────────────────────────────
+    if (game === '2048') {
+      const map = { ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down',
+                    KeyA:'left', KeyD:'right', KeyW:'up', KeyS:'down' };
+      if (map[code]) { e.preventDefault(); g2048Swipe(map[code]); }
+    }
+
+    // ── Шашки ───────────────────────────────────────────────────
+    // R = рестарт
+    if (game === 'checkers') {
+      if (code === 'KeyR') { e.preventDefault(); chkRestart(); }
+    }
+
+    // ── Шахматы ─────────────────────────────────────────────────
+    if (game === 'chess') {
+      if (code === 'KeyR') { e.preventDefault(); chessRestart(); }
+    }
+
+  });
+
+  document.addEventListener('keyup', function(e) {
+    if (!isDesktop()) return;
+    if (window._activeGame === 'pong') {
+      if (!window._pongKeys) return;
+      if (e.code === 'ArrowLeft'  || e.code === 'KeyA') window._pongKeys.left  = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') window._pongKeys.right = false;
+      if (e.code === 'ArrowUp'    || e.code === 'KeyW') window._pongKeys.up    = false;
+      if (e.code === 'ArrowDown'  || e.code === 'KeyS') window._pongKeys.down  = false;
+    }
+    // Дино — отпустили присед
+    if (window._activeGame === 'dino') {
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') _cdDuck(false);
+    }
+  });
+})();
+
 // ── 🐍 ЗМЕЙКА (v1.6.0) ───────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
 let snakeRaf = null, snakeRunning = false, snakePaused = false;
@@ -655,6 +766,19 @@ function pongLoop(ts) {
 
 function pongTick(dt) {
   const b = pongBall, p = pongPad, p2 = pongPad2;
+
+  // ── Клавиатурное управление (Desktop) ───────────────────────
+  if (window._pongKeys && window._activeGame === 'pong') {
+    const speed = (pongW / 18) * dt;
+    if (window._pongKeys.left)  p.x = Math.max(p.w/2, p.x - speed);
+    if (window._pongKeys.right) p.x = Math.min(pongW - p.w/2, p.x + speed);
+    // В режиме local — Игрок 2 (p2) управляется стрелками ↑↓ (W/S)
+    if (p2 && pongMode === 'local') {
+      if (window._pongKeys.up)   p2.x = Math.max(p2.w/2, p2.x - speed);
+      if (window._pongKeys.down) p2.x = Math.min(pongW - p2.w/2, p2.x + speed);
+    }
+  }
+
   b.x += b.vx * dt; b.y += b.vy * dt;
 
   const now1 = performance.now();
@@ -1399,201 +1523,319 @@ let cdDust = [];
 let cdBirds = [];
 
 const CD_DIFF = {
-  easy:   { speed: 6,  accel: 0.0015, jumpV: -14, gravity: 0.7 },
-  normal: { speed: 8,  accel: 0.003,  jumpV: -16, gravity: 0.8 },
-  hard:   { speed: 11, accel: 0.006,  jumpV: -17, gravity: 0.95 }
+  easy:   { speed: 5.5, accel: 0.001,  jumpV: -13.5, gravity: 0.65 },
+  normal: { speed: 7,   accel: 0.0025, jumpV: -15.5, gravity: 0.75 },
+  hard:   { speed: 10,  accel: 0.005,  jumpV: -16.5, gravity: 0.90 }
 };
 
-// ── PIXEL ART DINO RENDERER ───────────────────────────────────────
-// All shapes defined as pixel arrays, drawn scaled to canvas
+// ══════════════════════════════════════════════════════════════════
+// 🦕 CHROME DINO — точные спрайты из оригинала Chromium (canvas pixel art)
+// ══════════════════════════════════════════════════════════════════
 
-// T-Rex body shape — 44×47 pixel grid, 1=body, 2=eye
+// T-Rex стоит (44×47 → 14×20 пикселей, 1=тело, 2=глаз, 3=светлый)
 const CD_TREX_STAND = [
   [0,0,0,0,0,0,0,1,1,1,1,1,1,0],
   [0,0,0,0,0,0,1,1,1,1,1,1,1,1],
-  [0,0,0,0,0,0,1,1,1,1,1,1,1,1],
   [0,0,0,0,0,0,1,1,2,1,1,1,1,1],
-  [0,0,0,0,0,0,1,1,1,1,1,1,0,0],
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,0],
   [0,0,0,0,0,1,1,1,1,1,1,0,0,0],
-  [0,0,0,0,0,1,1,1,1,1,0,0,0,0],
   [0,0,0,0,1,1,1,1,1,1,0,0,0,0],
-  [0,0,0,1,1,1,1,1,1,1,1,1,1,0],
+  [0,0,0,1,1,1,1,1,1,1,1,1,0,0],
   [0,0,1,1,1,1,1,1,1,1,1,1,1,0],
   [0,1,1,1,1,1,1,1,1,1,1,1,0,0],
   [1,1,1,1,1,1,1,1,1,1,1,0,0,0],
   [1,1,1,1,1,1,1,1,1,1,0,0,0,0],
-  [1,1,1,1,1,1,1,1,1,0,0,0,0,0],
-  [0,1,1,1,1,1,1,1,0,0,0,0,0,0],
-  [0,0,1,1,1,1,0,0,0,0,0,0,0,0],
-  [0,0,0,1,1,0,0,0,0,0,0,0,0,0],
-  [0,0,0,1,1,0,0,0,0,0,0,0,0,0],
-  [0,0,1,1,0,1,1,0,0,0,0,0,0,0],
-  [0,0,1,0,0,0,1,0,0,0,0,0,0,0],
+  [0,1,1,1,1,1,1,1,1,0,0,0,0,0],
+  [0,0,1,1,1,1,1,1,0,0,0,0,0,0],
+  [0,0,0,1,1,1,1,0,0,0,0,0,0,0],
+  [0,0,0,1,1,0,1,1,0,0,0,0,0,0],
+  [0,0,1,1,0,0,0,1,1,0,0,0,0,0],
+  [0,0,1,0,0,0,0,0,0,0,0,0,0,0],
 ];
 
-const CD_TREX_RUN1 = [ // Нога 1 вперёд
+const CD_TREX_RUN1 = [
   [0,0,0,0,0,0,0,1,1,1,1,1,1,0],
   [0,0,0,0,0,0,1,1,1,1,1,1,1,1],
-  [0,0,0,0,0,0,1,1,1,1,1,1,1,1],
   [0,0,0,0,0,0,1,1,2,1,1,1,1,1],
-  [0,0,0,0,0,0,1,1,1,1,1,1,0,0],
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,0],
   [0,0,0,0,0,1,1,1,1,1,1,0,0,0],
-  [0,0,0,0,0,1,1,1,1,1,0,0,0,0],
   [0,0,0,0,1,1,1,1,1,1,0,0,0,0],
-  [0,0,0,1,1,1,1,1,1,1,1,1,1,0],
+  [0,0,0,1,1,1,1,1,1,1,1,1,0,0],
   [0,0,1,1,1,1,1,1,1,1,1,1,1,0],
   [0,1,1,1,1,1,1,1,1,1,1,1,0,0],
   [1,1,1,1,1,1,1,1,1,1,1,0,0,0],
   [1,1,1,1,1,1,1,1,1,1,0,0,0,0],
-  [1,1,1,1,1,1,1,1,1,0,0,0,0,0],
-  [0,1,1,1,1,1,1,1,0,0,0,0,0,0],
-  [0,0,1,1,1,1,0,0,0,0,0,0,0,0],
-  [0,0,0,1,1,0,0,0,0,0,0,0,0,0],
-  [0,0,0,1,0,0,0,0,0,0,0,0,0,0],
-  [0,0,1,1,1,0,1,0,0,0,0,0,0,0],
-  [0,0,1,1,0,0,0,0,0,0,0,0,0,0],
-];
-
-const CD_TREX_RUN2 = [ // Нога 2 вперёд
-  [0,0,0,0,0,0,0,1,1,1,1,1,1,0],
-  [0,0,0,0,0,0,1,1,1,1,1,1,1,1],
-  [0,0,0,0,0,0,1,1,1,1,1,1,1,1],
-  [0,0,0,0,0,0,1,1,2,1,1,1,1,1],
-  [0,0,0,0,0,0,1,1,1,1,1,1,0,0],
-  [0,0,0,0,0,1,1,1,1,1,1,0,0,0],
-  [0,0,0,0,0,1,1,1,1,1,0,0,0,0],
-  [0,0,0,0,1,1,1,1,1,1,0,0,0,0],
-  [0,0,0,1,1,1,1,1,1,1,1,1,1,0],
-  [0,0,1,1,1,1,1,1,1,1,1,1,1,0],
-  [0,1,1,1,1,1,1,1,1,1,1,1,0,0],
-  [1,1,1,1,1,1,1,1,1,1,1,0,0,0],
-  [1,1,1,1,1,1,1,1,1,1,0,0,0,0],
-  [1,1,1,1,1,1,1,1,1,0,0,0,0,0],
-  [0,1,1,1,1,1,1,1,0,0,0,0,0,0],
-  [0,0,1,1,1,1,0,0,0,0,0,0,0,0],
-  [0,0,0,1,1,0,0,0,0,0,0,0,0,0],
+  [0,1,1,1,1,1,1,1,1,0,0,0,0,0],
+  [0,0,1,1,1,1,1,1,0,0,0,0,0,0],
+  [0,0,0,1,1,1,1,0,0,0,0,0,0,0],
   [0,0,0,0,1,0,0,0,0,0,0,0,0,0],
-  [0,0,0,1,1,1,0,1,0,0,0,0,0,0],
+  [0,0,0,1,1,1,0,0,0,0,0,0,0,0],
+  [0,0,0,1,1,0,0,0,0,0,0,0,0,0],
+];
+
+const CD_TREX_RUN2 = [
+  [0,0,0,0,0,0,0,1,1,1,1,1,1,0],
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,1],
+  [0,0,0,0,0,0,1,1,2,1,1,1,1,1],
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,0],
+  [0,0,0,0,0,1,1,1,1,1,1,0,0,0],
+  [0,0,0,0,1,1,1,1,1,1,0,0,0,0],
+  [0,0,0,1,1,1,1,1,1,1,1,1,0,0],
+  [0,0,1,1,1,1,1,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,1,1,1,1,1,0,0],
+  [1,1,1,1,1,1,1,1,1,1,1,0,0,0],
+  [1,1,1,1,1,1,1,1,1,1,0,0,0,0],
+  [0,1,1,1,1,1,1,1,1,0,0,0,0,0],
+  [0,0,1,1,1,1,1,1,0,0,0,0,0,0],
+  [0,0,0,1,1,1,1,0,0,0,0,0,0,0],
   [0,0,0,0,0,1,1,0,0,0,0,0,0,0],
+  [0,0,0,0,1,1,1,0,0,0,0,0,0,0],
+  [0,0,0,0,0,1,0,0,0,0,0,0,0,0],
 ];
 
-// Ducking dino (shorter, wider)
-const CD_TREX_DUCK = [
-  [0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0],
-  [0,0,0,0,0,0,1,1,1,2,1,1,1,1,0,0,0,0],
-  [0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0],
-  [0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0],
-  [0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
-  [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0],
-  [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0],
-  [0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0],
-  [1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0],
-  [1,1,1,1,1,1,1,1,0,1,1,0,0,0,0,0,0,0],
-  [0,1,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+const CD_TREX_DEAD = [
+  [0,0,0,0,0,0,0,1,1,1,1,1,1,0],
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,1],
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,1],
+  [0,0,0,0,0,0,1,4,1,1,4,1,1,1], // 4=X-eye
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,0],
+  [0,0,0,0,0,1,1,1,1,1,1,0,0,0],
+  [0,0,0,0,1,1,1,1,1,1,0,0,0,0],
+  [0,0,0,1,1,1,1,1,1,1,1,1,0,0],
+  [0,0,1,1,1,1,1,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,1,1,1,1,1,0,0],
+  [1,1,1,1,1,1,1,1,1,1,1,0,0,0],
+  [1,1,1,1,1,1,1,1,1,1,0,0,0,0],
+  [0,1,1,1,1,1,1,1,1,0,0,0,0,0],
+  [0,0,1,1,1,1,1,1,0,0,0,0,0,0],
+  [0,0,0,1,1,1,1,0,0,0,0,0,0,0],
+  [0,0,0,1,1,0,1,1,0,0,0,0,0,0],
+  [0,0,1,1,0,0,0,1,1,0,0,0,0,0],
+  [0,0,1,0,0,0,0,0,0,0,0,0,0,0],
 ];
 
+const CD_TREX_DUCK1 = [
+  [0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,1,1,2,1,1,1,0,0,0,0],
+  [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0],
+  [0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0],
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0],
+  [0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0],
+  [0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0],
+  [0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0],
+  [0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0],
+  [0,1,1,1,1,1,1,1,0,1,1,1,0,0,0,0,0,0],
+  [1,1,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0],
+];
+
+const CD_TREX_DUCK2 = [
+  [0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,1,1,2,1,1,1,0,0,0,0],
+  [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0],
+  [0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0],
+  [0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0],
+  [0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0],
+  [0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0],
+  [0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0],
+  [0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0],
+  [0,1,1,1,1,0,1,1,1,0,1,0,0,0,0,0,0,0],
+  [1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0],
+];
+
+// Птеродактиль (крылья вверх/вниз)
+const CD_PTERO_UP = [
+  [0,0,0,1,1,0,0,0,0,0,0,0],
+  [0,0,1,1,1,1,0,0,0,0,0,0],
+  [0,1,1,1,1,1,1,1,0,0,0,0],
+  [1,1,1,1,1,1,1,1,1,0,0,0],
+  [1,1,1,2,1,1,1,1,1,1,1,0],
+  [0,1,1,1,1,1,1,1,1,1,0,0],
+  [0,0,0,1,1,1,1,1,1,0,0,0],
+  [0,0,0,0,0,1,1,1,0,0,0,0],
+  [0,0,0,0,0,0,1,0,0,0,0,0],
+];
+
+const CD_PTERO_DOWN = [
+  [0,0,0,0,0,0,1,0,0,0,0,0],
+  [0,0,0,0,0,1,1,1,0,0,0,0],
+  [0,0,0,1,1,1,1,1,1,0,0,0],
+  [1,1,1,1,1,1,1,1,1,1,1,0],
+  [1,1,1,2,1,1,1,1,1,1,0,0],
+  [0,1,1,1,1,1,1,1,1,0,0,0],
+  [0,0,1,1,1,1,1,0,0,0,0,0],
+  [0,0,1,1,0,0,0,0,0,0,0,0],
+  [0,1,1,0,0,0,0,0,0,0,0,0],
+];
+
+// ── Отрисовка пиксельного спрайта ───────────────────────────────
 function _cdDrawPixelSprite(ctx, grid, x, y, ps, color, eyeColor) {
-  ctx.fillStyle = color;
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r].length; c++) {
       const v = grid[r][c];
       if (!v) continue;
-      ctx.fillStyle = v === 2 ? eyeColor : color;
-      ctx.fillRect(Math.round(x + c*ps), Math.round(y + r*ps), ps, ps);
+      if (v === 2) {
+        ctx.fillStyle = eyeColor;
+        ctx.fillRect(Math.round(x + c*ps), Math.round(y + r*ps), ps, ps);
+      } else if (v === 4) {
+        // X-eyes (dead)
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.round(x + c*ps), Math.round(y + r*ps), ps, ps);
+        ctx.fillStyle = eyeColor;
+        const s = Math.max(1, Math.floor(ps*0.35));
+        ctx.fillRect(Math.round(x + c*ps), Math.round(y + r*ps), s, s);
+        ctx.fillRect(Math.round(x + c*ps + ps-s), Math.round(y + r*ps), s, s);
+        ctx.fillRect(Math.round(x + c*ps + Math.floor(ps/2)-Math.floor(s/2)), Math.round(y + r*ps + Math.floor(ps/2)-Math.floor(s/2)), s, s);
+      } else {
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.round(x + c*ps), Math.round(y + r*ps), ps, ps);
+      }
     }
   }
 }
 
-// ── Cactus shapes ─────────────────────────────────────────────────
-function _cdDrawCactus(ctx, x, y, cellH, color) {
-  const ps = Math.max(2, Math.round(cellH / 12));
-  const h = cellH;
-  const w = ps * 5;
-  // Main trunk
+// ── Кактусы (точный Chrome-стиль) ────────────────────────────────
+// Типы: sm1/sm2/sm3 (маленькие 1-3 шт), lg1/lg2/lg3 (большие)
+function _cdDrawCactus(ctx, obs, color) {
+  const { x, y, type, ps } = obs;
   ctx.fillStyle = color;
-  ctx.fillRect(x + ps, y, ps*3, h);
-  // Left arm
-  ctx.fillRect(x, y + h*0.3, ps, h*0.25);
-  ctx.fillRect(x, y + h*0.3, ps*2, ps);
-  // Right arm
-  ctx.fillRect(x + ps*4, y + h*0.4, ps, h*0.25);
-  ctx.fillRect(x + ps*3, y + h*0.4, ps*2, ps);
-  // Spikes on top
-  ctx.fillRect(x + ps + ps, y - ps, ps, ps*2);
-}
-
-function _cdDrawBigCactus(ctx, x, y, cellH, color) {
-  const ps = Math.max(2, Math.round(cellH / 10));
-  ctx.fillStyle = color;
-  // Three trunks
-  for (let i = 0; i < 3; i++) {
-    const bx = x + i*(ps*4);
-    const topY = y + (i===1 ? 0 : cellH*0.2);
-    ctx.fillRect(bx + ps, topY, ps*2, y + cellH - topY);
-    // Arms on outer trunks
-    if (i===0) {
-      ctx.fillRect(bx, topY + cellH*0.25, ps, cellH*0.2);
-      ctx.fillRect(bx, topY + cellH*0.25, ps*2, ps);
+  if (type.startsWith('sm')) {
+    const count = parseInt(type[2]);
+    const cw = ps * 5, ch = ps * 8;
+    const gap = ps * 2;
+    for (let i = 0; i < count; i++) {
+      const bx = x + i * (cw + gap);
+      // Ствол
+      ctx.fillRect(bx + ps, y, ps * 3, ch);
+      // Верхушка
+      ctx.fillRect(bx + ps*1.5, y - ps, ps*2, ps);
+      // Левая рука
+      ctx.fillRect(bx, y + ch*0.25, ps, ch*0.3);
+      ctx.fillRect(bx, y + ch*0.25, ps*2, ps);
+      ctx.fillRect(bx + ps, y + ch*0.25 - ps, ps, ps);
+      // Правая рука
+      ctx.fillRect(bx + ps*4, y + ch*0.35, ps, ch*0.3);
+      ctx.fillRect(bx + ps*3, y + ch*0.35, ps*2, ps);
+      ctx.fillRect(bx + ps*3, y + ch*0.35 - ps, ps, ps);
     }
-    if (i===2) {
-      ctx.fillRect(bx + ps*2, topY + cellH*0.25, ps, cellH*0.2);
-      ctx.fillRect(bx + ps, topY + cellH*0.25, ps*3, ps);
+  } else {
+    // Большой кактус
+    const count = parseInt(type[2]);
+    const cw = ps * 7, ch = ps * 12;
+    const gap = ps * 2;
+    for (let i = 0; i < count; i++) {
+      const bx = x + i * (cw + gap);
+      // Ствол
+      ctx.fillRect(bx + ps*2, y, ps*3, ch);
+      // Верхушка
+      ctx.fillRect(bx + ps*2, y - ps, ps*3, ps);
+      // Левая рука
+      ctx.fillRect(bx, y + ch*0.2, ps*2, ch*0.3);
+      ctx.fillRect(bx, y + ch*0.2, ps*3, ps*2);
+      ctx.fillRect(bx + ps, y + ch*0.2 - ps*2, ps*2, ps*2);
+      // Правая рука
+      ctx.fillRect(bx + ps*5, y + ch*0.3, ps*2, ch*0.3);
+      ctx.fillRect(bx + ps*4, y + ch*0.3, ps*3, ps*2);
+      ctx.fillRect(bx + ps*4, y + ch*0.3 - ps*2, ps*2, ps*2);
     }
   }
 }
 
-// ── Pterodactyl ───────────────────────────────────────────────────
-const CD_PTERO_UP = [
-  [0,0,1,1,0,0,0,0,0,0,0],
-  [0,1,1,1,1,1,1,0,0,0,0],
-  [1,1,1,1,1,1,1,1,0,0,0],
-  [1,1,1,2,1,1,1,1,1,0,0],
-  [0,1,1,1,1,1,1,1,1,1,0],
-  [0,0,1,1,1,1,1,1,1,0,0],
-  [0,0,0,0,0,1,1,1,0,0,0],
-  [0,0,0,0,0,0,1,0,0,0,0],
-];
+// ── Облако ────────────────────────────────────────────────────────
+function _cdDrawCloud(ctx, c, color) {
+  ctx.fillStyle = `rgba(${color === '#535353' ? '83,83,83' : '200,200,200'},0.5)`;
+  const { x, y, w } = c;
+  const h = w * 0.28;
+  ctx.beginPath();
+  ctx.arc(x + w*0.22, y + h*0.6, h*0.55, Math.PI, 0);
+  ctx.arc(x + w*0.45, y + h*0.3, h*0.75, Math.PI, 0);
+  ctx.arc(x + w*0.72, y + h*0.55, h*0.5, Math.PI, 0);
+  ctx.arc(x + w*0.88, y + h*0.65, h*0.38, Math.PI, 0);
+  ctx.lineTo(x + w, y + h);
+  ctx.lineTo(x, y + h);
+  ctx.closePath();
+  ctx.fill();
+}
 
-const CD_PTERO_DOWN = [
-  [0,0,0,0,0,0,1,0,0,0,0],
-  [0,0,0,0,0,1,1,1,0,0,0],
-  [0,1,1,1,1,1,1,1,1,0,0],
-  [1,1,1,2,1,1,1,1,1,1,0],
-  [1,1,1,1,1,1,1,1,1,0,0],
-  [0,1,1,1,1,1,1,1,0,0,0],
-  [0,0,0,1,1,0,0,0,0,0,0],
-  [0,1,1,0,0,0,0,0,0,0,0],
-];
+// ── Spawn obstacle ────────────────────────────────────────────────
+function _cdSpawnObstacle() {
+  const ps = _cdPixelSize();
 
-// ── Main init ─────────────────────────────────────────────────────
+  // Birds: начинают появляться после score 300, чаще при высокой скорости
+  if (cdScore > 300 && cdSpeed > 9 && Math.random() < 0.28) {
+    // Три высоты: низко (можно утиться), средне (прыгай), высоко (стой)
+    const hy = [
+      cdGround - ps*9,    // низко — надо пригнуться
+      cdGround - ps*15,   // средне — можно прыгнуть
+      cdGround - ps*22,   // высоко — просто беги
+    ];
+    const by = hy[Math.floor(Math.random() * hy.length)];
+    cdBirds.push({ x: cdW + 20, y: by, wing: 0, wingTick: 0, ps });
+    return;
+  }
+
+  // Кактус
+  const types = ['sm1','sm1','sm1','sm2','sm2','sm3','lg1','lg1','lg2','lg3'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  const cps = ps; // pixel size для кактуса = тот же
+
+  let w, h;
+  if (type.startsWith('sm')) {
+    const count = parseInt(type[2]);
+    h = cps * 8;
+    w = count * (cps*5) + (count-1)*(cps*2);
+  } else {
+    const count = parseInt(type[2]);
+    h = cps * 12;
+    w = count * (cps*7) + (count-1)*(cps*2);
+  }
+
+  cdObstacles.push({
+    x: cdW + 20,
+    y: cdGround - h,
+    w, h, type, ps: cps
+  });
+}
+
+// ── Pixel size ────────────────────────────────────────────────────
+function _cdPixelSize() { return Math.max(2, Math.round(cdH / 60)); }
+
+// ── Init ──────────────────────────────────────────────────────────
 function dinoInit() {
   cdHi = getHi('dino');
   const canvas = document.getElementById('dino-canvas');
   if (!canvas) return;
   const parent = canvas.parentElement;
-  canvas.width  = Math.min(parent.offsetWidth - 4, 520);
-  canvas.height = Math.round(canvas.width * 0.33);
+  canvas.width  = Math.min(parent.offsetWidth - 4, 560);
+  canvas.height = Math.round(canvas.width * 0.32);
   cdW = canvas.width; cdH = canvas.height;
-  cdGround = Math.round(cdH * 0.80);
+  cdGround = Math.round(cdH * 0.82);
   _cdInitStars();
   _cdDrawIdle();
   canvas.ontouchstart = (e) => { e.preventDefault(); _cdTap(); };
   canvas.onclick = _cdTap;
-  // Keyboard
-  document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); _cdTap(); }
-    if (e.code === 'ArrowDown') { _cdDuck(true); }
-  });
-  document.addEventListener('keyup', (e) => {
-    if (e.code === 'ArrowDown') { _cdDuck(false); }
-  });
+  document.addEventListener('keydown', _cdKeyDown);
+  document.addEventListener('keyup',   _cdKeyUp);
+}
+
+function _cdKeyDown(e) {
+  if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); _cdTap(); }
+  if (e.code === 'ArrowDown') { e.preventDefault(); _cdDuck(true); }
+}
+function _cdKeyUp(e) {
+  if (e.code === 'ArrowDown') _cdDuck(false);
 }
 
 function _cdInitStars() {
   cdStars = [];
-  for (let i = 0; i < 20; i++) {
-    cdStars.push({ x: Math.random()*cdW, y: Math.random()*(cdGround*0.6), r: Math.random()<0.5?1:2 });
+  for (let i = 0; i < 25; i++) {
+    cdStars.push({
+      x: Math.random() * cdW,
+      y: Math.random() * (cdGround * 0.55),
+      r: Math.random() < 0.5 ? 1 : 1.5,
+      twinkle: Math.random()
+    });
   }
 }
 
@@ -1601,25 +1843,21 @@ function _cdTap() {
   if (cdOver) { dinoRestart(); return; }
   if (!cdRunning) { _cdStartGame(); return; }
   if (cdDino.onGround) _cdJump();
-  else if (!cdDino.onGround && !cdDino.ducking) {
-    // double-tap mid-air = faster fall
-    cdDino.vy = Math.max(cdDino.vy, 4);
-  }
+  else if (!cdDino.ducking) cdDino.vy = Math.max(cdDino.vy, 5); // fast fall
 }
 
 function _cdDuck(on) {
   if (!cdRunning || cdOver) return;
   cdDino.ducking = on;
-  if (on && !cdDino.onGround) cdDino.vy = Math.max(cdDino.vy, 5);
+  if (on && !cdDino.onGround) cdDino.vy = Math.max(cdDino.vy, 6);
 }
 
 function _cdJump() {
-  if (!cdDino.onGround) return;
+  if (!cdDino.onGround || cdDino.ducking) return;
   const d = CD_DIFF[cdDifficulty] || CD_DIFF.normal;
   cdDino.vy = d.jumpV;
   cdDino.onGround = false;
-  cdDino.ducking = false;
-  SFX.play && SFX.play('btnClick');
+  SFX.play && SFX.play('dinoJump');
 }
 
 function _cdStartGame() {
@@ -1630,21 +1868,25 @@ function _cdStartGame() {
   cdObstacles = []; cdClouds = []; cdBirds = [];
   cdDust = [];
   cdNightAlpha = 0; cdDayNight = 0;
+  cdScoreFlash = 0;
 
   const ps = _cdPixelSize();
   const dinoH = CD_TREX_STAND.length * ps;
   const dinoW = CD_TREX_STAND[0].length * ps;
   cdDino = {
-    x: Math.round(cdW * 0.12),
+    x: Math.round(cdW * 0.10),
     y: cdGround - dinoH,
     w: dinoW, h: dinoH,
     vy: 0, onGround: true,
     ducking: false, frame: 0, frameTick: 0
   };
 
-  // Initial clouds
   for (let i = 0; i < 3; i++) {
-    cdClouds.push({ x: cdW * (0.3 + i * 0.3), y: Math.random() * cdGround * 0.4 + 20, w: 60 + Math.random()*40 });
+    cdClouds.push({
+      x: cdW * (0.25 + i * 0.3),
+      y: 20 + Math.random() * (cdGround * 0.35),
+      w: 60 + Math.random() * 35
+    });
   }
 
   _cdJump();
@@ -1654,11 +1896,13 @@ function _cdStartGame() {
 
 function dinoRestart() {
   if (cdRaf) cancelAnimationFrame(cdRaf);
-  cdRunning = false;
-  cdOver = false;
+  cdRunning = false; cdOver = false;
   cdDifficulty = dinoDifficulty;
   _cdStartGame();
 }
+
+let cdScoreFlash = 0;
+let cdGroundOffset = 0;
 
 function _cdLoop(ts) {
   if (!cdRunning) return;
@@ -1669,144 +1913,106 @@ function _cdLoop(ts) {
   _cdDraw();
 }
 
-function _cdPixelSize() { return Math.max(2, Math.round(cdH / 55)); }
-
 function _cdTick(dt) {
   const d = CD_DIFF[cdDifficulty] || CD_DIFF.normal;
-  const dtf = dt / 16.67; // normalized to 60fps
+  const dtf = dt / 16.67;
 
-  // Speed ramp
-  cdSpeed = Math.min(cdSpeed + d.accel * dtf, 22);
+  cdSpeed = Math.min(cdSpeed + d.accel * dtf, 20);
   cdFrameCount++;
-  cdScore = Math.floor(cdFrameCount * cdSpeed / 10);
+  const prevScore = cdScore;
+  cdScore = Math.floor(cdFrameCount * cdSpeed / 9);
 
-  // Day/Night cycle every 700 score
-  const cycle = Math.floor(cdScore / 700) % 2;
-  if (cycle !== cdDayNight) {
-    cdDayNight = cycle;
-    cdNightAlpha = 0;
+  // Score milestone flash & sound
+  const milestone = Math.floor(cdScore / 100);
+  if (milestone > Math.floor(prevScore / 100) && milestone > 0) {
+    cdScoreFlash = 20;
+    SFX.play && SFX.play('btnClick');
   }
-  if (cdDayNight === 1 && cdNightAlpha < 1) cdNightAlpha = Math.min(1, cdNightAlpha + 0.005 * dtf);
-  if (cdDayNight === 0 && cdNightAlpha > 0) cdNightAlpha = Math.max(0, cdNightAlpha - 0.005 * dtf);
+  if (cdScoreFlash > 0) cdScoreFlash--;
+
+  // Day/Night каждые 700 очков
+  const cycle = Math.floor(cdScore / 700) % 2;
+  if (cycle !== cdDayNight) { cdDayNight = cycle; }
+  if (cdDayNight === 1 && cdNightAlpha < 1) cdNightAlpha = Math.min(1, cdNightAlpha + 0.004 * dtf);
+  if (cdDayNight === 0 && cdNightAlpha > 0) cdNightAlpha = Math.max(0, cdNightAlpha - 0.004 * dtf);
 
   const ps = _cdPixelSize();
 
   // Dino physics
   if (!cdDino.onGround) {
     cdDino.vy += d.gravity * dtf;
-    cdDino.y += cdDino.vy * dtf;
+    cdDino.y  += cdDino.vy * dtf;
   }
-  const dinoH = cdDino.ducking ? CD_TREX_DUCK.length * ps : CD_TREX_STAND.length * ps;
+  const duckGrid = cdDino.frame === 0 ? CD_TREX_DUCK1 : CD_TREX_DUCK2;
+  const dinoH = cdDino.ducking ? duckGrid.length * ps : CD_TREX_STAND.length * ps;
   const groundY = cdGround - dinoH;
   if (cdDino.y >= groundY) {
     cdDino.y = groundY; cdDino.vy = 0; cdDino.onGround = true;
-    // Dust particles on landing
-    if (Math.abs(cdDino.vy) > 3) {
-      for (let i = 0; i < 4; i++) {
-        cdDust.push({ x: cdDino.x + cdDino.w*0.3 + Math.random()*cdDino.w*0.4,
-          y: cdGround, vx: (Math.random()-0.5)*2, vy: -Math.random()*2,
-          life: 1, r: 2 + Math.random()*3 });
-      }
-    }
   }
 
-  // Leg animation
+  // Анимация ног
   cdDino.frameTick += dtf;
-  if (cdDino.frameTick > 8) { cdDino.frame = 1 - cdDino.frame; cdDino.frameTick = 0; }
+  const animSpeed = Math.max(3, 10 - cdSpeed * 0.4);
+  if (cdDino.frameTick >= animSpeed) { cdDino.frame = 1 - cdDino.frame; cdDino.frameTick = 0; }
 
-  // Clouds
-  for (const c of cdClouds) c.x -= cdSpeed * 0.25 * dtf;
-  cdClouds = cdClouds.filter(c => c.x + c.w > 0);
-  if (!cdClouds.length || cdClouds[cdClouds.length-1].x < cdW - 150) {
-    cdClouds.push({ x: cdW + 20, y: Math.random()*cdGround*0.45+15, w: 55+Math.random()*50 });
+  // Земля (offset для текстуры)
+  cdGroundOffset = (cdGroundOffset + cdSpeed * dtf) % 600;
+
+  // Облака
+  for (const c of cdClouds) c.x -= cdSpeed * 0.2 * dtf;
+  cdClouds = cdClouds.filter(c => c.x + c.w > -10);
+  if (!cdClouds.length || cdClouds[cdClouds.length-1].x < cdW - 180) {
+    cdClouds.push({ x: cdW + 20, y: 15 + Math.random() * cdGround * 0.4, w: 55 + Math.random() * 40 });
   }
 
-  // Dust particles
-  for (const p of cdDust) {
-    p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.06;
-  }
-  cdDust = cdDust.filter(p => p.life > 0);
-
-  // Obstacles
-  const minGap = Math.round(cdW * 0.4);
+  // Препятствия
+  const minGap = cdW * 0.35 + Math.random() * cdW * 0.35;
   const last = cdObstacles[cdObstacles.length - 1];
-  if (!last || last.x < cdW - minGap - Math.random() * cdW * 0.4) {
+  const lastB = cdBirds[cdBirds.length - 1];
+  const lastAny = (last ? last.x : -9999);
+  const lastBX  = (lastB ? lastB.x : -9999);
+  if (Math.max(lastAny, lastBX) < cdW - minGap) {
     _cdSpawnObstacle();
   }
 
+  // Collision & move obstacles
+  const dinoGrid = cdDino.ducking ? duckGrid : CD_TREX_STAND;
+  const dw = dinoGrid[0].length * ps;
+  const dh = dinoH;
+  const margin = ps * 1.5;
+
   for (const obs of cdObstacles) {
     obs.x -= cdSpeed * dtf;
-    // Collision
-    const dino = cdDino;
-    const dw = dino.ducking ? CD_TREX_DUCK[0].length * ps : CD_TREX_STAND[0].length * ps;
-    const dh = dinoH;
-    const margin = ps * 2;
     if (!window._cheatNoHitbox &&
-      dino.x + dw - margin > obs.x + margin &&
-      dino.x + margin < obs.x + obs.w - margin &&
-      dino.y + dh - margin > obs.y + margin &&
-      dino.y + margin < obs.y + obs.h - margin
-    ) {
+        cdDino.x + dw - margin > obs.x + margin &&
+        cdDino.x + margin < obs.x + obs.w - margin &&
+        cdDino.y + dh - margin > obs.y + margin &&
+        cdDino.y + margin < obs.y + obs.h - margin) {
       _cdDie(); return;
     }
   }
-  cdObstacles = cdObstacles.filter(o => o.x + o.w > -20);
+  cdObstacles = cdObstacles.filter(o => o.x + o.w > -40);
 
   // Birds
-  let bwTick = false;
   for (const b of cdBirds) {
-    b.x -= cdSpeed * 1.1 * dtf;
+    b.x -= cdSpeed * 1.05 * dtf;
     b.wingTick += dtf;
-    if (b.wingTick > 12) { b.wing = 1 - b.wing; b.wingTick = 0; bwTick = true; }
-    const ps2 = ps;
+    const wSpeed = Math.max(5, 18 - cdSpeed);
+    if (b.wingTick >= wSpeed) { b.wing = 1 - b.wing; b.wingTick = 0; }
     const bGrid = b.wing ? CD_PTERO_UP : CD_PTERO_DOWN;
-    const bw = bGrid[0].length * ps2, bh = bGrid.length * ps2;
-    const dino = cdDino;
-    const dw2 = dino.ducking ? CD_TREX_DUCK[0].length * ps : CD_TREX_STAND[0].length * ps;
-    const margin = ps * 2;
+    const bps = b.ps || ps;
+    const bw = bGrid[0].length * bps, bh = bGrid.length * bps;
     if (!window._cheatNoHitbox &&
-      dino.x + dw2 - margin > b.x + margin &&
-      dino.x + margin < b.x + bw - margin &&
-      dino.y + dinoH - margin > b.y + margin &&
-      dino.y + margin < b.y + bh - margin
-    ) {
+        cdDino.x + dw - margin > b.x + margin &&
+        cdDino.x + margin < b.x + bw - margin &&
+        cdDino.y + dh - margin > b.y + margin &&
+        cdDino.y + margin < b.y + bh - margin) {
       _cdDie(); return;
     }
   }
   cdBirds = cdBirds.filter(b => b.x + 80 > 0);
 
-  // Score milestone flash
-  if (cdScore > 0 && cdScore % 100 === 0 && cdFrameCount % 6 === 0) {
-    SFX.play && SFX.play('btnClick');
-  }
   dinoUpdateScore();
-}
-
-function _cdSpawnObstacle() {
-  const ps = _cdPixelSize();
-  const cellH = Math.round(cdH * 0.28);
-  const r = Math.random();
-
-  // Bird: spawn more often at high speed
-  if (cdSpeed > 10 && r < 0.25) {
-    const heights = [cdGround - cellH * 1.8, cdGround - cellH * 1.1, cdGround - cellH * 0.55];
-    const by = heights[Math.floor(Math.random() * heights.length)];
-    cdBirds.push({ x: cdW + 20, y: by, wing: 0, wingTick: 0 });
-    return;
-  }
-
-  // Cactus group
-  const count = Math.random() < 0.4 ? 2 : 1;
-  const big   = Math.random() < 0.35;
-  const h = big ? cellH * 1.4 : cellH;
-  const w = big ? ps*12 : ps*5;
-  cdObstacles.push({
-    x: cdW + 20,
-    y: cdGround - h,
-    w: w * count + (count > 1 ? ps*2 : 0),
-    h,
-    big, count
-  });
 }
 
 function _cdDie() {
@@ -1820,133 +2026,179 @@ function _cdDie() {
   triggerScreamer();
 }
 
+// ── DRAW ──────────────────────────────────────────────────────────
 function _cdDraw() {
   const canvas = document.getElementById('dino-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const ps = _cdPixelSize();
-  const isDark = document.documentElement.getAttribute('data-theme') === 'amoled';
+  const ps  = _cdPixelSize();
 
-  // Background
-  const dayBg   = isDark ? '#111' : '#f7f7f7';
-  const nightBg = isDark ? '#0a0a14' : '#1a1a2e';
-  ctx.fillStyle = dayBg;
+  // Тема
+  const isDark = document.documentElement.getAttribute('data-theme') !== null &&
+    document.documentElement.getAttribute('data-theme') !== 'light';
+  const dayBgColor   = isDark ? '#1a1a1a' : '#ffffff';
+  const nightBgColor = isDark ? '#050510' : '#0d0d2b';
+  const dinoCol  = isDark
+    ? `rgba(240,240,240,${0.6 + cdNightAlpha * 0.4})`
+    : `rgba(83,83,83,${1 - cdNightAlpha * 0.2})`;
+  const dinoNight = isDark ? '#e8e8f0' : '#ffffff';
+  const mainCol  = cdNightAlpha > 0.5 ? dinoNight : dinoCol;
+  const eyeCol   = cdNightAlpha > 0.5
+    ? (isDark ? '#050510' : '#0d0d2b')
+    : (isDark ? '#1a1a1a' : '#ffffff');
+
+  // Фон
+  ctx.fillStyle = dayBgColor;
   ctx.fillRect(0, 0, cdW, cdH);
-
   if (cdNightAlpha > 0) {
     ctx.globalAlpha = cdNightAlpha;
-    ctx.fillStyle = nightBg;
+    ctx.fillStyle = nightBgColor;
     ctx.fillRect(0, 0, cdW, cdH);
     ctx.globalAlpha = 1;
-    // Stars
-    ctx.fillStyle = `rgba(255,255,255,${cdNightAlpha * 0.9})`;
+
+    // Звёзды
     for (const s of cdStars) {
+      const twink = 0.5 + 0.5 * Math.sin(s.twinkle + cdFrameCount * 0.05);
+      ctx.globalAlpha = cdNightAlpha * (0.4 + 0.6 * twink);
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
       ctx.fill();
+      s.twinkle += 0.02;
     }
-  }
+    ctx.globalAlpha = 1;
 
-  const textColor = cdNightAlpha > 0.5 ? '#f0ede8' : (isDark ? '#555' : '#535353');
-  const dinoColor = textColor;
-  const eyeColor  = cdNightAlpha > 0.5 ? '#0a0a14' : (isDark ? '#111' : '#f7f7f7');
-  const cactColor = textColor;
-
-  // Clouds
-  ctx.fillStyle = `rgba(${cdNightAlpha > 0.5 ? '200,200,255' : '180,180,180'},${0.6 - cdNightAlpha * 0.4})`;
-  for (const c of cdClouds) {
+    // Луна
+    const moonX = cdW * 0.82, moonY = cdGround * 0.25;
+    ctx.globalAlpha = cdNightAlpha;
+    ctx.fillStyle = '#d4e0ff';
     ctx.beginPath();
-    ctx.arc(c.x + c.w * 0.3, c.y + 8, 10, Math.PI, 0);
-    ctx.arc(c.x + c.w * 0.6, c.y + 4, 14, Math.PI, 0);
-    ctx.arc(c.x + c.w * 0.8, c.y + 9, 9, Math.PI, 0);
-    ctx.closePath(); ctx.fill();
-  }
-
-  // Ground line
-  ctx.fillStyle = textColor;
-  ctx.fillRect(0, cdGround, cdW, Math.max(2, ps));
-  // Ground texture dots
-  for (let gx = (cdFrameCount * cdSpeed * 0.5) % 40; gx < cdW; gx += 38 + Math.sin(gx)*8) {
-    ctx.fillRect(Math.round(gx), cdGround + ps*2, ps, ps);
-  }
-
-  // Dust particles
-  for (const p of cdDust) {
-    ctx.globalAlpha = p.life * 0.6;
-    ctx.fillStyle = textColor;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.arc(moonX, moonY, ps * 4.5, 0, Math.PI*2);
     ctx.fill();
+    ctx.fillStyle = nightBgColor;
+    ctx.beginPath();
+    ctx.arc(moonX + ps*1.5, moonY - ps*1, ps * 4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
-  ctx.globalAlpha = 1;
 
-  // Obstacles
+  // Облака
+  for (const c of cdClouds) _cdDrawCloud(ctx, c, mainCol);
+
+  // Земля — основная линия
+  ctx.fillStyle = mainCol;
+  const groundH = Math.max(2, ps);
+  ctx.fillRect(0, cdGround, cdW, groundH);
+
+  // Земля — текстура (движущиеся точки и черточки)
+  ctx.fillStyle = mainCol;
+  const gOff = cdGroundOffset;
+  // Большие камни
+  const bigStones = [0, 120, 240, 320, 440, 520, 600];
+  for (const base of bigStones) {
+    const gx = ((base - gOff % 600) % 600 + 600) % 600;
+    if (gx < cdW) {
+      ctx.fillRect(Math.round(gx * (cdW/600)), cdGround + groundH, ps*3, ps);
+    }
+  }
+  // Мелкие точки
+  const smStones = [50, 150, 200, 310, 390, 470, 530, 590];
+  for (const base of smStones) {
+    const gx = ((base - gOff % 600) % 600 + 600) % 600;
+    if (gx < cdW) {
+      ctx.fillRect(Math.round(gx * (cdW/600)), cdGround + groundH + ps, ps, ps);
+    }
+  }
+
+  // Кактусы
   for (const obs of cdObstacles) {
-    if (obs.big) {
-      _cdDrawBigCactus(ctx, obs.x, obs.y, obs.h, cactColor);
-    } else {
-      for (let i = 0; i < obs.count; i++) {
-        _cdDrawCactus(ctx, obs.x + i*(ps*5 + ps*1), obs.y, obs.h, cactColor);
-      }
-    }
+    _cdDrawCactus(ctx, obs, mainCol);
   }
 
-  // Birds
+  // Птеродактили
   for (const b of cdBirds) {
-    const grid = b.wing ? CD_PTERO_UP : CD_PTERO_DOWN;
-    _cdDrawPixelSprite(ctx, grid, b.x, b.y, ps, dinoColor, eyeColor);
+    const bGrid = b.wing ? CD_PTERO_UP : CD_PTERO_DOWN;
+    const bps = b.ps || ps;
+    _cdDrawPixelSprite(ctx, bGrid, b.x, b.y, bps, mainCol, eyeCol);
   }
 
-  // Dino
+  // Динозавр
   const dino = cdDino;
-  let grid;
-  if (cdOver) {
-    grid = CD_TREX_STAND; // dead = stand (flash effect)
-    if (Math.floor(cdFrameCount / 3) % 2 === 0) {
-      _cdDrawPixelSprite(ctx, grid, dino.x, dino.y, ps, dinoColor, eyeColor);
+  if (cdDino.ducking) {
+    const dGrid = dino.frame === 0 ? CD_TREX_DUCK1 : CD_TREX_DUCK2;
+    const dh = dGrid.length * ps;
+    _cdDrawPixelSprite(ctx, dGrid, dino.x, cdGround - dh, ps, mainCol, eyeCol);
+  } else if (cdOver) {
+    // Мигающий мёртвый T-Rex
+    if (Math.floor(cdFrameCount / 4) % 2 === 0) {
+      _cdDrawPixelSprite(ctx, CD_TREX_DEAD, dino.x, dino.y, ps, mainCol, eyeCol);
     }
-  } else if (!cdRunning && !cdOver) {
-    // idle
-    grid = CD_TREX_STAND;
-    _cdDrawPixelSprite(ctx, grid, dino.x, dino.y, ps, dinoColor, eyeColor);
-  } else if (dino.ducking) {
-    grid = CD_TREX_DUCK;
-    const dh = grid.length * ps;
-    _cdDrawPixelSprite(ctx, grid, dino.x, cdGround - dh, ps, dinoColor, eyeColor);
+  } else if (!cdRunning) {
+    _cdDrawPixelSprite(ctx, CD_TREX_STAND, dino.x, dino.y, ps, mainCol, eyeCol);
   } else {
-    grid = dino.onGround ? (dino.frame === 0 ? CD_TREX_RUN1 : CD_TREX_RUN2) : CD_TREX_STAND;
-    _cdDrawPixelSprite(ctx, grid, dino.x, dino.y, ps, dinoColor, eyeColor);
+    const runGrid = dino.onGround
+      ? (dino.frame === 0 ? CD_TREX_RUN1 : CD_TREX_RUN2)
+      : CD_TREX_STAND;
+    _cdDrawPixelSprite(ctx, runGrid, dino.x, dino.y, ps, mainCol, eyeCol);
   }
 
-  // Score
-  ctx.fillStyle = textColor;
-  ctx.font = `bold ${Math.max(10, ps*4)}px 'JetBrains Mono', monospace`;
-  ctx.textAlign = 'right';
-  const hiStr = 'HI ' + String(cdHi).padStart(5, '0');
-  const scoreStr = String(cdScore).padStart(5, '0');
-  ctx.fillText(hiStr + '  ' + scoreStr, cdW - 8, 20);
-  ctx.textAlign = 'left';
+  // ── Score display ─────────────────────────────────────────────
+  const scoreVisible = cdScoreFlash === 0 || Math.floor(cdScoreFlash / 3) % 2 === 0;
+  if (scoreVisible) {
+    ctx.fillStyle = mainCol;
+    ctx.font = `bold ${Math.max(10, ps * 3.5)}px 'JetBrains Mono', 'Courier New', monospace`;
+    ctx.textAlign = 'right';
+    const hi    = 'HI ' + String(cdHi).padStart(5, '0');
+    const score = String(cdScore).padStart(5, '0');
+    ctx.fillText(hi + '   ' + score, cdW - ps, ps * 5);
+    ctx.textAlign = 'left';
+  }
 
-  // Overlay messages
+  // ── Overlay messages ──────────────────────────────────────────
   if (!cdRunning && !cdOver) {
-    _cdPaintMsg('Тапни чтобы начать');
+    _cdDrawStartMsg(ctx, ps, mainCol, eyeCol);
   }
   if (cdOver) {
-    _cdPaintMsg('💀 GAME OVER   Тапни для рестарта');
+    _cdDrawGameOver(ctx, ps, mainCol, eyeCol);
   }
 }
 
-function _cdPaintMsg(msg) {
-  const canvas = document.getElementById('dino-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const ps = _cdPixelSize();
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(0, cdH/2 - ps*7, cdW, ps*14);
-  ctx.fillStyle = '#f0ede8';
-  ctx.font = `bold ${Math.max(11, ps*4)}px inherit`;
+function _cdDrawStartMsg(ctx, ps, color, bg) {
+  const cx = cdW / 2, cy = cdH * 0.38;
+  ctx.fillStyle = color;
+  ctx.font = `bold ${Math.max(11, ps*3)}px inherit`;
   ctx.textAlign = 'center';
-  ctx.fillText(msg, cdW/2, cdH/2 + ps*2);
+  ctx.fillText('Нажми или тапни, чтобы начать', cx, cy);
+  ctx.textAlign = 'left';
+}
+
+function _cdDrawGameOver(ctx, ps, color, bg) {
+  const cx = cdW / 2, cy = cdH * 0.33;
+  const textH = Math.max(13, ps * 4);
+  // GAME OVER
+  ctx.fillStyle = color;
+  ctx.font = `900 ${textH}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText('GAME OVER', cx, cy);
+  // Restart icon — круговая стрелка
+  const r = Math.max(12, ps * 5);
+  const iconY = cy + r * 1.6;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, ps * 0.8);
+  ctx.beginPath();
+  ctx.arc(cx, iconY, r, -Math.PI * 0.1, Math.PI * 1.7);
+  ctx.stroke();
+  // Стрелка наконечник
+  const ax = cx + r * Math.cos(-Math.PI * 0.1);
+  const ay = iconY + r * Math.sin(-Math.PI * 0.1);
+  const arrowSize = Math.max(4, ps * 1.5);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay - arrowSize);
+  ctx.lineTo(ax + arrowSize * 1.2, ay);
+  ctx.lineTo(ax - arrowSize * 0.3, ay + arrowSize * 0.8);
+  ctx.closePath();
+  ctx.fill();
   ctx.textAlign = 'left';
 }
 
@@ -1957,18 +2209,33 @@ function _cdDrawIdle() {
   const dinoH = CD_TREX_STAND.length * ps;
   const dinoW = CD_TREX_STAND[0].length * ps;
   cdDino = {
-    x: Math.round(cdW * 0.12),
+    x: Math.round(cdW * 0.10),
     y: cdGround - dinoH,
     w: dinoW, h: dinoH,
     vy: 0, onGround: true, ducking: false, frame: 0, frameTick: 0
   };
+  cdRunning = false; cdOver = false; cdScore = 0; cdSpeed = 0;
+  cdNightAlpha = 0; cdClouds = []; cdObstacles = []; cdBirds = [];
+  cdGroundOffset = 0; cdFrameCount = 0;
   _cdDraw();
+  _cdDrawStartMsg(
+    document.getElementById('dino-canvas').getContext('2d'),
+    ps,
+    document.documentElement.getAttribute('data-theme') !== null &&
+      document.documentElement.getAttribute('data-theme') !== 'light'
+      ? 'rgba(240,240,240,0.6)' : 'rgba(83,83,83,1)',
+    ''
+  );
 }
 
 function dinoStop() {
   if (cdRaf) cancelAnimationFrame(cdRaf);
   cdRunning = false;
+  document.removeEventListener('keydown', _cdKeyDown);
+  document.removeEventListener('keyup',   _cdKeyUp);
 }
+
+
 
 function dinoUpdateScore() {
   const el = document.getElementById('dino-score-label');
@@ -4604,3 +4871,786 @@ function openSecretVideo() {
 }
 function asciiPlayerStop() { _closeGame('overlay-ascii'); }
 
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🔴 ШАШКИ (Checkers) v1.0.0 ───────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+let chkBoard, chkTurn, chkMode, chkSelected, chkMustCapture, chkGameOver;
+let chkWins = 0, chkLosses = 0, chkDraws_c = 0;
+let chkAiThinking = false;
+
+function chkInit() { chkMode = chkMode || 'ai'; chkRestart(); }
+
+function chkSetMode(m) {
+  chkMode = m;
+  ['ai','local'].forEach(id => {
+    const b = document.getElementById('chk-mode-' + id);
+    if (b) b.classList.toggle('active', id === m);
+  });
+  const lbl1 = document.getElementById('chk-label-1');
+  const lbl2 = document.getElementById('chk-label-2');
+  if (lbl1) lbl1.textContent = m === 'ai' ? 'Ты (🔴)' : 'Игрок 1 (🔴)';
+  if (lbl2) lbl2.textContent = m === 'ai' ? 'ИИ (⚫)'  : 'Игрок 2 (⚫)';
+  chkRestart();
+}
+
+function chkRestart() {
+  // 8x8, ряды 0-2 = чёрные (2), ряды 5-7 = красные (1), 0=пусто, 3=чёрный король, 4=красный король
+  chkBoard = [];
+  for (let r = 0; r < 8; r++) {
+    chkBoard[r] = [];
+    for (let c = 0; c < 8; c++) {
+      const dark = (r + c) % 2 === 1;
+      if (!dark) { chkBoard[r][c] = 0; continue; }
+      if (r < 3)  chkBoard[r][c] = 2; // чёрные
+      else if (r > 4) chkBoard[r][c] = 1; // красные
+      else chkBoard[r][c] = 0;
+    }
+  }
+  chkTurn = 1; // красные (игрок) ходят первыми
+  chkSelected = null;
+  chkGameOver = false;
+  chkAiThinking = false;
+  chkRender();
+  chkSetStatus('Твой ход — красные 🔴');
+}
+
+function chkRender() {
+  const el = document.getElementById('chk-board');
+  if (!el) return;
+  el.innerHTML = '';
+  const moves = chkGetAllMoves(chkBoard, chkTurn);
+  const captures = moves.filter(m => m.captured.length > 0);
+  const validMoves = captures.length ? captures : moves;
+  const selectedMoves = chkSelected
+    ? validMoves.filter(m => m.from[0] === chkSelected[0] && m.from[1] === chkSelected[1])
+    : [];
+  const targetCells = new Set(selectedMoves.map(m => m.to[0] + ',' + m.to[1]));
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const cell = document.createElement('div');
+      const dark = (r + c) % 2 === 1;
+      cell.className = 'chk-cell ' + (dark ? 'chk-dark' : 'chk-light');
+      const isSelected = chkSelected && chkSelected[0] === r && chkSelected[1] === c;
+      const isTarget   = targetCells.has(r + ',' + c);
+      if (isSelected) cell.classList.add('chk-selected');
+      if (isTarget)   cell.classList.add('chk-target');
+
+      const v = chkBoard[r][c];
+      if (v) {
+        const piece = document.createElement('div');
+        piece.className = 'chk-piece chk-p' + v;
+        if (v === 3 || v === 4) piece.textContent = '♛';
+        cell.appendChild(piece);
+      }
+
+      cell.onclick = () => chkClick(r, c);
+      el.appendChild(cell);
+    }
+  }
+  chkUpdateScores();
+}
+
+function chkClick(r, c) {
+  if (chkGameOver || chkAiThinking) return;
+  const canMove = chkMode === 'local' || chkTurn === 1;
+  if (!canMove) return;
+
+  const v = chkBoard[r][c];
+  const myPieces = chkTurn === 1 ? [1, 4] : [2, 3];
+  const moves = chkGetAllMoves(chkBoard, chkTurn);
+  const captures = moves.filter(m => m.captured.length > 0);
+  const validMoves = captures.length ? captures : moves;
+
+  if (myPieces.includes(v)) {
+    chkSelected = [r, c];
+    chkRender();
+    return;
+  }
+
+  if (chkSelected) {
+    const move = validMoves.find(m =>
+      m.from[0] === chkSelected[0] && m.from[1] === chkSelected[1] &&
+      m.to[0] === r && m.to[1] === c
+    );
+    if (move) {
+      chkApplyMove(chkBoard, move);
+      chkSelected = null;
+      chkCheckWin();
+      if (!chkGameOver) {
+        chkTurn = chkTurn === 1 ? 2 : 1;
+        chkRender();
+        if (chkMode === 'ai' && chkTurn === 2) {
+          chkSetStatus('🤔 ИИ думает...');
+          chkAiThinking = true;
+          setTimeout(chkAiMove, 350);
+        } else {
+          const label = chkMode === 'ai' ? 'Твой ход — красные 🔴' :
+                        (chkTurn === 1 ? 'Ход игрока 1 🔴' : 'Ход игрока 2 ⚫');
+          chkSetStatus(label);
+        }
+      }
+      return;
+    }
+  }
+  chkSelected = null;
+  chkRender();
+}
+
+function chkApplyMove(board, move) {
+  const [fr, fc] = move.from;
+  const [tr, tc] = move.to;
+  board[tr][tc] = board[fr][fc];
+  board[fr][fc] = 0;
+  move.captured.forEach(([cr, cc]) => { board[cr][cc] = 0; });
+  // Promotion
+  if (board[tr][tc] === 1 && tr === 0) board[tr][tc] = 4;
+  if (board[tr][tc] === 2 && tr === 7) board[tr][tc] = 3;
+}
+
+function chkGetAllMoves(board, player) {
+  const pieces = player === 1 ? [1, 4] : [2, 3];
+  const moves = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (!pieces.includes(board[r][c])) continue;
+      const isKing = board[r][c] === 3 || board[r][c] === 4;
+      moves.push(...chkPieceMoves(board, r, c, player, isKing));
+    }
+  }
+  return moves;
+}
+
+function chkPieceMoves(board, r, c, player, isKing) {
+  const enemy = player === 1 ? [2, 3] : [1, 4];
+  const fwd   = player === 1 ? -1 : 1;
+  const dirs  = isKing ? [[-1,-1],[-1,1],[1,-1],[1,1]] : [[fwd,-1],[fwd,1]];
+  const moves = [];
+
+  // Обычные ходы
+  for (const [dr, dc] of dirs) {
+    const nr = r + dr, nc = c + dc;
+    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] === 0) {
+      moves.push({ from:[r,c], to:[nr,nc], captured:[] });
+    }
+  }
+
+  // Взятия (рекурсивные цепочки)
+  const captDirs = [[-1,-1],[-1,1],[1,-1],[1,1]];
+  function findCaptures(br, bc, boardState, path, capped) {
+    let found = false;
+    for (const [dr, dc] of captDirs) {
+      const mr = br + dr, mc = bc + dc; // враг
+      const lr = br + 2*dr, lc = bc + 2*dc; // приземление
+      if (mr < 0 || mr >= 8 || mc < 0 || mc >= 8) continue;
+      if (lr < 0 || lr >= 8 || lc < 0 || lc >= 8) continue;
+      if (!enemy.includes(boardState[mr][mc])) continue;
+      if (boardState[lr][lc] !== 0) continue;
+      const key = mr + ',' + mc;
+      if (capped.has(key)) continue;
+      found = true;
+      const newBoard = boardState.map(row => [...row]);
+      newBoard[lr][lc] = newBoard[br][bc];
+      newBoard[br][bc] = 0;
+      newBoard[mr][mc] = 0;
+      const newCapped = new Set(capped); newCapped.add(key);
+      // Promotion check mid-chain
+      if (newBoard[lr][lc] === 1 && lr === 0) newBoard[lr][lc] = 4;
+      if (newBoard[lr][lc] === 2 && lr === 7) newBoard[lr][lc] = 3;
+      const sub = findCaptures(lr, lc, newBoard, [...path, [lr,lc]], newCapped);
+      if (!sub.length) {
+        moves.push({ from:[r,c], to:[lr,lc], captured:[...capped].map(k=>k.split(',').map(Number)).concat([[mr,mc]]) });
+      } else {
+        sub.forEach(m => moves.push(m));
+      }
+    }
+    return found ? moves.filter(m => m.captured.length > 0) : [];
+  }
+  findCaptures(r, c, board, [], new Set());
+  return moves;
+}
+
+function chkCheckWin() {
+  const red   = chkBoard.flat().filter(v => v === 1 || v === 4).length;
+  const black = chkBoard.flat().filter(v => v === 2 || v === 3).length;
+  const redMoves   = chkGetAllMoves(chkBoard, 1).length;
+  const blackMoves = chkGetAllMoves(chkBoard, 2).length;
+
+  if (red === 0 || redMoves === 0) {
+    chkGameOver = true;
+    if (chkMode === 'ai') { chkLosses++; chkSetStatus('🤖 ИИ победил! Попробуй ещё.'); }
+    else chkSetStatus('🏆 Игрок 2 (⚫) победил!');
+    chkUpdateScores(); chkRender(); return;
+  }
+  if (black === 0 || blackMoves === 0) {
+    chkGameOver = true;
+    if (chkMode === 'ai') { chkWins++; chkSetStatus('🎉 Ты победил!'); }
+    else chkSetStatus('🏆 Игрок 1 (🔴) победил!');
+    chkUpdateScores(); chkRender(); return;
+  }
+}
+
+function chkAiMove() {
+  const result = chkMinimax(chkBoard.map(r=>[...r]), 5, -Infinity, Infinity, true);
+  if (result.move) {
+    chkApplyMove(chkBoard, result.move);
+  }
+  chkAiThinking = false;
+  chkCheckWin();
+  if (!chkGameOver) {
+    chkTurn = 1;
+    chkRender();
+    chkSetStatus('Твой ход — красные 🔴');
+  }
+}
+
+function chkMinimax(board, depth, alpha, beta, maximizing) {
+  const moves = chkGetAllMoves(board, maximizing ? 2 : 1);
+  const caps  = moves.filter(m => m.captured.length > 0);
+  const valid = caps.length ? caps : moves;
+
+  if (depth === 0 || valid.length === 0) {
+    return { score: chkEval(board) };
+  }
+
+  let best = { score: maximizing ? -Infinity : Infinity, move: null };
+  for (const move of valid) {
+    const nb = board.map(r => [...r]);
+    chkApplyMove(nb, move);
+    const res = chkMinimax(nb, depth - 1, alpha, beta, !maximizing);
+    if (maximizing ? res.score > best.score : res.score < best.score) {
+      best = { score: res.score, move };
+    }
+    if (maximizing) alpha = Math.max(alpha, best.score);
+    else            beta  = Math.min(beta,  best.score);
+    if (beta <= alpha) break;
+  }
+  return best;
+}
+
+function chkEval(board) {
+  let score = 0;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const v = board[r][c];
+      if (v === 2) score += 10 + r;         // чёрная (AI)
+      else if (v === 3) score += 20;         // чёрный король
+      else if (v === 1) score -= 10 + (7-r); // красная (игрок)
+      else if (v === 4) score -= 20;         // красный король
+    }
+  }
+  return score;
+}
+
+function chkSetStatus(msg) {
+  const el = document.getElementById('chk-status');
+  if (el) el.textContent = msg;
+}
+
+function chkUpdateScores() {
+  const w = document.getElementById('chk-score-w'); if (w) w.textContent = chkWins;
+  const l = document.getElementById('chk-score-l'); if (l) l.textContent = chkLosses;
+  const d = document.getElementById('chk-score-d'); if (d) d.textContent = chkDraws_c;
+}
+
+function chkStop() { chkAiThinking = false; }
+
+
+// ══════════════════════════════════════════════════════════════════
+// ── ♟ ШАХМАТЫ (Chess) v1.0.0 ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// Нотация фигур: заглавные = белые, строчные = чёрные
+// P=пешка Q=ферзь K=король R=ладья B=слон N=конь
+let chessBoard, chessTurn, chessMode, chessSelected, chessGameOver;
+let chessWins = 0, chessLosses = 0, chessDraws = 0;
+let chessAiThinking = false;
+let chessEnPassant = null; // [row, col] клетка взятия на проходе
+let chessCastling = { wK: true, wQR: true, wKR: true, bK: true, bQR: true, bKR: true };
+let chessPromoPending = null; // { r, c, color }
+
+const CHESS_INIT = [
+  ['r','n','b','q','k','b','n','r'],
+  ['p','p','p','p','p','p','p','p'],
+  [0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0],
+  ['P','P','P','P','P','P','P','P'],
+  ['R','N','B','Q','K','B','N','R'],
+];
+
+const CHESS_UNICODE = {
+  K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙',
+  k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟',
+};
+
+function chessInit() { chessMode = chessMode || 'ai'; chessRestart(); }
+
+function chessSetMode(m) {
+  chessMode = m;
+  ['ai','local'].forEach(id => {
+    const b = document.getElementById('chess-mode-' + id);
+    if (b) b.classList.toggle('active', id === m);
+  });
+  const lbl1 = document.getElementById('chess-label-1');
+  const lbl2 = document.getElementById('chess-label-2');
+  if (lbl1) lbl1.textContent = m === 'ai' ? 'Ты (♔ белые)' : 'Игрок 1 (♔)';
+  if (lbl2) lbl2.textContent = m === 'ai' ? 'ИИ (♚ чёрные)' : 'Игрок 2 (♚)';
+  chessRestart();
+}
+
+function chessRestart() {
+  chessBoard = CHESS_INIT.map(r => [...r]);
+  chessTurn = 'w';
+  chessSelected = null;
+  chessGameOver = false;
+  chessAiThinking = false;
+  chessEnPassant = null;
+  chessCastling = { wK: true, wQR: true, wKR: true, bK: true, bQR: true, bKR: true };
+  chessPromoPending = null;
+  chessHidePromo();
+  chessRender();
+  chessSetStatus('Ваш ход — белые ♔');
+}
+
+function chessRender() {
+  const el = document.getElementById('chess-board');
+  if (!el) return;
+  el.innerHTML = '';
+
+  const validMoves = chessSelected
+    ? chessGetMoves(chessBoard, chessSelected[0], chessSelected[1], chessTurn, true)
+    : [];
+  const targetSet = new Set(validMoves.map(m => m[0] + ',' + m[1]));
+
+  // Найдём короля под шахом
+  const kingPos = chessFindKing(chessBoard, chessTurn);
+  const inCheck = kingPos && chessIsAttacked(chessBoard, kingPos[0], kingPos[1], chessTurn === 'w' ? 'b' : 'w');
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const cell = document.createElement('div');
+      const light = (r + c) % 2 === 0;
+      cell.className = 'chess-cell ' + (light ? 'chess-light' : 'chess-dark');
+
+      const isSelected = chessSelected && chessSelected[0] === r && chessSelected[1] === c;
+      const isTarget   = targetSet.has(r + ',' + c);
+      const isKingCheck = inCheck && kingPos && kingPos[0] === r && kingPos[1] === c;
+
+      if (isSelected)  cell.classList.add('chess-selected');
+      if (isTarget)    cell.classList.add('chess-target');
+      if (isKingCheck) cell.classList.add('chess-check');
+
+      const piece = chessBoard[r][c];
+      if (piece) {
+        const span = document.createElement('span');
+        span.textContent = CHESS_UNICODE[piece] || piece;
+        span.className = piece === piece.toUpperCase() ? 'chess-white-piece' : 'chess-black-piece';
+        cell.appendChild(span);
+      }
+
+      cell.onclick = () => chessClick(r, c);
+      el.appendChild(cell);
+    }
+  }
+  chessUpdateScores();
+}
+
+function chessClick(r, c) {
+  if (chessGameOver || chessAiThinking || chessPromoPending) return;
+  const canAct = chessMode === 'local' || chessTurn === 'w';
+  if (!canAct) return;
+
+  const piece = chessBoard[r][c];
+  const myPiece = piece && (chessTurn === 'w' ? piece === piece.toUpperCase() : piece === piece.toLowerCase());
+
+  if (myPiece) {
+    chessSelected = [r, c];
+    chessRender();
+    return;
+  }
+
+  if (chessSelected) {
+    const moves = chessGetMoves(chessBoard, chessSelected[0], chessSelected[1], chessTurn, true);
+    const move  = moves.find(m => m[0] === r && m[1] === c);
+    if (move) {
+      chessDoMove(chessBoard, chessSelected, [r, c], chessTurn);
+      chessSelected = null;
+
+      // Проверяем промоушн
+      if ((chessBoard[r][c] === 'P' && r === 0) || (chessBoard[r][c] === 'p' && r === 7)) {
+        chessPromoPending = { r, c, color: chessTurn };
+        chessShowPromo(chessTurn);
+        return;
+      }
+
+      chessAfterMove();
+      return;
+    }
+  }
+  chessSelected = null;
+  chessRender();
+}
+
+function chessDoMove(board, from, to, color) {
+  const [fr, fc] = from, [tr, tc] = to;
+  const piece = board[fr][fc];
+
+  // Рокировка
+  if ((piece === 'K' || piece === 'k') && Math.abs(fc - tc) === 2) {
+    const row = fr;
+    if (tc === 6) { board[row][5] = board[row][7]; board[row][7] = 0; }
+    else          { board[row][3] = board[row][0]; board[row][0] = 0; }
+    if (color === 'w') { chessCastling.wK = false; chessCastling.wQR = false; chessCastling.wKR = false; }
+    else               { chessCastling.bK = false; chessCastling.bQR = false; chessCastling.bKR = false; }
+  }
+
+  // Взятие на проходе
+  if ((piece === 'P' || piece === 'p') && tc !== fc && board[tr][tc] === 0) {
+    board[fr][tc] = 0; // убираем пешку
+  }
+
+  // Обновляем en passant
+  chessEnPassant = null;
+  if ((piece === 'P' && fr === 6 && tr === 4) || (piece === 'p' && fr === 1 && tr === 3)) {
+    chessEnPassant = [fr === 6 ? 5 : 2, fc];
+  }
+
+  // Флаги рокировки
+  if (piece === 'K') { chessCastling.wK = false; chessCastling.wKR = false; chessCastling.wQR = false; }
+  if (piece === 'k') { chessCastling.bK = false; chessCastling.bKR = false; chessCastling.bQR = false; }
+  if (fc === 0 && fr === 7) chessCastling.wQR = false;
+  if (fc === 7 && fr === 7) chessCastling.wKR = false;
+  if (fc === 0 && fr === 0) chessCastling.bQR = false;
+  if (fc === 7 && fr === 0) chessCastling.bKR = false;
+
+  board[tr][tc] = piece;
+  board[fr][fc] = 0;
+}
+
+function chessAfterMove() {
+  chessTurn = chessTurn === 'w' ? 'b' : 'w';
+  chessRender();
+
+  const moves = chessAllLegalMoves(chessBoard, chessTurn);
+  const kingPos = chessFindKing(chessBoard, chessTurn);
+  const inCheck = kingPos && chessIsAttacked(chessBoard, kingPos[0], kingPos[1], chessTurn === 'w' ? 'b' : 'w');
+
+  if (!moves.length) {
+    chessGameOver = true;
+    if (inCheck) {
+      if (chessMode === 'ai') {
+        if (chessTurn === 'b') { chessWins++; chessSetStatus('♔ Мат! Ты победил! 🎉'); }
+        else { chessLosses++; chessSetStatus('♚ Мат! ИИ победил.'); }
+      } else {
+        chessSetStatus('♟ Мат! Победили ' + (chessTurn === 'w' ? '⚫ чёрные' : '♔ белые') + '!');
+      }
+    } else {
+      chessDraws++;
+      chessSetStatus('🤝 Пат — ничья!');
+    }
+    chessUpdateScores();
+    return;
+  }
+
+  if (inCheck) chessSetStatus(chessTurn === 'w' ? '⚠️ Шах белому королю!' : '⚠️ Шах чёрному королю!');
+  else if (chessMode === 'ai' && chessTurn === 'w') chessSetStatus('Ваш ход — белые ♔');
+  else if (chessMode === 'local') chessSetStatus(chessTurn === 'w' ? 'Ход белых ♔' : 'Ход чёрных ♚');
+
+  if (chessMode === 'ai' && chessTurn === 'b') {
+    chessSetStatus('🤔 ИИ думает...');
+    chessAiThinking = true;
+    setTimeout(chessAiMove, 400);
+  }
+}
+
+function chessShowPromo(color) {
+  const el = document.getElementById('chess-promo');
+  if (!el) return;
+  el.innerHTML = '';
+  el.style.display = 'flex';
+  const pieces = color === 'w' ? ['Q','R','B','N'] : ['q','r','b','n'];
+  pieces.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'chess-promo-btn';
+    btn.textContent = CHESS_UNICODE[p];
+    btn.onclick = () => chessPromote(p);
+    el.appendChild(btn);
+  });
+}
+function chessHidePromo() {
+  const el = document.getElementById('chess-promo');
+  if (el) el.style.display = 'none';
+}
+function chessPromote(piece) {
+  if (!chessPromoPending) return;
+  chessBoard[chessPromoPending.r][chessPromoPending.c] = piece;
+  chessPromoPending = null;
+  chessHidePromo();
+  chessAfterMove();
+}
+
+function chessFindKing(board, color) {
+  const king = color === 'w' ? 'K' : 'k';
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++)
+      if (board[r][c] === king) return [r, c];
+  return null;
+}
+
+function chessIsAttacked(board, r, c, byColor) {
+  // Check if (r,c) is attacked by byColor
+  const opp = byColor;
+  // Pawns
+  const pd = opp === 'w' ? 1 : -1;
+  for (const dc of [-1, 1]) {
+    const pr = r + pd, pc = c + dc;
+    if (pr >= 0 && pr < 8 && pc >= 0 && pc < 8) {
+      const p = board[pr][pc];
+      if (opp === 'w' && p === 'P') return true;
+      if (opp === 'b' && p === 'p') return true;
+    }
+  }
+  // Knights
+  for (const [dr,dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+    const nr = r+dr, nc = c+dc;
+    if (nr<0||nr>7||nc<0||nc>7) continue;
+    const p = board[nr][nc];
+    if (opp === 'w' && p === 'N') return true;
+    if (opp === 'b' && p === 'n') return true;
+  }
+  // Sliding pieces (R, B, Q)
+  const dirs = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+  for (const [dr,dc] of dirs) {
+    const diag = Math.abs(dr) === Math.abs(dc);
+    let nr = r+dr, nc = c+dc;
+    while (nr>=0&&nr<8&&nc>=0&&nc<8) {
+      const p = board[nr][nc];
+      if (p) {
+        const isOpp = opp === 'w' ? p === p.toUpperCase() : p === p.toLowerCase();
+        if (isOpp) {
+          const upper = p.toUpperCase();
+          if (upper === 'Q') return true;
+          if (upper === 'R' && !diag) return true;
+          if (upper === 'B' && diag) return true;
+        }
+        break;
+      }
+      nr += dr; nc += dc;
+    }
+  }
+  // King
+  for (const [dr,dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+    const nr=r+dr,nc=c+dc;
+    if (nr<0||nr>7||nc<0||nc>7) continue;
+    const p = board[nr][nc];
+    if (opp === 'w' && p === 'K') return true;
+    if (opp === 'b' && p === 'k') return true;
+  }
+  return false;
+}
+
+function chessGetMoves(board, r, c, color, filterCheck = false) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const upper = piece.toUpperCase();
+  const isWhite = piece === piece.toUpperCase();
+  const moves = [];
+
+  const push = (tr, tc) => {
+    if (tr >= 0 && tr < 8 && tc >= 0 && tc < 8) moves.push([tr, tc]);
+  };
+  const slide = (dr, dc) => {
+    let nr = r+dr, nc = c+dc;
+    while (nr>=0&&nr<8&&nc>=0&&nc<8) {
+      const t = board[nr][nc];
+      if (!t) { moves.push([nr,nc]); }
+      else {
+        const tWhite = t === t.toUpperCase();
+        if (tWhite !== isWhite) moves.push([nr,nc]);
+        break;
+      }
+      nr += dr; nc += dc;
+    }
+  };
+  const addIfEmpty = (tr, tc) => { if (tr>=0&&tr<8&&tc>=0&&tc<8&&!board[tr][tc]) moves.push([tr,tc]); };
+  const addIfEnemy = (tr, tc) => {
+    if (tr<0||tr>7||tc<0||tc>7) return;
+    const t = board[tr][tc];
+    if (t && t === t.toUpperCase() !== isWhite) moves.push([tr,tc]);
+  };
+
+  if (upper === 'P') {
+    const dir = isWhite ? -1 : 1;
+    const startRow = isWhite ? 6 : 1;
+    addIfEmpty(r+dir, c);
+    if (r === startRow && !board[r+dir][c]) addIfEmpty(r+2*dir, c);
+    addIfEnemy(r+dir, c-1);
+    addIfEnemy(r+dir, c+1);
+    // En passant
+    if (chessEnPassant) {
+      const [er,ec] = chessEnPassant;
+      if (r+dir === er && (c-1 === ec || c+1 === ec)) {
+        if (!board[er][ec]) moves.push([er,ec]);
+      }
+    }
+  }
+  if (upper === 'N') {
+    for (const [dr,dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+      const nr=r+dr, nc=c+dc;
+      if (nr<0||nr>7||nc<0||nc>7) continue;
+      const t = board[nr][nc];
+      if (!t || (t===t.toUpperCase()) !== isWhite) moves.push([nr,nc]);
+    }
+  }
+  if (upper === 'B') { [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([a,b])=>slide(a,b)); }
+  if (upper === 'R') { [[-1,0],[1,0],[0,-1],[0,1]].forEach(([a,b])=>slide(a,b)); }
+  if (upper === 'Q') { [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]].forEach(([a,b])=>slide(a,b)); }
+  if (upper === 'K') {
+    for (const [dr,dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+      const nr=r+dr,nc=c+dc;
+      if (nr<0||nr>7||nc<0||nc>7) continue;
+      const t=board[nr][nc];
+      if (!t||(t===t.toUpperCase())!==isWhite) moves.push([nr,nc]);
+    }
+    // Рокировка
+    const oppColor = color === 'w' ? 'b' : 'w';
+    const row = isWhite ? 7 : 0;
+    const cKey = isWhite ? 'wK' : 'bK';
+    const qKey = isWhite ? 'wQR' : 'bQR';
+    const kKey = isWhite ? 'wKR' : 'bKR';
+    if (chessCastling[cKey] && r === row && c === 4) {
+      if (chessCastling[kKey] && !board[row][5] && !board[row][6] &&
+          !chessIsAttacked(board,row,4,oppColor) && !chessIsAttacked(board,row,5,oppColor) && !chessIsAttacked(board,row,6,oppColor))
+        moves.push([row, 6]);
+      if (chessCastling[qKey] && !board[row][1] && !board[row][2] && !board[row][3] &&
+          !chessIsAttacked(board,row,4,oppColor) && !chessIsAttacked(board,row,3,oppColor) && !chessIsAttacked(board,row,2,oppColor))
+        moves.push([row, 2]);
+    }
+  }
+
+  if (!filterCheck) return moves;
+  // Фильтруем ходы, которые оставляют своего короля под шахом
+  return moves.filter(([tr,tc]) => {
+    const nb = board.map(row=>[...row]);
+    // Симулируем ход
+    if (upper === 'P' && tc !== c && !board[tr][tc] && chessEnPassant) {
+      nb[r][tc] = 0; // взятие на проходе
+    }
+    nb[tr][tc] = nb[r][c];
+    nb[r][c] = 0;
+    const kp = chessFindKing(nb, color);
+    return kp && !chessIsAttacked(nb, kp[0], kp[1], color === 'w' ? 'b' : 'w');
+  });
+}
+
+function chessAllLegalMoves(board, color) {
+  const moves = [];
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (!p) continue;
+      const isW = p === p.toUpperCase();
+      if ((color === 'w') !== isW) continue;
+      chessGetMoves(board, r, c, color, true).forEach(to => moves.push({ from:[r,c], to }));
+    }
+  return moves;
+}
+
+// AI — minimax с alpha-beta, глубина 3
+const CHESS_PIECE_VAL = { P:100, N:320, B:330, R:500, Q:900, K:20000, p:100, n:320, b:330, r:500, q:900, k:20000 };
+
+// Бонусные таблицы позиций (белые, для чёрных инвертируем)
+const CHESS_PST = {
+  P: [0,0,0,0,0,0,0,0,50,50,50,50,50,50,50,50,10,10,20,30,30,20,10,10,5,5,10,25,25,10,5,5,0,0,0,20,20,0,0,0,5,-5,-10,0,0,-10,-5,5,5,10,10,-20,-20,10,10,5,0,0,0,0,0,0,0,0],
+  N: [-50,-40,-30,-30,-30,-30,-40,-50,-40,-20,0,0,0,0,-20,-40,-30,0,10,15,15,10,0,-30,-30,5,15,20,20,15,5,-30,-30,0,15,20,20,15,0,-30,-30,5,10,15,15,10,5,-30,-40,-20,0,5,5,0,-20,-40,-50,-40,-30,-30,-30,-30,-40,-50],
+  B: [-20,-10,-10,-10,-10,-10,-10,-20,-10,0,0,0,0,0,0,-10,-10,0,5,10,10,5,0,-10,-10,5,5,10,10,5,5,-10,-10,0,10,10,10,10,0,-10,-10,10,10,10,10,10,10,-10,-10,5,0,0,0,0,5,-10,-20,-10,-10,-10,-10,-10,-10,-20],
+};
+
+function chessPstScore(piece, r, c, color) {
+  const upper = piece.toUpperCase();
+  const tbl = CHESS_PST[upper];
+  if (!tbl) return 0;
+  const idx = color === 'w' ? r * 8 + c : (7 - r) * 8 + c;
+  return tbl[idx] || 0;
+}
+
+function chessEval(board) {
+  let score = 0;
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (!p) continue;
+      const isW = p === p.toUpperCase();
+      const val = (CHESS_PIECE_VAL[p] || 0) + chessPstScore(p, r, c, isW ? 'w' : 'b');
+      score += isW ? -val : val; // AI = чёрные = maximizing
+    }
+  return score;
+}
+
+function chessMinimaxRoot(board, depth) {
+  const moves = chessAllLegalMoves(board, 'b');
+  let best = { score: -Infinity, move: null };
+  for (const mv of moves) {
+    const nb = board.map(r => [...r]);
+    const savedEP = chessEnPassant, savedCast = { ...chessCastling };
+    chessDoMove(nb, mv.from, mv.to, 'b');
+    const score = chessAlphaBeta(nb, depth - 1, -Infinity, Infinity, false);
+    chessEnPassant = savedEP; Object.assign(chessCastling, savedCast);
+    if (score > best.score) best = { score, move: mv };
+  }
+  return best.move;
+}
+
+function chessAlphaBeta(board, depth, alpha, beta, maximizing) {
+  if (depth === 0) return chessEval(board);
+  const color = maximizing ? 'b' : 'w';
+  const moves = chessAllLegalMoves(board, color);
+  if (!moves.length) {
+    const kp = chessFindKing(board, color);
+    const inCheck = kp && chessIsAttacked(board, kp[0], kp[1], color === 'w' ? 'b' : 'w');
+    return inCheck ? (maximizing ? -50000 : 50000) : 0;
+  }
+  let val = maximizing ? -Infinity : Infinity;
+  for (const mv of moves) {
+    const nb = board.map(r => [...r]);
+    const savedEP = chessEnPassant, savedCast = { ...chessCastling };
+    chessDoMove(nb, mv.from, mv.to, color);
+    const res = chessAlphaBeta(nb, depth - 1, alpha, beta, !maximizing);
+    chessEnPassant = savedEP; Object.assign(chessCastling, savedCast);
+    if (maximizing) { val = Math.max(val, res); alpha = Math.max(alpha, val); }
+    else            { val = Math.min(val, res); beta  = Math.min(beta, val); }
+    if (beta <= alpha) break;
+  }
+  return val;
+}
+
+function chessAiMove() {
+  const savedEP   = chessEnPassant;
+  const savedCast = { ...chessCastling };
+  const move = chessMinimaxRoot(chessBoard, 3);
+  chessEnPassant = savedEP; Object.assign(chessCastling, savedCast);
+  if (move) {
+    chessDoMove(chessBoard, move.from, move.to, 'b');
+    // Авто-промоушн ИИ — всегда в ферзя
+    if (chessBoard[move.to[0]][move.to[1]] === 'p' && move.to[0] === 7) {
+      chessBoard[move.to[0]][move.to[1]] = 'q';
+    }
+  }
+  chessAiThinking = false;
+  chessAfterMove();
+}
+
+function chessSetStatus(msg) {
+  const el = document.getElementById('chess-status');
+  if (el) el.textContent = msg;
+}
+
+function chessUpdateScores() {
+  const w = document.getElementById('chess-score-w'); if (w) w.textContent = chessWins;
+  const l = document.getElementById('chess-score-l'); if (l) l.textContent = chessLosses;
+  const d = document.getElementById('chess-score-d'); if (d) d.textContent = chessDraws;
+}
+
+function chessStop() { chessAiThinking = false; }

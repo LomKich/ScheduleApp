@@ -29,8 +29,9 @@ public class MessagingForegroundService extends Service {
     public static final String PREF_SB_USER    = "sb_username";
     public static final String PREF_SB_LAST_TS = "sb_last_notif_ts";
 
-    // 30 секунд в фоне — разумный баланс между оперативностью и трафиком
-    private static final int POLL_INTERVAL_MS  = 30_000;
+    // 7 секунд — баланс между оперативностью и батареей.
+    // Telegram использует ~5 сек для активных чатов, ~15 для фона.
+    private static final int POLL_INTERVAL_MS  = 7_000;
 
     private Handler           pollHandler;
     private Runnable          pollRunnable;
@@ -51,18 +52,17 @@ public class MessagingForegroundService extends Service {
         prefs = getSharedPreferences("schedule_prefs", MODE_PRIVATE);
         log.i(TAG, "Service created");
         createNotificationChannel();
-        // startForeground ОБЯЗАН быть вызван в течение 5 секунд от onCreate
-        startForeground(FG_NOTIF_ID, buildFgNotification("Подключено · ожидаю сообщения"));
+        // startForeground ОБЯЗАН быть вызван в течение 5 секунд от onCreate (требование Android)
+        // Сразу же вызываем stopForeground — уведомление скрывается, сервис продолжает работать.
+        // AlarmManager перезапустит нас при необходимости, так что потеря foreground-статуса не критична.
+        startForeground(FG_NOTIF_ID, buildFgNotification(""));
+        stopForeground(true); // true = убрать уведомление
         acquireWakeLock();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         log.i(TAG, "onStartCommand flags=" + flags);
-        // Обновляем уведомление — оно могло пропасть
-        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (nm != null) nm.notify(FG_NOTIF_ID, buildFgNotification("Подключено · ожидаю сообщения"));
-
         if (!isPolling) startPolling();
 
         // START_STICKY: Android перезапустит сервис если убьёт его
@@ -92,9 +92,32 @@ public class MessagingForegroundService extends Service {
     // ── WakeLock ──────────────────────────────────────────────────────────────
 
     private void acquireWakeLock() {
-        // WakeLock не используем — он держит CPU активным и тратит батарею.
-        // Android сам управляет пробуждением через Doze + AlarmManager.
-        log.i(TAG, "WakeLock: отключён для экономии батареи и трафика");
+        try {
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm == null) return;
+            // PARTIAL_WAKE_LOCK держит CPU активным без включения экрана.
+            // Необходим чтобы Handler.postDelayed не замерзал в Doze-режиме.
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "ScheduleApp::BgPollWakeLock"
+            );
+            wakeLock.setReferenceCounted(false);
+            wakeLock.acquire(10 * 60 * 1000L); // авто-освобождение через 10 мин
+            log.i(TAG, "WakeLock acquired");
+        } catch (Exception e) {
+            log.w(TAG, "WakeLock acquire failed: " + e.getMessage());
+        }
+    }
+
+    private void renewWakeLockIfNeeded() {
+        try {
+            if (wakeLock != null && !wakeLock.isHeld()) {
+                wakeLock.acquire(10 * 60 * 1000L);
+                log.i(TAG, "WakeLock renewed");
+            }
+        } catch (Exception e) {
+            log.w(TAG, "WakeLock renew failed: " + e.getMessage());
+        }
     }
 
     private void releaseWakeLock() {
@@ -104,8 +127,6 @@ public class MessagingForegroundService extends Service {
             }
         } catch (Exception ignored) {}
     }
-
-    private void renewWakeLockIfNeeded() { /* не используется */ }
 
     // ── Restart on kill ───────────────────────────────────────────────────────
 

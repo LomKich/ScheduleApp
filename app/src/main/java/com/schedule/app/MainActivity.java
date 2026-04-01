@@ -706,11 +706,17 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setCurrentUser(String username) {
             log.i(TAG, "setCurrentUser: " + username);
-            prefs.edit()
-                .putString(PREF_SB_USER, username != null ? username : "")
-                // Начинаем отслеживать с текущего момента (не уведомляем о старых)
-                .putLong(PREF_SB_LAST_TS, System.currentTimeMillis())
-                .apply();
+            String prevUser = prefs.getString(PREF_SB_USER, "");
+            boolean sameUser = username != null && username.equals(prevUser);
+            SharedPreferences.Editor ed = prefs.edit()
+                .putString(PREF_SB_USER, username != null ? username : "");
+            if (!sameUser) {
+                // Новый пользователь — начинаем с текущего момента, не уведомляем о старых
+                ed.putLong(PREF_SB_LAST_TS, System.currentTimeMillis());
+            }
+            // Тот же пользователь — не трогаем lastTs, чтобы не пропустить
+            // сообщения пришедшие с момента последнего poll
+            ed.apply();
         }
 
         /**
@@ -733,8 +739,9 @@ public class MainActivity extends Activity {
         public void dismissNotifications() {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm != null) nm.cancelAll();
-            // Обновляем lastTs чтобы не показывать прочитанное снова
-            prefs.edit().putLong(PREF_SB_LAST_TS, System.currentTimeMillis()).apply();
+            // Не трогаем PREF_SB_LAST_TS — JS управляет им через _inboxTsSave.
+            // Перезапись на System.currentTimeMillis() здесь приводила бы к потере
+            // сообщений, пришедших между последним poll и открытием чата.
         }
 
         /** Возвращает сохранённый username для фонового поллинга */
@@ -1101,7 +1108,10 @@ public class MainActivity extends Activity {
         // Снимаем все уведомления когда пользователь вернулся в приложение
         NotificationManager nm2 = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm2 != null) nm2.cancelAll();
-        prefs.edit().putLong(PREF_SB_LAST_TS, System.currentTimeMillis()).apply();
+        // НЕ сбрасываем PREF_SB_LAST_TS — сервис уже сохранил корректный ts последнего
+        // обработанного сообщения. Если перезаписать на System.currentTimeMillis(), JS получит
+        // «сейчас» как javaTs и при getJavaSbLastTs() откатится назад только на 2 мин,
+        // потеряв все сообщения за время фонового ожидания.
         // Ускоряем интервал — приложение на экране
         if (pollHandler != null && pollRunnable != null) {
             pollHandler.removeCallbacks(pollRunnable);

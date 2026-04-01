@@ -2108,6 +2108,42 @@ body.glass-mode #s-sched .pair-card {
 .ttt-score-item{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--muted)}
 .ttt-score-val{font-size:22px;font-weight:800;color:var(--text);font-family:'JetBrains Mono',monospace}
 .ttt-status{font-size:13px;font-weight:600;color:var(--muted);margin-top:14px;min-height:20px;text-align:center}
+/* ── Шашки ── */
+.chk-board{display:grid;grid-template-columns:repeat(8,1fr);gap:0;width:min(320px,88vw);border:2px solid var(--surface3);border-radius:8px;overflow:hidden;margin:10px auto}
+.chk-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s}
+.chk-light{background:#f0d9b5}
+.chk-dark{background:#b58863}
+.chk-selected{outline:3px solid var(--accent);outline-offset:-3px}
+.chk-target{background:rgba(255,200,0,.55)!important}
+.chk-piece{width:72%;height:72%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1em;box-shadow:0 2px 6px rgba(0,0,0,.45);transition:transform .1s}
+.chk-piece:active{transform:scale(.9)}
+.chk-p1{background:radial-gradient(circle at 35% 35%,#ff7777,#cc0000);border:2px solid #880000}
+.chk-p4{background:radial-gradient(circle at 35% 35%,#ff9999,#cc0000);border:2px solid #ff0;color:#ff0}
+.chk-p2{background:radial-gradient(circle at 35% 35%,#555,#111);border:2px solid #000}
+.chk-p3{background:radial-gradient(circle at 35% 35%,#888,#222);border:2px solid #ffd700;color:#ffd700}
+.chk-scores{display:flex;gap:16px;margin-bottom:10px}
+.chk-score-item{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted)}
+.chk-score-val{font-size:20px;font-weight:800;color:var(--text);font-family:'JetBrains Mono',monospace}
+.chk-status{font-size:13px;font-weight:600;color:var(--muted);margin-top:10px;min-height:18px;text-align:center}
+/* ── Шахматы ── */
+.chess-board{display:grid;grid-template-columns:repeat(8,1fr);gap:0;width:min(320px,88vw);border:2px solid var(--surface3);border-radius:8px;overflow:hidden;margin:10px auto}
+.chess-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:min(7vw,28px);transition:background .12s;user-select:none}
+.chess-light{background:#f0d9b5}
+.chess-dark{background:#b58863}
+.chess-selected{outline:3px solid var(--accent);outline-offset:-3px;z-index:1}
+.chess-target::after{content:'';display:block;width:32%;height:32%;border-radius:50%;background:rgba(0,0,0,.25)}
+.chess-target.chess-cell:has(span)::after{display:none}
+.chess-target:has(span){outline:3px solid rgba(0,0,0,.35);outline-offset:-3px}
+.chess-check{background:#e0503a!important}
+.chess-white-piece{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8),0 0 2px #000}
+.chess-black-piece{color:#111;text-shadow:0 1px 2px rgba(255,255,255,.3)}
+.chess-scores{display:flex;gap:16px;margin-bottom:10px}
+.chess-score-item{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted)}
+.chess-score-val{font-size:20px;font-weight:800;color:var(--text);font-family:'JetBrains Mono',monospace}
+.chess-status{font-size:13px;font-weight:600;color:var(--muted);margin-top:10px;min-height:18px;text-align:center}
+.chess-promo{display:none;gap:8px;margin-top:8px;justify-content:center}
+.chess-promo-btn{font-size:32px;background:var(--surface2);border:2px solid var(--accent);border-radius:10px;padding:6px 10px;cursor:pointer;transition:transform .1s}
+.chess-promo-btn:active{transform:scale(.9)}
 /* ── Tetris controls ── */
 .tet-controls{display:flex;gap:8px;margin-top:12px;align-items:center}
 .tet-btn{background:var(--surface2);border:1.5px solid var(--surface3);border-radius:10px;color:var(--text);font-size:16px;width:50px;height:46px;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;flex-shrink:0;transition:background .1s,transform .1s}
@@ -2987,6 +3023,70 @@ html.notch-on #s-login {
   padding-top: 0 !important;
 }
 
+/* ═══ WIZARD REGISTRATION ═══ */
+#s-login { display:flex;flex-direction:column; }
+.wdot {
+  width:8px;height:8px;border-radius:50%;
+  background:var(--surface3);transition:all .3s cubic-bezier(.4,0,.2,1);
+}
+.wdot-active {
+  width:24px;border-radius:4px;background:var(--accent);
+}
+#wizard-track {
+  width:100%;
+}
+.wstep {
+  min-width:100%;box-sizing:border-box;
+  padding:8px 18px 32px;
+  display:flex;flex-direction:column;align-items:stretch;
+}
+.wstep-icon {
+  font-size:72px;text-align:center;margin:8px 0 14px;
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1);
+}
+.wstep-title {
+  font-size:22px;font-weight:800;color:var(--text);
+  text-align:center;margin-bottom:6px;
+  letter-spacing:-.02em;
+}
+.wstep-sub {
+  font-size:13px;color:var(--muted);text-align:center;
+  margin-bottom:22px;line-height:1.5;
+}
+/* Pomodoro виджет */
+#pomodoro-widget {
+  background:var(--surface2);border-radius:16px;
+  border:1.5px solid var(--surface3);
+  padding:14px 16px;margin-bottom:12px;
+  display:flex;align-items:center;gap:14px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:opacity .15s;
+}
+#pomodoro-widget:active { opacity:.7; }
+#pomodoro-ring {
+  width:52px;height:52px;flex-shrink:0;position:relative;
+}
+#pomodoro-ring svg { position:absolute;inset:0; }
+#pomodoro-ring-track { stroke:var(--surface3); }
+#pomodoro-ring-fill  { stroke:var(--accent);stroke-linecap:round;
+  transition:stroke-dashoffset .8s linear; transform-origin:center;transform:rotate(-90deg); }
+#pomodoro-ring-label {
+  position:absolute;inset:0;display:flex;align-items:center;
+  justify-content:center;font-size:11px;font-weight:700;color:var(--text);
+}
+/* Fun features bar под расписанием */
+.fun-bar {
+  display:flex;gap:8px;flex-wrap:wrap;
+  padding:12px 0 4px;
+}
+.fun-chip {
+  background:var(--surface2);border:1.5px solid var(--surface3);
+  border-radius:20px;padding:6px 13px;font-size:12px;font-weight:600;
+  color:var(--text);cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:background .15s,transform .1s;white-space:nowrap;
+}
+.fun-chip:active { transform:scale(.94);background:var(--surface3); }
+
 /* ── notch-off: никакого учёта выреза */
 html.notch-off .screen {
   padding-top: 0;
@@ -3103,7 +3203,7 @@ html.notch-off #s-login {
       <div style="color:var(--muted);font-size:12px;line-height:1.6;margin-bottom:20px">
         Проверь подключение к интернету и повтори попытку.
       </div>
-      <button class="btn btn-surface" onclick="loadFiles()">🔄 Повторить</button>
+      <button class="btn btn-surface" onclick="loadFiles()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Повторить</button>
     </div>
   </div>
 </div>
@@ -3234,7 +3334,7 @@ html.notch-off #s-login {
            placeholder="https://disk.yandex.ru/d/..."
            autocomplete="off" autocorrect="off" autocapitalize="off">
     <div style="height:8px"></div>
-    <button class="btn btn-accent2" onclick="SFX.play('btnAccent');saveUrlAndLoad()">⬇ Обновить файлы</button>
+    <button class="btn btn-accent2" onclick="SFX.play('btnAccent');saveUrlAndLoad()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Обновить файлы</button>
     <div style="height:6px"></div>
     <div class="status" id="proxy-status" style="text-align:left;font-size:11px"></div>
     <div class="sep"></div>
@@ -3278,8 +3378,8 @@ html.notch-off #s-login {
         <span style="font-size:11px;color:#fff;font-weight:600">Свой фон активен</span>
       </div>
     </div>
-    <button class="btn btn-surface" onclick="pickBgImage()" style="margin-bottom:6px">🖼 Загрузить фон (PNG / JPG)</button>
-    <button id="remove-bg-btn" class="btn btn-danger" onclick="removeBgImage()" style="display:none;margin-bottom:6px">🗑 Удалить фон</button>
+    <button class="btn btn-surface" onclick="pickBgImage()" style="margin-bottom:6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Загрузить фон (PNG / JPG)</button>
+    <button id="remove-bg-btn" class="btn btn-danger" onclick="removeBgImage()" style="display:none;margin-bottom:6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Удалить фон</button>
     <input type="file" id="bg-file-input" accept="image/*,image/png,image/jpeg,image/jpg,image/gif,image/webp,image/bmp,image/heic,image/heif,image/avif,.png,.jpg,.jpeg,.gif,.webp,.bmp,.heic,.heif,.avif" style="display:none" onchange="onBgFileChosen(event)">
     <!-- Тоггл блюра для обычного режима (без liquid glass) -->
     <div id="bg-blur-row" style="display:none;border-top:1px solid rgba(255,255,255,.07);padding:12px 16px;margin-top:4px;background:var(--surface);border-radius:var(--rb);align-items:center;justify-content:space-between;">
@@ -3303,6 +3403,64 @@ html.notch-off #s-login {
       <button class="btn btn-accent" style="width:auto;padding:8px 14px;font-size:12px;font-weight:700;flex-shrink:0"
         onclick="switchToNativeUI()">Включить →</button>
     </div>
+    <div class="sep"></div>
+
+    <!-- Уведомления -->
+    <div class="section-label">Уведомления и связь</div>
+    <div id="push-notif-row" style="background:var(--surface2);border-radius:14px;margin-bottom:8px;border:1.5px solid var(--surface3)">
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+        </span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">Уведомления</div>
+          <div style="font-size:12px;color:var(--muted)" id="push-notif-status">Проверяем...</div>
+        </div>
+        <button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:12px;flex-shrink:0" onclick="pushRequestPermission()" id="push-notif-btn">Включить</button>
+      </div>
+    </div>
+    <!-- Фоновое соединение -->
+    <div id="bg-service-row" style="background:var(--surface2);border-radius:14px;margin-bottom:8px;border:1.5px solid var(--surface3)">
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
+        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+        </span>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">Фоновое соединение</div>
+          <div style="font-size:12px;color:var(--muted)" id="bg-service-status">Проверяем...</div>
+        </div>
+        <div id="bg-service-toggle" onclick="toggleBackgroundService()"
+          style="width:51px;height:31px;border-radius:16px;position:relative;cursor:pointer;transition:background .25s;flex-shrink:0">
+          <div id="bg-service-knob"
+            style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;
+                   box-shadow:0 1px 4px rgba(0,0,0,.35);transition:left .25s"></div>
+        </div>
+      </div>
+      <div style="padding:0 16px 12px;font-size:11px;color:var(--muted);line-height:1.5">
+        Получайте сообщения даже когда приложение закрыто. Работает как в Telegram.
+      </div>
+    </div>
+    <script>
+      (function() {
+        const _origSSNotif = window.showScreen;
+        window.showScreen = function(id, dir) {
+          if (_origSSNotif) _origSSNotif(id, dir);
+          if (id === 's-settings') {
+            setTimeout(function() {
+              if (typeof _bgServiceUpdateUI === 'function') _bgServiceUpdateUI();
+              if (typeof pushGetStatusText === 'function') {
+                const st = document.getElementById('push-notif-status');
+                if (st) st.textContent = pushGetStatusText();
+              }
+              if (typeof pushGetBtnText === 'function') {
+                const bt = document.getElementById('push-notif-btn');
+                if (bt) bt.textContent = pushGetBtnText();
+              }
+            }, 60);
+          }
+        };
+      })();
+    </script>
     <div class="sep"></div>
 
     <!-- Звук -->
@@ -3334,6 +3492,54 @@ html.notch-off #s-login {
     </div>
     <div class="sep"></div>
 
+    <!-- VIP Аккаунт -->
+    <div class="section-label">VIP Аккаунт</div>
+    <div id="settings-vip-row" style="background:var(--surface2);border-radius:14px;padding:14px 16px;margin-bottom:8px;border:1.5px solid var(--surface3)">
+      <div id="settings-vip-status" style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:22px">👑</span>
+        <div>
+          <div style="font-size:14px;font-weight:700" id="settings-vip-label">VIP Статус</div>
+          <div style="font-size:12px;color:var(--muted)" id="settings-vip-sub">Фото-аватар · значки · фото-баннер</div>
+        </div>
+      </div>
+      <button class="btn btn-accent" id="settings-vip-btn"
+        onclick="showDonateSheet()"
+        style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px">
+        <span style="font-size:16px">💝</span> Получить VIP
+      </button>
+      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">Поддержи проект — VIP активируется после проверки</div>
+    </div>
+    <script>
+      (function() {
+        function _updateVipRow() {
+          const p = typeof profileLoad === 'function' ? profileLoad() : null;
+          const lbl = document.getElementById('settings-vip-label');
+          const sub = document.getElementById('settings-vip-sub');
+          const btn = document.getElementById('settings-vip-btn');
+          if (!lbl) return;
+          if (p && p.vip) {
+            lbl.textContent = '✅ VIP Активен';
+            lbl.style.color = '#4caf7d';
+            if (sub) sub.textContent = 'Все привилегии активны';
+            if (btn) { btn.textContent = '👑 VIP'; btn.disabled = true; btn.style.opacity = '0.5'; }
+          } else {
+            lbl.textContent = 'VIP Статус';
+            lbl.style.color = '';
+            if (sub) sub.textContent = 'Фото-аватар · значки · фото-баннер';
+            if (btn) { btn.innerHTML = '<span style="font-size:16px">💝</span> Получить VIP'; btn.disabled = false; btn.style.opacity = ''; }
+          }
+        }
+        // Обновляем при открытии настроек
+        const _origSS = window.showScreen;
+        window.showScreen = function(id, dir) {
+          if (_origSS) _origSS(id, dir);
+          if (id === 's-settings') setTimeout(_updateVipRow, 50);
+        };
+        setTimeout(_updateVipRow, 500);
+      })();
+    </script>
+    <div class="sep"></div>
+
     <!-- Приложение / OTA -->
     <div class="section-label">Приложение</div>
     <div class="list-item" style="cursor:default;margin-bottom:8px">
@@ -3345,14 +3551,8 @@ html.notch-off #s-login {
         <div class="item-sub" id="app-version-str">— Android</div>
         <script>(function(){var el=document.getElementById('app-version-str');if(!el)return;var v=(window.Android&&typeof window.Android.getAppVersion==='function')?window.Android.getAppVersion():null;el.textContent=(v||'?')+' — Android';})();</script>
       </div>
-      <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()">🔄 Проверить</button>
+      <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Проверить</button>
     </div>
-    <div style="height:4px"></div>
-    <!-- Hot-patch: обновление только изменённых файлов -->
-    <div style="margin-bottom:4px">
-      <button class="btn btn-surface" style="width:100%;margin-bottom:0" onclick="checkHotPatch(false)">🔥 Горячий патч (только файлы)</button>
-    </div>
-    <div id="hot-patch-status" style="font-size:11px;color:var(--muted);padding:0 2px 4px;min-height:16px"></div>
     <div style="height:12px"></div>
 
     <!-- Бэкапы APK -->
@@ -3361,10 +3561,27 @@ html.notch-off #s-login {
       <div id="backup-info-text" style="color:var(--muted);font-size:12px">Загрузка...</div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-surface" style="flex:1;margin-bottom:0;font-size:13px" onclick="showBackupList()">📋 Список</button>
+      <button class="btn btn-surface" style="flex:1;margin-bottom:0;font-size:13px" onclick="showBackupList()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Список</button>
       <button class="btn btn-surface3" style="flex:1;margin-bottom:0;font-size:13px;color:#ff6b6b" onclick="confirmRestoreBackup()">↩ Восстановить</button>
     </div>
     <div style="height:24px"></div>
+
+    <!-- Опасная зона -->
+    <div style="font-size:11px;font-weight:700;color:#e05555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">⚠️ Опасная зона</div>
+    <div style="background:var(--surface2);border-radius:14px;border:1.5px solid #e0555533;overflow:hidden;margin-bottom:32px">
+      <div id="danger-zone-collapsed" style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="document.getElementById('danger-zone-inner').style.display=document.getElementById('danger-zone-inner').style.display==='none'?'block':'none'">
+        <div style="font-size:13px;font-weight:600;color:var(--muted)">🗑 Удалить аккаунт</div>
+        <span style="color:var(--muted);font-size:18px">›</span>
+      </div>
+      <div id="danger-zone-inner" style="display:none;padding:0 16px 16px">
+        <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px;padding:10px;background:rgba(224,85,85,.08);border-radius:10px;border-left:3px solid #e05555">
+          Удаление аккаунта необратимо. Профиль, все сообщения и данные будут удалены с сервера. Восстановить аккаунт будет невозможно.
+        </div>
+        <button class="btn" style="background:#e05555;color:#fff;font-size:13px" onclick="profileDeleteAccount()">
+          🗑 Удалить аккаунт навсегда
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3486,84 +3703,161 @@ html.notch-off #s-login {
     </div>
 
     <div class="sep"></div>
-    <button class="btn" style="background:var(--danger,#c94f4f);color:#fff;margin-top:8px" onclick="profileDeleteAccount()">🗑 Выйти и удалить аккаунт</button>
+    <button class="btn btn-surface" style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px" onclick="profileLogout()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+      Выйти из аккаунта
+    </button>
   </div>
 </div>
 
 <!-- ЭКРАН ВХОДА/РЕГИСТРАЦИИ -->
 <div class="screen" id="s-login">
-  <div class="hdr">
-    <div class="hdr-title">Аккаунт</div>
+  <!-- Шапка с динамической кнопкой Назад -->
+  <div class="hdr" id="login-hdr">
+    <button id="login-back-btn" class="hdr-back"
+      style="visibility:hidden"
+      onclick="wizardBack()">Назад</button>
+    <div class="hdr-title" id="login-hdr-title">Аккаунт</div>
+    <div style="width:60px"></div>
   </div>
-  <div class="body" style="display:flex;flex-direction:column;align-items:center;padding-top:32px">
-    <div style="font-size:56px;margin-bottom:12px">👤</div>
 
-    <!-- Переключатель вкладок -->
-    <div style="display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:28px;width:100%;max-width:300px">
-      <button id="login-tab-reg" onclick="loginShowRegister()"
-        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .18s,color .18s;background:var(--accent);color:var(--btn-text,#fff)">
+  <!-- ═══════════════════════════════════════════
+       ТАББАР: Регистрация / Войти
+  ════════════════════════════════════════════ -->
+  <div id="login-tabbar" style="padding:0 18px 0;flex-shrink:0">
+    <div style="display:flex;background:var(--surface2);border-radius:12px;padding:3px;width:100%">
+      <button id="login-tab-reg" onclick="wizardSwitchTab('reg')"
+        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;background:var(--accent);color:var(--btn-text,#fff)">
         Регистрация
       </button>
-      <button id="login-tab-auth" onclick="loginShowAuth()"
-        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .18s,color .18s;background:transparent;color:var(--muted)">
+      <button id="login-tab-auth" onclick="wizardSwitchTab('auth')"
+        style="flex:1;padding:9px 0;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .2s,color .2s;background:transparent;color:var(--muted)">
         Войти
       </button>
     </div>
-
-    <!-- ФОРМА РЕГИСТРАЦИИ -->
-    <div id="login-register-form" style="width:100%;max-width:340px">
-      <div class="section-label">Имя</div>
-      <input class="inp" id="login-name" placeholder="Как тебя зовут?" maxlength="32" style="margin-bottom:12px">
-
-      <div class="section-label">Юзернейм</div>
-      <div style="position:relative;margin-bottom:4px">
-        <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)">@</span>
-        <input class="inp" id="login-username" placeholder="твой_ник" maxlength="24"
-               style="padding-left:28px" oninput="loginCheckUsername(this.value)">
-      </div>
-      <div id="login-username-status" style="font-size:11px;min-height:16px;margin-bottom:16px;padding-left:4px"></div>
-
-      <div class="section-label">Аватар</div>
-      <!-- Поле ввода произвольного эмодзи -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <input id="login-custom-emoji-input"
-          placeholder="Введи любой эмодзи 😎"
-          maxlength="8"
-          style="background:var(--surface2);border:2px solid var(--surface3);border-radius:12px;padding:10px 14px;font-size:22px;color:var(--text);font-family:inherit;outline:none;flex:1;min-width:0;transition:border-color .15s"
-          oninput="loginCustomEmojiInput(this)">
-        <div id="login-custom-emoji-preview"
-          onclick="randomEmojiPick('login')"
-          title="Случайный эмодзи"
-          style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid var(--surface3);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;cursor:pointer;transition:transform .15s,border-color .15s"
-          ontouchstart="this.style.transform='scale(.88)'" ontouchend="this.style.transform=''">🎲</div>
-      </div>
-      <div id="login-custom-emoji-error" style="font-size:11px;color:var(--danger,#c94f4f);min-height:14px;margin-bottom:6px;padding-left:4px"></div>
-      <div id="login-emoji-grid" style="display:none"></div>
-
-      <div class="section-label">Пароль</div>
-      <input class="inp" id="login-password" type="password" placeholder="Придумай пароль" maxlength="64" style="margin-bottom:4px">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:20px;padding-left:4px">Пароль нужен для входа с этого устройства</div>
-
-      <button class="btn btn-accent" id="login-submit-btn" onclick="profileCreate()" disabled>Создать аккаунт</button>
-      <div id="login-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:8px;min-height:16px"></div>
-    </div>
-
-    <!-- ФОРМА ВХОДА -->
-    <div id="login-auth-form" style="width:100%;max-width:340px;display:none">
-      <div class="section-label">Юзернейм</div>
-      <div style="position:relative;margin-bottom:16px">
-        <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)">@</span>
-        <input class="inp" id="login-auth-username" placeholder="твой_ник" maxlength="24"
-               style="padding-left:28px" oninput="loginAuthUsernameInput(this.value)">
-      </div>
-
-      <div class="section-label">Пароль</div>
-      <input class="inp" id="login-auth-password" type="password" placeholder="Пароль" maxlength="64" style="margin-bottom:20px" onkeydown="if(event.key==='Enter')loginDoAuth()">
-
-      <button class="btn btn-accent" onclick="loginDoAuth()">Войти</button>
-      <div id="login-auth-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:8px;min-height:16px"></div>
-    </div>
   </div>
+
+  <!-- ═══════════════════════════════════════════
+       КОНТЕНТ — слайдер шагов
+  ════════════════════════════════════════════ -->
+  <div id="login-slider-wrap" style="flex:1;overflow:hidden;position:relative">
+
+    <!-- ── ВИД: РЕГИСТРАЦИЯ (wizard) ── -->
+    <div id="login-view-reg" style="position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch">
+
+      <!-- Прогресс-точки -->
+      <div id="wizard-dots" style="display:flex;justify-content:center;gap:8px;padding:18px 0 6px">
+        <div class="wdot wdot-active" id="wdot-0"></div>
+        <div class="wdot" id="wdot-1"></div>
+        <div class="wdot" id="wdot-2"></div>
+      </div>
+
+      <!-- Слайды шагов -->
+      <div id="wizard-track" style="display:flex;transition:transform .3s cubic-bezier(.4,0,.2,1);will-change:transform">
+
+        <!-- ── ШАГ 0: Имя ── -->
+        <div class="wstep" id="wstep-0">
+          <div class="wstep-icon">👋</div>
+          <div class="wstep-title">Как тебя зовут?</div>
+          <div class="wstep-sub">Это имя увидят другие пользователи</div>
+          <input class="inp" id="login-name" placeholder="Имя или псевдоним" maxlength="32"
+            style="margin-bottom:6px;font-size:16px"
+            oninput="wizardValidateStep0()"
+            onkeydown="if(event.key==='Enter')wizardNext()">
+          <div id="wstep0-hint" style="font-size:11px;color:var(--muted);min-height:14px;padding-left:4px;margin-bottom:20px">Минимум 2 символа</div>
+          <button class="btn btn-accent" id="wbtn-0" onclick="wizardNext()" disabled style="width:100%">Далее →</button>
+        </div>
+
+        <!-- ── ШАГ 1: Никнейм + Аватар ── -->
+        <div class="wstep" id="wstep-1">
+          <div class="wstep-icon" id="wizard-avatar-big" onclick="randomEmojiPick('login')"
+            title="Нажми чтобы сменить"
+            style="cursor:pointer;transition:transform .15s"
+            ontouchstart="this.style.transform='scale(.85)'" ontouchend="this.style.transform=''">😊</div>
+          <div class="wstep-title">Выбери никнейм</div>
+          <div class="wstep-sub">Используется для входа и в чатах</div>
+
+          <div style="position:relative;margin-bottom:4px">
+            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:700">@</span>
+            <input class="inp" id="login-username" placeholder="твой_ник" maxlength="24"
+              style="padding-left:28px;font-size:15px;letter-spacing:.02em"
+              oninput="loginCheckUsername(this.value)"
+              onkeydown="if(event.key==='Enter')wizardNext()">
+          </div>
+          <div id="login-username-status" style="font-size:11px;min-height:16px;margin-bottom:14px;padding-left:4px"></div>
+
+          <!-- Эмодзи аватар -->
+          <div style="background:var(--surface2);border-radius:14px;padding:12px 14px;margin-bottom:4px">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:10px">АВАТАР</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <input id="login-custom-emoji-input"
+                placeholder="Вставь эмодзи 😎"
+                maxlength="8"
+                style="background:var(--surface3);border:2px solid transparent;border-radius:10px;padding:8px 12px;font-size:20px;color:var(--text);font-family:inherit;outline:none;flex:1;min-width:0;transition:border-color .15s"
+                oninput="loginCustomEmojiInput(this)">
+              <div id="login-custom-emoji-preview"
+                onclick="randomEmojiPick('login')"
+                style="width:44px;height:44px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;cursor:pointer;transition:transform .15s"
+                ontouchstart="this.style.transform='scale(.88)'" ontouchend="this.style.transform=''">🎲</div>
+            </div>
+            <div id="login-custom-emoji-error" style="font-size:11px;color:var(--danger,#c94f4f);min-height:12px;margin-top:4px"></div>
+          </div>
+          <div id="login-emoji-grid" style="display:none"></div>
+
+          <button class="btn btn-accent" id="wbtn-1" onclick="wizardNext()" disabled style="width:100%;margin-top:16px">Далее →</button>
+        </div>
+
+        <!-- ── ШАГ 2: Пароль ── -->
+        <div class="wstep" id="wstep-2">
+          <div class="wstep-icon">🔒</div>
+          <div class="wstep-title">Придумай пароль</div>
+          <div class="wstep-sub">Нужен для входа с нового устройства</div>
+
+          <input class="inp" id="login-password" type="password" placeholder="Пароль" maxlength="64"
+            style="margin-bottom:6px;font-size:16px"
+            oninput="wizardValidateStep2()"
+            onkeydown="if(event.key==='Enter')wizardFinish()">
+          <input class="inp" id="login-password2" type="password" placeholder="Повтори пароль" maxlength="64"
+            style="margin-bottom:6px;font-size:16px"
+            oninput="wizardValidateStep2()"
+            onkeydown="if(event.key==='Enter')wizardFinish()">
+          <div id="wstep2-hint" style="font-size:11px;color:var(--muted);min-height:14px;padding-left:4px;margin-bottom:20px">Минимум 4 символа</div>
+
+          <button class="btn btn-accent" id="wbtn-2" onclick="wizardFinish()" disabled style="width:100%">Создать аккаунт 🎉</button>
+          <div id="login-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:10px;min-height:16px"></div>
+        </div>
+
+      </div><!-- /wizard-track -->
+    </div><!-- /login-view-reg -->
+
+    <!-- ── ВИД: ВХОД ── -->
+    <div id="login-view-auth" style="position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none">
+      <div style="display:flex;flex-direction:column;align-items:center;padding:32px 18px 0">
+        <div style="font-size:64px;margin-bottom:16px">👤</div>
+        <div style="font-size:20px;font-weight:800;color:var(--text);margin-bottom:6px">С возвращением!</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:28px;text-align:center">Введи свои данные для входа</div>
+
+        <div style="width:100%;max-width:340px">
+          <div class="section-label">Юзернейм</div>
+          <div style="position:relative;margin-bottom:16px">
+            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:700">@</span>
+            <input class="inp" id="login-auth-username" placeholder="твой_ник" maxlength="24"
+              style="padding-left:28px" oninput="loginAuthUsernameInput(this.value)"
+              onkeydown="if(event.key==='Enter')document.getElementById('login-auth-password').focus()">
+          </div>
+
+          <div class="section-label">Пароль</div>
+          <input class="inp" id="login-auth-password" type="password" placeholder="Пароль" maxlength="64"
+            style="margin-bottom:20px"
+            onkeydown="if(event.key==='Enter')loginDoAuth()">
+
+          <button class="btn btn-accent" onclick="loginDoAuth()" style="width:100%">Войти</button>
+          <div id="login-auth-error" style="font-size:12px;color:var(--danger,#c94f4f);text-align:center;margin-top:10px;min-height:16px"></div>
+        </div>
+      </div>
+    </div><!-- /login-view-auth -->
+
+  </div><!-- /login-slider-wrap -->
 </div>
 
 <!-- ЭКРАН ОНЛАЙН-ПОЛЬЗОВАТЕЛЕЙ -->
@@ -3623,6 +3917,64 @@ html.notch-off #s-login {
 </div>
 
 <!-- PHOTO ZOOM OVERLAY -->
+<!-- ══ ПОМОДОРО оверлей ══ -->
+<div id="pomodoro-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9200;align-items:center;justify-content:center;padding:24px">
+  <div style="background:var(--surface2);border-radius:24px;padding:28px 24px;width:100%;max-width:320px;text-align:center;border:1.5px solid var(--surface3)">
+    <div id="pomo-mode-label" style="font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--accent);margin-bottom:12px">ФОКУС 🍅</div>
+    <div style="position:relative;width:140px;height:140px;margin:0 auto 20px">
+      <svg viewBox="0 0 140 140" width="140" height="140" style="position:absolute;inset:0">
+        <circle cx="70" cy="70" r="60" fill="none" stroke="var(--surface3)" stroke-width="10"/>
+        <circle id="pomo-ov-ring" cx="70" cy="70" r="60" fill="none" stroke="var(--accent)" stroke-width="10"
+          stroke-linecap="round" stroke-dasharray="376.99" stroke-dashoffset="0"
+          style="transform-origin:center;transform:rotate(-90deg);transition:stroke-dashoffset .8s linear"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <div id="pomo-ov-time" style="font-size:36px;font-weight:800;color:var(--text);letter-spacing:-.02em">25:00</div>
+        <div id="pomo-ov-emoji" style="font-size:22px">🍅</div>
+      </div>
+    </div>
+    <div id="pomo-ov-session" style="font-size:12px;color:var(--muted);margin-bottom:18px"></div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button id="pomo-ov-main-btn" onclick="pomodoroToggle()" class="btn btn-accent" style="flex:1">⏸ Пауза</button>
+      <button onclick="pomodoroReset()" class="btn btn-surface" style="flex:1">↺ Сброс</button>
+    </div>
+    <button onclick="document.getElementById('pomodoro-overlay').style.display='none'"
+      style="margin-top:14px;background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;font-family:inherit">Свернуть</button>
+  </div>
+</div>
+
+<!-- ══ ЖАЛОБНАЯ КНИГА оверлей ══ -->
+<div id="complaint-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9100;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--surface2);border-radius:20px;padding:22px;width:100%;max-width:340px;border:1.5px solid var(--surface3)">
+    <div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);margin-bottom:10px">😤 ЖАЛОБНАЯ КНИГА</div>
+    <div id="complaint-text" style="font-size:15px;line-height:1.55;color:var(--text);margin-bottom:18px;min-height:60px"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="funShowComplaint()" class="btn btn-surface" style="flex:1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Ещё</button>
+      <button onclick="funCopyComplaint()" class="btn btn-accent" style="flex:1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Скопировать</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ РАНДОМАЙЗЕР ГРУППЫ ══ -->
+<div id="randomizer-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9100;align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--surface2);border-radius:20px;padding:22px;width:100%;max-width:340px;border:1.5px solid var(--surface3)">
+    <div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);margin-bottom:12px">🎲 КТО ОТВЕЧАЕТ?</div>
+    <div id="rand-names-wrap" style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Участники (по одному на строку):</div>
+      <textarea id="rand-names-input" rows="5" placeholder="Иван&#10;Мария&#10;Дмитрий&#10;..."
+        style="width:100%;box-sizing:border-box;background:var(--surface3);border:none;border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:14px;outline:none;resize:none"></textarea>
+    </div>
+    <div id="rand-result" style="display:none;text-align:center;padding:16px 0">
+      <div style="font-size:48px" id="rand-result-emoji">🎯</div>
+      <div id="rand-result-name" style="font-size:22px;font-weight:800;color:var(--accent);margin-top:8px"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:4px">
+      <button onclick="funGroupRandomizerSpin()" class="btn btn-accent" style="flex:1">🎲 Выбрать!</button>
+      <button onclick="document.getElementById('randomizer-overlay').style.display='none'" class="btn btn-surface">✕</button>
+    </div>
+  </div>
+</div>
+
 <div id="photo-zoom-overlay">
   <!-- Хедер -->
   <div id="pz-header">
@@ -3997,6 +4349,18 @@ html.notch-off #s-login {
   <div id="egg-picker" class="egg-picker">
     <div class="egg-title">🎮 Секретный режим</div>
     <div class="egg-sub">Ты нашёл пасхалку!<br>Убей время до пары 🎲</div>
+
+    <!-- ── Таблица лидеров — над списком игр ── -->
+    <div onclick="document.getElementById('egg-overlay').classList.remove('show'); showScreen('s-leaderboard');"
+         style="background:linear-gradient(135deg,rgba(255,180,0,.12),var(--surface2));border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;border:1.5px solid rgba(255,180,0,.35);cursor:pointer;-webkit-tap-highlight-color:transparent;margin-bottom:12px;box-shadow:0 0 18px rgba(255,180,0,.08)">
+      <span style="font-size:24px">🏆</span>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700;color:var(--text)">Таблица лидеров</div>
+        <div style="font-size:12px;color:var(--muted)">Рекорды по всем играм</div>
+      </div>
+      <span style="color:rgba(255,180,0,.8);font-size:18px">›</span>
+    </div>
+
     <div class="egg-picker-title">Выбери игру</div>
     <div class="egg-cards">
       <div class="egg-card" onclick="eggStartGame('snake')">
@@ -4135,6 +4499,26 @@ html.notch-off #s-login {
         <div class="egg-card-arrow">›</div>
       </div>
 
+      <div class="egg-card" onclick="eggStartGame('checkers')">
+        <div class="egg-card-icon">🔴</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Шашки</div>
+          <div class="egg-card-desc">Классические шашки — против ИИ или вдвоём</div>
+          <div class="egg-card-badge egg-card-new">v1.0.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+
+      <div class="egg-card" onclick="eggStartGame('chess')">
+        <div class="egg-card-icon">♟</div>
+        <div class="egg-card-body">
+          <div class="egg-card-name">Шахматы</div>
+          <div class="egg-card-desc">Полные правила, рокировка, ИИ minimax</div>
+          <div class="egg-card-badge egg-card-new">v1.0.0 ✦ НОВАЯ</div>
+        </div>
+        <div class="egg-card-arrow">›</div>
+      </div>
+
     </div>
   </div>
 
@@ -4159,7 +4543,7 @@ html.notch-off #s-login {
       <div class="dpad-btn" ontouchstart="event.preventDefault();snakeDir(0,1)" onclick="snakeDir(0,1)">▼</div>
       <div></div>
     </div>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="snakeRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="snakeRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- Крестики-нолики -->
@@ -4168,14 +4552,14 @@ html.notch-off #s-login {
     <!-- Mode selector -->
     <div class="diff-picker" id="ttt-mode-picker" style="margin-bottom:8px">
       <button class="diff-btn active" id="ttt-mode-ai"     onclick="tttSetMode('ai')">🤖 vs ИИ</button>
-      <button class="diff-btn"        id="ttt-mode-local"  onclick="tttSetMode('local')">📱 Вдвоём</button>
+      <button class="diff-btn"        id="ttt-mode-local"  onclick="tttSetMode('local')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Вдвоём</button>
       <button class="diff-btn"        id="ttt-mode-lan"    onclick="tttSetMode('lan')">📡 LAN</button>
     </div>
     <!-- LAN panel -->
     <div id="ttt-lan-panel" style="display:none;width:100%;max-width:340px;margin-bottom:8px">
       <div style="display:flex;gap:8px;margin-bottom:6px">
-        <button class="btn btn-accent" style="flex:1;padding:10px;font-size:13px" onclick="tttLanHost()">🏠 Создать</button>
-        <button class="btn btn-surface3" style="flex:1;padding:10px;font-size:13px" onclick="tttLanJoinPrompt()">🔗 Войти</button>
+        <button class="btn btn-accent" style="flex:1;padding:10px;font-size:13px" onclick="tttLanHost()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/><polyline points="9 21 9 13 15 13 15 21"/></svg> Создать</button>
+        <button class="btn btn-surface3" style="flex:1;padding:10px;font-size:13px" onclick="tttLanJoinPrompt()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Войти</button>
       </div>
       <div id="ttt-lan-status" style="font-size:12px;color:var(--muted);text-align:center;min-height:18px"></div>
       <div id="ttt-lan-code-wrap" style="display:none;margin-top:6px">
@@ -4191,7 +4575,7 @@ html.notch-off #s-login {
     </div>
     <div class="ttt-board" id="ttt-board"></div>
     <div class="ttt-status" id="ttt-status">Твой ход — ставь ✕</div>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:14px;font-size:13px" onclick="tttRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:14px;font-size:13px" onclick="tttRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- Пинг-понг -->
@@ -4200,14 +4584,14 @@ html.notch-off #s-login {
     <!-- Mode selector -->
     <div class="diff-picker" id="pong-mode-picker" style="margin-bottom:4px">
       <button class="diff-btn active" id="pong-mode-ai"    onclick="pongSetMode('ai')">🤖 vs ИИ</button>
-      <button class="diff-btn"        id="pong-mode-local" onclick="pongSetMode('local')">📱 Вдвоём</button>
+      <button class="diff-btn"        id="pong-mode-local" onclick="pongSetMode('local')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Вдвоём</button>
       <button class="diff-btn"        id="pong-mode-lan"   onclick="pongSetMode('lan')">📡 LAN</button>
     </div>
     <!-- LAN panel -->
     <div id="pong-lan-panel" style="display:none;width:100%;max-width:340px;margin-bottom:4px">
       <div style="display:flex;gap:8px;margin-bottom:6px">
-        <button class="btn btn-accent" style="flex:1;padding:10px;font-size:13px" onclick="pongLanHost()">🏠 Создать</button>
-        <button class="btn btn-surface3" style="flex:1;padding:10px;font-size:13px" onclick="pongLanJoinPrompt()">🔗 Войти</button>
+        <button class="btn btn-accent" style="flex:1;padding:10px;font-size:13px" onclick="pongLanHost()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/><polyline points="9 21 9 13 15 13 15 21"/></svg> Создать</button>
+        <button class="btn btn-surface3" style="flex:1;padding:10px;font-size:13px" onclick="pongLanJoinPrompt()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Войти</button>
       </div>
       <div id="pong-lan-status" style="font-size:12px;color:var(--muted);text-align:center;min-height:18px"></div>
       <div id="pong-lan-code-wrap" style="display:none;margin-top:6px">
@@ -4224,7 +4608,7 @@ html.notch-off #s-login {
     <div class="egg-score" id="pong-score-label">Счёт: 0 • Рекорд: 0</div>
     <canvas id="pong-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
     <div id="pong-local-hint" style="display:none;font-size:11px;color:var(--muted);text-align:center;margin-top:6px">👆 Верхняя зона — Игрок 2 &nbsp;|&nbsp; 👇 Нижняя зона — Игрок 1</div>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="pongRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="pongRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- Тетрис -->
@@ -4243,7 +4627,7 @@ html.notch-off #s-login {
       <button class="tet-btn" ontouchstart="event.preventDefault();tetMove(1)" onclick="tetMove(1)">▶</button>
       <button class="tet-btn tet-btn-wide" ontouchstart="event.preventDefault();tetDrop()" onclick="tetDrop()">⬇</button>
     </div>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tetRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tetRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- Дино -->
@@ -4256,7 +4640,7 @@ html.notch-off #s-login {
     </div>
     <div class="egg-score" id="dino-score-label">Счёт: 0 • Рекорд: 0</div>
     <canvas id="dino-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="dinoRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="dinoRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- BlockBlast -->
@@ -4271,7 +4655,7 @@ html.notch-off #s-login {
     <div id="bb-board-wrap" style="margin-top:10px;display:flex;justify-content:center"></div>
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px">Перетаскивай фигуры на поле</div>
     <div id="bb-pieces-wrap" style="display:flex;gap:10px;justify-content:center;align-items:flex-end;margin-top:8px;min-height:80px"></div>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bbRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="bbRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- Арканоид -->
@@ -4284,7 +4668,7 @@ html.notch-off #s-login {
     </div>
     <div class="egg-score" id="br-score-label">Счёт: 0 • Рекорд: 0 • Жизни: ❤️❤️❤️</div>
     <canvas id="br-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:10px;display:block;touch-action:none"></canvas>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="brRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="brRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- Флаппи птица -->
@@ -4301,7 +4685,7 @@ html.notch-off #s-login {
     <div class="egg-score" id="g2048-score-label">Счёт: 0 • Рекорд: 0</div>
     <div id="g2048-board" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(300px,85vw);margin:12px auto 0;touch-action:none"></div>
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px">свайп или стрелки — двигать плитки</div>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="g2048Restart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="g2048Restart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- Монетка -->
@@ -4323,7 +4707,7 @@ html.notch-off #s-login {
     <div class="coin-result" id="coin-result">Нажми, чтобы подбросить!</div>
     <div class="coin-streak" id="coin-streak"></div>
     <button class="btn btn-accent" style="width:200px;margin-top:16px" onclick="coinFlip()">🪙 Бросить!</button>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:8px;font-size:13px" onclick="coinReset()">🔄 Сбросить</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:8px;font-size:13px" onclick="coinReset()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Сбросить</button>
   </div>
 
   <!-- Кубик -->
@@ -4344,7 +4728,7 @@ html.notch-off #s-login {
     <div class="egg-score" id="basket-score-label">Счёт: 0 • Рекорд: 0</div>
     <canvas id="basket-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">Свайп снизу вверх для броска</div>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="basketRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="basketRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- Geometry Dash -->
@@ -4358,7 +4742,7 @@ html.notch-off #s-login {
     <div class="egg-score" id="geo-score-label">Попытка: 1 • Рекорд: 0%</div>
     <canvas id="geo-canvas" style="border-radius:14px;border:1.5px solid var(--surface3);margin-top:8px;display:block;touch-action:none"></canvas>
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">Тап / пробел — прыжок</div>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="geoRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="geoRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
   <!-- Танчики -->
@@ -4380,20 +4764,45 @@ html.notch-off #s-login {
       </div>
       <div class="dpad-btn" data-dir="down" ontouchstart="event.preventDefault();tanksDir('down')" onclick="tanksDir('down')">▼</div>
     </div>
-    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tanksRestart()">🔄 Заново</button>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="tanksRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
 
-  <!-- ── Таблица лидеров (перемещена из профиля) ── -->
-  <div style="padding:16px 16px 0">
-    <div onclick="showScreen('s-leaderboard')" style="background:var(--surface2);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;border:1.5px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
-      <span style="font-size:22px">🏆</span>
-      <div style="flex:1">
-        <div style="font-size:14px;font-weight:700">Таблица лидеров</div>
-        <div style="font-size:12px;color:var(--muted)">Рекорды в играх</div>
-      </div>
-      <span style="color:var(--muted);font-size:18px">›</span>
+  <!-- Шашки -->
+  <div id="egg-checkers" class="egg-game" style="display:none">
+    <div class="egg-game-title">🔴 Шашки</div>
+    <div class="diff-picker" style="margin-bottom:8px">
+      <button class="diff-btn active" id="chk-mode-ai"    onclick="chkSetMode('ai')">🤖 vs ИИ</button>
+      <button class="diff-btn"        id="chk-mode-local" onclick="chkSetMode('local')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Вдвоём</button>
     </div>
+    <div class="chk-scores">
+      <div class="chk-score-item"><div class="chk-score-val" id="chk-score-w">0</div><div id="chk-label-1">Ты (🔴)</div></div>
+      <div class="chk-score-item"><div class="chk-score-val" id="chk-score-d">0</div><div>Ничья</div></div>
+      <div class="chk-score-item"><div class="chk-score-val" id="chk-score-l">0</div><div id="chk-label-2">ИИ (⚫)</div></div>
+    </div>
+    <div class="chk-board" id="chk-board"></div>
+    <div class="chk-status" id="chk-status">Твой ход</div>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="chkRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
   </div>
+
+  <!-- Шахматы -->
+  <div id="egg-chess" class="egg-game" style="display:none">
+    <div class="egg-game-title">♟ Шахматы</div>
+    <div class="diff-picker" style="margin-bottom:8px">
+      <button class="diff-btn active" id="chess-mode-ai"    onclick="chessSetMode('ai')">🤖 vs ИИ</button>
+      <button class="diff-btn"        id="chess-mode-local" onclick="chessSetMode('local')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Вдвоём</button>
+    </div>
+    <div class="chess-scores">
+      <div class="chess-score-item"><div class="chess-score-val" id="chess-score-w">0</div><div id="chess-label-1">Ты (♔)</div></div>
+      <div class="chess-score-item"><div class="chess-score-val" id="chess-score-d">0</div><div>Ничья</div></div>
+      <div class="chess-score-item"><div class="chess-score-val" id="chess-score-l">0</div><div id="chess-label-2">ИИ (♚)</div></div>
+    </div>
+    <div class="chess-board" id="chess-board"></div>
+    <div class="chess-promo" id="chess-promo"></div>
+    <div class="chess-status" id="chess-status">Ваш ход — белые ♔</div>
+    <button class="btn btn-surface3" style="width:auto;padding:9px 22px;margin-top:10px;font-size:13px" onclick="chessRestart()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Заново</button>
+  </div>
+
+
 
 </div>
 
