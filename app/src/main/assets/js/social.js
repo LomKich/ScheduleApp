@@ -1174,24 +1174,37 @@ function openImageCrop(dataUrl, options) {
   };
   tmpImg.src = dataUrl;
 
-  // ┄┄ Pointer drag ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-  function onDown(e) {
+  // ┄┄ Drag через Pointer Events (надёжно на Android WebView) ┄┄┄┄┄┄┄
+  // setPointerCapture гарантирует, что все события идут сюда,
+  // даже если палец вышел за пределы cropBox. Надёжнее touchmove на window.
+  function onPointerDown(e) {
     e.preventDefault();
+    if (e.pointerType === 'touch' || e.pointerType === 'mouse' || e.pointerType === 'pen') {
+      // Захватываем этот pointer — все последующие move/up придут на cropBox
+      try { cropBox.setPointerCapture(e.pointerId); } catch(_) {}
+    }
     st.dragging = true;
-    const pt = e.touches ? e.touches[0] : e;
-    st.lastX = pt.clientX; st.lastY = pt.clientY;
-    // Pinch-zoom init
-    if (e.touches && e.touches.length === 2) {
+    st.lastX = e.clientX; st.lastY = e.clientY;
+    // Pinch: отслеживаем второй pointer отдельно
+    if (!st._activePointers) st._activePointers = {};
+    st._activePointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    const ptrs = Object.values(st._activePointers);
+    if (ptrs.length === 2) {
+      const dx = ptrs[0].x - ptrs[1].x, dy = ptrs[0].y - ptrs[1].y;
       st.pinching = true;
-      st.pinchDist = _pinchDist(e.touches);
+      st.pinchDist = Math.sqrt(dx*dx + dy*dy);
       st.pinchScale = st.scale;
     }
   }
-  function onMove(e) {
+  function onPointerMove(e) {
     e.preventDefault();
     if (!st.dragging) return;
-    if (e.touches && e.touches.length === 2 && st.pinching) {
-      const d = _pinchDist(e.touches);
+    if (!st._activePointers) st._activePointers = {};
+    st._activePointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    const ptrs = Object.values(st._activePointers);
+    if (ptrs.length === 2 && st.pinching) {
+      const dx = ptrs[0].x - ptrs[1].x, dy = ptrs[0].y - ptrs[1].y;
+      const d = Math.sqrt(dx*dx + dy*dy);
       const newScale = Math.max(st.minScale, Math.min(st.minScale * 4, st.pinchScale * d / st.pinchDist));
       st.scale = newScale;
       zoomEl.value = Math.round(newScale * 100);
@@ -1200,28 +1213,29 @@ function openImageCrop(dataUrl, options) {
       return;
     }
     st.pinching = false;
-    const pt = e.touches ? e.touches[0] : e;
-    st.x += pt.clientX - st.lastX;
-    st.y += pt.clientY - st.lastY;
-    st.lastX = pt.clientX; st.lastY = pt.clientY;
+    st.x += e.clientX - st.lastX;
+    st.y += e.clientY - st.lastY;
+    st.lastX = e.clientX; st.lastY = e.clientY;
     _cropClamp();
     _cropApplyTransform();
   }
-  function onUp() { st.dragging = false; st.pinching = false; }
+  function onPointerUp(e) {
+    if (st._activePointers) delete st._activePointers[e.pointerId];
+    if (!st._activePointers || Object.keys(st._activePointers).length === 0) {
+      st.dragging = false; st.pinching = false;
+    }
+  }
 
-  cropBox.addEventListener('mousedown',  onDown, {passive:false});
-  cropBox.addEventListener('touchstart', onDown, {passive:false});
-  window.addEventListener('mousemove',  onMove, {passive:false});
-  window.addEventListener('touchmove',  onMove, {passive:false});
-  window.addEventListener('mouseup',   onUp);
-  window.addEventListener('touchend',  onUp);
+  cropBox.style.touchAction = 'none'; // дублируем CSS на случай если WebView игнорирует стиль
+  cropBox.addEventListener('pointerdown', onPointerDown);
+  cropBox.addEventListener('pointermove', onPointerMove);
+  cropBox.addEventListener('pointerup',   onPointerUp);
+  cropBox.addEventListener('pointercancel', onPointerUp);
   st._cleanupListeners = () => {
-    cropBox.removeEventListener('mousedown',  onDown);
-    cropBox.removeEventListener('touchstart', onDown);
-    window.removeEventListener('mousemove',  onMove);
-    window.removeEventListener('touchmove',  onMove);
-    window.removeEventListener('mouseup',   onUp);
-    window.removeEventListener('touchend',  onUp);
+    cropBox.removeEventListener('pointerdown',   onPointerDown);
+    cropBox.removeEventListener('pointermove',   onPointerMove);
+    cropBox.removeEventListener('pointerup',     onPointerUp);
+    cropBox.removeEventListener('pointercancel', onPointerUp);
   };
 
   // ┄┄ Zoom slider ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -1533,6 +1547,7 @@ function profileLogout() {
   }
   profileDisconnect();
   localStorage.removeItem(PROFILE_KEY);
+  localStorage.removeItem(GROUPS_KEY); // очищаем кэш групп — при следующем входе загрузим с сервера
   updateNavProfileIcon(null);
   profileInitLoginScreen();
   showScreen('s-login');
@@ -3551,12 +3566,17 @@ async function syncGroupsFromServer(username) {
     const raw = rows[0].groups;
     const serverGroups = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(serverGroups)) return;
-    const local  = groupsLoad();
-    // Merge: добавляем серверные группы которых нет локально
-    const merged = [...local];
-    serverGroups.forEach(sg => {
-      if (!merged.find(g => g.id === sg.id)) merged.push(sg);
-    });
+    const local = groupsLoad();
+    // Сервер — источник истины для групп.
+    // Старая логика (additive merge) оставляла удалённые группы в локальном кэше.
+    // Теперь: берём серверный список, добавляем только те локальные группы,
+    // которые были созданы офлайн (есть локально, нет на сервере) — edge case.
+    const localOnlyGroups = local.filter(lg =>
+      lg.id !== PUBLIC_GROUP_ID && !serverGroups.find(sg => sg.id === lg.id)
+    );
+    // localOnlyGroups почти всегда пуст (groupCreate всегда пишет на сервер).
+    // Это подстраховка на случай потери связи при создании группы.
+    const merged = [...serverGroups, ...localOnlyGroups];
     groupsSave(merged);
 
     // ┄┄ Авто-вступление в публичную группу ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -5634,20 +5654,50 @@ const PROFILE_BANNERS = [
 // profileInitEditScreen теперь единая функция в profile-script блоке выше.
 // VIP-секции рендерятся внутри неё напрямую через PROFILE_FRAMES/BADGES/BANNERS.
 
+// Применяет незасохранённые изменения из формы редактирования к объекту профиля.
+// Нужно вызывать перед profileSave() при промежуточных действиях (смена рамки/значка/баннера),
+// иначе аватарка, имя и цвет сбрасываются к последнему сохранённому значению.
+function _profileApplyPendingEdits(p) {
+  // Имя и биография из полей формы
+  const nameVal = (document.getElementById('edit-name')?.value || '').trim();
+  const bioVal  = (document.getElementById('edit-bio')?.value  || '').trim();
+  if (nameVal) p.name = nameVal;
+  if (bioVal  !== undefined) p.bio = bioVal;
+  // Цвет и статус из in-memory переменных
+  if (typeof _editSelectedColor  !== 'undefined') p.color  = _editSelectedColor;
+  if (typeof _editSelectedStatus !== 'undefined') p.status = _editSelectedStatus;
+  // Аватарка: фото или эмодзи
+  if (_profileAvatarMode === 'photo') {
+    p.avatarType = 'photo';
+    // Если пользователь выбрал новое фото — применяем, но не стираем _profileTempAvatarData
+    // (оно понадобится ещё раз при итоговом profileSaveEdit)
+    if (window._profileTempAvatarData) {
+      p.avatarData = window._profileTempAvatarData;
+    }
+  } else {
+    p.avatarType = 'emoji';
+    p.avatar = _editSelectedEmoji || p.avatar;
+    delete p.avatarData;
+  }
+}
+
 function profileSetFrame(id) {
   const p = profileLoad(); if (!p) return;
+  _profileApplyPendingEdits(p);
   p.frame = id; profileSave(p);
   toast('✅ Рамка: ' + PROFILE_FRAMES[id].label);
   profileInitEditScreen();
 }
 function profileSetBadge(id) {
   const p = profileLoad(); if (!p) return;
+  _profileApplyPendingEdits(p);
   p.badge = id; profileSave(p);
   toast(id ? '✅ Значок выбран' : '✅ Значок убран');
   profileInitEditScreen();
 }
 function profileSetBanner(id) {
   const p = profileLoad(); if (!p) return;
+  _profileApplyPendingEdits(p);
   const b = PROFILE_BANNERS.find(x => x.id === id);
   p.banner = b ? b.style : null; profileSave(p);
   toast('✅ Баннер обновлён');
