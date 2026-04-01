@@ -3398,6 +3398,54 @@ html.notch-off #s-login {
     </div>
     <div class="sep"></div>
 
+    <!-- VIP Аккаунт -->
+    <div class="section-label">VIP Аккаунт</div>
+    <div id="settings-vip-row" style="background:var(--surface2);border-radius:14px;padding:14px 16px;margin-bottom:8px;border:1.5px solid var(--surface3)">
+      <div id="settings-vip-status" style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:22px">👑</span>
+        <div>
+          <div style="font-size:14px;font-weight:700" id="settings-vip-label">VIP Статус</div>
+          <div style="font-size:12px;color:var(--muted)" id="settings-vip-sub">Фото-аватар · значки · фото-баннер</div>
+        </div>
+      </div>
+      <button class="btn btn-accent" id="settings-vip-btn"
+        onclick="showDonateSheet()"
+        style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px">
+        <span style="font-size:16px">💝</span> Получить VIP
+      </button>
+      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">Поддержи проект — VIP активируется после проверки</div>
+    </div>
+    <script>
+      (function() {
+        function _updateVipRow() {
+          const p = typeof profileLoad === 'function' ? profileLoad() : null;
+          const lbl = document.getElementById('settings-vip-label');
+          const sub = document.getElementById('settings-vip-sub');
+          const btn = document.getElementById('settings-vip-btn');
+          if (!lbl) return;
+          if (p && p.vip) {
+            lbl.textContent = '✅ VIP Активен';
+            lbl.style.color = '#4caf7d';
+            if (sub) sub.textContent = 'Все привилегии активны';
+            if (btn) { btn.textContent = '👑 VIP'; btn.disabled = true; btn.style.opacity = '0.5'; }
+          } else {
+            lbl.textContent = 'VIP Статус';
+            lbl.style.color = '';
+            if (sub) sub.textContent = 'Фото-аватар · значки · фото-баннер';
+            if (btn) { btn.innerHTML = '<span style="font-size:16px">💝</span> Получить VIP'; btn.disabled = false; btn.style.opacity = ''; }
+          }
+        }
+        // Обновляем при открытии настроек
+        const _origSS = window.showScreen;
+        window.showScreen = function(id, dir) {
+          if (_origSS) _origSS(id, dir);
+          if (id === 's-settings') setTimeout(_updateVipRow, 50);
+        };
+        setTimeout(_updateVipRow, 500);
+      })();
+    </script>
+    <div class="sep"></div>
+
     <!-- Приложение / OTA -->
     <div class="section-label">Приложение</div>
     <div class="list-item" style="cursor:default;margin-bottom:8px">
