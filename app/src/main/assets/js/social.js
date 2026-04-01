@@ -397,7 +397,7 @@ function editCustomEmojiInput(el) {
 let _loginCheckTimer = null;
 function loginCheckUsername(val) {
   const status = document.getElementById('login-username-status');
-  const btn = document.getElementById('login-submit-btn');
+  const btn = document.getElementById('wbtn-1');
   if (!val) { if(status)status.textContent=''; if(btn)btn.disabled=true; return; }
   const clean = val.replace(/[^a-zA-Z0-9_]/g, '');
   if (document.getElementById('login-username')) document.getElementById('login-username').value = clean;
