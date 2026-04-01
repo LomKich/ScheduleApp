@@ -641,6 +641,7 @@ function profileRenderScreen() {
   const statusObj = PROFILE_STATUSES.find(s => s.id === p.status) || PROFILE_STATUSES[0];
   const onlinePeers = _profileOnlinePeers || [];
   const vip = p.vip;
+  const frameStyle = PROFILE_FRAMES[p.frame] || PROFILE_FRAMES['none'];
   const badgeObj = PROFILE_BADGES ? PROFILE_BADGES.find(b => b.id === p.badge) : null;
 
   const bannerStyle = p.banner
@@ -660,7 +661,7 @@ function profileRenderScreen() {
       <div style="${bannerStyle};height:140px;width:100%;background-size:cover;background-position:center"></div>
       <div style="position:absolute;bottom:-50px;left:50%;transform:translateX(-50%)">
         <div style="position:relative;display:inline-block">
-          <div class="profile-avatar" style="width:96px;height:96px;font-size:46px;border:3px solid ${p.color||'var(--accent)'};border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden">
+          <div class="profile-avatar ${frameStyle.cls}" style="width:96px;height:96px;font-size:46px;border:3px solid ${p.color||'var(--accent)'};border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden;${frameStyle.style}">
             ${avatarHtml}
           </div>
           ${vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))">${_emojiImg("👑",22)}</div>` : ''}
@@ -779,6 +780,104 @@ function profileRenderScreen() {
     <div style="height:8px"></div>
   `;
   _bgServiceUpdateUI();
+  _renderAccountSwitcher();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 👥 МУЛЬТИАККАУНТ — Telegram-style переключение аккаунтов
+// ══════════════════════════════════════════════════════════════════
+
+function _renderAccountSwitcher() {
+  const body = document.getElementById('profile-body');
+  if (!body) return;
+  const accounts = accountsLoad();
+  const current  = profileLoad();
+  const allNames = Object.keys(accounts);
+  if (allNames.length === 0) return;
+
+  document.getElementById('account-switcher-bar')?.remove();
+
+  const bar = document.createElement('div');
+  bar.id = 'account-switcher-bar';
+  bar.style.cssText = 'background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3);overflow:hidden';
+
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'padding:12px 16px 8px;display:flex;align-items:center;justify-content:space-between';
+  hdr.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Аккаунты</div>
+    <button onclick="accountSwitcherAddNew()" style="background:none;border:none;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:8px;-webkit-tap-highlight-color:transparent">+ Добавить</button>`;
+  bar.appendChild(hdr);
+
+  const list = document.createElement('div');
+  allNames.forEach(username => {
+    const acc = accounts[username];
+    const isCurrent = username === current?.username;
+    const row = document.createElement('div');
+    row.style.cssText = `display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:${isCurrent ? 'default' : 'pointer'};border-top:1px solid var(--surface3);-webkit-tap-highlight-color:transparent;${isCurrent ? 'background:rgba(255,255,255,.03)' : ''}`;
+    if (!isCurrent) {
+      row.ontouchstart = function() { this.style.background = 'var(--surface3)'; };
+      row.ontouchend   = function() { this.style.background = ''; };
+      row.onclick = () => accountSwitcherSwitch(username);
+    }
+    const avatarData = isCurrent ? current?.avatarData : null;
+    const avatarType = isCurrent ? current?.avatarType : null;
+    const avatarEmoji = acc.avatar || '\u{1F60A}';
+    const avatarHtml = (avatarType === 'photo' && avatarData)
+      ? `<img src="${avatarData}" style="width:40px;height:40px;border-radius:50%;object-fit:cover">`
+      : `<span style="font-size:22px">${avatarEmoji}</span>`;
+    row.innerHTML = `<div style="width:40px;height:40px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;${isCurrent ? 'border:2px solid var(--accent)' : ''}">${avatarHtml}</div>
+      <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:${isCurrent ? '700' : '500'};color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(acc.name || username)}</div>
+      <div style="font-size:12px;color:var(--muted)">@${escHtml(username)}</div></div>
+      ${isCurrent ? '<span style="font-size:11px;font-weight:700;color:var(--accent);flex-shrink:0">\u2713 \u0410\u043A\u0442\u0438\u0432\u0435\u043D</span>' : '<span style="font-size:18px;color:var(--muted);flex-shrink:0">\u203a</span>'}`;
+    list.appendChild(row);
+  });
+  bar.appendChild(list);
+  body.insertBefore(bar, body.firstChild);
+}
+
+async function accountSwitcherSwitch(username) {
+  const accounts = accountsLoad();
+  const acc = accounts[username];
+  if (!acc) return;
+  const cur = profileLoad();
+  if (cur) {
+    accounts[cur.username] = { name: cur.name, avatar: cur.avatar, avatarType: cur.avatarType, avatarData: cur.avatarData, createdAt: cur.createdAt, pwdHash: cur.pwdHash };
+    accountsSave(accounts);
+    profileDisconnect();
+  }
+  if (acc.pwdHash) {
+    toast('\u23F3 \u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0435\u043C \u0430\u043A\u043A\u0430\u0443\u043D\u0442...');
+    localStorage.removeItem(PROFILE_KEY);
+    if (sbReady()) {
+      try {
+        const rows = await sbGet('users', `select=*&username=eq.${encodeURIComponent(username)}&limit=1`);
+        if (Array.isArray(rows) && rows.length > 0) _mapProfileRow(rows[0]);
+      } catch(e) {}
+    }
+    let p = profileLoad();
+    if (!p || p.username !== username) {
+      p = { username, name: acc.name || username, avatar: acc.avatar || '\u{1F60A}', avatarType: acc.avatarType || 'emoji', avatarData: acc.avatarData || null, bio: '', status: 'online', color: 'var(--accent)', pwdHash: acc.pwdHash, createdAt: acc.createdAt || Date.now(), uid: username };
+      profileSave(p);
+    }
+    updateNavProfileIcon(p);
+    profileConnect(p);
+    profileRenderScreen();
+    showScreen('s-profile');
+    toast('\u{1F44B} \u041F\u0440\u0438\u0432\u0435\u0442, ' + (p.name || username) + '!');
+    try { window.Android?.setCurrentUser?.(username); } catch(_) {}
+  } else {
+    profileInitLoginScreen();
+    showScreen('s-login');
+    loginShowAuth(username);
+    toast('\u{1F511} \u0412\u0432\u0435\u0434\u0438 \u043F\u0430\u0440\u043E\u043B\u044C \u0434\u043B\u044F @' + username);
+  }
+}
+
+function accountSwitcherAddNew() {
+  const cur = profileLoad();
+  if (cur) { profileDisconnect(); localStorage.removeItem(PROFILE_KEY); updateNavProfileIcon(null); }
+  profileInitLoginScreen();
+  showScreen('s-login');
+  toast('\u{1F464} \u0412\u043E\u0439\u0434\u0438 \u0438\u043B\u0438 \u0441\u043E\u0437\u0434\u0430\u0439 \u043D\u043E\u0432\u044B\u0439 \u0430\u043A\u043A\u0430\u0443\u043D\u0442');
 }
 
 // ┄┄ Фоновый сервис: управление и UI ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -5548,8 +5647,30 @@ if (typeof cmdExec === 'function') {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// 🖼 ЗНАЧКИ
+// 🖼 ЗНАЧКИ, РАМКИ, БАННЕРЫ
+// Рамки и баннеры скрыты из UI редактирования, но работают для тех кто их поставил
+// и могут быть выставлены через /frame и /banner в CMD
 // ══════════════════════════════════════════════════════════════════
+const PROFILE_FRAMES = {
+  'none':     { cls: '',               style: '',                                                label: 'Нет',         vip: false },
+  'accent':   { cls: '',               style: 'box-shadow:0 0 0 3px var(--accent)',              label: '🔶 Акцент',   vip: false },
+  'glow':     { cls: '',               style: 'box-shadow:0 0 16px 4px var(--accent)',           label: '✅ Свечение', vip: true  },
+  'rainbow':  { cls: 'frame-rainbow',  style: '',                                                label: '🌈 Радуга',   vip: true  },
+  'gold':     { cls: '',               style: 'box-shadow:0 0 0 3px #f5c518,0 0 12px #f5c51866', label: '🥇 Золото',  vip: true  },
+  'neon':     { cls: '',               style: 'box-shadow:0 0 0 3px #00e5ff,0 0 20px #00e5ff88', label: '💠 Неон',    vip: true  },
+  'fire':     { cls: 'frame-fire',     style: '',                                                label: '🔥 Огонь',   vip: true  },
+};
+
+const PROFILE_BANNERS = [
+  { id: 'none',    label: 'Нет',         style: 'background:var(--surface2)',                                    vip: false },
+  { id: 'accent',  label: 'Акцент',      style: 'background:linear-gradient(135deg,var(--accent)66,var(--surface2))', vip: false },
+  { id: 'sunset',  label: '🌅 Закат',    style: 'background:linear-gradient(135deg,#e87722,#c94f4f,#a78bfa)',    vip: true  },
+  { id: 'ocean',   label: '🌊 Океан',    style: 'background:linear-gradient(135deg,#00e5ff,#60cdff,#4caf7d)',    vip: true  },
+  { id: 'night',   label: '🌌 Ночь',     style: 'background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)',    vip: true  },
+  { id: 'candy',   label: '🍭 Конфета',  style: 'background:linear-gradient(135deg,#ff66aa,#a78bfa,#60cdff)',    vip: true  },
+  { id: 'gold',    label: '🥇 Золото',   style: 'background:linear-gradient(135deg,#f5c518,#e87722,#c94f4f)',    vip: true  },
+  { id: 'matrix',  label: '💚 Матрица',  style: 'background:linear-gradient(135deg,#0d0d0d,#0a3d0a,#00ff41)',   vip: true  },
+];
 
 const PROFILE_BADGES = [
   { id: 'early',  emoji: '🌟', label: 'Первый',  color: '#f5c518', vip: false },
@@ -5560,10 +5681,19 @@ const PROFILE_BADGES = [
   { id: 'ghost',  emoji: '👻', label: 'Призрак', color: '#a78bfa', vip: true  },
 ];
 
-// ┄┄ CSS для мессенджера ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ┄┄ CSS для рамок и мессенджера ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 (function injectFrameCSS() {
   const style = document.createElement('style');
   style.textContent = `
+    @keyframes rainbow-border {
+      0%{border-color:#ff0000} 14%{border-color:#ff9900} 28%{border-color:#ffff00}
+      42%{border-color:#00ff00} 57%{border-color:#0099ff} 71%{border-color:#6600ff} 85%{border-color:#ff00ff} 100%{border-color:#ff0000}
+    }
+    @keyframes fire-border {
+      0%{border-color:#e87722;box-shadow:0 0 8px #e87722} 50%{border-color:#f5c518;box-shadow:0 0 18px #f5c518} 100%{border-color:#c94f4f;box-shadow:0 0 8px #c94f4f}
+    }
+    .frame-rainbow{animation:rainbow-border 2s linear infinite;border-width:3px!important;border-style:solid!important}
+    .frame-fire{animation:fire-border 1s ease-in-out infinite;border-width:3px!important;border-style:solid!important}
     .profile-avatar{position:relative}
     #s-messenger-chat{display:flex!important;flex-direction:column!important;padding-bottom:0!important}
     #s-messenger{padding-bottom:0!important}
@@ -5769,6 +5899,15 @@ function _profileApplyPendingEdits(p) {
   }
 }
 
+// profileSetFrame/profileSetBanner — используются только через CMD (/frame id, /banner id)
+function profileSetFrame(id) {
+  const p = profileLoad(); if (!p) return;
+  _profileApplyPendingEdits(p);
+  p.frame = PROFILE_FRAMES[id] ? id : 'none';
+  profileSave(p);
+  toast('✅ Рамка: ' + (PROFILE_FRAMES[p.frame]?.label || id));
+  profileRenderScreen();
+}
 function profileSetBadge(id) {
   const p = profileLoad(); if (!p) return;
   _profileApplyPendingEdits(p);
@@ -5776,14 +5915,19 @@ function profileSetBadge(id) {
   toast(id ? '✅ Значок выбран' : '✅ Значок убран');
   profileInitEditScreen();
 }
-// profileSetBanner используется только для programmatic сброса
+// profileSetBanner — используется через CMD (/banner id) и для сброса
 function profileSetBanner(id) {
   const p = profileLoad(); if (!p) return;
   _profileApplyPendingEdits(p);
-  if (id === 'none' || !id) { p.banner = null; }
+  if (id === 'none' || !id) {
+    p.banner = null;
+  } else {
+    const b = PROFILE_BANNERS.find(x => x.id === id);
+    p.banner = b ? b.style : null;
+  }
   profileSave(p);
   toast('✅ Баннер обновлён');
-  profileInitEditScreen();
+  profileRenderScreen();
 }
 
 function profileUploadPhotoBanner(input) {
