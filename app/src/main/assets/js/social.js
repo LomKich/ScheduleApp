@@ -641,8 +641,6 @@ function profileRenderScreen() {
   const statusObj = PROFILE_STATUSES.find(s => s.id === p.status) || PROFILE_STATUSES[0];
   const onlinePeers = _profileOnlinePeers || [];
   const vip = p.vip;
-  if (typeof PROFILE_FRAMES === 'undefined') { setTimeout(profileRenderScreen, 200); return; }
-  const frameStyle = PROFILE_FRAMES[p.frame] || PROFILE_FRAMES['none'];
   const badgeObj = PROFILE_BADGES ? PROFILE_BADGES.find(b => b.id === p.badge) : null;
 
   const bannerStyle = p.banner
@@ -662,7 +660,7 @@ function profileRenderScreen() {
       <div style="${bannerStyle};height:140px;width:100%;background-size:cover;background-position:center"></div>
       <div style="position:absolute;bottom:-50px;left:50%;transform:translateX(-50%)">
         <div style="position:relative;display:inline-block">
-          <div class="profile-avatar ${frameStyle.cls}" style="width:96px;height:96px;font-size:46px;border:3px solid ${p.color||'var(--accent)'};border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden;${frameStyle.style}">
+          <div class="profile-avatar" style="width:96px;height:96px;font-size:46px;border:3px solid ${p.color||'var(--accent)'};border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden">
             ${avatarHtml}
           </div>
           ${vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))">${_emojiImg("👑",22)}</div>` : ''}
@@ -915,10 +913,8 @@ function profileInitEditScreen() {
     });
   }
 
-  // ┄┄ VIP-секции (рамки, значки, баннер, фото) ┄┄
+  // ┄┄ VIP-секции (значки, фото-аватар, фото-баннер) ┄┄
   document.getElementById('vip-edit-section')?.remove();
-
-  if (typeof PROFILE_FRAMES === 'undefined') return; // VIP скрипт ещё не загружен
 
   const body = document.querySelector('#s-profile-edit .body');
   if (!body) return;
@@ -926,24 +922,7 @@ function profileInitEditScreen() {
   const vipSec = document.createElement('div');
   vipSec.id = 'vip-edit-section';
 
-  // ┄┄ Кнопка доната (всегда видна) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-  const donateRow = document.createElement('div');
-  donateRow.innerHTML = `<div class="sep"></div>`;
-  const donateBtn = document.createElement('button');
-  donateBtn.className = 'btn btn-accent';
-  donateBtn.style.cssText = 'margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px';
-  donateBtn.innerHTML = `<span style="font-size:18px">💝</span> Поддержать проект   VIP`;
-  donateBtn.onclick = showDonateSheet;
-  donateRow.appendChild(donateBtn);
-  if (!isVip) {
-    const subNote = document.createElement('div');
-    subNote.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:14px;text-align:center';
-    subNote.textContent = 'Донат через СБП   VIP активируется автоматически';
-    donateRow.appendChild(subNote);
-  }
-  vipSec.appendChild(donateRow);
-
-
+  // Фото аватара (VIP)
   const photoRow = document.createElement('div');
   photoRow.innerHTML = `<div class="sep"></div>
     <div class="section-label" style="display:flex;align-items:center;gap:8px">
@@ -967,30 +946,11 @@ function profileInitEditScreen() {
   }
   vipSec.appendChild(photoRow);
 
-  // Рамки
-  const framesDiv = document.createElement('div');
-  framesDiv.innerHTML = '<div class="section-label">🖼 Рамка профиля</div>';
-  const framesWrap = document.createElement('div');
-  framesWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px';
-  Object.entries(PROFILE_FRAMES).forEach(([id, f]) => {
-    const locked = f.vip && !isVip;
-    const sel = (p.frame || 'none') === id;
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-surface';
-    btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);box-shadow:0 0 0 2px var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
-    btn.innerHTML = f.label + (locked ? ' '+(typeof _emojiImg==="function"?_emojiImg("👑",12):"👑") : '');
-    btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetFrame(id);
-    framesWrap.appendChild(btn);
-  });
-  framesDiv.appendChild(framesWrap);
-  vipSec.appendChild(framesDiv);
-
   // Значки
   const badgesDiv = document.createElement('div');
   badgesDiv.innerHTML = '<div class="section-label">🏷 Значок профиля</div>';
   const badgesWrap = document.createElement('div');
   badgesWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px';
-  // Кнопка "Нет"
   const noneBtn = document.createElement('button');
   noneBtn.className = 'btn btn-surface';
   noneBtn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${!p.badge ? 'color:var(--accent);' : ''}`;
@@ -1010,24 +970,12 @@ function profileInitEditScreen() {
   badgesDiv.appendChild(badgesWrap);
   vipSec.appendChild(badgesDiv);
 
-  // Баннеры
+  // Баннер (только фото, только VIP)
   const bannersDiv = document.createElement('div');
-  const bannerLabel = isVip ? '🎨 Баннер профиля' : '🎨 Баннер профиля <span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>';
+  const bannerLabel = isVip
+    ? '🎨 Баннер профиля'
+    : '🎨 Баннер профиля <span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>';
   bannersDiv.innerHTML = `<div class="section-label">${bannerLabel}</div>`;
-  const bannersWrap = document.createElement('div');
-  bannersWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
-  PROFILE_BANNERS.forEach(b => {
-    const locked = b.vip && !isVip;
-    const sel = p.banner === b.style || (!p.banner && b.id === 'none');
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-surface';
-    btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);border-color:var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
-    btn.innerHTML = b.label + (locked ? ' ' + (typeof _emojiImg==='function' ? _emojiImg('👑',12) : '👑') : '');
-    btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetBanner(b.id);
-    bannersWrap.appendChild(btn);
-  });
-  bannersDiv.appendChild(bannersWrap);
-  // VIP-only: upload custom photo banner
   if (isVip) {
     const uploadRow = document.createElement('div');
     uploadRow.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:16px';
@@ -1038,13 +986,14 @@ function profileInitEditScreen() {
         <span style="font-size:13px;color:${hasPhotoBanner ? 'var(--accent)' : 'var(--muted)'};">${hasPhotoBanner ? 'Фото-баннер установлен' : 'Загрузить фото как баннер'}</span>
         <input type="file" accept="image/*" style="display:none" onchange="profileUploadPhotoBanner(this)">
       </label>
-      ${hasPhotoBanner ? '<button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="profileSetBanner(\'none\')">✅ Убрать</button>' : ''}
+      ${hasPhotoBanner ? '<button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="profileClearBanner()">✕ Убрать</button>' : ''}
     `;
     bannersDiv.appendChild(uploadRow);
   } else {
-    const spacer = document.createElement('div');
-    spacer.style.marginBottom = '16px';
-    bannersDiv.appendChild(spacer);
+    const lockBanner = document.createElement('div');
+    lockBanner.style.cssText = 'font-size:12px;color:var(--muted);margin-bottom:16px;padding:10px;background:var(--surface2);border-radius:10px';
+    lockBanner.textContent = '🔒 Фото-баннер доступен только для VIP';
+    bannersDiv.appendChild(lockBanner);
   }
   vipSec.appendChild(bannersDiv);
 
@@ -1056,8 +1005,8 @@ function profileInitEditScreen() {
       <div style="background:linear-gradient(135deg,#f5c51822,#e8772222);border:1px solid #f5c51844;border-radius:14px;padding:16px;text-align:center;margin-bottom:12px">
         <div style="font-size:24px;margin-bottom:6px">${typeof _emojiImg==="function"?_emojiImg("👑",24):"👑"}</div>
         <div style="font-weight:800;margin-bottom:4px">VIP Аккаунт</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Фото-аватар · рамки · значки · баннеры</div>
-        <div style="font-size:11px;color:var(--muted)">Введи <code style="color:var(--accent);background:var(--surface3);padding:2px 6px;border-radius:4px">/vip КОД</code> в CMD</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Фото-аватар · значки · фото-баннер</div>
+        <div style="font-size:11px;color:var(--muted)">Перейди в <b>Настройки</b> → Получить VIP</div>
       </div>
     `;
     vipSec.appendChild(promo);
@@ -5389,6 +5338,8 @@ async function donateConfirm() {
     );
     if (res.ok || res.status === 201) {
       document.getElementById('donate-sheet')?.remove();
+      const tier = DONATE_TIERS[_selectedDoneTierIdx];
+      _vipBotNotify(p, tier.amount, tier.label, txn);
       toast('🎉 Заявка отправлена! VIP активируется после проверки.');
     } else {
       throw new Error(res.status);
@@ -5597,17 +5548,8 @@ if (typeof cmdExec === 'function') {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// 🖼 РАМКИ, ЗНАЧКИ, БАННЕРЫ
+// 🖼 ЗНАЧКИ
 // ══════════════════════════════════════════════════════════════════
-const PROFILE_FRAMES = {
-  'none':     { cls: '',          style: '',                                               label: 'Нет',         vip: false },
-  'accent':   { cls: '',          style: 'box-shadow:0 0 0 3px var(--accent)',              label: '🔶 Акцент',   vip: false },
-  'glow':     { cls: '',          style: 'box-shadow:0 0 16px 4px var(--accent)',           label: '✅ Свечение', vip: true  },
-  'rainbow':  { cls: 'frame-rainbow', style: '',                                           label: '🌈 Радуга',   vip: true  },
-  'gold':     { cls: '',          style: 'box-shadow:0 0 0 3px #f5c518,0 0 12px #f5c51866', label: '🥇 Золото',  vip: true  },
-  'neon':     { cls: '',          style: 'box-shadow:0 0 0 3px #00e5ff,0 0 20px #00e5ff88', label: '💠 Неон',    vip: true  },
-  'fire':     { cls: 'frame-fire', style: '',                                              label: '🔥 Огонь',    vip: true  },
-};
 
 const PROFILE_BADGES = [
   { id: 'early',  emoji: '🌟', label: 'Первый',  color: '#f5c518', vip: false },
@@ -5618,30 +5560,10 @@ const PROFILE_BADGES = [
   { id: 'ghost',  emoji: '👻', label: 'Призрак', color: '#a78bfa', vip: true  },
 ];
 
-const PROFILE_BANNERS = [
-  { id: 'none',    label: 'Нет',          style: 'background:var(--surface2)',                                   vip: false },
-  { id: 'accent',  label: 'Акцент',       style: 'background:linear-gradient(135deg,var(--accent)66,var(--surface2))', vip: false },
-  { id: 'sunset',  label: '🌅 Закат',     style: 'background:linear-gradient(135deg,#e87722,#c94f4f,#a78bfa)',   vip: true  },
-  { id: 'ocean',   label: '🌊 Океан',     style: 'background:linear-gradient(135deg,#00e5ff,#60cdff,#4caf7d)',   vip: true  },
-  { id: 'night',   label: '🌌 Ночь',      style: 'background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)',   vip: true  },
-  { id: 'candy',   label: '🍭 Конфета',   style: 'background:linear-gradient(135deg,#ff66aa,#a78bfa,#60cdff)',   vip: true  },
-  { id: 'gold',    label: '🥇 Золото',    style: 'background:linear-gradient(135deg,#f5c518,#e87722,#c94f4f)',   vip: true  },
-  { id: 'matrix',  label: '💚 Матрица',   style: 'background:linear-gradient(135deg,#0d0d0d,#0a3d0a,#00ff41)',   vip: true  },
-];
-
-// ┄┄ CSS для спец-рамок и мессенджера ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ┄┄ CSS для мессенджера ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 (function injectFrameCSS() {
   const style = document.createElement('style');
   style.textContent = `
-    @keyframes rainbow-border {
-      0%{border-color:#ff0000} 14%{border-color:#ff9900} 28%{border-color:#ffff00}
-      42%{border-color:#00ff00} 57%{border-color:#0099ff} 71%{border-color:#6600ff} 85%{border-color:#ff00ff} 100%{border-color:#ff0000}
-    }
-    @keyframes fire-border {
-      0%{border-color:#e87722;box-shadow:0 0 8px #e87722} 50%{border-color:#f5c518;box-shadow:0 0 18px #f5c518} 100%{border-color:#c94f4f;box-shadow:0 0 8px #c94f4f}
-    }
-    .frame-rainbow{animation:rainbow-border 2s linear infinite;border-width:3px!important;border-style:solid!important}
-    .frame-fire{animation:fire-border 1s ease-in-out infinite;border-width:3px!important;border-style:solid!important}
     .profile-avatar{position:relative}
     #s-messenger-chat{display:flex!important;flex-direction:column!important;padding-bottom:0!important}
     #s-messenger{padding-bottom:0!important}
@@ -5651,8 +5573,174 @@ const PROFILE_BANNERS = [
   document.head.appendChild(style);
 })();
 
-// profileInitEditScreen теперь единая функция в profile-script блоке выше.
-// VIP-секции рендерятся внутри неё напрямую через PROFILE_FRAMES/BADGES/BANNERS.
+// ══════════════════════════════════════════════════════════════════
+// 👑 VIP БОТ — чат с поддержкой/заявками на VIP
+// ══════════════════════════════════════════════════════════════════
+const VIP_BOT_ID       = 'vip_bot';
+const VIP_ADMIN_USER   = 'lomkich';
+const VIP_BOT_NAME     = 'VIP Поддержка';
+const VIP_BOT_AVATAR   = '👑';
+const VIP_BOT_COLOR    = '#f5c518';
+
+// Добавляет VIP-бот в список чатов и сохраняет сообщение о заявке
+function _vipBotNotify(p, amount, tier, txn) {
+  try {
+    // Добавляем бот-чат в список чатов пользователя
+    const chats = chatsLoad();
+    if (!chats.includes(VIP_BOT_ID)) {
+      chats.unshift(VIP_BOT_ID);
+      chatsSave(chats);
+    }
+    // Локальное сообщение-подтверждение для пользователя
+    const msgs = msgLoad();
+    if (!msgs[VIP_BOT_ID]) msgs[VIP_BOT_ID] = [];
+    const ts = Date.now();
+    msgs[VIP_BOT_ID].push({
+      from: VIP_BOT_ID,
+      to: p.username,
+      text: `🎉 Заявка на VIP отправлена!\n\nТариф: ${tier}\nСумма: ${amount}₽\nНомер транзакции: ${txn}\n\nВаша заявка будет проверена администратором. VIP активируется после подтверждения.`,
+      ts,
+      delivered: true, read: false,
+      _bot: true
+    });
+    msgSave(msgs);
+    messengerUpdateBadge?.();
+
+    // Уведомляем администратора (@lomkich) через Supabase messages
+    if (sbReady()) {
+      const adminKey = sbChatKey(p.username, VIP_ADMIN_USER);
+      const adminMsg = {
+        from_user: p.username,
+        to_user:   VIP_ADMIN_USER,
+        chat_key:  adminKey,
+        text:      `[VIP ЗАЯВКА]\nПользователь: @${p.username} (${p.name})\nТариф: ${tier}\nСумма: ${amount}₽\nТранзакция: ${txn}\nВремя: ${new Date(ts).toLocaleString('ru')}`,
+        ts,
+        delivered: false, read: false
+      };
+      _sbFetch('POST', '/rest/v1/messages', adminMsg, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      }).catch(() => {});
+    }
+  } catch(e) { console.warn('[VipBot] notify error', e); }
+}
+
+// Рендер чата VIP-бота: для @lomkich — таблица заявок из Supabase donations;
+// для остальных — локальные сообщения бота
+async function _vipBotOpenChat() {
+  const p = profileLoad();
+  if (!p) return;
+
+  // Обновляем шапку чата
+  const hdrName   = document.getElementById('mc-hdr-name');
+  const hdrSub    = document.getElementById('mc-hdr-sub');
+  const hdrAvatar = document.getElementById('mc-hdr-avatar');
+  if (hdrName)   hdrName.textContent   = VIP_BOT_NAME;
+  if (hdrSub)    hdrSub.textContent    = p.username === VIP_ADMIN_USER ? 'Все заявки на VIP' : 'Поддержка';
+  if (hdrAvatar) {
+    hdrAvatar.style.background = VIP_BOT_COLOR + '44';
+    hdrAvatar.innerHTML = `<span style="font-size:20px">${VIP_BOT_AVATAR}</span>`;
+  }
+
+  const msgBody = document.getElementById('mc-messages');
+  if (!msgBody) return;
+
+  if (p.username === VIP_ADMIN_USER) {
+    // Администратор: грузим все заявки из таблицы donations
+    msgBody.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">⏳ Загрузка заявок...</div>';
+    try {
+      const rows = sbReady()
+        ? await sbGet('donations', 'order=ts.desc&limit=100')
+        : [];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        msgBody.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">📭 Заявок пока нет</div>';
+        return;
+      }
+      msgBody.innerHTML = rows.map(r => {
+        const dt = new Date(r.ts || 0).toLocaleString('ru');
+        const statusColor = r.status === 'approved' ? '#4caf7d' : r.status === 'rejected' ? '#e05555' : '#f5c518';
+        const statusLabel = r.status === 'approved' ? '✅ Подтверждено' : r.status === 'rejected' ? '❌ Отклонено' : '⏳ На проверке';
+        return `<div style="margin:8px 12px;padding:12px 14px;background:var(--surface2);border-radius:14px;border-left:3px solid ${statusColor}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+            <div style="font-size:14px;font-weight:700">@${escHtml(r.username||'?')}</div>
+            <span style="font-size:11px;font-weight:700;color:${statusColor};flex-shrink:0">${statusLabel}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${escHtml(r.tier||'?')} · ${r.amount||0}₽</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Транзакция: ${escHtml(r.txn_id||'—')}</div>
+          <div style="font-size:11px;color:var(--muted)">${dt}</div>
+          ${r.status === 'pending' ? `<div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-accent" style="flex:1;padding:8px;font-size:12px;margin:0" onclick="_vipAdminApprove('${escHtml(r.username||'')}',${r.id||0})">✅ Подтвердить</button>
+            <button class="btn btn-surface" style="flex:1;padding:8px;font-size:12px;margin:0;color:#e05555" onclick="_vipAdminReject(${r.id||0})">❌ Отклонить</button>
+          </div>` : ''}
+        </div>`;
+      }).join('');
+    } catch(e) {
+      msgBody.innerHTML = `<div style="text-align:center;padding:30px;color:#e05555;font-size:13px">❌ Ошибка загрузки: ${e.message}</div>`;
+    }
+  } else {
+    // Обычный пользователь: показываем локальные сообщения бота
+    const msgs = msgLoad();
+    const botMsgs = msgs[VIP_BOT_ID] || [];
+    if (botMsgs.length === 0) {
+      msgBody.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">📭 Нет сообщений</div>';
+      return;
+    }
+    msgBody.innerHTML = botMsgs.map(m => {
+      const dt = msgFormatTime(m.ts);
+      const text = (m.text || '').replace(/\n/g, '<br>');
+      return `<div style="display:flex;justify-content:flex-start;padding:4px 12px">
+        <div style="max-width:82%;background:var(--surface2);border-radius:16px 16px 16px 4px;padding:10px 14px;position:relative">
+          <div style="font-size:13px;line-height:1.5;color:var(--text)">${text}</div>
+          <div style="font-size:10px;color:var(--muted);text-align:right;margin-top:4px">${dt}</div>
+        </div>
+      </div>`;
+    }).join('');
+    setTimeout(() => { msgBody.scrollTop = msgBody.scrollHeight; }, 50);
+    // Помечаем как прочитанные
+    botMsgs.forEach(m => { m.read = true; });
+    msgSave(msgs);
+    messengerUpdateBadge?.();
+  }
+}
+
+// Администратор: подтвердить VIP-заявку
+async function _vipAdminApprove(username, id) {
+  if (!sbReady() || !username) return;
+  try {
+    await _sbFetch('PATCH', `/rest/v1/donations?id=eq.${id}`,
+      { status: 'approved' },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+    // Активируем VIP пользователю в таблице users
+    await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
+      { vip: true },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+    toast(`✅ VIP активирован для @${username}`);
+    _vipBotOpenChat(); // перерендер
+  } catch(e) { toast('❌ Ошибка: ' + e.message); }
+}
+
+// Администратор: отклонить заявку
+async function _vipAdminReject(id) {
+  if (!sbReady()) return;
+  try {
+    await _sbFetch('PATCH', `/rest/v1/donations?id=eq.${id}`,
+      { status: 'rejected' },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+    toast('❌ Заявка отклонена');
+    _vipBotOpenChat();
+  } catch(e) { toast('❌ Ошибка: ' + e.message); }
+}
+
+// Очистить фото-баннер профиля
+function profileClearBanner() {
+  const p = profileLoad(); if (!p) return;
+  _profileApplyPendingEdits(p);
+  p.banner = null; profileSave(p);
+  toast('✅ Баннер убран');
+  profileInitEditScreen();
+}
 
 // Применяет незасохранённые изменения из формы редактирования к объекту профиля.
 // Нужно вызывать перед profileSave() при промежуточных действиях (смена рамки/значка/баннера),
@@ -5681,13 +5769,6 @@ function _profileApplyPendingEdits(p) {
   }
 }
 
-function profileSetFrame(id) {
-  const p = profileLoad(); if (!p) return;
-  _profileApplyPendingEdits(p);
-  p.frame = id; profileSave(p);
-  toast('✅ Рамка: ' + PROFILE_FRAMES[id].label);
-  profileInitEditScreen();
-}
 function profileSetBadge(id) {
   const p = profileLoad(); if (!p) return;
   _profileApplyPendingEdits(p);
@@ -5695,11 +5776,12 @@ function profileSetBadge(id) {
   toast(id ? '✅ Значок выбран' : '✅ Значок убран');
   profileInitEditScreen();
 }
+// profileSetBanner используется только для programmatic сброса
 function profileSetBanner(id) {
   const p = profileLoad(); if (!p) return;
   _profileApplyPendingEdits(p);
-  const b = PROFILE_BANNERS.find(x => x.id === id);
-  p.banner = b ? b.style : null; profileSave(p);
+  if (id === 'none' || !id) { p.banner = null; }
+  profileSave(p);
   toast('✅ Баннер обновлён');
   profileInitEditScreen();
 }
@@ -6339,6 +6421,34 @@ function messengerRenderList(filter) {
     const peer     = _profileOnlinePeers.find(u => u.username === username)
                    || _allKnownUsers.find(u => u.username === username);
     const isOnline = !!_profileOnlinePeers.find(u => u.username === username);
+    // ── VIP-бот: спец-отрисовка ───────────────────────────────────────────────
+    if (username === VIP_BOT_ID) {
+      const botMsgs  = msgs[VIP_BOT_ID] || [];
+      const botUnread = botMsgs.filter(m => !m.read).length;
+      const botLast  = botMsgs[botMsgs.length - 1];
+      const botPrev  = botLast ? escHtml((botLast.text||'').split('\n')[0].slice(0,45)) : '<span style="color:var(--muted)">Нажми для открытия</span>';
+      const botTime  = botLast ? msgFormatTime(botLast.ts) : '';
+      const _pinned  = _pins.includes(VIP_BOT_ID);
+      return `<div
+          data-chat-user="${VIP_BOT_ID}"
+          onclick="messengerOpenChat('${VIP_BOT_ID}')"
+          class="chat-row"
+          style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);${_pinned?'background:rgba(255,255,255,.025)':''}">
+        <div style="position:relative;flex-shrink:0">
+          <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#f5c518,#e87722);display:flex;align-items:center;justify-content:center;font-size:26px">👑</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+            <div style="font-size:15px;font-weight:600;color:var(--text)">${VIP_BOT_NAME}</div>
+            <span style="font-size:11px;color:${botUnread>0?'var(--accent)':'var(--muted)'}">${botTime}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80%">${botPrev}</div>
+            ${botUnread > 0 ? `<div style="min-width:20px;height:20px;border-radius:10px;background:var(--accent);color:#000;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px;flex-shrink:0">${botUnread}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }
     // ── Группы: берём имя/аватар из groupGet, а не из users ──────────────────
     const _isGroupChat = username === PUBLIC_GROUP_ID || username.startsWith('grp_');
     const _groupData   = _isGroupChat ? groupGet(username) : null;
@@ -6496,6 +6606,16 @@ function messengerFilterChats(q) { messengerRenderList(q); }
 
 // ┄┄ Открытие чата ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function messengerOpenChat(username) {
+  if (username === VIP_BOT_ID) {
+    _msgCurrentChat = VIP_BOT_ID;
+    showScreen('s-messenger-chat');
+    _vipBotOpenChat();
+    _mcUpdateMuteIcon?.();
+    // скрываем инпут-бар для бота
+    const inputBar = document.getElementById('mc-input-bar');
+    if (inputBar) inputBar.style.display = 'none';
+    return;
+  }
   if (username === PUBLIC_GROUP_ID) {
     _showPublicGroupSplash(() => _doOpenChat(username));
     return;
@@ -6505,6 +6625,9 @@ function messengerOpenChat(username) {
 
 function _doOpenChat(username) {
   _msgCurrentChat = username;
+  // Восстанавливаем инпут-бар (мог быть скрыт при открытии vip_bot)
+  const inputBar = document.getElementById('mc-input-bar');
+  if (inputBar) inputBar.style.display = '';
   // Сбрасываем уведомления от этого пользователя
   try { window.Android?.dismissNotifications?.(); } catch(_) {}
   // Сообщения помечаются прочитанными только при скролле до конца (см. messengerMarkRead)
