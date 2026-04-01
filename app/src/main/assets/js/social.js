@@ -41,15 +41,30 @@ const AVATAR_EMOJIS = [
 function profileLoad()    { try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || null; } catch(e){ return null; } }
 function profileSave(p) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
-  // Keep accounts store in sync
+  // Keep accounts store in sync — including banner/avatar/vip for correct restore on switch
   if (p && p.username) {
     const accounts = accountsLoad();
     if (!accounts[p.username]) accounts[p.username] = {};
-    accounts[p.username].name = p.name;
-    accounts[p.username].avatar = p.avatar;
-    accounts[p.username].createdAt = p.createdAt;
+    accounts[p.username].name       = p.name;
+    accounts[p.username].avatar     = p.avatar;
+    accounts[p.username].avatarType = p.avatarType || 'emoji';
+    accounts[p.username].avatarData = p.avatarData || null;
+    accounts[p.username].avatarVideo= p.avatarVideo|| null;
+    accounts[p.username].banner     = p.banner     || null;
+    accounts[p.username].bio        = p.bio        || '';
+    accounts[p.username].color      = p.color      || 'var(--accent)';
+    accounts[p.username].frame      = p.frame      || 'none';
+    accounts[p.username].badge      = p.badge      || null;
+    accounts[p.username].vip        = p.vip        || false;
+    accounts[p.username].createdAt  = p.createdAt;
     if (p.pwdHash) accounts[p.username].pwdHash = p.pwdHash;
     accountsSave(accounts);
+    // Persist large avatar/banner data to IndexedDB so it survives localStorage limits
+    if (typeof idbSet === 'function') {
+      if (p.avatarData)  idbSet('profile_avatar:'  + p.username, p.avatarData).catch(()=>{});
+      if (p.avatarVideo) idbSet('profile_video:'   + p.username, p.avatarVideo).catch(()=>{});
+      if (p.banner)      idbSet('profile_banner:'  + p.username, p.banner).catch(()=>{});
+    }
   }
 }
 function accountsLoad()   { try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || {}; } catch(e){ return {}; } }
@@ -154,7 +169,9 @@ function updateNavProfileIcon(p) {
   const btn = document.getElementById('nav-profile');
   const wrap = btn?.querySelector('.nav-icon-wrap');
   if (!wrap) return;
-  if (p && p.avatarType === 'emoji' && p.avatar) {
+  if (p && p.avatarType === 'video' && p.avatarVideo) {
+    wrap.innerHTML = `<video src="${p.avatarVideo}" autoplay loop muted playsinline style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block"></video>`;
+  } else if (p && p.avatarType === 'emoji' && p.avatar) {
     wrap.innerHTML = `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center">${_emojiImg(p.avatar,24)}</div>`;
   } else if (p && p.avatarType === 'photo' && p.avatarData) {
     wrap.innerHTML = `<img src="${p.avatarData}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`;
@@ -648,7 +665,9 @@ function profileRenderScreen() {
     ? (p.banner.startsWith('background:') ? p.banner : `background:${p.banner}`)
     : `background:linear-gradient(135deg,${p.color||'var(--accent)'}66,${p.color||'var(--accent)'}22)`;
 
-  const avatarHtml = p.avatarType === 'photo' && p.avatarData
+  const avatarHtml = p.avatarType === 'video' && p.avatarVideo
+    ? `<video src="${p.avatarVideo}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:50%"></video>`
+    : p.avatarType === 'photo' && p.avatarData
     ? `<img src="${p.avatarData}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center">${_emojiImg(p.avatar||'😊',46)}</div>`;
 
@@ -732,54 +751,20 @@ function profileRenderScreen() {
       </div>
     </div>
 
-    <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 -->
-    <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
+    <!-- Карточка: Подключение -->
+    <div id="profile-connect-card" style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
       <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
         <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M1 9l2 2c2.88-2.88 6.79-4.08 10.53-3.62l1.19-1.19C9.89 5.6 4.91 7.12 1 9zm8 8l3 3 3-3c-1.65-1.64-3.96-2.4-6-2.4S10.65 15.36 9 17zm-4-4l2 2c1.88-1.87 4.45-2.83 7-2.83s5.12.96 7 2.83l2-2C21 10.46 16.81 9 12 9c-4.81 0-9 1.46-11 4z"/></svg></span>
         <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435</div>
-          <div style="font-size:12px;color:var(--muted)" id="profile-p2p-status">${_profilePeerReady ? '\u{1F7E2} \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E' : '\u{1F534} \u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E'}</div>
+          <div style="font-size:14px;font-weight:700">\u041F\u043E\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435</div>
+          <div style="font-size:12px;color:var(--muted)" id="profile-p2p-status">${_profilePeerReady ? '\u{1F7E2} \u041F\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u043e' : '\u{1F534} \u041e\u0442\u043a\u043b\u044e\u0447\u0435\u043d\u043e'}</div>
         </div>
         <button onclick="profileConnect(profileLoad())" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px;line-height:1">\u21BB</button>
       </div>
     </div>
 
-    <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F -->
-    <div id="push-notif-row" style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
-      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
-        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg></span>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F</div>
-          <div style="font-size:12px;color:var(--muted)" id="push-notif-status">${pushGetStatusText()}</div>
-        </div>
-        <button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:12px;flex-shrink:0" onclick="pushRequestPermission()" id="push-notif-btn">${pushGetBtnText()}</button>
-      </div>
-    </div>
-    <!-- Фоновое соединение (Telegram-style keep-alive) -->
-    <div id="bg-service-row" style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
-      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
-        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
-        </span>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">Фоновое соединение</div>
-          <div style="font-size:12px;color:var(--muted)" id="bg-service-status">Проверяем...</div>
-        </div>
-        <div id="bg-service-toggle" onclick="toggleBackgroundService()"
-          style="width:51px;height:31px;border-radius:16px;position:relative;cursor:pointer;transition:background .25s;flex-shrink:0">
-          <div id="bg-service-knob"
-            style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;
-                   box-shadow:0 1px 4px rgba(0,0,0,.35);transition:left .25s"></div>
-        </div>
-      </div>
-      <div style="padding:0 16px 12px;font-size:11px;color:var(--muted);line-height:1.5">
-        Получайте сообщения даже когда приложение закрыто. Работает как в Telegram.
-      </div>
-    </div>
-
     <div style="height:8px"></div>
   `;
-  _bgServiceUpdateUI();
   _renderAccountSwitcher();
 }
 
@@ -831,7 +816,15 @@ function _renderAccountSwitcher() {
     list.appendChild(row);
   });
   bar.appendChild(list);
-  body.insertBefore(bar, body.firstChild);
+  // Insert AFTER the connection card (profile-connect-card), not at top
+  const connectCard = body.querySelector('#profile-connect-card');
+  if (connectCard && connectCard.nextSibling) {
+    body.insertBefore(bar, connectCard.nextSibling);
+  } else if (connectCard) {
+    body.appendChild(bar);
+  } else {
+    body.insertBefore(bar, body.firstChild);
+  }
 }
 
 async function accountSwitcherSwitch(username) {
@@ -840,7 +833,22 @@ async function accountSwitcherSwitch(username) {
   if (!acc) return;
   const cur = profileLoad();
   if (cur) {
-    accounts[cur.username] = { name: cur.name, avatar: cur.avatar, avatarType: cur.avatarType, avatarData: cur.avatarData, createdAt: cur.createdAt, pwdHash: cur.pwdHash };
+    // Save FULL profile snapshot into accounts cache before switching
+    accounts[cur.username] = {
+      name:        cur.name,
+      avatar:      cur.avatar,
+      avatarType:  cur.avatarType  || 'emoji',
+      avatarData:  cur.avatarData  || null,
+      avatarVideo: cur.avatarVideo || null,
+      banner:      cur.banner      || null,
+      bio:         cur.bio         || '',
+      color:       cur.color       || 'var(--accent)',
+      frame:       cur.frame       || 'none',
+      badge:       cur.badge       || null,
+      vip:         cur.vip         || false,
+      createdAt:   cur.createdAt,
+      pwdHash:     cur.pwdHash,
+    };
     accountsSave(accounts);
     profileDisconnect();
   }
@@ -855,8 +863,48 @@ async function accountSwitcherSwitch(username) {
     }
     let p = profileLoad();
     if (!p || p.username !== username) {
-      p = { username, name: acc.name || username, avatar: acc.avatar || '\u{1F60A}', avatarType: acc.avatarType || 'emoji', avatarData: acc.avatarData || null, bio: '', status: 'online', color: 'var(--accent)', pwdHash: acc.pwdHash, createdAt: acc.createdAt || Date.now(), uid: username };
+      // Restore full profile from accounts cache (includes banner, video, vip etc.)
+      p = {
+        username,
+        name:        acc.name        || username,
+        avatar:      acc.avatar      || '\u{1F60A}',
+        avatarType:  acc.avatarType  || 'emoji',
+        avatarData:  acc.avatarData  || null,
+        avatarVideo: acc.avatarVideo || null,
+        banner:      acc.banner      || null,
+        bio:         acc.bio         || '',
+        status:      'online',
+        color:       acc.color       || 'var(--accent)',
+        frame:       acc.frame       || 'none',
+        badge:       acc.badge       || null,
+        vip:         acc.vip         || false,
+        pwdHash:     acc.pwdHash,
+        createdAt:   acc.createdAt   || Date.now(),
+        uid:         username,
+      };
       profileSave(p);
+    }
+    // Try to restore large data from IndexedDB (avatarData/banner may be too big for accounts obj)
+    if (typeof idbGet === 'function') {
+      const restoreFromIdb = async () => {
+        const fresh = profileLoad();
+        if (!fresh || fresh.username !== username) return;
+        let changed = false;
+        if (!fresh.avatarData && fresh.avatarType === 'photo') {
+          const d = await idbGet('profile_avatar:' + username).catch(()=>null);
+          if (d) { fresh.avatarData = d; changed = true; }
+        }
+        if (!fresh.avatarVideo && fresh.avatarType === 'video') {
+          const d = await idbGet('profile_video:' + username).catch(()=>null);
+          if (d) { fresh.avatarVideo = d; changed = true; }
+        }
+        if (!fresh.banner) {
+          const d = await idbGet('profile_banner:' + username).catch(()=>null);
+          if (d) { fresh.banner = d; changed = true; }
+        }
+        if (changed) { profileSave(fresh); updateNavProfileIcon(fresh); profileRenderScreen(); }
+      };
+      restoreFromIdb();
     }
     updateNavProfileIcon(p);
     profileConnect(p);
@@ -1188,7 +1236,7 @@ function openImageCrop(dataUrl, options) {
     </div>
     <div class="img-crop-actions">
       <button class="btn btn-surface" onclick="closeCrop()">Отмена</button>
-      <button class="btn" style="background:var(--accent);color:var(--btn-text,#fff)" onclick="applyCrop()">✅ Применить</button>
+      <button class="btn" style="background:var(--accent);color:var(--btn-text,#fff)" onclick="applyCrop()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><polyline points="20 6 9 17 4 12"/></svg> Применить</button>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -1349,12 +1397,36 @@ function applyCrop() {
 // ═════════════════════════════════════════════════════════════════
 
 function profilePickPhoto() {
-  // Кнопка «Выбрать фото» на главном экране профиля   только VIP
+  // Кнопка «Выбрать фото» на главном экране профиля — только VIP
   const onEditScreen = document.getElementById('s-profile-edit')?.classList.contains('active');
   if (!onEditScreen && !vipCheck()) {
-    toast('👑 Фото профиля   только для VIP');
+    toast('👑 Фото профиля — только для VIP');
     return;
   }
+
+  // Показываем меню: фото или видео (видео — только VIP)
+  const isVip = typeof vipCheck === 'function' ? vipCheck() : false;
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px;animation:mcFadeIn .15s ease';
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px;width:100%;max-width:400px;overflow:hidden;animation:mcSlideUp .25s cubic-bezier(.34,1.26,.64,1)" onclick="event.stopPropagation()">
+      <div style="padding:16px 20px 8px;font-size:13px;font-weight:700;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.5px">Аватарка профиля</div>
+      <button onclick="this.closest('[style*=fixed]').remove();_profilePickPhotoOnly()" style="width:100%;padding:16px 20px;background:none;border:none;border-top:1px solid var(--surface3);color:var(--text);font-family:inherit;font-size:16px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--accent)"><path d="M9 3L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.65 0-3 1.35-3 3s1.35 3 3 3 3-1.35 3-3-1.35-3-3-3z"/></svg>
+        Выбрать фото
+      </button>
+      <button onclick="${isVip ? "this.closest('[style*=fixed]').remove();_profilePickVideoAvatar()" : "toast('👑 Видео-аватар — только для VIP')"}" style="width:100%;padding:16px 20px;background:none;border:none;border-top:1px solid var(--surface3);color:${isVip ? 'var(--text)' : 'var(--muted)'};font-family:inherit;font-size:16px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="${isVip ? 'var(--accent)' : 'var(--muted)'}"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+        Видео-аватар ${isVip ? '' : '<span style="margin-left:6px;font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>'}
+      </button>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="width:100%;padding:14px 20px;background:none;border:none;border-top:1px solid var(--surface3);color:var(--muted);font-family:inherit;font-size:15px;cursor:pointer">Отмена</button>
+    </div>`;
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+  document.body.appendChild(sheet);
+}
+
+// Выбрать только фото (без выбора типа)
+function _profilePickPhotoOnly() {
   _profileWaitingForPhoto = true;
   if (window.Android && typeof Android.pickImageForBackground === 'function') {
     Android.pickImageForBackground();
@@ -1369,6 +1441,32 @@ function profilePickPhoto() {
     };
     inp.click();
   }
+}
+
+// Выбрать видео для аватарки (только VIP)
+function _profilePickVideoAvatar() {
+  if (!vipCheck()) { toast('👑 Видео-аватар — только для VIP'); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'video/mp4,video/webm,video/mov,video/*';
+  inp.onchange = () => {
+    const file = inp.files?.[0]; if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { toast('❌ Видео слишком большое (макс 20 МБ)'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      const dataUrl = e.target.result;
+      const p = profileLoad(); if (!p) return;
+      p.avatarType  = 'video';
+      p.avatarVideo = dataUrl;
+      p.avatarData  = null; // фото убираем
+      profileSave(p);
+      updateNavProfileIcon(p);
+      profileRenderScreen();
+      sbPresencePut(p);
+      toast('✅ Видео-аватар установлен');
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
 }
 
 function _profileHandleAvatarDataUrl(dataUrl) {
@@ -1570,8 +1668,11 @@ async function profileDeleteAccount() {
   // 5. Очищаем все личные данные
   localStorage.removeItem(PROFILE_KEY);
   localStorage.removeItem(FRIENDS_KEY);
-  localStorage.removeItem(MSG_STORE_KEY);
-  localStorage.removeItem(MSG_CHATS_KEY);
+  localStorage.removeItem(_msgStoreKey());
+  localStorage.removeItem(_msgChatsKey());
+  // Also remove legacy shared keys in case they exist
+  localStorage.removeItem(MSG_STORE_KEY_BASE);
+  localStorage.removeItem(MSG_CHATS_KEY_BASE);
 
   updateNavProfileIcon(null);
   profileInitLoginScreen();
@@ -4447,7 +4548,7 @@ function showCreateGroupDialog() {
   sheet.innerHTML = `
     <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot));max-height:80vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="font-size:17px;font-weight:700;margin-bottom:12px">👥 Создать группу</div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Создать группу</div>
       <input id="grp-name-inp" class="inp" placeholder="Название группы" style="margin-bottom:12px">
       <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Участники (друзья и онлайн):</div>
       <div id="grp-members-list">
@@ -5798,8 +5899,8 @@ async function _vipBotOpenChat() {
           <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Транзакция: ${escHtml(r.txn_id||'—')}</div>
           <div style="font-size:11px;color:var(--muted)">${dt}</div>
           ${r.status === 'pending' ? `<div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn btn-accent" style="flex:1;padding:8px;font-size:12px;margin:0" onclick="_vipAdminApprove('${escHtml(r.username||'')}',${r.id||0})">✅ Подтвердить</button>
-            <button class="btn btn-surface" style="flex:1;padding:8px;font-size:12px;margin:0;color:#e05555" onclick="_vipAdminReject(${r.id||0})">❌ Отклонить</button>
+            <button class="btn btn-accent" style="flex:1;padding:8px;font-size:12px;margin:0" onclick="_vipAdminApprove('${escHtml(r.username||'')}',${r.id||0})"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><polyline points="20 6 9 17 4 12"/></svg> Подтвердить</button>
+            <button class="btn btn-surface" style="flex:1;padding:8px;font-size:12px;margin:0;color:#e05555" onclick="_vipAdminReject(${r.id||0})"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Отклонить</button>
           </div>` : ''}
         </div>`;
       }).join('');
@@ -6079,22 +6180,39 @@ function _leaderboardDrawLocal() {
     <div class="diff-picker" style="flex-wrap:wrap;gap:6px;margin-bottom:12px">${tabsHtml}</div>
     ${myInfoHtml}
     ${rowsHtml}
-    <button class="btn btn-surface lb-refresh-btn" style="margin-top:8px" onclick="leaderboardRender()">🔄 Обновить из сети</button>
+    <button class="btn btn-surface lb-refresh-btn" style="margin-top:8px" onclick="leaderboardRender()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Обновить из сети</button>
   `;
 }
 
 // ══════════════════════════════════════════════════════════════════
 // 💬 МЕССЕНДЖЕР v2   Telegram стиль
 // ══════════════════════════════════════════════════════════════════
-const MSG_STORE_KEY = 'sapp_messages_v2';
-const MSG_CHATS_KEY = 'sapp_chats_v1';
+const MSG_STORE_KEY_BASE = 'sapp_messages_v2';
+const MSG_CHATS_KEY_BASE = 'sapp_chats_v1';
 let _msgCurrentChat = null;
 let _mcPollTimer = null;
 
-function msgLoad()    { try { return JSON.parse(localStorage.getItem(MSG_STORE_KEY)||'{}'); } catch(e){ return {}; } }
-function msgSave(d)   { localStorage.setItem(MSG_STORE_KEY, JSON.stringify(d)); }
-function chatsLoad()  { try { return JSON.parse(localStorage.getItem(MSG_CHATS_KEY)||'[]'); } catch(e){ return []; } }
-function chatsSave(d) { localStorage.setItem(MSG_CHATS_KEY, JSON.stringify(d)); }
+// Per-user storage keys — prevents cross-account data leakage and duplicate chats
+function _msgStoreKey() {
+  try { const p = JSON.parse(localStorage.getItem(PROFILE_KEY)); return p?.username ? MSG_STORE_KEY_BASE + '_' + p.username : MSG_STORE_KEY_BASE; } catch(e) { return MSG_STORE_KEY_BASE; }
+}
+function _msgChatsKey() {
+  try { const p = JSON.parse(localStorage.getItem(PROFILE_KEY)); return p?.username ? MSG_CHATS_KEY_BASE + '_' + p.username : MSG_CHATS_KEY_BASE; } catch(e) { return MSG_CHATS_KEY_BASE; }
+}
+
+function msgLoad()    { try { return JSON.parse(localStorage.getItem(_msgStoreKey())||'{}'); } catch(e){ return {}; } }
+function msgSave(d)   { localStorage.setItem(_msgStoreKey(), JSON.stringify(d)); }
+function chatsLoad()  {
+  const perUser = localStorage.getItem(_msgChatsKey());
+  if (perUser !== null) { try { return JSON.parse(perUser)||[]; } catch(e){ return []; } }
+  // Migrate from old shared key on first use
+  try {
+    const legacy = JSON.parse(localStorage.getItem(MSG_CHATS_KEY_BASE)||'[]');
+    if (legacy.length > 0) { localStorage.setItem(_msgChatsKey(), JSON.stringify(legacy)); }
+    return legacy;
+  } catch(e) { return []; }
+}
+function chatsSave(d) { localStorage.setItem(_msgChatsKey(), JSON.stringify(d)); }
 
 function messengerOpen() { showScreen('s-messenger'); }
 
@@ -6543,7 +6661,7 @@ function messengerRenderList(filter) {
         <div style="font-size:52px">💬</div>
         <div style="font-size:17px;font-weight:700;color:var(--text)">Нет сообщений</div>
         <div style="font-size:13px;text-align:center">Открой список онлайн и начни общаться</div>
-        <button class="btn btn-accent" style="margin-top:8px;width:auto;padding:12px 24px" onclick="profileRenderOnline();showScreen('s-online')">👥 Найти собеседника</button>
+        <button class="btn btn-accent" style="margin-top:8px;width:auto;padding:12px 24px" onclick="profileRenderOnline();showScreen('s-online')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Найти собеседника</button>
       </div>`;
     return;
   }
@@ -8141,37 +8259,37 @@ function mcShowMsgMenu(idx) {
         border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.45)">
         <button class="mc-action-btn"
           onclick="mcSetReply(${idx});mcCloseMenu()">
-          <span style="font-size:20px">↩</span> Ответить
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg></span> Ответить
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcPinMsg(${idx});mcCloseMenu()">
-          <span style="font-size:20px">📌</span> Закрепить
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg></span> Закрепить
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcForwardMsg(${idx});mcCloseMenu()">
-          <span style="font-size:20px">↩</span> Переслать
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg></span> Переслать
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcCopyMsg(${idx});mcCloseMenu()">
-          <span style="font-size:20px">📋</span> Копировать
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span> Копировать
         </button>
         ${msg.image ? `<div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcSaveImage(${idx});mcCloseMenu()">
-          <span style="font-size:20px">💾</span> Сохранить фото
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span> Сохранить фото
         </button>` : ''}
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcCloseMenu();_mcEnterSelectMode(null,${idx})">
-          <span style="font-size:20px">☑️</span> Выбрать
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span> Выбрать
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn" style="color:var(--danger,#e05555)"
           onclick="mcConfirmDelete(${idx});mcCloseMenu()">
-          <span style="font-size:20px">🗑</span> Удалить${isMe ? '' : ' у себя'}
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></span> Удалить${isMe ? '' : ' у себя'}
         </button>
       </div>
     </div>`;
@@ -11506,7 +11624,7 @@ function renderGroupsList() {
     list.innerHTML = `<div style="text-align:center;padding:48px 20px;color:var(--muted)">
       <div style="font-size:40px;margin-bottom:12px">💬</div>
       <div style="font-size:14px;margin-bottom:20px">Нет групп. Создай первую!</div>
-      <button class="btn btn-accent" style="max-width:260px" onclick="showCreateGroupDialog()">👥 Создать группу</button>
+      <button class="btn btn-accent" style="max-width:260px" onclick="showCreateGroupDialog()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Создать группу</button>
     </div>`;
     return;
   }
