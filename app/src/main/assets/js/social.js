@@ -5808,7 +5808,24 @@ const PROFILE_BADGES = [
 // 👑 VIP БОТ — чат с поддержкой/заявками на VIP
 // ══════════════════════════════════════════════════════════════════
 const VIP_BOT_ID       = 'vip_bot';
-const VIP_ADMIN_USER   = 'lomkich';
+
+// ── Динамический список проверкеров (управляется через CMD: checker add/remove) ──
+const VIP_CHECKERS_KEY = 'sapp_vip_checkers_v1';
+function vipCheckersLoad() {
+  try { return JSON.parse(localStorage.getItem(VIP_CHECKERS_KEY) || '["lomkich"]'); }
+  catch(e) { return ['lomkich']; }
+}
+function vipCheckersSave(arr) {
+  localStorage.setItem(VIP_CHECKERS_KEY, JSON.stringify(arr));
+}
+function isVipChecker(username) {
+  if (!username) return false;
+  return vipCheckersLoad().map(u => u.toLowerCase()).includes(username.toLowerCase());
+}
+// Первый в списке — главный получатель уведомлений (обратная совместимость)
+function getVipAdminUser() { return vipCheckersLoad()[0] || 'lomkich'; }
+
+const VIP_ADMIN_USER = getVipAdminUser(); // для совместимости с местами, где используется напрямую
 const VIP_BOT_NAME     = 'VIP Поддержка';
 const VIP_BOT_AVATAR   = '👑';
 const VIP_BOT_COLOR    = '#f5c518';
@@ -5839,10 +5856,10 @@ function _vipBotNotify(p, amount, tier, txn) {
 
     // Уведомляем администратора (@lomkich) через Supabase messages
     if (sbReady()) {
-      const adminKey = sbChatKey(p.username, VIP_ADMIN_USER);
+      const adminKey = sbChatKey(p.username, getVipAdminUser());
       const adminMsg = {
         from_user: p.username,
-        to_user:   VIP_ADMIN_USER,
+        to_user:   getVipAdminUser(),
         chat_key:  adminKey,
         text:      `[VIP ЗАЯВКА]\nПользователь: @${p.username} (${p.name})\nТариф: ${tier}\nСумма: ${amount}₽\nТранзакция: ${txn}\nВремя: ${new Date(ts).toLocaleString('ru')}`,
         ts,
@@ -5866,7 +5883,7 @@ async function _vipBotOpenChat() {
   const hdrSub    = document.getElementById('mc-hdr-sub');
   const hdrAvatar = document.getElementById('mc-hdr-avatar');
   if (hdrName)   hdrName.textContent   = VIP_BOT_NAME;
-  if (hdrSub)    hdrSub.textContent    = p.username === VIP_ADMIN_USER ? 'Все заявки на VIP' : 'Поддержка';
+  if (hdrSub)    hdrSub.textContent    = isVipChecker(p.username) ? 'Все заявки на VIP' : 'Поддержка';
   if (hdrAvatar) {
     hdrAvatar.style.background = VIP_BOT_COLOR + '44';
     hdrAvatar.innerHTML = `<span style="font-size:20px">${VIP_BOT_AVATAR}</span>`;
@@ -5875,7 +5892,7 @@ async function _vipBotOpenChat() {
   const msgBody = document.getElementById('mc-messages');
   if (!msgBody) return;
 
-  if (p.username === VIP_ADMIN_USER) {
+  if (isVipChecker(p.username)) {
     // Администратор: грузим все заявки из таблицы donations
     msgBody.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">⏳ Загрузка заявок...</div>';
     try {

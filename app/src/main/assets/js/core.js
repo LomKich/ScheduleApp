@@ -2692,6 +2692,50 @@ showScreen = function(id, dir) {
 
 })();
 
+// ══════════════════════════════════════════════════════════════════
+// ── ⬅️  Desktop Back Navigation (Mouse4 / Alt+Left / Backspace) ────
+// ══════════════════════════════════════════════════════════════════
+(function() {
+  function desktopBack() {
+    // 1. Если открыто game-window — закрываем его
+    if (typeof _gameWindowEl !== 'undefined' && _gameWindowEl) {
+      if (typeof gameWindowClose === 'function') gameWindowClose();
+      return;
+    }
+    // 2. Если egg-overlay открыт
+    const egg = document.getElementById('egg-overlay');
+    if (egg && egg.classList.contains('show')) {
+      if (typeof eggClose === 'function') eggClose();
+      return;
+    }
+    // 3. По карте назад текущего экрана
+    const activeScrEl = document.querySelector('.screen.active');
+    const cur = activeScrEl ? activeScrEl.id : '';
+    const BACK = {
+      's-groups':'s-home','s-schedule':'s-groups','s-leaderboard':'s-profile',
+      's-settings':'s-profile','s-group-settings':'s-groups','s-chat':'s-messenger',
+      's-peer-profile':'s-messenger','s-theme-editor':'s-settings',
+    };
+    const target = BACK[cur];
+    if (target && typeof showScreen === 'function') { showScreen(target); return; }
+  }
+
+  // Mouse Button 3 = "назад" (4-я кнопка мыши)
+  document.addEventListener('mousedown', (e) => {
+    if (e.button === 3) { e.preventDefault(); desktopBack(); }
+  });
+
+  // Alt+Left, Backspace вне полей ввода
+  document.addEventListener('keydown', (e) => {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.altKey && e.code === 'ArrowLeft') { e.preventDefault(); desktopBack(); return; }
+    if (e.code === 'Backspace' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault(); desktopBack();
+    }
+  });
+})();
+
 // ══ ПОСЛЕДНЯЯ ГРУППА — кнопка удалена, функция оставлена как заглушка ══
 function updateLastGroupBtn(){}
 function jumpToLastGroup(){}
@@ -3333,6 +3377,7 @@ function cmdExec(raw){
       cmdPrint('out','  tiktok              — открыть TikTok');
       cmdPrint('out','  donate              — поддержать проект');
       cmdPrint('out','  vip <код>           — активировать VIP');
+      cmdPrint('out','  checker [add|remove] <user> — проверкеры VIP');
       cmdPrint('out', '');
       cmdPrint('info','── React Native UI (preview) ──');
       cmdPrint('out','  rn home             — Главная (RN)');
@@ -3907,6 +3952,50 @@ function cmdExec(raw){
     case 'donate': {
       cmdPrint('ok', '💝 Открываю страницу доната...');
       setTimeout(() => { cmdClose(); showDonateSheet(); }, 300);
+    } break;
+
+    case 'vip': {
+      if (!arg) { cmdPrint('err', 'Укажи код: vip <КОД>'); break; }
+      if (typeof vipActivate === 'function' && vipActivate(arg)) {
+        cmdPrint('ok', '👑 VIP активирован! Перезагрузи профиль.');
+        SFX.play && SFX.play('success');
+      } else {
+        cmdPrint('err', '❌ Неверный код.');
+      }
+    } break;
+
+    case 'checker': {
+      if (typeof vipCheckersLoad !== 'function') {
+        cmdPrint('err', 'Функция проверкеров не найдена. Обнови social.js.');
+        break;
+      }
+      const _list = vipCheckersLoad();
+      const _sub  = arg;           // add | remove | (пусто)
+      const _user = parts[2]?.toLowerCase?.();
+      if (!_sub) {
+        cmdPrint('info', '── Проверкеры VIP ──');
+        if (!_list.length) cmdPrint('out', '  (список пуст)');
+        _list.forEach(u => cmdPrint('ok', '  👑 @' + u));
+        cmdPrint('out', '');
+        cmdPrint('out', '  checker add <username>    — добавить проверкера');
+        cmdPrint('out', '  checker remove <username> — убрать проверкера');
+        break;
+      }
+      if (!_user) { cmdPrint('err', 'Укажи username.'); break; }
+      if (_sub === 'add') {
+        if (_list.includes(_user)) { cmdPrint('warn', '@' + _user + ' уже проверкер.'); break; }
+        _list.push(_user);
+        vipCheckersSave(_list);
+        cmdPrint('ok', '✅ @' + _user + ' теперь может проверять VIP-заявки.');
+      } else if (_sub === 'remove') {
+        const _idx = _list.indexOf(_user);
+        if (_idx === -1) { cmdPrint('err', '@' + _user + ' не найден в списке.'); break; }
+        _list.splice(_idx, 1);
+        vipCheckersSave(_list);
+        cmdPrint('ok', '🗑 @' + _user + ' убран из проверкеров.');
+      } else {
+        cmdPrint('err', 'Неизвестная подкоманда. Используй: add / remove');
+      }
     } break;
 
     case 'tiktok': {
