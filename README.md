@@ -19,8 +19,6 @@
 
 ---
 
-# 🇷🇺 Русская версия
-
 ## 🚀 Возможности
 
 * 📆 Управление расписанием
@@ -90,74 +88,3 @@ npm run build-linux
 2. Branch (`feature/...`)
 3. Commit
 4. Pull Request
-
----
-
-# 🇬🇧 English Version
-
-## 🚀 Features
-
-* 📆 Schedule management
-* 💬 Social features (chat / interaction)
-* 🎮 Built-in mini games
-* 🔊 Sounds and animations
-* 🖥 Desktop support (Electron)
-* 📱 Android support
-
----
-
-## 🧱 Tech Stack
-
-* **Electron** — Desktop app
-* **Java / Android SDK** — Mobile
-* **JavaScript (Vanilla)** — Logic
-* **HTML / CSS** — UI
-
----
-
-## 📂 Project Structure
-
-```
-ScheduleApp/
-├── app/
-├── MainActivity.java
-├── build.gradle
-└── .github/workflows/
-```
-
----
-
-## ⚙️ Installation & Run
-
-```bash
-npm install
-npm start
-```
-
----
-
-## 📦 Build
-
-```bash
-npm run build-win
-npm run build-mac
-npm run build-linux
-```
-
----
-
-## 📱 Android
-
-Open the project in Android Studio and run it.
-
----
-
-## ⭐ Support
-
-If you like this project, give it a star on GitHub!
-
----
-
-## 📄 License
-
-Specify your license (MIT recommended)
