@@ -849,11 +849,19 @@ public class MainActivity extends Activity {
                         byte[] rawBytes = baos.toByteArray();
 
                         // Конвертируем любой формат (HEIC/HEIF/BMP/WEBP/и т.д.) в JPEG
+                        // GIF пропускаем как есть — BitmapFactory убивает анимацию (только 1й кадр)
                         byte[] bytes;
                         String mime;
-                        android.graphics.Bitmap bitmap =
+                        boolean isGif = rawBytes.length > 3
+                            && rawBytes[0] == 'G' && rawBytes[1] == 'I' && rawBytes[2] == 'F';
+                        if (isGif) {
+                            bytes = rawBytes;
+                            mime = "image/gif";
+                            log.i(TAG, "GIF-аватарка — передаём без конвертации, размер: " + bytes.length + " байт");
+                        }
+                        android.graphics.Bitmap bitmap = isGif ? null :
                             android.graphics.BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.length);
-                        if (bitmap != null) {
+                        if (!isGif && bitmap != null) {
                             // Масштабируем до разумного размера (макс. 1920px по длинной стороне)
                             // чтобы base64 не превышал ~10 МБ лимит WebView
                             final int MAX_SIDE = 1920;
@@ -2429,7 +2437,7 @@ public class MainActivity extends Activity {
                     UploadProgressCallback progressCb = (pct) -> {
                         final int p = pct;
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadProgress='function')onUploadProgress('"
+                            "if(typeof onUploadProgress==='function')onUploadProgress('"
                             + id + "'," + p + ")", null));
                     };
                     // Сначала пробуем pixeldrain (быстрее)

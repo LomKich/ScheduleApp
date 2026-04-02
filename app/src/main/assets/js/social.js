@@ -1534,7 +1534,12 @@ function _profileHandleAvatarDataUrl(dataUrl, skipCrop = false) {
 // Перехватываем onNativeBgImagePicked для профиля если ждём фото
 const _origOnNativeBgImagePicked = window.onNativeBgImagePicked;
 window.onNativeBgImagePicked = function(dataUrl) {
-  if (_profileWaitingForPhoto) {
+  // desktop-patch.js ставит window._profileWaitingForPhoto (глобально),
+  // social.js ставит локальный _profileWaitingForPhoto — проверяем оба
+  const waiting = _profileWaitingForPhoto || window._profileWaitingForPhoto;
+  if (waiting) {
+    _profileWaitingForPhoto = false;
+    window._profileWaitingForPhoto = false;
     _profileHandleAvatarDataUrl(dataUrl);
   } else {
     if (_origOnNativeBgImagePicked) _origOnNativeBgImagePicked(dataUrl);
