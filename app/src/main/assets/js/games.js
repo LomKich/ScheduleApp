@@ -36,6 +36,13 @@
       if (code === 'Space' || code === 'Enter') { e.preventDefault(); snakeTogglePause(); }
     }
 
+    // ── Змейка Плюс ─────────────────────────────────────────────
+    if (game === 'snake2') {
+      const d = DIR[code];
+      if (d) { e.preventDefault(); s2Turn(d[0], d[1]); return; }
+      if (code === 'Space' || code === 'Enter') { e.preventDefault(); s2TogglePause(); }
+    }
+
     // ── Понг ────────────────────────────────────────────────────
     // Горизонтальное управление: ← A → D двигают ракетку
     if (game === 'pong') {
@@ -5654,3 +5661,537 @@ function chessUpdateScores() {
 }
 
 function chessStop() { chessAiThinking = false; }
+
+
+// ══════════════════════════════════════════════════════════════════
+// ── 🌊 ЗМЕЙКА ПЛЮС (Snake+) — анимированная версия с requestAnimationFrame
+//    Отличия от обычной змейки:
+//    • Плавное движение между клетками (интерполяция)
+//    • Градиентная окраска тела от головы к хвосту
+//    • Глаза на голове с направлением взгляда
+//    • Пульсирующая еда с частицами при поедании
+//    • Эффект следа (trail) за хвостом
+//    • Бонус-еда с таймером (x3 очка)
+//    • Shake-эффект экрана при смерти
+//    • Счётчик комбо при последовательном поедании
+// ══════════════════════════════════════════════════════════════════
+
+const S2_COLS = 22;
+const S2_ROWS = 26;
+const S2_DIFF = {
+  easy:   { tickMs: 260, step: 2 },
+  normal: { tickMs: 180, step: 3 },
+  hard:   { tickMs: 100, step: 5 },
+};
+
+// ── Состояние ─────────────────────────────────────────────────────
+let s2Running = false, s2Paused = false;
+let s2Grid, s2Cells;
+let s2Dir, s2NextDir;
+let s2Food, s2BonusFood, s2BonusTimer;
+let s2Score = 0, s2Hi = 0, s2Combo = 0;
+let s2CellSize, s2CW, s2CH;
+let s2Difficulty = 'normal';
+
+// Анимационный движок
+let s2Raf = null;          // requestAnimationFrame handle
+let s2TickTimer = null;    // логический тик (setTimeout)
+let s2LastTick = 0;        // время последнего тика
+let s2Progress = 0;        // 0..1 анимация между тиками
+let s2PrevCells = null;    // позиции на предыдущем тике
+let s2ShakeUntil = 0;      // время окончания shake-эффекта
+
+// Частицы
+let s2Particles = [];
+
+// ── Инициализация ─────────────────────────────────────────────────
+function s2Init() {
+  s2Hi = getHi('snake2');
+  const canvas = document.getElementById('s2-canvas');
+  if (!canvas) return;
+
+  const maxW = Math.min(window.innerWidth - 64, 320);
+  s2CellSize = Math.floor(maxW / S2_COLS);
+  canvas.width  = s2CellSize * S2_COLS;
+  canvas.height = s2CellSize * S2_ROWS;
+  s2CW = canvas.width;
+  s2CH = canvas.height;
+
+  // Свайп
+  let tx0, ty0;
+  canvas.ontouchstart = e => {
+    e.preventDefault();
+    tx0 = e.touches[0].clientX;
+    ty0 = e.touches[0].clientY;
+  };
+  canvas.ontouchend = e => {
+    e.preventDefault();
+    const dx = e.changedTouches[0].clientX - tx0;
+    const dy = e.changedTouches[0].clientY - ty0;
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) { s2TogglePause(); return; }
+    if (Math.abs(dx) > Math.abs(dy)) s2Turn(dx > 0 ? 1 : -1, 0);
+    else s2Turn(0, dy > 0 ? 1 : -1);
+  };
+
+  s2Restart();
+}
+
+function s2Restart() {
+  s2Stop();
+  s2Grid = Array.from({ length: S2_ROWS }, () => new Array(S2_COLS).fill(0));
+  const sx = Math.floor(S2_COLS / 2);
+  const sy = Math.floor(S2_ROWS / 2);
+  s2Cells = [
+    { x: sx,   y: sy },
+    { x: sx-1, y: sy },
+    { x: sx-2, y: sy },
+  ];
+  s2Cells.forEach(c => s2Grid[c.y][c.x] = 1);
+  s2Dir     = { x: 1, y: 0 };
+  s2NextDir = { x: 1, y: 0 };
+  s2Score   = 0;
+  s2Combo   = 0;
+  s2Particles = [];
+  s2BonusFood = null;
+  s2BonusTimer = 0;
+  s2PrevCells = s2Cells.map(c => ({ ...c }));
+  s2Progress  = 0;
+  s2ShakeUntil = 0;
+  s2Running = true;
+  s2Paused  = false;
+  s2PlaceFood();
+  s2UpdateScore();
+  s2ScheduleTick();
+  s2RafLoop();
+}
+
+function s2Stop() {
+  s2Running = false;
+  if (s2TickTimer) { clearTimeout(s2TickTimer); s2TickTimer = null; }
+  if (s2Raf)       { cancelAnimationFrame(s2Raf); s2Raf = null; }
+}
+
+function s2TogglePause() {
+  if (!s2Running) { s2Restart(); return; }
+  s2Paused = !s2Paused;
+  if (!s2Paused) {
+    s2ScheduleTick();
+    s2RafLoop();
+  }
+}
+
+function s2Turn(dx, dy) {
+  if (dx === -s2Dir.x && dy === -s2Dir.y) return;
+  s2NextDir = { x: dx, y: dy };
+  SFX.play('snakeTurn');
+}
+
+// ── Логический тик ────────────────────────────────────────────────
+function s2ScheduleTick() {
+  if (!s2Running || s2Paused) return;
+  const d = S2_DIFF[s2Difficulty] || S2_DIFF.normal;
+  const len = s2Cells.length;
+  const delay = Math.max(60, d.tickMs - (len - 3) * d.step);
+  s2TickTimer = setTimeout(() => {
+    s2Tick();
+    s2ScheduleTick();
+  }, delay);
+}
+
+function s2Tick() {
+  if (!s2Running || s2Paused) return;
+
+  s2PrevCells = s2Cells.map(c => ({ ...c }));
+  s2Progress  = 0;
+  s2LastTick  = performance.now();
+
+  s2Dir = { ...s2NextDir };
+  const head = s2Cells[0];
+  const nx = (head.x + s2Dir.x + S2_COLS) % S2_COLS;
+  const ny = (head.y + s2Dir.y + S2_ROWS) % S2_ROWS;
+
+  // Столкновение с собой
+  if (!window._cheatSnakeWalls && s2Grid[ny][nx] === 1) {
+    s2GameOver();
+    return;
+  }
+
+  const ateMain  = s2Food   && nx === s2Food.x   && ny === s2Food.y;
+  const ateBonus = s2BonusFood && nx === s2BonusFood.x && ny === s2BonusFood.y;
+
+  s2Cells.unshift({ x: nx, y: ny });
+  s2Grid[ny][nx] = 1;
+
+  if (!ateMain && !ateBonus) {
+    const tail = s2Cells.pop();
+    s2Grid[tail.y][tail.x] = 0;
+  }
+
+  if (ateMain) {
+    s2Combo++;
+    const pts = s2Combo >= 3 ? 2 : 1;
+    s2Score += pts;
+    s2SpawnParticles(nx, ny, getAccent(), 12);
+    SFX.play('snakeEat');
+    s2PlaceFood();
+    // Шанс появления бонус-еды
+    if (!s2BonusFood && Math.random() < 0.25) s2PlaceBonusFood();
+    s2UpdateScore();
+    if (s2Score > s2Hi) s2Hi = saveHi('snake2', s2Score);
+  }
+
+  if (ateBonus && s2BonusFood) {
+    s2Combo++;
+    s2Score += 3;
+    s2SpawnParticles(nx, ny, '#ffd700', 20);
+    SFX.play('success');
+    s2BonusFood  = null;
+    s2BonusTimer = 0;
+    s2UpdateScore();
+    if (s2Score > s2Hi) s2Hi = saveHi('snake2', s2Score);
+  }
+
+  // Таймер бонуса
+  if (s2BonusFood) {
+    s2BonusTimer--;
+    if (s2BonusTimer <= 0) s2BonusFood = null;
+  }
+}
+
+function s2GameOver() {
+  s2Running = false;
+  if (s2TickTimer) { clearTimeout(s2TickTimer); s2TickTimer = null; }
+  s2ShakeUntil = performance.now() + 600;
+  s2SpawnParticles(s2Cells[0].x, s2Cells[0].y, '#ff4444', 30);
+  SFX.play('snakeDie');
+  triggerScreamer();
+  if (s2Score > s2Hi) s2Hi = saveHi('snake2', s2Score);
+  s2UpdateScore();
+  // RAF продолжает крутиться для анимации частиц и shake
+}
+
+// ── Размещение еды ────────────────────────────────────────────────
+function s2PlaceFood() {
+  const empty = [];
+  for (let y = 0; y < S2_ROWS; y++)
+    for (let x = 0; x < S2_COLS; x++)
+      if (!s2Grid[y][x]) empty.push({ x, y });
+  if (empty.length) s2Food = empty[Math.floor(Math.random() * empty.length)];
+}
+
+function s2PlaceBonusFood() {
+  const empty = [];
+  for (let y = 0; y < S2_ROWS; y++)
+    for (let x = 0; x < S2_COLS; x++)
+      if (!s2Grid[y][x] && !(s2Food && s2Food.x === x && s2Food.y === y))
+        empty.push({ x, y });
+  if (!empty.length) return;
+  s2BonusFood  = empty[Math.floor(Math.random() * empty.length)];
+  s2BonusTimer = 20; // исчезает через 20 тиков
+}
+
+// ── Частицы ───────────────────────────────────────────────────────
+function s2SpawnParticles(cx, cy, color, count) {
+  const px = cx * s2CellSize + s2CellSize / 2;
+  const py = cy * s2CellSize + s2CellSize / 2;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 3.5;
+    s2Particles.push({
+      x: px, y: py,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1.0,
+      decay: 0.03 + Math.random() * 0.04,
+      size: 2 + Math.random() * 3,
+      color,
+    });
+  }
+}
+
+// ── RAF рендер-цикл ───────────────────────────────────────────────
+function s2RafLoop() {
+  if (!s2Running && s2Particles.length === 0 && performance.now() > s2ShakeUntil) return;
+  s2Raf = requestAnimationFrame(s2RafLoop);
+  s2Draw();
+}
+
+// ── Рисование ─────────────────────────────────────────────────────
+function s2Draw() {
+  const canvas = document.getElementById('s2-canvas');
+  if (!canvas) return;
+  const ctx  = canvas.getContext('2d');
+  const cs   = s2CellSize;
+  const now  = performance.now();
+
+  // ── Вычисляем прогресс анимации
+  if (s2Running && !s2Paused && s2LastTick > 0) {
+    const d = S2_DIFF[s2Difficulty] || S2_DIFF.normal;
+    const len = s2Cells.length;
+    const tickDur = Math.max(60, d.tickMs - (len - 3) * d.step);
+    s2Progress = Math.min((now - s2LastTick) / tickDur, 1);
+  }
+
+  // ── Shake-эффект ─────────────────────────────────────────────────
+  let shakeX = 0, shakeY = 0;
+  if (now < s2ShakeUntil) {
+    const t = (s2ShakeUntil - now) / 600;
+    const amp = t * 8;
+    shakeX = (Math.random() - 0.5) * amp;
+    shakeY = (Math.random() - 0.5) * amp;
+  }
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  // ── Фон ───────────────────────────────────────────────────────────
+  ctx.fillStyle = '#0b0d14';
+  ctx.fillRect(-4, -4, s2CW + 8, s2CH + 8);
+
+  // ── Тонкая сетка ─────────────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth   = 0.5;
+  for (let x = 0; x <= S2_COLS; x++) {
+    ctx.beginPath(); ctx.moveTo(x*cs, 0); ctx.lineTo(x*cs, s2CH); ctx.stroke();
+  }
+  for (let y = 0; y <= S2_ROWS; y++) {
+    ctx.beginPath(); ctx.moveTo(0, y*cs); ctx.lineTo(s2CW, y*cs); ctx.stroke();
+  }
+
+  // ── Еда (пульсирующая) ────────────────────────────────────────────
+  if (s2Food) {
+    const pulse = 0.85 + 0.15 * Math.sin(now / 250);
+    const r     = (cs / 2 - 2) * pulse;
+    const fx    = s2Food.x * cs + cs / 2;
+    const fy    = s2Food.y * cs + cs / 2;
+    // Свечение
+    ctx.save();
+    ctx.shadowColor = '#ff5520';
+    ctx.shadowBlur  = 14 * pulse;
+    ctx.fillStyle   = '#ff5520';
+    ctx.beginPath();
+    ctx.arc(fx, fy, r, 0, Math.PI * 2);
+    ctx.fill();
+    // Блик
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath();
+    ctx.arc(fx - r*0.28, fy - r*0.28, r*0.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Бонус-еда (вращающаяся звезда) ───────────────────────────────
+  if (s2BonusFood) {
+    const bx  = s2BonusFood.x * cs + cs / 2;
+    const by  = s2BonusFood.y * cs + cs / 2;
+    const br  = (cs / 2 - 1);
+    const rot = now / 400;
+    // Мигание по таймеру
+    const blink = s2BonusTimer < 8 ? (Math.floor(now / 150) % 2 === 0) : true;
+    if (blink) {
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate(rot);
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur  = 18;
+      ctx.fillStyle   = '#ffd700';
+      // Звезда из 5 лучей
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a   = (i * Math.PI) / 5 - Math.PI / 2;
+        const r2  = i % 2 === 0 ? br : br * 0.45;
+        const px2 = Math.cos(a) * r2;
+        const py2 = Math.sin(a) * r2;
+        if (i === 0) ctx.moveTo(px2, py2); else ctx.lineTo(px2, py2);
+      }
+      ctx.closePath();
+      ctx.fill();
+      // Текст x3
+      ctx.rotate(-rot);
+      ctx.fillStyle = '#000';
+      ctx.font = `bold ${Math.round(cs * 0.38)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('x3', 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // ── Змея ─────────────────────────────────────────────────────────
+  const accent = getAccent();
+  // Парсим accent в RGB для градиента
+  let ar = 130, ag = 180, ab = 255;
+  const hexM = accent.replace('#', '');
+  if (hexM.length === 6) {
+    ar = parseInt(hexM.slice(0, 2), 16);
+    ag = parseInt(hexM.slice(2, 4), 16);
+    ab = parseInt(hexM.slice(4, 6), 16);
+  }
+
+  const totalLen = s2Cells.length;
+
+  for (let i = totalLen - 1; i >= 0; i--) {
+    const cur  = s2Cells[i];
+    const prev = s2PrevCells ? (s2PrevCells[i] || cur) : cur;
+
+    // Интерполируем позицию для плавного движения
+    // Учитываем wrap-around (телепортацию через края)
+    let ix = prev.x + (cur.x - prev.x) * s2Progress;
+    let iy = prev.y + (cur.y - prev.y) * s2Progress;
+    // Если разница > 1 — wrap через край
+    if (Math.abs(cur.x - prev.x) > 1) {
+      const dx = cur.x > prev.x ? cur.x - S2_COLS : cur.x + S2_COLS;
+      ix = prev.x + (dx - prev.x) * s2Progress;
+    }
+    if (Math.abs(cur.y - prev.y) > 1) {
+      const dy = cur.y > prev.y ? cur.y - S2_ROWS : cur.y + S2_ROWS;
+      iy = prev.y + (dy - prev.y) * s2Progress;
+    }
+
+    // Позиция в пикселях
+    const px = ix * cs;
+    const py = iy * cs;
+
+    // Градиент по длине: голова — акцент, хвост — темнее
+    const t     = i / Math.max(totalLen - 1, 1);
+    const alpha = i === 0 ? 1 : 0.85 - t * 0.55;
+    // Цвет: от акцента у головы к более тёмному у хвоста
+    const r2 = Math.round(ar * (1 - t * 0.6));
+    const g2 = Math.round(ag * (1 - t * 0.6));
+    const b2 = Math.round(ab * (1 - t * 0.4));
+    const segColor = `rgba(${r2},${g2},${b2},${alpha})`;
+
+    // Размер сегмента: голова немного крупнее
+    const scale = i === 0 ? 0.92 : 0.80 - t * 0.12;
+    const pad   = cs * (1 - scale) / 2;
+    const size  = cs - pad * 2;
+    const radius = size * 0.38;
+
+    // Свечение головы
+    ctx.save();
+    if (i === 0) {
+      ctx.shadowColor = accent;
+      ctx.shadowBlur  = 12;
+    } else if (i < 4) {
+      ctx.shadowColor = accent;
+      ctx.shadowBlur  = 4;
+    }
+
+    ctx.fillStyle = segColor;
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(px + pad, py + pad, size, size, radius);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(px + cs/2, py + cs/2, size/2, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Блик на сегменте
+    if (i < totalLen * 0.6) {
+      ctx.fillStyle = `rgba(255,255,255,${0.18 - t * 0.15})`;
+      ctx.beginPath();
+      ctx.arc(px + pad + size*0.32, py + pad + size*0.28, size*0.18, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // ── Глаза на голове ──────────────────────────────────────────
+    if (i === 0) {
+      const ex = s2Dir.x, ey = s2Dir.y;
+      const eyeR = size * 0.14;
+      // Смещения глаз перпендикулярно направлению
+      const perp = { x: -ey, y: ex };
+      const eyeOffset = size * 0.20;
+      const eyeFwd    = size * 0.15;
+
+      const eye1x = px + cs/2 + perp.x * eyeOffset + ex * eyeFwd;
+      const eye1y = py + cs/2 + perp.y * eyeOffset + ey * eyeFwd;
+      const eye2x = px + cs/2 - perp.x * eyeOffset + ex * eyeFwd;
+      const eye2y = py + cs/2 - perp.y * eyeOffset + ey * eyeFwd;
+
+      ctx.save();
+      ctx.shadowBlur = 0;
+      // Белки
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(eye1x, eye1y, eyeR, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(eye2x, eye2y, eyeR, 0, Math.PI*2); ctx.fill();
+      // Зрачки
+      ctx.fillStyle = '#111';
+      const pupR = eyeR * 0.55;
+      ctx.beginPath(); ctx.arc(eye1x + ex*pupR*0.5, eye1y + ey*pupR*0.5, pupR, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(eye2x + ex*pupR*0.5, eye2y + ey*pupR*0.5, pupR, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ── Частицы ──────────────────────────────────────────────────────
+  s2Particles = s2Particles.filter(p => p.life > 0);
+  s2Particles.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle   = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur  = 6;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+    p.x    += p.vx;
+    p.y    += p.vy;
+    p.vy   += 0.12; // гравитация
+    p.vx   *= 0.97;
+    p.life -= p.decay;
+  });
+
+  // ── Пауза ─────────────────────────────────────────────────────────
+  if (s2Paused) {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, s2CH/2 - 28, s2CW, 56);
+    ctx.fillStyle = '#f0ede8';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⏸ Пауза — тапни чтобы продолжить', s2CW/2, s2CH/2);
+  }
+
+  // ── Game Over ─────────────────────────────────────────────────────
+  if (!s2Running && now >= s2ShakeUntil && s2Particles.length === 0) {
+    ctx.fillStyle = 'rgba(0,0,0,0.62)';
+    ctx.fillRect(0, s2CH/2 - 38, s2CW, 76);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ff6666';
+    ctx.font = 'bold 17px sans-serif';
+    ctx.fillText('💀 Игра окончена!', s2CW/2, s2CH/2 - 12);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = accent;
+    ctx.fillText('Счёт: ' + s2Score + ' • Рекорд: ' + s2Hi, s2CW/2, s2CH/2 + 12);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '11px sans-serif';
+    ctx.fillText('Нажми «Заново» или тапни по полю', s2CW/2, s2CH/2 + 30);
+  }
+
+  // ── Комбо-подсказка ───────────────────────────────────────────────
+  if (s2Combo >= 2 && s2Running) {
+    const comboAlpha = Math.min(1, (s2Combo - 1) * 0.35);
+    ctx.save();
+    ctx.globalAlpha = comboAlpha;
+    ctx.fillStyle   = '#ffd700';
+    ctx.font        = 'bold 13px sans-serif';
+    ctx.textAlign   = 'right';
+    ctx.textBaseline = 'top';
+    ctx.shadowColor = '#ffd700';
+    ctx.shadowBlur  = 8;
+    ctx.fillText('🔥 x' + s2Combo + ' КОМБО', s2CW - 8, 8);
+    ctx.restore();
+  }
+
+  ctx.restore(); // shake transform
+}
+
+function s2UpdateScore() {
+  const el = document.getElementById('s2-score-label');
+  if (el) el.textContent = 'Счёт: ' + s2Score + ' • Рекорд: ' + s2Hi;
+}
