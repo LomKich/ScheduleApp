@@ -112,23 +112,29 @@ jobs:
 
   # ═══════════════════════════════════════════════
   # JOB 2 — Desktop EXE (Electron / Windows)
+  # ВАЖНО: запускается на windows-latest, чтобы NSIS компилировался
+  # нативно и создавал настоящий установщик, а не portable exe.
+  # На ubuntu+Wine NSIS часто падает или генерирует portable.
   # ═══════════════════════════════════════════════
   build-desktop:
-    name: 🖥️ Build Desktop EXE
-    runs-on: ubuntu-latest
+    name: 🖥️ Build Desktop Installer (Windows)
+    runs-on: windows-latest
     outputs:
       version: ${{ steps.get_version.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read version
+      - name: Read version from build.gradle
         id: get_version
+        shell: bash
         run: |
           VERSION=$(grep "versionName" app/build.gradle | sed 's/.*"\(.*\)".*/\1/' | tr -d '[:space:]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
 
       - name: Sync version into package.json
+        shell: bash
         run: |
           cd desktop
           node -e "
@@ -136,6 +142,7 @@ jobs:
             const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
             pkg.version = '${{ steps.get_version.outputs.version }}';
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+            console.log('package.json version set to', pkg.version);
           "
 
       - name: Set up Node.js
@@ -148,24 +155,28 @@ jobs:
       - name: Install dependencies
         run: cd desktop && npm ci
 
-      - name: Install Wine (cross-compile Windows EXE on Linux)
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update -qq
-          sudo apt-get install -y wine64 wine32 2>/dev/null || \
-          sudo apt-get install -y wine 2>/dev/null || true
-
-      - name: Build Windows EXE
+      - name: Build Windows NSIS Installer
         run: |
           cd desktop
           npx electron-builder --win --x64 --publish never
-          ls dist/
 
-      - name: Rename EXE
+      - name: Verify installer was created (must be Setup.exe, not portable)
+        shell: bash
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
-          EXE=$(find desktop/dist -name "*.exe" | head -1)
-          cp "$EXE" "ScheduleApp-v${VERSION}-Setup.exe"
+          # Ищем именно Setup.exe (NSIS installer), не portable
+          INSTALLER=$(find desktop/dist -name "*Setup*.exe" -o -name "*setup*.exe" | head -1)
+          if [ -z "$INSTALLER" ]; then
+            echo "❌ NSIS Setup.exe не найден! Список dist:"
+            ls desktop/dist/
+            # Берём любой .exe как fallback — но это проблема
+            INSTALLER=$(find desktop/dist -name "*.exe" | head -1)
+            echo "⚠️ Используем fallback: $INSTALLER"
+          else
+            echo "✅ Installer найден: $INSTALLER"
+          fi
+          cp "$INSTALLER" "ScheduleApp-v${VERSION}-Setup.exe"
+          echo "installer_path=ScheduleApp-v${VERSION}-Setup.exe" >> $GITHUB_ENV
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4

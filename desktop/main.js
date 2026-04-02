@@ -188,11 +188,20 @@ function downloadAndInstall(asset, fallbackUrl) {
       new Notification({ title: '⬇️ Загрузка обновления', body: asset.name }).show();
     }
 
-    // Если файл уже скачан — не скачиваем снова
+    // Если файл уже скачан — проверяем размер (старый кэш мог быть битым или от другой версии)
     if (fs.existsSync(destPath)) {
-      launchInstaller(destPath, fallbackUrl);
-      resolve();
-      return;
+      const stat = fs.statSync(destPath);
+      const expectedSize = asset.size || 0;
+      if (expectedSize > 0 && Math.abs(stat.size - expectedSize) < 1024) {
+        sLog('info', 'Installer already cached, reusing:', destPath);
+        launchInstaller(destPath, fallbackUrl);
+        resolve();
+        return;
+      } else {
+        // Размер не совпадает — удаляем старый и качаем заново
+        sLog('info', 'Cached installer size mismatch, re-downloading');
+        try { fs.unlinkSync(destPath); } catch(_) {}
+      }
     }
 
     try {
@@ -240,17 +249,36 @@ function launchInstaller(filePath, fallbackUrl) {
     buttons: ['Установить сейчас'],
     defaultId: 0,
   }).then(() => {
-    if (process.platform === 'win32') {
-      // shell.openPath гарантирует запуск .exe даже с пробелами в пути
-      shell.openPath(filePath);
-    } else if (process.platform === 'darwin') {
-      shell.openPath(filePath);
-    } else {
-      execFile('chmod', ['+x', filePath], () => {
+    try {
+      if (process.platform === 'win32') {
+        // shell.openPath надёжнее spawn — работает с пробелами в пути и UAC
+        shell.openPath(filePath);
+        // Удаляем temp-файл через PowerShell с задержкой (нельзя удалить запущенный .exe сразу)
+        // NSIS-установщик копирует себя во временную папку системы, поэтому удаление безопасно
+        const cleanupCmd = `Start-Sleep -Seconds 15; Remove-Item -Force -LiteralPath '${filePath.replace(/'/g, "''")}' -ErrorAction SilentlyContinue`;
+        spawn('powershell', ['-NonInteractive', '-Command', cleanupCmd],
+          { detached: true, stdio: 'ignore' }).unref();
+      } else if (process.platform === 'darwin') {
+        shell.openPath(filePath);
+        // Удаляем dmg через 15 секунд
+        setTimeout(() => {
+          try { fs.unlinkSync(filePath); } catch(_) {}
+        }, 15000);
+      } else {
+        // Linux: делаем исполняемым, запускаем, удаляем через 30 сек
+        fs.chmodSync(filePath, 0o755);
         spawn(filePath, [], { detached: true, stdio: 'ignore' }).unref();
-      });
+        setTimeout(() => {
+          try { fs.unlinkSync(filePath); } catch(_) {}
+        }, 30000);
+      }
+    } catch (err) {
+      sLog('error', 'launchInstaller spawn failed:', err.message);
+      // Fallback: открываем папку с установщиком чтобы пользователь запустил вручную
+      shell.showItemInFolder(filePath);
+      return;
     }
-    // Задержка 600мс: даём установщику инициализироваться до того как Electron завершится
+    // Даём установщику 600мс инициализироваться до того как Electron завершится
     setTimeout(() => app.quit(), 600);
   });
 }
