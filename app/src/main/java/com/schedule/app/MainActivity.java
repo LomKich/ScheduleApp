@@ -891,6 +891,8 @@ public class MainActivity extends Activity {
                         String dataUrl = "data:" + mime + ";base64," + b64;
                         final String jsDataUrl = dataUrl;
 
+                        final byte[] finalBytes = bytes;
+
                         runOnUiThread(() -> {
                             if (fileChooserCallback != null) {
                                 fileChooserCallback.onReceiveValue(null);
