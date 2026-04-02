@@ -87,21 +87,7 @@ jobs:
           # ── PWA Manifest ──────────────────────────────────────────
           echo "📱 Генерируем PWA manifest..."
           cat > "$DIST/manifest.json" << 'MANIFEST'
-{
-  "name": "ScheduleApp",
-  "short_name": "Расписание",
-  "description": "Расписание занятий",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#1c1c1e",
-  "theme_color": "#e87722",
-  "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
-}
-MANIFEST
-
+          
           # ── Итог ─────────────────────────────────────────────────
           echo ""
           echo "📊 Результат сборки:"
