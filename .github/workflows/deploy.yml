@@ -1,6 +1,6 @@
-name: 🚀 Deploy Web Version
+name: 🌐 Deploy Web Version
 
-# Запускается при пуше в main если изменились JS/HTML файлы приложения
+# Запускается при пуше в main если изменились JS/HTML файлы
 on:
   push:
     branches: [main]
@@ -8,110 +8,116 @@ on:
       - 'app/src/main/assets/**'
       - 'web/**'
       - '.github/workflows/deploy.yml'
-  # Ручной запуск из GitHub Actions UI
+  # Ручной запуск из GitHub Actions UI (кнопка Run workflow)
   workflow_dispatch:
+
+# Разрешения для GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Только один деплой одновременно
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
-    name: Build & Deploy to Cloudflare
+    name: Build & Deploy to GitHub Pages
     runs-on: ubuntu-latest
 
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
     steps:
-      # ─── 1. Получаем код ────────────────────────────────────────
-      - name: Checkout repository
+      # ─── 1. Получаем код ──────────────────────────────────────────
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # ─── 2. Node.js для wrangler ────────────────────────────────
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'web/package-lock.json'
-
-      - name: Install Wrangler
-        run: npm install -g wrangler@latest
-
-      # ─── 3. Сборка веб-дистрибутива ─────────────────────────────
-      # Берём исходники из app/src/main/assets/ (единый источник),
-      # убираем desktop-only скрипты, добавляем service worker.
+      # ─── 2. Сборка: копируем JS из Android assets ─────────────────
+      # app/src/main/assets/ — единый источник для Android, Desktop и Web
       - name: Build web distribution
         run: |
           set -e
 
           ASSETS="app/src/main/assets"
-          DIST="web/_dist"
+          DIST="_site"   # стандартная папка для GitHub Pages
 
-          echo "📁 Creating dist directory..."
+          echo "📁 Создаём папку сборки..."
           rm -rf "$DIST"
           mkdir -p "$DIST/js"
 
-          # ── index.html ──────────────────────────────────────────
-          echo "📄 Processing index.html..."
+          # ── index.html ────────────────────────────────────────────
+          echo "📄 Обрабатываем index.html..."
 
-          # Копируем Android index.html, удаляем desktop-patch.js (не нужен в браузере)
+          # Берём Android index.html — это источник истины
+          # Убираем desktop-patch.js (нужен только в Electron, не в браузере)
           sed '/desktop-patch\.js/d' "$ASSETS/index.html" > "$DIST/index.html"
 
-          # Добавляем регистрацию Service Worker перед </body>
-          SW_SCRIPT='<script>if("serviceWorker"in navigator){navigator.serviceWorker.register("/sw.js").then(()=>console.log("[SW] registered")).catch(e=>console.warn("[SW] failed:",e));}</script>'
-          sed -i "s|</body>|$SW_SCRIPT\n</body>|" "$DIST/index.html"
+          # Вставляем регистрацию Service Worker перед </body>
+          sed -i 's|</body>|<script>if("serviceWorker"in navigator){navigator.serviceWorker.register("/sw.js").then(()=>console.log("[SW] ok")).catch(console.warn);}</script>\n</body>|' "$DIST/index.html"
 
-          # Добавляем мета-тег для PWA (standalone mode)
+          # Добавляем PWA manifest
           sed -i 's|</head>|<link rel="manifest" href="/manifest.json">\n</head>|' "$DIST/index.html"
 
-          echo "✅ index.html done ($(wc -c < "$DIST/index.html") bytes)"
+          echo "   ✅ $(wc -c < "$DIST/index.html") байт"
 
-          # ── JS файлы ────────────────────────────────────────────
-          echo "📦 Copying JS files..."
+          # ── JS файлы ──────────────────────────────────────────────
+          echo "📦 Копируем JS файлы..."
+          COPIED=0
           for f in "$ASSETS/js"/*.js; do
             fname=$(basename "$f")
-            # Пропускаем desktop-patch.js — он только для Electron
+            # desktop-patch.js — только для Electron, в браузере не нужен
             if [ "$fname" = "desktop-patch.js" ]; then
-              echo "  ⏭  Skipped: $fname (desktop-only)"
+              echo "   ⏭  Пропущен: $fname (только Electron)"
               continue
             fi
             cp "$f" "$DIST/js/$fname"
-            echo "  ✅ $fname ($(wc -c < "$DIST/js/$fname") bytes)"
+            echo "   ✅ $fname ($(wc -c < "$DIST/js/$fname") байт)"
+            COPIED=$((COPIED + 1))
           done
+          echo "   Скопировано: $COPIED файлов"
 
-          # ── Веб-специфичные файлы ────────────────────────────────
-          echo "🌐 Copying web-specific files..."
+          # ── Service Worker ────────────────────────────────────────
+          echo "⚙️  Копируем Service Worker..."
           cp web/sw.js "$DIST/sw.js"
 
-          # Генерируем PWA manifest
+          # ── PWA Manifest ──────────────────────────────────────────
+          echo "📱 Генерируем PWA manifest..."
           cat > "$DIST/manifest.json" << 'MANIFEST'
-          {
-            "name": "ScheduleApp",
-            "short_name": "Расписание",
-            "description": "Расписание занятий",
-            "start_url": "/",
-            "display": "standalone",
-            "background_color": "#1c1c1e",
-            "theme_color": "#e87722",
-            "icons": [
-              { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-              { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
-            ]
-          }
-          MANIFEST
+{
+  "name": "ScheduleApp",
+  "short_name": "Расписание",
+  "description": "Расписание занятий",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1c1c1e",
+  "theme_color": "#e87722",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
+MANIFEST
 
           # ── Итог ─────────────────────────────────────────────────
           echo ""
-          echo "📊 Build summary:"
-          echo "  HTML: $(wc -c < "$DIST/index.html") bytes"
-          echo "  JS files: $(ls "$DIST/js" | wc -l)"
-          echo "  Total size: $(du -sh "$DIST" | cut -f1)"
-          ls -la "$DIST/"
-          ls -la "$DIST/js/"
+          echo "📊 Результат сборки:"
+          echo "   HTML:     $(wc -c < "$DIST/index.html") байт"
+          echo "   JS файлы: $(ls "$DIST/js" | wc -l) шт."
+          echo "   Размер:   $(du -sh "$DIST" | cut -f1)"
 
-      # ─── 4. Пушим файлы расписания в scheduletxt ────────────────
-      # Если в папке schedule/ есть .docx файлы — заливаем на GitHub
-      - name: Sync schedule files to scheduletxt repo
+      # ─── 3. Синхронизируем файлы расписания в scheduletxt ────────
+      # Если в репо есть папка schedule/ с .docx файлами —
+      # автоматически заливаем их как резерв на GitHub
+      - name: Sync schedule files to scheduletxt
         if: hashFiles('schedule/*.docx', 'schedule/*.doc') != ''
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          echo "📅 Syncing schedule files to LomKich/scheduletxt..."
+          echo "📅 Синхронизируем файлы расписания..."
           git clone https://x-access-token:${GH_PAT}@github.com/LomKich/scheduletxt.git /tmp/scheduletxt
           cp schedule/*.docx /tmp/scheduletxt/ 2>/dev/null || true
           cp schedule/*.doc  /tmp/scheduletxt/ 2>/dev/null || true
@@ -120,31 +126,29 @@ jobs:
           git config user.email "ci@scheduleapp.local"
           git add -A
           if git diff --cached --quiet; then
-            echo "  ℹ️  No schedule changes to push"
+            echo "   ℹ️  Изменений нет, пропускаем"
           else
-            git commit -m "🔄 Auto-sync schedule files [skip ci]"
+            git commit -m "🔄 Авто-синхронизация расписания [skip ci]"
             git push
-            echo "  ✅ Schedule files pushed to scheduletxt"
+            echo "   ✅ Файлы расписания обновлены в scheduletxt"
           fi
 
-      # ─── 5. Деплой на Cloudflare Workers ───────────────────────
-      - name: Deploy to Cloudflare Workers
-        working-directory: web
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-        run: |
-          echo "🚀 Deploying to Cloudflare..."
-          wrangler deploy
-          echo "✅ Deployed!"
+      # ─── 4. Загружаем артефакт для GitHub Pages ───────────────────
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
 
-      # ─── 6. Уведомление в консоль ───────────────────────────────
-      - name: Deployment summary
+      # ─── 5. Деплоим на GitHub Pages ───────────────────────────────
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      # ─── 6. Вывод результата ──────────────────────────────────────
+      - name: Summary
         run: |
           echo ""
-          echo "╔══════════════════════════════════════════╗"
-          echo "║  ✅  Web version deployed successfully!  ║"
-          echo "╚══════════════════════════════════════════╝"
-          echo ""
-          echo "📝 Changed files trigger:"
-          git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E "\.(js|html)$" || echo "  (workflow_dispatch)"
+          echo "╔══════════════════════════════════════════════════════╗"
+          echo "║  ✅  Веб-версия задеплоена на GitHub Pages!          ║"
+          echo "║  🌐  ${{ steps.deploy.outputs.page_url }}            ║"
+          echo "╚══════════════════════════════════════════════════════╝"
