@@ -241,15 +241,17 @@ function launchInstaller(filePath, fallbackUrl) {
     defaultId: 0,
   }).then(() => {
     if (process.platform === 'win32') {
-      spawn(filePath, [], { detached: true, stdio: 'ignore' }).unref();
+      // shell.openPath гарантирует запуск .exe даже с пробелами в пути
+      shell.openPath(filePath);
     } else if (process.platform === 'darwin') {
-      execFile('open', [filePath]);
+      shell.openPath(filePath);
     } else {
       execFile('chmod', ['+x', filePath], () => {
         spawn(filePath, [], { detached: true, stdio: 'ignore' }).unref();
       });
     }
-    app.quit();
+    // Задержка 600мс: даём установщику инициализироваться до того как Electron завершится
+    setTimeout(() => app.quit(), 600);
   });
 }
 

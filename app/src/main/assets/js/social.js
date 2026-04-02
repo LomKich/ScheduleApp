@@ -2669,22 +2669,33 @@ let _presenceFirstPut = true;
 async function sbPresencePut(p) {
   if (!p || !sbReady()) return;
   // Compress photo avatar to 80x80px base64 for presence storage
+  // GIF и WebP НЕ сжимаем через canvas — canvas убивает анимацию и даёт чёрный фон
   let avatarDataToStore = null;
   if (p.avatarType === 'photo' && p.avatarData) {
-    try {
-      await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const cv = document.createElement('canvas');
-          cv.width = cv.height = 80;
-          cv.getContext('2d').drawImage(img, 0, 0, 80, 80);
-          avatarDataToStore = cv.toDataURL('image/jpeg', 0.75);
-          resolve();
-        };
-        img.onerror = () => resolve();
-        img.src = p.avatarData;
-      });
-    } catch(_) {}
+    const isAnimated = p.avatarData.startsWith('data:image/gif') || p.avatarData.startsWith('data:image/webp');
+    if (isAnimated) {
+      // Анимированные форматы передаём как есть (canvas убьёт анимацию и сделает изображение чёрным)
+      avatarDataToStore = p.avatarData;
+    } else {
+      try {
+        await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const cv = document.createElement('canvas');
+            cv.width = cv.height = 80;
+            const ctx = cv.getContext('2d');
+            // Белый фон перед drawImage: без него прозрачные PNG дают чёрный фон в JPEG
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 80, 80);
+            ctx.drawImage(img, 0, 0, 80, 80);
+            avatarDataToStore = cv.toDataURL('image/jpeg', 0.75);
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = p.avatarData;
+        });
+      } catch(_) {}
+    }
   }
   const payload = {
     username: p.username, name: p.name,

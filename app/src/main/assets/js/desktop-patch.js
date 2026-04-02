@@ -345,16 +345,27 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
         && typeof window.mcPickFile==='function'&&typeof window.mcPickAudio==='function';
   }, function(){
 
+    // ── КРИТИЧНО: сохраняем оригиналы ДО перезаписи ──
+    // На Android: Android.pickXxxForChat не реализован → fallback на оригиналы (input[type=file])
+    // На Electron: Android = undefined → тоже fallback, но там electronAPI доступен
+    window._origMcPickImage = window.mcPickImage;
+    window._origMcPickVideo = window.mcPickVideo;
+    window._origMcPickAudio = window.mcPickAudio;
+    window._origMcPickFile  = window.mcPickFile;
+
     // ── mcPickImage ──
     window.mcPickImage = async function(){
-      if (!window.Android?.pickImageForChat){ typeof window._origMcPickImage==='function'&&window._origMcPickImage(); return; }
+      if (!window.Android?.pickImageForChat){
+        // Fallback: оригинальный input[type=file] — работает и на Android WebView, и на ПК
+        typeof window._origMcPickImage==='function' && window._origMcPickImage();
+        return;
+      }
       var cbId='ci_'+Date.now();
       var f=await _waitForChatFile(cbId,function(){ window.Android.pickImageForChat(cbId); });
       if (!f) return;
       if (f.size>20*1024*1024){ typeof window.toast==='function'&&window.toast('❌ Фото > 20 МБ'); return; }
       typeof window._mcInChatSendingShow==='function'&&window._mcInChatSendingShow('image',f.name);
       try {
-        // Компрессия через canvas
         var b64c=await _compressImageB64(f.base64,f.mime,900);
         var url=await _uploadBase64(b64c,f.name,'image/jpeg');
         typeof window._mcSendMediaMsg==='function'&&window._mcSendMediaMsg({url,fileName:f.name,fileType:'image',fileSize:f.size});
@@ -364,7 +375,10 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
 
     // ── mcPickVideo ──
     window.mcPickVideo = async function(){
-      if (!window.Android?.pickVideoForChat){ typeof window._origMcPickVideo==='function'&&window._origMcPickVideo(); return; }
+      if (!window.Android?.pickVideoForChat){
+        typeof window._origMcPickVideo==='function' && window._origMcPickVideo();
+        return;
+      }
       var cbId='cv_'+Date.now();
       var f=await _waitForChatFile(cbId,function(){ window.Android.pickVideoForChat(cbId); });
       if (!f) return;
@@ -379,7 +393,10 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
 
     // ── mcPickAudio ──
     window.mcPickAudio = async function(){
-      if (!window.Android?.pickAudioForChat){ typeof window._origMcPickAudio==='function'&&window._origMcPickAudio(); return; }
+      if (!window.Android?.pickAudioForChat){
+        typeof window._origMcPickAudio==='function' && window._origMcPickAudio();
+        return;
+      }
       var cbId='ca_'+Date.now();
       var f=await _waitForChatFile(cbId,function(){ window.Android.pickAudioForChat(cbId); });
       if (!f) return;
@@ -393,7 +410,10 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
 
     // ── mcPickFile ──
     window.mcPickFile = async function(){
-      if (!window.Android?.pickAnyFileForChat){ typeof window._origMcPickFile==='function'&&window._origMcPickFile(); return; }
+      if (!window.Android?.pickAnyFileForChat){
+        typeof window._origMcPickFile==='function' && window._origMcPickFile();
+        return;
+      }
       var cbId='cf_'+Date.now();
       var f=await _waitForChatFile(cbId,function(){ window.Android.pickAnyFileForChat(cbId); });
       if (!f) return;
@@ -408,7 +428,7 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
       } catch(e){ typeof window._mcInChatSendingHide==='function'&&window._mcInChatSendingHide(); typeof window.toast==='function'&&window.toast('❌ '+e.message); }
     };
 
-    _log('mcPick* patched (Electron dialog)');
+    _log('mcPick* patched (Electron dialog + Android fallback fixed)');
   });
 
   // Canvas-компрессия изображения из base64
@@ -974,5 +994,5 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
   }
 
 
-  _log('v3.1 — все патчи применены (fix: attach/sticker btns, GIF avatar, PNG crop)');
+  _log('v3.2 — все патчи применены (fix: Android file picker fallback, GIF avatar, PNG crop, PC update)');
 })();
