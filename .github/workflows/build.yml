@@ -1,4 +1,4 @@
-name: Build & Release APK
+name: Build & Release
 
 on:
   push:
@@ -9,12 +9,18 @@ permissions:
   contents: write
 
 jobs:
-  build:
+
+  # ═══════════════════════════════════════════════
+  # JOB 1 — Android APK
+  # ═══════════════════════════════════════════════
+  build-android:
+    name: 🤖 Build Android APK
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -35,29 +41,23 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      # Декодируем keystore из base64 (хранится в GitHub Secrets)
       - name: Decode keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > $RUNNER_TEMP/release.jks
           echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
 
-      # Читаем versionName из build.gradle
       - name: Read version
         id: get_version
         run: |
           VERSION=$(grep "versionName" app/build.gradle | sed 's/.*"\(.*\)".*/\1/' | tr -d '[:space:]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Версия: $VERSION"
 
-      # Генерируем patch-manifest.json — SHA256 хэши обновляемых файлов assets
-      # Автоматически находит ВСЕ .html, .js, .css файлы в assets (включая новые)
-      # Приложение скачивает только файлы с изменившимся/отсутствующим хэшем
       - name: Generate patch-manifest.json
         id: gen_manifest
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
           ASSETS_DIR="app/src/main/assets"
-          REPO="LomKich/ScheduleApp"
+          REPO="${{ github.repository }}"
           TAG="v${VERSION}"
           PATCH_DIR="patch_files"
           mkdir -p "$PATCH_DIR"
@@ -67,33 +67,19 @@ jobs:
           echo "  \"files\": {" >> patch-manifest.json
 
           FIRST=true
-          # Автоматически собираем ВСЕ .html, .js, .css файлы из assets
-          # find возвращает относительные пути вида "js/social.js", "index.html"
           while IFS= read -r FILEPATH; do
-            # Относительный путь от корня assets
             FILE="${FILEPATH#${ASSETS_DIR}/}"
             SHA=$(sha256sum "$FILEPATH" | awk '{print $1}')
-            # Имя файла для аттача к релизу: "js/social.js" -> "patch__js__social.js"
             SAFE_NAME="patch__$(echo "$FILE" | tr '/' '__')"
             RAW_URL="https://github.com/${REPO}/releases/download/${TAG}/${SAFE_NAME}"
             if [ "$FIRST" = true ]; then FIRST=false; else printf ",\n" >> patch-manifest.json; fi
             printf "    \"%s\": { \"sha\": \"%s\", \"url\": \"%s\" }" "$FILE" "$SHA" "$RAW_URL" >> patch-manifest.json
-            # Копируем с безопасным именем для прикрепления к релизу
             cp "$FILEPATH" "${PATCH_DIR}/${SAFE_NAME}"
-            echo "  + $FILE ($SHA)"
           done < <(find "$ASSETS_DIR" -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" \) | sort)
 
           printf "\n  }\n}\n" >> patch-manifest.json
-
-          echo "Манифест:"
-          cat patch-manifest.json
-          echo ""
-          echo "Файлов в патче: $(ls "$PATCH_DIR" | wc -l)"
-
-          # Сохраняем путь к директории с патч-файлами для следующего шага
           echo "patch_dir=$PATCH_DIR" >> $GITHUB_OUTPUT
 
-      # Собираем Release APK с постоянной подписью
       - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -101,48 +87,150 @@ jobs:
           KEY_ALIAS: schedule
         run: gradle assembleRelease
 
-      # Переименовываем APK
       - name: Rename APK
         run: |
           mv app/build/outputs/apk/release/app-release.apk \
              app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
 
-      # Артефакт для скачивания из Actions
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ScheduleApp-v${{ steps.get_version.outputs.version }}
+          name: apk-${{ steps.get_version.outputs.version }}
           path: app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
 
-      # Удаляем старый релиз с тем же тегом если есть
-      - name: Delete existing release
+      - name: Upload patch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: patch-${{ steps.get_version.outputs.version }}
+          path: |
+            patch-manifest.json
+            ${{ steps.gen_manifest.outputs.patch_dir }}/
+
+      - name: Cleanup keystore
+        if: always()
+        run: rm -f $RUNNER_TEMP/release.jks
+
+  # ═══════════════════════════════════════════════
+  # JOB 2 — Desktop EXE (Electron / Windows)
+  # ═══════════════════════════════════════════════
+  build-desktop:
+    name: 🖥️ Build Desktop EXE
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: get_version
+        run: |
+          VERSION=$(grep "versionName" app/build.gradle | sed 's/.*"\(.*\)".*/\1/' | tr -d '[:space:]')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Sync version into package.json
+        run: |
+          cd desktop
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+            pkg.version = '${{ steps.get_version.outputs.version }}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install dependencies
+        run: cd desktop && npm ci
+
+      - name: Install Wine (cross-compile Windows EXE on Linux)
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update -qq
+          sudo apt-get install -y wine64 wine32 2>/dev/null || \
+          sudo apt-get install -y wine 2>/dev/null || true
+
+      - name: Build Windows EXE
+        run: |
+          cd desktop
+          npx electron-builder --win --x64 --publish never
+          ls dist/
+
+      - name: Rename EXE
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          EXE=$(find desktop/dist -name "*.exe" | head -1)
+          cp "$EXE" "ScheduleApp-v${VERSION}-Setup.exe"
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: exe-${{ steps.get_version.outputs.version }}
+          path: ScheduleApp-v${{ steps.get_version.outputs.version }}-Setup.exe
+
+  # ═══════════════════════════════════════════════
+  # JOB 3 — Единый GitHub Release (APK + EXE + патчи)
+  # ═══════════════════════════════════════════════
+  release:
+    name: 🚀 GitHub Release
+    runs-on: ubuntu-latest
+    needs: [ build-android, build-desktop ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare files
+        id: prep
+        run: |
+          VERSION="${{ needs.build-android.outputs.version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          APK=$(find artifacts/apk-* -name "*.apk" | head -1)
+          EXE=$(find artifacts/exe-* -name "*.exe" | head -1)
+          MANIFEST=$(find artifacts/patch-* -name "patch-manifest.json" | head -1)
+          echo "apk=$APK" >> $GITHUB_OUTPUT
+          echo "exe=$EXE" >> $GITHUB_OUTPUT
+          echo "manifest=$MANIFEST" >> $GITHUB_OUTPUT
+
+      - name: Delete existing release & tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete "v${{ steps.get_version.outputs.version }}" --yes 2>/dev/null || true
-          git push origin --delete "v${{ steps.get_version.outputs.version }}" 2>/dev/null || true
+          gh release delete "v${{ steps.prep.outputs.version }}" --yes 2>/dev/null || true
+          git push origin --delete "v${{ steps.prep.outputs.version }}" 2>/dev/null || true
 
-      # Создаём GitHub Release с APK + все patch-файлы + манифест (динамически)
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.get_version.outputs.version }}
-          name: "ScheduleApp v${{ steps.get_version.outputs.version }}"
+          tag_name: v${{ steps.prep.outputs.version }}
+          name: "ScheduleApp v${{ steps.prep.outputs.version }}"
           body: |
             Автосборка из ветки `${{ github.ref_name }}`
             Коммит: `${{ github.sha }}`
 
-            **Горячий патч**: нажми 🔥 в настройках приложения — обновятся только изменённые файлы без переустановки APK.
+            ## Скачать
+
+            | Платформа | Файл |
+            |-----------|------|
+            | 🤖 Android | `ScheduleApp-v${{ steps.prep.outputs.version }}.apk` |
+            | 🖥️ Windows  | `ScheduleApp-v${{ steps.prep.outputs.version }}-Setup.exe` |
+
+            **Горячий патч**: нажми 🔥 в настройках — обновятся только изменённые JS/HTML файлы без переустановки.
           files: |
-            app/build/outputs/apk/release/ScheduleApp-v${{ steps.get_version.outputs.version }}.apk
-            patch-manifest.json
-            ${{ steps.gen_manifest.outputs.patch_dir }}/*
-          prerelease: false
+            ${{ steps.prep.outputs.apk }}
+            ${{ steps.prep.outputs.exe }}
+            ${{ steps.prep.outputs.manifest }}
+            artifacts/patch-${{ steps.prep.outputs.version }}/*
           draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Чистим keystore из временной папки
-      - name: Cleanup keystore
-        if: always()
-        run: rm -f $RUNNER_TEMP/release.jks
