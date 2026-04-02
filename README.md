@@ -1,73 +1,163 @@
-# ScheduleApp Desktop (Electron)
+# 📅 ScheduleApp
 
-Полноценная ПК-версия приложения на базе Electron.
-Работает на **Windows / macOS / Linux**.
+> 🇷🇺 Приложение для управления расписанием с поддержкой Desktop и Android
+> 🇬🇧 A cross-platform scheduling app for Desktop and Android
 
 ---
 
-## ▶ Быстрый запуск (разработка)
+## 🖼 Интерфейс / UI Preview
 
-Нужен [Node.js](https://nodejs.org/) 18+.
+> Добавь свои реальные скриншоты в папку `screenshots/` и они автоматически будут отображаться здесь.
+
+### Desktop
+
+![Desktop Screenshot](screenshots/desktop.png)
+
+### Mobile (Android)
+
+![Mobile Screenshot](screenshots/mobile.png)
+
+---
+
+# 🇷🇺 Русская версия
+
+## 🚀 Возможности
+
+* 📆 Управление расписанием
+* 💬 Социальные функции (чат / взаимодействие)
+* 🎮 Мини‑игры внутри приложения
+* 🔊 Звуковые эффекты и анимации
+* 🖥 Desktop (Electron)
+* 📱 Android
+
+---
+
+## 🧱 Технологии
+
+* **Electron** — Desktop
+* **Java / Android SDK** — Android
+* **JavaScript (Vanilla)** — логика
+* **HTML / CSS** — интерфейс
+
+---
+
+## 📂 Структура проекта
+
+```
+ScheduleApp/
+├── app/
+│   ├── src/main/
+│   │   ├── main.js
+│   │   ├── preload.js
+│   │   ├── assets/
+│   │   └── AndroidManifest.xml
+│   └── build.gradle
+├── MainActivity.java
+├── build.gradle
+└── .github/workflows/
+```
+
+---
+
+## ⚙️ Установка и запуск
 
 ```bash
-# 1. Перейди в папку проекта
-cd ScheduleApp-Desktop
-
-# 2. Установи зависимости
 npm install
-
-# 3. Запусти
 npm start
 ```
 
 ---
 
-## 📦 Сборка .exe / .dmg / .AppImage
+## 📦 Сборка
 
 ```bash
-# Windows (запускать на Windows или в CI)
 npm run build-win
-
-# macOS
 npm run build-mac
-
-# Linux
 npm run build-linux
 ```
 
-Готовый установщик появится в папке `dist/`.
+---
+
+## 📱 Android
+
+Открой проект в Android Studio и запусти.
 
 ---
 
-## 🗂 Структура
+## 🤝 Вклад
+
+1. Fork
+2. Branch (`feature/...`)
+3. Commit
+4. Pull Request
+
+---
+
+# 🇬🇧 English Version
+
+## 🚀 Features
+
+* 📆 Schedule management
+* 💬 Social features (chat / interaction)
+* 🎮 Built-in mini games
+* 🔊 Sounds and animations
+* 🖥 Desktop support (Electron)
+* 📱 Android support
+
+---
+
+## 🧱 Tech Stack
+
+* **Electron** — Desktop app
+* **Java / Android SDK** — Mobile
+* **JavaScript (Vanilla)** — Logic
+* **HTML / CSS** — UI
+
+---
+
+## 📂 Project Structure
 
 ```
-ScheduleApp-Desktop/
-├── main.js        — главный процесс Electron (окно, IPC, ОС-интеграция)
-├── preload.js     — мост Android→Desktop (window.Android.* полифил)
-├── assets/
-│   ├── index.html — основной UI (без изменений)
-│   ├── js/        — core.js, social.js, games.js, rn.js
-│   ├── sounds/    — звуки
-│   └── dice/      — анимации кубиков
-└── package.json
+ScheduleApp/
+├── app/
+├── MainActivity.java
+├── build.gradle
+└── .github/workflows/
 ```
 
 ---
 
-## ℹ️ Что работает
+## ⚙️ Installation & Run
 
-| Функция | Статус |
-|---|---|
-| Расписание, темы, шрифты | ✅ |
-| Авторизация / профиль (Supabase) | ✅ |
-| Мессенджер, групповые чаты | ✅ |
-| E2E шифрование | ✅ |
-| Мини-игры | ✅ |
-| Уведомления ОС | ✅ |
-| Выбор фото для фона | ✅ |
-| Сохранение картинок | ✅ |
-| Запись голоса/видео | ✅ (через браузерные API) |
-| Скачивание файлов | ✅ |
-| VPN / смена иконки | ❌ (Android-only) |
-| Фоновый сервис | ❌ (не нужен — поллинг идёт в окне) |
+```bash
+npm install
+npm start
+```
+
+---
+
+## 📦 Build
+
+```bash
+npm run build-win
+npm run build-mac
+npm run build-linux
+```
+
+---
+
+## 📱 Android
+
+Open the project in Android Studio and run it.
+
+---
+
+## ⭐ Support
+
+If you like this project, give it a star on GitHub!
+
+---
+
+## 📄 License
+
+Specify your license (MIT recommended)
