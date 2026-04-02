@@ -462,6 +462,56 @@ const DNS_PROVIDERS={
 
 // ══ ПРОКСИ провайдеры ══
 // format:
+// ══ GITHUB FALLBACK ══════════════════════════════════════════════
+// Если файлы расписания не грузятся с Яндекс Диска,
+// пробуем взять их из репозитория на GitHub.
+const GITHUB_FALLBACK = {
+  owner: 'LomKich',
+  repo:  'scheduletxt',
+  branch: 'main',
+  apiBase: 'https://api.github.com/repos/LomKich/scheduletxt/contents/',
+  rawBase: 'https://raw.githubusercontent.com/LomKich/scheduletxt/main/',
+};
+
+// Получить список файлов расписания из GitHub
+async function githubListFiles() {
+  const url = GITHUB_FALLBACK.apiBase;
+  let resp;
+  // На десктопе и Android — прямой fetch; в браузере нужен прокси
+  if (window.__desktopMode || (window.Android && window.Android.nativeFetch)) {
+    resp = await fetch(url, {
+      headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'ScheduleApp' },
+      signal: AbortSignal.timeout(15000)
+    });
+  } else {
+    // В браузере GitHub API не требует прокси (нет CORS-блока)
+    resp = await fetch(url, {
+      headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'ScheduleApp' },
+      signal: AbortSignal.timeout(15000)
+    });
+  }
+  if (!resp.ok) throw new Error('GitHub API: HTTP ' + resp.status);
+  const items = await resp.json();
+  // Фильтруем только .doc/.docx файлы
+  return items
+    .filter(i => i.type === 'file' && /\.(doc|docx)$/i.test(i.name))
+    .map(i => ({
+      name: i.name,
+      path: '/' + i.name,
+      size: i.size || 0,
+      resourceId: i.sha || '',
+      _githubRaw: GITHUB_FALLBACK.rawBase + encodeURIComponent(i.name),
+    }));
+}
+
+// Скачать файл расписания напрямую с GitHub (raw URL)
+async function githubDownloadFile(rawUrl) {
+  appLog('info', 'githubDownloadFile: ' + rawUrl);
+  const resp = await fetch(rawUrl, { signal: AbortSignal.timeout(30000) });
+  if (!resp.ok) throw new Error('GitHub raw: HTTP ' + resp.status);
+  return resp.arrayBuffer();
+}
+
 //   'append_encoded' → proxy_url + encodeURIComponent(target)
 //   'append_raw'     → proxy_url + target (URL не кодируется)
 //   'query_url'      → proxy_url + encodeURIComponent(target) (то же что append_encoded, другой ключ)
@@ -2765,24 +2815,45 @@ async function loadFiles(){
     setStatus('home-status','Загружаю файлы...');setBar('home-bar',30);
   }
 
+  // Попытка 1: Яндекс Диск
   try{
     const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
     S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&/\.(doc|docx)$/i.test(i.name))
       .map(i=>({name:i.name,path:i.path||('/'+i.name),size:i.size||0,resourceId:i.resource_id||''}));
     setBar('home-bar',100);setStatus('home-status',`Найдено: ${S.files.length} файлов`);
     setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
-    saveLocal(); // сохраняем обновлённый список файлов в кэш
-    appLog('ok','loadFiles: loaded '+S.files.length+' files');
+    saveLocal();
+    appLog('ok','loadFiles: loaded '+S.files.length+' files from Yandex');
     renderFileList(false);
-  }catch(e){
-    appLog('err','loadFiles error: '+e.message);
+    return;
+  }catch(yadErr){
+    appLog('warn','loadFiles: Yandex failed ('+yadErr.message+'), trying GitHub fallback...');
+  }
+
+  // Попытка 2: GitHub-репозиторий (LomKich/scheduletxt)
+  try{
+    setStatus('home-status','📡 Яндекс недоступен, пробую GitHub...');setBar('home-bar',50);
+    const ghFiles = await githubListFiles();
+    if(ghFiles.length > 0){
+      S.files = ghFiles;
+      setBar('home-bar',100);
+      setStatus('home-status',`GitHub: ${S.files.length} файлов`);
+      setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','📂 GitHub-резерв');},1200);
+      saveLocal();
+      appLog('ok','loadFiles: loaded '+S.files.length+' files from GitHub');
+      renderFileList(false, /*githubMode=*/true);
+      return;
+    }else{
+      throw new Error('Репозиторий пуст или файлов нет');
+    }
+  }catch(ghErr){
+    appLog('err','loadFiles: GitHub fallback failed: '+ghErr.message);
     setBar('home-bar',0);setStatus('home-status','');
     if(hasCached){
-      // Есть кэш — не ломаем UI, просто показываем офлайн-бейдж
       renderFileList(true);
-      toast('📡 Нет интернета — расписание из кэша');
+      toast('📡 Нет соединения — расписание из кэша');
     }else{
-      showHomeState('error',e.message);
+      showHomeState('error','Яндекс Диск и GitHub резерв недоступны');
     }
   }
 }
@@ -2799,9 +2870,14 @@ function showHomeState(type,msg){
     if(el){const em=el.querySelector('.error-msg');if(em)em.textContent=msg||'Ошибка подключения';el.classList.remove('hidden');}
   }
 }
-function renderFileList(isOffline=false){
+function renderFileList(isOffline=false, githubMode=false){
   const list=document.getElementById('file-list');list.innerHTML='';
-  if(isOffline){
+  if(githubMode){
+    const badge=document.createElement('div');
+    badge.style.cssText='text-align:center;padding:6px 12px;margin-bottom:8px;background:color-mix(in srgb,#6e40c9 12%,transparent);border-radius:10px;font-size:12px;color:var(--muted)';
+    badge.textContent='📂 GitHub-резерв (Яндекс недоступен)';
+    list.appendChild(badge);
+  } else if(isOffline){
     const badge=document.createElement('div');
     badge.style.cssText='text-align:center;padding:6px 12px;margin-bottom:8px;background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:10px;font-size:12px;color:var(--muted)';
     badge.textContent='📦 Офлайн — файлы из кэша';
@@ -2832,19 +2908,50 @@ async function getFileBuf(){
   if(cached){
     appLog('info','getFileBuf: из IndexedDB: '+key);
     FILE_CACHE[key]=cached;
-    // Фоновое обновление если есть интернет
     _refreshFileBufInBackground(key,S.selectedFile);
     return cached;
   }
 
-  // Загружаем из сети
+  // Попытка 1: если файл пришёл из GitHub (_githubRaw), сразу берём оттуда
+  if(S.selectedFile._githubRaw){
+    appLog('info','getFileBuf: GitHub raw source detected, downloading directly');
+    try{
+      const buf=await githubDownloadFile(S.selectedFile._githubRaw);
+      FILE_CACHE[key]=buf;
+      idbSet('file:'+key,buf).catch(()=>{});
+      return buf;
+    }catch(ghErr){
+      appLog('err','getFileBuf: GitHub raw failed: '+ghErr.message);
+      throw ghErr;
+    }
+  }
+
+  // Попытка 2: Яндекс Диск (обычный путь)
   const filePath=S.selectedFile.path||('/'+S.selectedFile.name);
-  const dl=await yadGet('/v1/disk/public/resources/download',{public_key:S.url,path:filePath});
-  if(!dl||!dl.href) throw new Error('Яндекс не вернул ссылку на файл. Путь: '+filePath);
-  const buf=await yadDownload(dl.href, S.selectedFile.name);
-  FILE_CACHE[key]=buf;
-  idbSet('file:'+key,buf).catch(()=>{}); // сохраняем в фоне
-  return buf;
+  try{
+    const dl=await yadGet('/v1/disk/public/resources/download',{public_key:S.url,path:filePath});
+    if(!dl||!dl.href) throw new Error('Яндекс не вернул ссылку на файл. Путь: '+filePath);
+    const buf=await yadDownload(dl.href, S.selectedFile.name);
+    FILE_CACHE[key]=buf;
+    idbSet('file:'+key,buf).catch(()=>{});
+    return buf;
+  }catch(yadErr){
+    appLog('warn','getFileBuf: Yandex failed ('+yadErr.message+'), trying GitHub fallback...');
+  }
+
+  // Попытка 3: GitHub raw по имени файла
+  try{
+    const rawUrl=GITHUB_FALLBACK.rawBase+encodeURIComponent(S.selectedFile.name);
+    appLog('info','getFileBuf: trying GitHub raw: '+rawUrl);
+    const buf=await githubDownloadFile(rawUrl);
+    FILE_CACHE[key]=buf;
+    idbSet('file:'+key,buf).catch(()=>{});
+    toast('📂 Файл загружен из GitHub-резерва');
+    return buf;
+  }catch(ghErr){
+    appLog('err','getFileBuf: GitHub fallback also failed: '+ghErr.message);
+    throw new Error('Не удалось загрузить файл ни с Яндекс Диска, ни из GitHub-резерва');
+  }
 }
 
 async function _refreshFileBufInBackground(key,fileRef){

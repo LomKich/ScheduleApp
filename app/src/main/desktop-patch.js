@@ -871,5 +871,108 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
   });
 
 
-  _log('v3.0 — все патчи применены');
+  // ═══════════════════════════════════════════════════════════════
+  // 12. FIX КНОПОК ПРИКРЕПЛЕНИЯ И СТИКЕРОВ НА ПК
+  // preload.js шлёт touchcancel для простых кликов, поэтому кнопки
+  // с ontouchend не срабатывают. Вешаем click-обработчики напрямую.
+  // ═══════════════════════════════════════════════════════════════
+  function _fixChatActionButtons() {
+    // Кнопка "прикрепить файл" (attach)
+    var attachBtn = document.getElementById('mc-attach-btn');
+    if (attachBtn && !attachBtn.dataset.pcFixed) {
+      attachBtn.dataset.pcFixed = '1';
+      attachBtn.addEventListener('click', function(e) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        typeof window.mcPickMedia === 'function' && window.mcPickMedia();
+      });
+      _log('mc-attach-btn click fixed');
+    }
+
+    // Кнопка "стикеры/emoji"
+    var stickerBtn = document.getElementById('mc-sticker-btn');
+    if (stickerBtn && !stickerBtn.dataset.pcFixed) {
+      stickerBtn.dataset.pcFixed = '1';
+      stickerBtn.addEventListener('click', function(e) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        typeof window.mcToggleStickerPanel === 'function' && window.mcToggleStickerPanel();
+      });
+      _log('mc-sticker-btn click fixed');
+    }
+
+    // Кнопка "отправить изображение" внутри чата (если есть отдельная)
+    var sendImgBtn = document.getElementById('mc-send-img-btn');
+    if (sendImgBtn && !sendImgBtn.dataset.pcFixed) {
+      sendImgBtn.dataset.pcFixed = '1';
+      sendImgBtn.addEventListener('click', function(e) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        typeof window.mcPickImage === 'function' && window.mcPickImage();
+      });
+    }
+
+    // Кнопка "отправить видео" внутри чата (если есть отдельная)
+    var sendVidBtn = document.getElementById('mc-send-vid-btn');
+    if (sendVidBtn && !sendVidBtn.dataset.pcFixed) {
+      sendVidBtn.dataset.pcFixed = '1';
+      sendVidBtn.addEventListener('click', function(e) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        typeof window.mcPickVideo === 'function' && window.mcPickVideo();
+      });
+    }
+  }
+
+  // Запускаем сразу и следим за DOM (кнопки могут появиться позже)
+  _waitFor(
+    function() { return !!document.getElementById('mc-attach-btn') || !!document.getElementById('mc-sticker-btn'); },
+    _fixChatActionButtons, 60, 300
+  );
+  new MutationObserver(function(muts) {
+    muts.forEach(function(m) {
+      m.addedNodes.forEach(function(n) {
+        if (n.nodeType === 1) _fixChatActionButtons();
+      });
+    });
+  }).observe(document.body || document.documentElement, { childList: true, subtree: true });
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // 13. ПОДДЕРЖКА GIF-АВАТАРОК — синхронизация через Supabase
+  // GIF хранится локально как dataUrl, но другие видят его
+  // через avatar_data в таблице users (base64 в поле text)
+  // ═══════════════════════════════════════════════════════════════
+  _waitFor(function() { return typeof window.profileSave === 'function'; }, function() {
+    var _oSave = window.profileSave;
+    window.profileSave = function(p) {
+      var r = _oSave.apply(this, arguments);
+      // Если аватарка GIF — синхронизируем в Supabase avatar_data
+      if (p && p.avatarType === 'photo' && p.avatarData && p.avatarData.startsWith('data:image/gif')) {
+        _syncGifAvatarToSupabase(p);
+      }
+      return r;
+    };
+    _log('profileSave patched for GIF sync');
+  });
+
+  function _syncGifAvatarToSupabase(profile) {
+    if (!profile || !profile.username || !profile.avatarData) return;
+    if (typeof window.sbReady !== 'function' || !window.sbReady()) return;
+    if (typeof window._sbFetch !== 'function') return;
+    // Не синхронизируем если GIF больше 2 МБ (Supabase text лимит)
+    var sizeEst = Math.round(profile.avatarData.length * 0.75);
+    if (sizeEst > 2 * 1024 * 1024) {
+      _log('GIF аватарка слишком большая для прямой синхронизации (' + Math.round(sizeEst/1024) + ' кБ)');
+      typeof window.toast === 'function' && window.toast('⚠️ GIF > 2 МБ — другие не увидят анимацию. Загрузи поменьше.');
+      return;
+    }
+    window._sbFetch('PATCH', '/rest/v1/users?username=eq.' + encodeURIComponent(profile.username),
+      { avatar_type: 'photo', avatar_data: profile.avatarData },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    ).then(function() {
+      _log('GIF avatar synced to Supabase for ' + profile.username);
+    }).catch(function(e) {
+      _log('GIF sync failed: ' + (e.message || e));
+    });
+  }
+
+
+  _log('v3.1 — все патчи применены (fix: attach/sticker btns, GIF avatar, PNG crop)');
 })();

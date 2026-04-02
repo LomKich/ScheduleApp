@@ -394,19 +394,25 @@ window.addEventListener('DOMContentLoaded', () => {
       active = false;
       document.body.classList.remove('mouse-dragging');
       // Если движения почти не было — это простой клик.
-      // Не диспатчим touchend чтобы браузер не синтезировал ghost click
-      // поверх нативного click события (double-fire проблема).
       if (!movedEnough) {
-        // Простой клик — touchstart тоже не нужен был, но мы его уже отправили.
-        // Посылаем touchcancel вместо touchend чтобы отменить цепочку без click.
-        try {
-          const touch = makeTouch(e);
-          const evt = new TouchEvent('touchcancel', {
-            bubbles: true, cancelable: true,
-            touches: [], targetTouches: [], changedTouches: [touch],
-          });
-          e.target.dispatchEvent(evt);
-        } catch(_) {}
+        // Проверяем: есть ли у элемента (или его родителя) обработчик ontouchend?
+        // Такие кнопки (attach, sticker, send) НЕ получают нативный click —
+        // им нужен именно touchend. Для остальных шлём touchcancel → нативный click.
+        const hasTouchEndHandler = !!e.target.closest('[ontouchend]');
+        if (hasTouchEndHandler) {
+          // Диспатчим touchend — это активирует кнопки прикрепить/стикеры/отправить
+          dispatch(e.target, 'touchend', e);
+        } else {
+          // Обычный клик — отменяем touch-цепочку, пропускаем нативный click
+          try {
+            const touch = makeTouch(e);
+            const evt = new TouchEvent('touchcancel', {
+              bubbles: true, cancelable: true,
+              touches: [], targetTouches: [], changedTouches: [touch],
+            });
+            e.target.dispatchEvent(evt);
+          } catch(_) {}
+        }
         return;
       }
       dispatch(e.target, 'touchend', e);
@@ -427,7 +433,10 @@ window.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('load', () => {
     const script = document.createElement('script');
     // __dirname здесь доступен т.к. preload выполняется в Node-контексте
-    const patchPath = require('path').join(__dirname, 'assets', 'js', 'desktop-patch.js');
+    const assetsJs = app.isPackaged
+      ? require('path').join(process.resourcesPath, 'app', 'src', 'main', 'assets', 'js')
+      : require('path').join(__dirname, '..', 'app', 'src', 'main', 'assets', 'js');
+    const patchPath = require('path').join(assetsJs, 'desktop-patch.js');
     script.src = 'file://' + patchPath.replace(/\\/g, '/');
     document.head.appendChild(script);
   });

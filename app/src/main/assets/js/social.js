@@ -174,6 +174,7 @@ function updateNavProfileIcon(p) {
   } else if (p && p.avatarType === 'emoji' && p.avatar) {
     wrap.innerHTML = `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center">${_emojiImg(p.avatar,24)}</div>`;
   } else if (p && p.avatarType === 'photo' && p.avatarData) {
+    // GIF-аватарки отображаем через <img> (браузер анимирует автоматически)
     wrap.innerHTML = `<img src="${p.avatarData}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`;
   } else {
     wrap.innerHTML = `<svg class="nav-icon" id="nav-profile-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
@@ -1387,8 +1388,21 @@ function applyCrop() {
   }
   const tmpImg = new Image();
   tmpImg.onload = () => {
+    // Если у источника прозрачность (PNG/WebP) — сохраняем как PNG,
+    // чтобы не было чёрного фона вместо прозрачных пикселей
+    const srcMime = (st.rawSrc || '').match(/^data:([^;]+)/)?.[1] || 'image/jpeg';
+    const hasTrans = srcMime === 'image/png' || srcMime === 'image/webp';
+    if (hasTrans) {
+      // Белый фон для аватарок (PNG с прозрачностью выглядит чисто)
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, st.cropW, st.cropH);
+      ctx.globalCompositeOperation = 'source-over';
+    }
     ctx.drawImage(tmpImg, st.x, st.y, st.natW * st.scale, st.natH * st.scale);
-    const out = canvas.toDataURL('image/jpeg', 0.88);
+    const out = hasTrans
+      ? canvas.toDataURL('image/png')
+      : canvas.toDataURL('image/jpeg', 0.88);
     closeCrop();
     st.onDone(out);
   };
@@ -1432,11 +1446,21 @@ function _profilePickPhotoOnly() {
     Android.pickImageForBackground();
   } else {
     const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = 'image/*';
+    // Принимаем все форматы изображений включая GIF и WebP
+    inp.type = 'file'; inp.accept = 'image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/*';
     inp.onchange = () => {
       const file = inp.files?.[0]; if (!file) return;
+      if (file.size > 15 * 1024 * 1024) { toast('❌ Файл слишком большой (макс. 15 МБ)'); return; }
       const reader = new FileReader();
-      reader.onload = e => _profileHandleAvatarDataUrl(e.target.result);
+      reader.onload = e => {
+        const mime = file.type || '';
+        // GIF — сохраняем без crop чтобы не убить анимацию
+        if (mime === 'image/gif') {
+          _profileHandleAvatarDataUrl(e.target.result, true);
+        } else {
+          _profileHandleAvatarDataUrl(e.target.result, false);
+        }
+      };
       reader.readAsDataURL(file);
     };
     inp.click();
@@ -1469,33 +1493,42 @@ function _profilePickVideoAvatar() {
   inp.click();
 }
 
-function _profileHandleAvatarDataUrl(dataUrl) {
+function _profileHandleAvatarDataUrl(dataUrl, skipCrop = false) {
   _profileWaitingForPhoto = false;
   const onEditScreen = document.getElementById('s-profile-edit')?.classList.contains('active');
-  openImageCrop(dataUrl, {
-    mode: 'avatar',
-    onDone: cropped => {
-      _profileAvatarMode = 'photo';
-      window._profileTempAvatarData = cropped;
-      if (onEditScreen) {
-        // Обновляем превью на экране редактирования
-        const inner = document.getElementById('edit-avatar-inner');
-        if (inner) inner.innerHTML = `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
-      } else {
-        // Сохраняем сразу   пользователь нажал "Выбрать фото" с экрана профиля
-        const p = profileLoad();
-        if (!p) return;
-        p.avatarType = 'photo';
-        p.avatarData = cropped;
-        profileSave(p);
-        window._profileTempAvatarData = null;
-        updateNavProfileIcon(p);
-        profileRenderScreen();
-        sbPresencePut(p);
-        toast('✅ Фото обновлено');
-      }
+
+  // skipCrop=true для GIF — анимацию нельзя кадрировать через canvas (убьёт анимацию)
+  const _applyAvatar = (cropped) => {
+    _profileAvatarMode = 'photo';
+    window._profileTempAvatarData = cropped;
+    if (onEditScreen) {
+      const inner = document.getElementById('edit-avatar-inner');
+      // Для GIF показываем тег img с loop, для фото — обычный img
+      const isGif = cropped.startsWith('data:image/gif');
+      if (inner) inner.innerHTML = isGif
+        ? `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`
+        : `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
+    } else {
+      const p = profileLoad();
+      if (!p) return;
+      p.avatarType = 'photo';
+      p.avatarData = cropped;
+      profileSave(p);
+      window._profileTempAvatarData = null;
+      updateNavProfileIcon(p);
+      profileRenderScreen();
+      sbPresencePut(p);
+      const isGif = cropped.startsWith('data:image/gif');
+      toast(isGif ? '✅ Анимированный аватар установлен' : '✅ Фото обновлено');
     }
-  });
+  };
+
+  if (skipCrop) {
+    // Для GIF/анимированных — сохраняем как есть без crop
+    _applyAvatar(dataUrl);
+  } else {
+    openImageCrop(dataUrl, { mode: 'avatar', onDone: _applyAvatar });
+  }
 }
 
 // Перехватываем onNativeBgImagePicked для профиля если ждём фото
