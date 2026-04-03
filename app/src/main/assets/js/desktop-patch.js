@@ -213,19 +213,24 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
       var cbId='vidAvatar_'+Date.now();
       var p2 = new Promise(function(res,rej){
         var pD=window.onUploadDone,pE=window.onUploadError;
-        window.onUploadDone=(id,url)=>{ if(id!==cbId){pD?.(id,url);return;} window.onUploadDone=pD; res(url); };
-        window.onUploadError=(id,e)=>{ if(id!==cbId){pE?.(id,e);return;} window.onUploadError=pE; rej(new Error(e)); };
+        window.onUploadDone=function(id,url){ if(id!==cbId){typeof pD==='function'&&pD(id,url);return;} window.onUploadDone=pD; res(url); };
+        window.onUploadError=function(id,e){ if(id!==cbId){typeof pE==='function'&&pE(id,e);return;} window.onUploadError=pE; rej(new Error(e)); };
       });
       var b64=videoDataUrl.split(',')[1], mime=(videoDataUrl.match(/^data:([^;]+)/)||[])[1]||'video/mp4';
       window.Android.nativeUploadFileAsync(b64,'avatar_'+profile.username+'_'+Date.now()+'.'+mime.split('/')[1],mime,cbId);
-      var url = await Promise.race([p2, new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),30000))]);
+      var url = await Promise.race([p2, new Promise(function(_,r){setTimeout(function(){r(new Error('timeout'));},30000);})]);
       if (url) {
+        // Обновляем таблицу users
         await window._sbFetch('PATCH','/rest/v1/users?username=eq.'+encodeURIComponent(profile.username),
           {avatar_type:'video',avatar_video_url:url},{'Content-Type':'application/json','Prefer':'return=minimal'});
-        profile.avatarVideoUrl=url; typeof window.profileSave==='function'&&window.profileSave(profile);
+        // Обновляем таблицу presence чтобы другие сразу видели анимацию
+        await window._sbFetch('PATCH','/rest/v1/presence?username=eq.'+encodeURIComponent(profile.username),
+          {avatar_type:'video',avatar_video_url:url},{'Content-Type':'application/json','Prefer':'return=minimal'});
+        profile.avatarVideoUrl=url;
+        typeof window.profileSave==='function'&&window.profileSave(profile);
         typeof window.toast==='function'&&window.toast('✅ Видео-аватар виден всем!');
       }
-    } catch(e){ _log('Video sync failed: '+e.message); typeof window.toast==='function'&&window.toast('⚠️ Видео локально'); }
+    } catch(e){ _log('Video sync failed: '+e.message); typeof window.toast==='function'&&window.toast('⚠️ Видео сохранено локально'); }
   }
 
   _waitFor(function(){ return typeof window.sbPresencePut==='function'; }, function(){
@@ -233,10 +238,18 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
     window.sbPresencePut=async function(p){
       if (p&&p.avatarType==='video'&&!p.__videoProcessed) {
         try {
-          if (p.avatarVideoUrl) return _o.call(this,Object.assign({},p,{__videoProcessed:true}));
+          // Если уже есть внешний URL — просто пробрасываем его напрямую
+          if (p.avatarVideoUrl) {
+            return _o.call(this, Object.assign({}, p, { __videoProcessed: true }));
+          }
+          // Иначе — выгружаем base64 и получаем URL, затем кэшируем
           if (p.avatarVideo) {
             var th=await _extractVideoThumb(p.avatarVideo);
-            if (th) return _o.call(this,Object.assign({},p,{__videoProcessed:true,avatarType:'photo',avatarData:th}));
+            if (th) return _o.call(this, Object.assign({}, p, {
+              __videoProcessed: true,
+              avatarType: 'photo',
+              avatarData: th
+            }));
           }
         } catch(_){}
       }
