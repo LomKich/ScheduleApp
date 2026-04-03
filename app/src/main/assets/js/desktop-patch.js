@@ -570,197 +570,384 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
 
 
   // ═══════════════════════════════════════════════════════════════
-  // 10. СТИКЕР-ПАНЕЛЬ С 3 ВКЛАДКАМИ
   // ═══════════════════════════════════════════════════════════════
-  window._stickerPanelTab='emoji';
+  // 10. СТИКЕР-ПАНЕЛЬ — Telegram-style (нижние табы, catbar, GIF)
+  // ═══════════════════════════════════════════════════════════════
+  window._stickerPanelTab = 'emoji';
 
-  _waitFor(function(){ return typeof window.mcToggleStickerPanel==='function'; }, function(){
-    var _o=window.mcToggleStickerPanel;
-    window.mcToggleStickerPanel=function(){
-      _o.apply(this,arguments);
-      if (window._mcStickerPanelOpen) requestAnimationFrame(_renderStickerTabs);
+  // Патч mcRenderStickerPanel: рендерим emoji в _sp-content через id-подмену
+  _waitFor(function(){ return typeof window.mcRenderStickerPanel === 'function'; }, function(){
+    var _oRender = window.mcRenderStickerPanel;
+    window.mcRenderStickerPanel = function(){
+      var panel   = document.getElementById('mc-sticker-panel');
+      var content = document.getElementById('_sp-content');
+      var catbar  = document.getElementById('_sp-catbar');
+      if (content && (window._stickerPanelTab || 'emoji') === 'emoji') {
+        panel.removeAttribute('id');
+        content.id = 'mc-sticker-panel';
+        _oRender.apply(this, arguments);
+        content.id = '_sp-content';
+        panel.id   = 'mc-sticker-panel';
+        if (catbar) {
+          catbar.innerHTML = '';
+          var catRow = content.firstElementChild;
+          if (catRow && catRow.querySelector && catRow.querySelector('[id^="mc-ecat-btn"]')) {
+            catbar.appendChild(catRow);
+          }
+        }
+      } else if (!(window._stickerPanelTab) || window._stickerPanelTab === 'emoji') {
+        _oRender.apply(this, arguments);
+      }
+      setTimeout(_fixEmojiClicks, 80);
+      setTimeout(_fixEmojiClicks, 300);
+    };
+    _log('mcRenderStickerPanel patched (click fix)');
+  });
+
+  // Патч mcToggleStickerPanel: строим layout при открытии
+  _waitFor(function(){ return typeof window.mcToggleStickerPanel === 'function'; }, function(){
+    var _oToggle = window.mcToggleStickerPanel;
+    window.mcToggleStickerPanel = function(){
+      _oToggle.apply(this, arguments);
+      if (window._mcStickerPanelOpen) requestAnimationFrame(_spBuildLayout);
     };
     _log('mcToggleStickerPanel patched (tabs)');
   });
 
-  function _ts(active){
-    return 'flex:1;background:none;border:none;color:'+(active?'var(--accent,#e87722)':'var(--muted)')
-      +';font-size:13px;font-weight:'+(active?700:500)+';padding:9px 4px 7px;cursor:pointer;'
-      +'border-bottom:2px solid '+(active?'var(--accent,#e87722)':'transparent')+';'
+  function _spBuildLayout(){
+    var panel = document.getElementById('mc-sticker-panel');
+    if (!panel || document.getElementById('_sp-tabbar')) return;
+    panel.style.overflowY     = 'hidden';
+    panel.style.display       = 'flex';
+    panel.style.flexDirection = 'column';
+    panel.style.padding       = '0';
+
+    var catbar  = document.createElement('div');
+    catbar.id   = '_sp-catbar';
+    catbar.style.cssText = 'flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.07);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch';
+
+    var content = document.createElement('div');
+    content.id  = '_sp-content';
+    content.style.cssText = 'flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y';
+
+    var tabbar = document.createElement('div');
+    tabbar.id  = '_sp-tabbar';
+    tabbar.style.cssText = 'display:flex;flex-shrink:0;background:var(--surface,#1c1c1e);border-top:1px solid rgba(255,255,255,.07)';
+    tabbar.innerHTML =
+      '<button id="_spt-emoji"    style="'+_spTabSt('emoji'  )+'" title="Эмодзи">'
+        +'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>'
+      +'</button>'
+      +'<button id="_spt-sticker" style="'+_spTabSt('sticker')+'" title="Стикеры">'
+        +'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0"/><path d="M15 2.46A9.95 9.95 0 0 1 21.54 9"/></svg>'
+      +'</button>'
+      +'<button id="_spt-gif"     style="'+_spTabSt('gif'    )+'" title="GIF">'
+        +'<span style="font-size:11px;font-weight:800;letter-spacing:-.5px;line-height:1">GIF</span>'
+      +'</button>';
+
+    panel.innerHTML = '';
+    panel.appendChild(catbar);
+    panel.appendChild(content);
+    panel.appendChild(tabbar);
+
+    tabbar.querySelector('#_spt-emoji'  ).addEventListener('click', function(){ _spSwitch('emoji');   });
+    tabbar.querySelector('#_spt-sticker').addEventListener('click', function(){ _spSwitch('sticker'); });
+    tabbar.querySelector('#_spt-gif'    ).addEventListener('click', function(){ _spSwitch('gif');     });
+
+    _spSwitch(window._stickerPanelTab || 'emoji');
+  }
+
+  function _spTabSt(tab){
+    var a = (window._stickerPanelTab || 'emoji') === tab;
+    return 'flex:1;padding:8px 0;background:none;border:none;border-top:2px solid '
+      +(a ? 'var(--accent,#e87722)' : 'transparent')
+      +';color:'+(a ? 'var(--accent,#e87722)' : 'var(--muted)')
+      +';cursor:pointer;display:flex;align-items:center;justify-content:center;'
       +'transition:color .15s,border-color .15s;-webkit-tap-highlight-color:transparent';
   }
 
-  function _renderStickerTabs(){
-    var panel=document.getElementById('mc-sticker-panel');
-    if (!panel||panel.querySelector('#_sticker-tabs')) return;
-    var tabs=document.createElement('div');
-    tabs.id='_sticker-tabs';
-    tabs.style.cssText='display:flex;border-bottom:1px solid rgba(255,255,255,.08);position:sticky;top:0;background:var(--surface,#1c1c1e);z-index:2;flex-shrink:0';
-    tabs.innerHTML='<button id="_stab-emoji" style="'+_ts(true)+'">😊 Emoji</button>'
-      +'<button id="_stab-sticker" style="'+_ts(false)+'">🎨 Стикеры</button>'
-      +'<button id="_stab-gif" style="'+_ts(false)+'">GIF</button>';
-    tabs.querySelector('#_stab-emoji').addEventListener('click',function(){ window._switchStickerTab('emoji'); });
-    tabs.querySelector('#_stab-sticker').addEventListener('click',function(){ window._switchStickerTab('sticker'); });
-    tabs.querySelector('#_stab-gif').addEventListener('click',function(){ window._switchStickerTab('gif'); });
-    panel.prepend(tabs);
-    setTimeout(_fixEmojiClicks,100);
-  }
+  window._switchStickerTab = function(tab){ _spSwitch(tab); };
 
-  window._switchStickerTab=function(tab){
-    window._stickerPanelTab=tab;
+  function _spSwitch(tab){
+    window._stickerPanelTab = tab;
     ['emoji','sticker','gif'].forEach(function(t){
-      var b=document.getElementById('_stab-'+t);
-      if(b) b.style.cssText=_ts(t===tab);
+      var b = document.getElementById('_spt-'+t);
+      if (b) b.style.cssText = _spTabSt(t);
     });
-    var panel=document.getElementById('mc-sticker-panel');
-    if (!panel) return;
-    Array.from(panel.children).forEach(function(ch){ if(ch.id!=='_sticker-tabs') ch.remove(); });
-    if (tab==='emoji'){
-      typeof window.mcRenderStickerPanel==='function'&&window.mcRenderStickerPanel();
-      setTimeout(_fixEmojiClicks,100);
-    } else if (tab==='sticker'){
-      _renderStickerPacksTab(panel);
+    var catbar  = document.getElementById('_sp-catbar');
+    var content = document.getElementById('_sp-content');
+    if (!catbar || !content) return;
+    catbar.innerHTML  = '';
+    content.innerHTML = '';
+    if (tab === 'emoji') {
+      typeof window.mcRenderStickerPanel === 'function' && window.mcRenderStickerPanel();
+      setTimeout(_fixEmojiClicks, 100);
+    } else if (tab === 'sticker') {
+      _spRenderPacksTab();
     } else {
-      _renderGifTab(panel);
+      _spRenderGifTab();
     }
-  };
-
-  function _renderGifTab(panel){
-    var d=document.createElement('div');
-    d.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:10px;opacity:.75';
-    d.innerHTML='<div style="font-size:44px">🎬</div>'
-      +'<div style="font-size:15px;font-weight:700;color:var(--text)">GIF-стикеры</div>'
-      +'<div style="font-size:12px;color:var(--muted);text-align:center;line-height:1.5">Скоро появится поиск и отправка GIF прямо из чата</div>'
-      +'<div style="background:var(--accent,#e87722);color:#fff;border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;margin-top:4px">Скоро</div>';
-    panel.appendChild(d);
   }
 
 
   // ═══════════════════════════════════════════════════════════════
-  // 11. КАСТОМНЫЕ СТИКЕР-ПАКИ
+  // 11. GIF-ПОИСК (Tenor API)
   // ═══════════════════════════════════════════════════════════════
-  var _PACKS_KEY='sapp_custom_packs_v1';
-  function _loadPacks(){ try{return JSON.parse(localStorage.getItem(_PACKS_KEY)||'[]');}catch(_){return [];} }
-  function _savePacks(p){ try{localStorage.setItem(_PACKS_KEY,JSON.stringify(p));}catch(_){} }
+  var _TENOR_KEY = 'LIVDSRZULELA'; // Получи свой: https://tenor.com/developer/keyregistration
+  var _gifTimer  = null;
+
+  function _spRenderGifTab(){
+    var catbar  = document.getElementById('_sp-catbar');
+    var content = document.getElementById('_sp-content');
+    if (!catbar || !content) return;
+    catbar.style.cssText = 'flex-shrink:0;padding:8px;border-bottom:1px solid rgba(255,255,255,.07)';
+    catbar.innerHTML =
+      '<input id="_gif-q" placeholder="🔍 Поиск GIF..." autocomplete="off"'
+      +' style="width:100%;background:var(--surface2,rgba(255,255,255,.08));border:none;border-radius:20px;'
+      +'padding:8px 14px;color:var(--text);font-size:13px;box-sizing:border-box;outline:none">';
+    var inp = catbar.querySelector('#_gif-q');
+    inp.addEventListener('input', function(){
+      clearTimeout(_gifTimer);
+      var q = inp.value.trim();
+      _gifTimer = setTimeout(function(){ _gifFetch(q); }, 450);
+    });
+    inp.addEventListener('focus', function(e){ e.stopPropagation(); });
+    _gifFetch('');
+  }
+
+  function _gifFetch(q){
+    var content = document.getElementById('_sp-content');
+    if (!content) return;
+    content.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:80px;color:var(--muted);font-size:13px">Загрузка...</div>';
+    var url = q
+      ? 'https://api.tenor.com/v1/search?q='+encodeURIComponent(q)+'&key='+_TENOR_KEY+'&limit=24&media_filter=minimal&contentfilter=medium'
+      : 'https://api.tenor.com/v1/trending?key='+_TENOR_KEY+'&limit=24&media_filter=minimal&contentfilter=medium';
+    fetch(url).then(function(r){ return r.json(); }).then(function(data){
+      var content2 = document.getElementById('_sp-content');
+      if (!content2) return;
+      var list = data.results || [];
+      if (!list.length){
+        content2.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:28px;gap:8px">'
+          +'<div style="font-size:36px">🔍</div>'
+          +'<div style="font-size:13px;color:var(--muted)">Ничего не найдено</div></div>';
+        return;
+      }
+      content2.innerHTML = '';
+      var grid = document.createElement('div');
+      grid.style.cssText = 'columns:2;gap:3px;padding:6px 4px';
+      list.forEach(function(r){
+        var media = r.media && r.media[0];
+        if (!media) return;
+        var tiny = media.tinygif || media.gif;
+        var full = media.gif || tiny;
+        if (!tiny) return;
+        var img = document.createElement('img');
+        img.src = tiny.url; img.alt = r.title || ''; img.loading = 'lazy';
+        img.style.cssText = 'width:100%;border-radius:8px;cursor:pointer;display:block;margin-bottom:3px;break-inside:avoid;transition:opacity .1s';
+        img.addEventListener('click', function(){ _gifSend(full.url); });
+        img.addEventListener('mouseover', function(){ img.style.opacity = '.8'; });
+        img.addEventListener('mouseout',  function(){ img.style.opacity = ''; });
+        grid.appendChild(img);
+      });
+      content2.appendChild(grid);
+    }).catch(function(){
+      var c = document.getElementById('_sp-content');
+      if (c) c.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;padding:28px;gap:8px">'
+        +'<div style="font-size:32px">⚠️</div>'
+        +'<div style="font-size:13px;color:var(--muted);text-align:center">Ошибка загрузки.<br>Замени _TENOR_KEY в desktop-patch.js на свой.</div></div>';
+    });
+  }
+
+  function _gifSend(url){
+    var p = typeof window.profileLoad === 'function' ? window.profileLoad() : null;
+    if (!p || !window._msgCurrentChat){ typeof window.toast==='function' && window.toast('❌ Открой чат'); return; }
+    var ts  = Date.now();
+    var msg = { from:p.username, to:window._msgCurrentChat, image:url, fileType:'gif', text:'', ts, delivered:false, read:false };
+    var msgs = typeof window.msgLoad === 'function' ? window.msgLoad() : {};
+    if (!msgs[window._msgCurrentChat]) msgs[window._msgCurrentChat] = [];
+    msgs[window._msgCurrentChat].push(msg);
+    typeof window.msgSave === 'function' && window.msgSave(msgs);
+    typeof window.messengerRenderMessages === 'function' && window.messengerRenderMessages(true);
+    if (typeof window.sbInsert === 'function'){
+      window.sbInsert('messages',{
+        chat_key: typeof window.sbChatKey==='function' ? window.sbChatKey(p.username, window._msgCurrentChat) : '',
+        from_user: p.username, to_user: window._msgCurrentChat,
+        text: '[GIF]', ts,
+        extra: JSON.stringify({ image:url, fileType:'gif' })
+      });
+    }
+    if (window._mcStickerPanelOpen) typeof window.mcToggleStickerPanel==='function' && window.mcToggleStickerPanel();
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // 12. КАСТОМНЫЕ СТИКЕР-ПАКИ (обновлено)
+  // ═══════════════════════════════════════════════════════════════
+  var _PACKS_KEY = 'sapp_custom_packs_v1';
+  function _loadPacks(){ try{ return JSON.parse(localStorage.getItem(_PACKS_KEY)||'[]'); }catch(_){ return []; } }
+  function _savePacks(p){ try{ localStorage.setItem(_PACKS_KEY, JSON.stringify(p)); }catch(_){} }
   function _genId(){ return Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
 
-  function _renderStickerPacksTab(panel){
-    var packs=_loadPacks();
-    var wrap=document.createElement('div');
-    wrap.id='_custom-sticker-wrap';
-    wrap.style.cssText='padding:6px 0;display:flex;flex-direction:column;flex:1;min-height:0';
+  function _spRenderPacksTab(){
+    var catbar  = document.getElementById('_sp-catbar');
+    var content = document.getElementById('_sp-content');
+    if (!catbar || !content) return;
+    var packs = _loadPacks();
 
     if (!packs.length){
-      wrap.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;padding:24px 16px;gap:8px">'
-        +'<div style="font-size:42px">📦</div>'
+      catbar.innerHTML = '';
+      content.innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;padding:28px 16px;gap:10px">'
+        +'<div style="font-size:44px">📦</div>'
         +'<div style="font-size:14px;font-weight:600;color:var(--text)">Паков нет</div>'
-        +'<div style="font-size:12px;color:var(--muted);text-align:center">Создай свой пак или импортируй код от друга</div></div>';
-    } else {
-      var nav='<div style="display:flex;gap:6px;padding:6px 10px 8px;overflow-x:auto;scrollbar-width:none">';
-      packs.forEach(function(pk,i){
-        nav+='<button id="_pnav-'+pk.id+'" data-pid="'+pk.id+'"'
-          +' style="flex-shrink:0;background:'+(i===0?'var(--accent,#e87722)':'var(--surface2)')+';border:none;border-radius:18px;'
-          +'padding:5px 12px;font-size:13px;cursor:pointer;color:'+(i===0?'#fff':'var(--text)')+';'
-          +'font-weight:600;transition:background .15s;white-space:nowrap">'+pk.icon+' '+pk.name+'</button>';
-      });
-      nav+='</div><div id="_pack-content"></div>';
-      wrap.innerHTML=nav;
-      // Вешаем клики на навигацию
-      wrap.querySelectorAll('[id^="_pnav-"]').forEach(function(btn){
-        btn.addEventListener('click',function(){ _showPackContent(btn.dataset.pid); });
-      });
+        +'<div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:6px">Создай свой пак или импортируй от друга</div>'
+        +'<button id="_cp-btn" style="background:var(--accent,#e87722);border:none;border-radius:14px;padding:10px 22px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">＋ Создать пак</button>'
+        +'<button id="_ip-btn" style="background:var(--surface2,rgba(255,255,255,.08));border:none;border-radius:14px;padding:10px 22px;color:var(--text);font-size:13px;cursor:pointer">📥 Импорт</button>'
+        +'</div>';
+      content.querySelector('#_cp-btn').addEventListener('click', _openCreatePackDialog);
+      content.querySelector('#_ip-btn').addEventListener('click', _openImportPackDialog);
+      return;
     }
 
-    var btns=document.createElement('div');
-    btns.style.cssText='display:flex;gap:8px;padding:8px 10px 4px;border-top:1px solid rgba(255,255,255,.07);flex-shrink:0';
-    btns.innerHTML='<button id="_btn-create-pack" style="flex:1;background:var(--accent,#e87722);border:none;border-radius:12px;padding:9px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">＋ Создать пак</button>'
-      +'<button id="_btn-import-pack" style="flex:1;background:var(--surface2);border:none;border-radius:12px;padding:9px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer">📥 Импорт</button>';
-    wrap.appendChild(btns);
-    panel.appendChild(wrap);
+    catbar.style.cssText = 'flex-shrink:0;display:flex;align-items:center;gap:6px;padding:6px 8px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid rgba(255,255,255,.07)';
+    var nav = '';
+    packs.forEach(function(pk, i){
+      nav += '<button id="_pnav-'+pk.id+'" data-pid="'+pk.id+'"'
+        +' style="flex-shrink:0;background:'+(i===0?'var(--accent,#e87722)':'rgba(255,255,255,.07)')
+        +';border:none;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer;'
+        +'transition:background .15s;display:flex;align-items:center;justify-content:center" title="'+pk.name+'">'+pk.icon+'</button>';
+    });
+    nav += '<button id="_pnav-new" title="Создать пак"'
+      +' style="flex-shrink:0;background:rgba(255,255,255,.05);border:none;border-radius:50%;'
+      +'width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--muted);'
+      +'display:flex;align-items:center;justify-content:center;margin-left:2px">＋</button>'
+      +'<button id="_pnav-imp" title="Импорт"'
+      +' style="flex-shrink:0;background:rgba(255,255,255,.05);border:none;border-radius:50%;'
+      +'width:32px;height:32px;font-size:14px;cursor:pointer;color:var(--muted);'
+      +'display:flex;align-items:center;justify-content:center">📥</button>';
+    catbar.innerHTML = nav;
 
-    wrap.querySelector('#_btn-create-pack').addEventListener('click',_openCreatePackDialog);
-    wrap.querySelector('#_btn-import-pack').addEventListener('click',_openImportPackDialog);
+    catbar.querySelectorAll('[data-pid]').forEach(function(btn){
+      btn.addEventListener('click', function(){ _showPackContent(btn.dataset.pid); });
+    });
+    catbar.querySelector('#_pnav-new').addEventListener('click', _openCreatePackDialog);
+    catbar.querySelector('#_pnav-imp').addEventListener('click', _openImportPackDialog);
 
-    if (packs.length) _showPackContent(packs[0].id);
+    _showPackContent(packs[0].id);
   }
 
   function _showPackContent(packId){
-    var packs=_loadPacks(), pack=packs.find(function(p){return p.id===packId;});
-    var cont=document.getElementById('_pack-content');
-    if (!cont||!pack) return;
-    // Подсвечиваем активный таб
-    document.querySelectorAll('[id^="_pnav-"]').forEach(function(b){
-      b.style.background= b.id==='_pnav-'+packId ? 'var(--accent,#e87722)':'var(--surface2)';
-      b.style.color=      b.id==='_pnav-'+packId ? '#fff':'var(--text)';
+    var packs   = _loadPacks();
+    var pack    = packs.find(function(p){ return p.id === packId; });
+    var content = document.getElementById('_sp-content');
+    if (!content || !pack) return;
+    document.querySelectorAll('[data-pid]').forEach(function(b){
+      var a = b.id === '_pnav-'+packId;
+      b.style.background = a ? 'var(--accent,#e87722)' : 'rgba(255,255,255,.07)';
     });
-    if (!pack.stickers||!pack.stickers.length){
-      cont.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;padding:16px;gap:8px">'
-        +'<div style="font-size:12px;color:var(--muted)">Пак пустой — добавь стикеры!</div>'
-        +'<button id="_btn-add-sticker" style="background:var(--surface2);border:none;border-radius:10px;padding:7px 14px;color:var(--text);font-size:12px;cursor:pointer">＋ Добавить стикер</button></div>';
-      cont.querySelector('#_btn-add-sticker').addEventListener('click',function(){ _addStickerToPack(packId); });
+    window._stickerActivePack = packId;
+
+    if (!pack.stickers || !pack.stickers.length){
+      content.innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;padding:20px;gap:10px">'
+        +'<div style="font-size:13px;color:var(--muted)">Пак пустой — добавь стикеры!</div>'
+        +'<button id="_add-s" style="background:var(--surface2,rgba(255,255,255,.08));border:none;border-radius:12px;padding:9px 18px;color:var(--text);font-size:13px;cursor:pointer">＋ Добавить стикер</button>'
+        +'</div>';
+      content.querySelector('#_add-s').addEventListener('click', function(){ _addStickerToPack(packId); });
       return;
     }
-    var html='<div style="display:flex;flex-wrap:wrap;padding:6px 6px;gap:4px">';
+
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:4px;padding:6px">';
     pack.stickers.forEach(function(s){
-      html+='<div data-sid="'+s.id+'" data-pid="'+packId+'" style="width:68px;height:68px;border-radius:10px;overflow:hidden;cursor:pointer;background:rgba(255,255,255,.04);flex-shrink:0;border:1.5px solid rgba(255,255,255,.07);transition:transform .1s" title="'+(s.name||'')+'">'
+      html += '<div data-sid="'+s.id+'" data-pid="'+packId+'"'
+        +' style="aspect-ratio:1;border-radius:10px;overflow:hidden;cursor:pointer;'
+        +'background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.07);'
+        +'transition:transform .12s,border-color .12s" title="'+(s.name||'')+'">'
         +'<img src="'+s.dataUrl+'" style="width:100%;height:100%;object-fit:contain" loading="lazy"></div>';
     });
-    html+='</div><div style="display:flex;gap:6px;padding:4px 10px 8px">'
-      +'<button id="_btn-add-stk" style="flex:1;background:var(--surface2);border:none;border-radius:10px;padding:7px;color:var(--text);font-size:11px;cursor:pointer">＋ Стикер</button>'
-      +'<button id="_btn-exp-pack" style="flex:1;background:var(--surface2);border:none;border-radius:10px;padding:7px;color:var(--text);font-size:11px;cursor:pointer">📤 Экспорт</button>'
-      +'<button id="_btn-del-pack" style="background:rgba(255,80,80,.15);border:none;border-radius:10px;padding:7px 10px;color:#ff5050;font-size:11px;cursor:pointer">🗑</button>'
+    html += '</div>'
+      +'<div style="display:flex;gap:5px;padding:4px 6px 8px">'
+      +'<button id="_s-add" style="flex:1;background:rgba(255,255,255,.07);border:none;border-radius:10px;padding:8px;color:var(--text);font-size:11px;cursor:pointer">＋ Стикер</button>'
+      +'<button id="_s-exp" style="flex:1;background:rgba(255,255,255,.07);border:none;border-radius:10px;padding:8px;color:var(--text);font-size:11px;cursor:pointer">📤 Экспорт</button>'
+      +'<button id="_s-shr" style="flex:1;background:rgba(54,132,255,.15);border:none;border-radius:10px;padding:8px;color:#5b9bff;font-size:11px;cursor:pointer">📨 Другу</button>'
+      +'<button id="_s-del" style="background:rgba(255,80,80,.12);border:none;border-radius:10px;padding:8px 11px;color:#ff5050;font-size:11px;cursor:pointer">🗑</button>'
       +'</div>';
-    cont.innerHTML=html;
-    // Клики по стикерам
-    cont.querySelectorAll('[data-sid]').forEach(function(el){
-      el.addEventListener('mouseover',function(){ el.style.transform='scale(1.08)'; });
-      el.addEventListener('mouseout', function(){ el.style.transform=''; });
-      el.addEventListener('click',function(){ _sendCustomSticker(el.dataset.sid,el.dataset.pid); });
+    content.innerHTML = html;
+
+    content.querySelectorAll('[data-sid]').forEach(function(el){
+      el.addEventListener('mouseover', function(){ el.style.transform='scale(1.08)'; el.style.borderColor='var(--accent,#e87722)'; });
+      el.addEventListener('mouseout',  function(){ el.style.transform=''; el.style.borderColor='rgba(255,255,255,.07)'; });
+      el.addEventListener('click', function(){ _sendCustomSticker(el.dataset.sid, el.dataset.pid); });
     });
-    cont.querySelector('#_btn-add-stk').addEventListener('click',function(){ _addStickerToPack(packId); });
-    cont.querySelector('#_btn-exp-pack').addEventListener('click',function(){ _exportPack(packId); });
-    cont.querySelector('#_btn-del-pack').addEventListener('click',function(){ _deletePackConfirm(packId); });
+    content.querySelector('#_s-add').addEventListener('click', function(){ _addStickerToPack(packId); });
+    content.querySelector('#_s-exp').addEventListener('click', function(){ _exportPack(packId); });
+    content.querySelector('#_s-shr').addEventListener('click', function(){ _sharePackToChat(packId); });
+    content.querySelector('#_s-del').addEventListener('click', function(){ _deletePackConfirm(packId); });
   }
 
   function _sendCustomSticker(stickerId, packId){
-    var packs=_loadPacks(), pack=packs.find(function(p){return p.id===packId;});
-    var sticker=pack&&pack.stickers&&pack.stickers.find(function(s){return s.id===stickerId;});
+    var packs   = _loadPacks();
+    var pack    = packs.find(function(p){ return p.id === packId; });
+    var sticker = pack && pack.stickers && pack.stickers.find(function(s){ return s.id === stickerId; });
     if (!sticker) return;
-    var p=typeof window.profileLoad==='function'?window.profileLoad():null;
-    if (!p||!window._msgCurrentChat){ typeof window.toast==='function'&&window.toast('❌ Открой чат'); return; }
-    var ts=Date.now();
-    var msg={from:p.username,to:window._msgCurrentChat,image:sticker.dataUrl,fileType:'sticker',ts,delivered:false,read:false};
-    var msgs=typeof window.msgLoad==='function'?window.msgLoad():{};
-    if (!msgs[window._msgCurrentChat]) msgs[window._msgCurrentChat]=[];
+    var p = typeof window.profileLoad==='function' ? window.profileLoad() : null;
+    if (!p || !window._msgCurrentChat){ typeof window.toast==='function' && window.toast('❌ Открой чат'); return; }
+    var ts  = Date.now();
+    var msg = { from:p.username, to:window._msgCurrentChat, image:sticker.dataUrl, fileType:'sticker', ts, delivered:false, read:false };
+    var msgs = typeof window.msgLoad==='function' ? window.msgLoad() : {};
+    if (!msgs[window._msgCurrentChat]) msgs[window._msgCurrentChat] = [];
     msgs[window._msgCurrentChat].push(msg);
-    typeof window.msgSave==='function'&&window.msgSave(msgs);
-    typeof window.messengerRenderMessages==='function'&&window.messengerRenderMessages(true);
-    if (window._mcStickerPanelOpen) typeof window.mcToggleStickerPanel==='function'&&window.mcToggleStickerPanel();
+    typeof window.msgSave==='function' && window.msgSave(msgs);
+    typeof window.messengerRenderMessages==='function' && window.messengerRenderMessages(true);
+    if (window._mcStickerPanelOpen) typeof window.mcToggleStickerPanel==='function' && window.mcToggleStickerPanel();
   }
 
   function _addStickerToPack(packId){
-    if (!window.Android?.pickStickerImage){ typeof window.toast==='function'&&window.toast('❌ Picker недоступен'); return; }
-    var cbId='si_'+Date.now();
-    var timer=setTimeout(function(){ cleanUp(); },120000);
-    function cleanUp(){ clearTimeout(timer); delete window._onStickerImagePicked; delete window._onStickerImageCancelled; }
-    window._onStickerImagePicked=function(id,dataUrl,name){
-      if(id!==cbId) return; cleanUp();
-      var packs=_loadPacks(), pack=packs.find(function(p){return p.id===packId;});
-      if(!pack) return;
-      pack.stickers=pack.stickers||[];
-      pack.stickers.push({id:_genId(),dataUrl,name:name||'Стикер'});
-      _savePacks(packs);
-      typeof window.toast==='function'&&window.toast('✅ Стикер добавлен!');
-      _showPackContent(packId);
-    };
-    window._onStickerImageCancelled=function(id){ if(id!==cbId) return; cleanUp(); };
-    window.Android.pickStickerImage(cbId);
+    if (window.Android && typeof window.Android.pickStickerImage === 'function'){
+      var cbId = 'si_'+Date.now();
+      var timer = setTimeout(function(){ cleanUp(); }, 120000);
+      function cleanUp(){ clearTimeout(timer); delete window._onStickerImagePicked; delete window._onStickerImageCancelled; }
+      window._onStickerImagePicked = function(id, dataUrl, name){
+        if (id !== cbId) return; cleanUp();
+        var packs = _loadPacks(), pack = packs.find(function(p){ return p.id === packId; });
+        if (!pack) return;
+        pack.stickers = pack.stickers || [];
+        pack.stickers.push({ id:_genId(), dataUrl, name:name||'Стикер' });
+        _savePacks(packs);
+        typeof window.toast==='function' && window.toast('✅ Стикер добавлен!');
+        _showPackContent(packId);
+      };
+      window._onStickerImageCancelled = function(id){ if (id !== cbId) return; cleanUp(); };
+      window.Android.pickStickerImage(cbId);
+    } else {
+      // ПК: обычный file input
+      var inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
+      document.body.appendChild(inp);
+      inp.onchange = function(){
+        var file = inp.files && inp.files[0];
+        if (!file){ inp.remove(); return; }
+        if (file.size > 5*1024*1024){ typeof window.toast==='function' && window.toast('❌ Файл > 5 МБ'); inp.remove(); return; }
+        var reader = new FileReader();
+        reader.onload = function(e){
+          var packs = _loadPacks(), pack = packs.find(function(p){ return p.id === packId; });
+          if (!pack){ inp.remove(); return; }
+          pack.stickers = pack.stickers || [];
+          pack.stickers.push({ id:_genId(), dataUrl:e.target.result, name:file.name.replace(/\.[^.]+$/,'') });
+          _savePacks(packs);
+          typeof window.toast==='function' && window.toast('✅ Стикер добавлен!');
+          _showPackContent(packId);
+          inp.remove();
+        };
+        reader.readAsDataURL(file);
+      };
+      inp.click();
+    }
   }
 
   function _openCreatePackDialog(){
-    var ov=document.createElement('div');
-    ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
-    ov.innerHTML='<div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:320px;animation:mcSlideUp .22s ease">'
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:320px;animation:mcSlideUp .22s ease">'
       +'<div style="font-size:18px;font-weight:700;margin-bottom:16px">📦 Новый пак стикеров</div>'
       +'<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">Иконка</div>'
       +'<input id="_pk-ico" maxlength="4" value="🎨" style="width:100%;background:var(--surface2);border:none;border-radius:12px;padding:10px;color:var(--text);font-size:20px;text-align:center;box-sizing:border-box"></div>'
@@ -771,78 +958,131 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
       +'<button id="_pk-ok" style="flex:1;padding:12px;background:var(--accent,#e87722);border:none;border-radius:14px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">Создать</button>'
       +'</div></div>';
     document.body.appendChild(ov);
-    ov.querySelector('#_pk-cancel').addEventListener('click',function(){ov.remove();});
-    ov.querySelector('#_pk-ok').addEventListener('click',function(){
-      var icon=ov.querySelector('#_pk-ico').value.trim()||'📦';
-      var name=ov.querySelector('#_pk-nm').value.trim();
-      if(!name){typeof window.toast==='function'&&window.toast('❌ Введи название');return;}
-      var packs=_loadPacks(); packs.push({id:_genId(),name,icon,stickers:[]}); _savePacks(packs);
-      ov.remove(); typeof window.toast==='function'&&window.toast('✅ Пак создан!');
-      var panel=document.getElementById('mc-sticker-panel');
-      if (panel){ var w=document.getElementById('_custom-sticker-wrap'); if(w)w.remove(); _renderStickerPacksTab(panel); }
+    ov.querySelector('#_pk-cancel').addEventListener('click', function(){ ov.remove(); });
+    ov.querySelector('#_pk-ok').addEventListener('click', function(){
+      var icon = ov.querySelector('#_pk-ico').value.trim() || '📦';
+      var name = ov.querySelector('#_pk-nm').value.trim();
+      if (!name){ typeof window.toast==='function' && window.toast('❌ Введи название'); return; }
+      var packs = _loadPacks(); packs.push({ id:_genId(), name, icon, stickers:[] }); _savePacks(packs);
+      ov.remove();
+      typeof window.toast==='function' && window.toast('✅ Пак создан!');
+      _spSwitch('sticker');
     });
   }
 
   function _exportPack(packId){
-    var packs=_loadPacks(), pack=packs.find(function(p){return p.id===packId;});
+    var packs = _loadPacks(), pack = packs.find(function(p){ return p.id === packId; });
     if (!pack) return;
-    var b64=btoa(unescape(encodeURIComponent(JSON.stringify({_type:'sapp_sticker_pack',version:1,pack}))));
-    var ov=document.createElement('div');
-    ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
-    ov.innerHTML='<div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:340px">'
+    var b64 = btoa(unescape(encodeURIComponent(JSON.stringify({ _type:'sapp_sticker_pack', version:1, pack }))));
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:var(--surface);border-radius:20px;padding:22px;width:100%;max-width:340px">'
       +'<div style="font-size:16px;font-weight:700;margin-bottom:4px">📤 '+pack.icon+' '+pack.name+'</div>'
-      +'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+((pack.stickers||[]).length)+' стикеров · Скопируй код и отправь другу</div>'
-      +'<textarea id="_exp-code" readonly style="width:100%;height:80px;background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px;color:var(--text);font-size:10px;font-family:monospace;resize:none;box-sizing:border-box;word-break:break-all">'+b64+'</textarea>'
-      +'<div style="display:flex;gap:10px;margin-top:12px">'
-      +'<button id="_exp-copy" style="flex:1;padding:11px;background:var(--accent,#e87722);border:none;border-radius:12px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">📋 Копировать</button>'
-      +'<button id="_exp-close" style="flex:1;padding:11px;background:var(--surface2);border:none;border-radius:12px;color:var(--text);font-size:13px;cursor:pointer">Закрыть</button>'
+      +'<div style="font-size:12px;color:var(--muted);margin-bottom:10px">'+((pack.stickers||[]).length)+' стикеров</div>'
+      +'<textarea id="_exp-code" readonly style="width:100%;height:72px;background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px;color:var(--text);font-size:10px;font-family:monospace;resize:none;box-sizing:border-box;word-break:break-all">'+b64+'</textarea>'
+      +'<div style="display:flex;gap:8px;margin-top:10px">'
+      +'<button id="_exp-copy" style="flex:1;padding:10px;background:var(--accent,#e87722);border:none;border-radius:12px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">📋 Копировать</button>'
+      +'<button id="_exp-send" style="flex:1;padding:10px;background:rgba(54,132,255,.2);border:none;border-radius:12px;color:#5b9bff;font-size:12px;font-weight:700;cursor:pointer">📨 Другу в чат</button>'
+      +'<button id="_exp-close" style="padding:10px 14px;background:var(--surface2);border:none;border-radius:12px;color:var(--text);font-size:12px;cursor:pointer">✕</button>'
       +'</div></div>';
     document.body.appendChild(ov);
-    ov.querySelector('#_exp-copy').addEventListener('click',function(){
-      navigator.clipboard?.writeText(b64).then(function(){typeof window.toast==='function'&&window.toast('✅ Скопировано!');});
+    ov.querySelector('#_exp-copy').addEventListener('click', function(){
+      navigator.clipboard && navigator.clipboard.writeText(b64).then(function(){
+        typeof window.toast==='function' && window.toast('✅ Скопировано!');
+      });
     });
-    ov.querySelector('#_exp-close').addEventListener('click',function(){ov.remove();});
-    ov.querySelector('#_exp-code').addEventListener('click',function(){this.select();});
+    ov.querySelector('#_exp-send').addEventListener('click', function(){ ov.remove(); _sharePackToChat(packId); });
+    ov.querySelector('#_exp-close').addEventListener('click', function(){ ov.remove(); });
+    ov.querySelector('#_exp-code').addEventListener('click', function(){ this.select(); });
+  }
+
+  function _sharePackToChat(packId){
+    var packs = _loadPacks(), pack = packs.find(function(p){ return p.id === packId; });
+    if (!pack) return;
+    var b64  = btoa(unescape(encodeURIComponent(JSON.stringify({ _type:'sapp_sticker_pack', version:1, pack }))));
+    var text = '\uD83D\uDCE6 Стикер-пак «'+pack.icon+' '+pack.name+'» ('+((pack.stickers||[]).length)+' шт)\n[STKPACK:'+b64+']';
+    var chats = typeof window.chatsLoad==='function' ? window.chatsLoad() : [];
+    if (!chats.length){ typeof window.toast==='function' && window.toast('❌ Нет чатов'); return; }
+    var sheet = document.createElement('div');
+    sheet.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .12s ease';
+    var items = chats.slice(0,20).map(function(u){
+      var peer = ((window._profileOnlinePeers||[]).concat(window._allKnownUsers||[])).find(function(x){ return x.username===u; });
+      return '<button data-to="'+u+'" style="width:100%;padding:12px 18px;background:none;border:none;color:var(--text);'
+        +'font-family:inherit;font-size:14px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;'
+        +'border-bottom:1px solid rgba(255,255,255,.04)">'
+        +'<div style="width:36px;height:36px;border-radius:50%;background:'+(peer&&peer.color||'var(--surface3)')+';'
+        +'display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'
+        +(typeof window._emojiImg==='function'?window._emojiImg(peer&&peer.avatar||'\uD83D\uDE0A',20):(peer&&peer.avatar||'\uD83D\uDE0A'))
+        +'</div><span style="font-weight:600">'+(peer&&peer.name||u)+'</span></button>';
+    }).join('');
+    sheet.innerHTML = '<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 16px;max-height:70vh;overflow-y:auto" onclick="event.stopPropagation()">'
+      +'<div style="width:36px;height:4px;background:var(--surface3);border-radius:2px;margin:8px auto 4px"></div>'
+      +'<div style="font-size:13px;font-weight:700;color:var(--muted);padding:8px 18px 10px">Отправить пак другу...</div>'
+      +items+'</div>';
+    sheet.addEventListener('click', function(){ sheet.remove(); });
+    sheet.querySelectorAll('[data-to]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var to = btn.dataset.to;
+        var prof = typeof window.profileLoad==='function' ? window.profileLoad() : null;
+        if (!prof) return;
+        var ts = Date.now();
+        var msg = { from:prof.username, to, text, ts, delivered:false, read:false };
+        var msgs = typeof window.msgLoad==='function' ? window.msgLoad() : {};
+        if (!msgs[to]) msgs[to] = [];
+        msgs[to].push(msg);
+        typeof window.msgSave==='function' && window.msgSave(msgs);
+        var c = typeof window.chatsLoad==='function' ? window.chatsLoad() : [];
+        if (!c.includes(to)){ c.unshift(to); typeof window.chatsSave==='function' && window.chatsSave(c); }
+        if (typeof window.sbInsert==='function'){
+          window.sbInsert('messages',{
+            chat_key: typeof window.sbChatKey==='function' ? window.sbChatKey(prof.username,to) : '',
+            from_user:prof.username, to_user:to, text, ts
+          });
+        }
+        sheet.remove();
+        typeof window.toast==='function' && window.toast('\uD83D\uDCE8 Пак отправлен '+to+'!');
+      });
+    });
+    document.body.appendChild(sheet);
   }
 
   function _openImportPackDialog(){
-    var ov=document.createElement('div');
-    ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
-    ov.innerHTML='<div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:340px;animation:mcSlideUp .22s ease">'
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:340px;animation:mcSlideUp .22s ease">'
       +'<div style="font-size:18px;font-weight:700;margin-bottom:6px">📥 Импорт пака</div>'
-      +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Вставь код пака который тебе прислали</div>'
+      +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Вставь код пака который прислали</div>'
       +'<textarea id="_imp-code" placeholder="Вставь код здесь..." style="width:100%;height:80px;background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px;color:var(--text);font-size:11px;font-family:monospace;resize:none;box-sizing:border-box"></textarea>'
       +'<div style="display:flex;gap:10px;margin-top:12px">'
       +'<button id="_imp-cancel" style="flex:1;padding:12px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-size:14px;cursor:pointer">Отмена</button>'
       +'<button id="_imp-ok" style="flex:1;padding:12px;background:var(--accent,#e87722);border:none;border-radius:14px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">Импорт</button>'
       +'</div></div>';
     document.body.appendChild(ov);
-    ov.querySelector('#_imp-cancel').addEventListener('click',function(){ov.remove();});
-    ov.querySelector('#_imp-ok').addEventListener('click',function(){
-      var code=ov.querySelector('#_imp-code').value.trim();
-      if(!code) return;
+    ov.querySelector('#_imp-cancel').addEventListener('click', function(){ ov.remove(); });
+    ov.querySelector('#_imp-ok').addEventListener('click', function(){
+      var code = ov.querySelector('#_imp-code').value.trim();
+      if (!code) return;
       try {
-        var obj=JSON.parse(decodeURIComponent(escape(atob(code))));
-        if(obj._type!=='sapp_sticker_pack'||!obj.pack) throw new Error('Неверный формат');
-        var packs=_loadPacks();
-        if(packs.find(function(p){return p.id===obj.pack.id;})){
-          typeof window.toast==='function'&&window.toast('ℹ️ Уже добавлен'); ov.remove(); return;
+        var obj = JSON.parse(decodeURIComponent(escape(atob(code))));
+        if (obj._type !== 'sapp_sticker_pack' || !obj.pack) throw new Error('Неверный формат');
+        var packs = _loadPacks();
+        if (packs.find(function(p){ return p.id === obj.pack.id; })){
+          typeof window.toast==='function' && window.toast('\u2139\uFE0F Уже добавлен'); ov.remove(); return;
         }
         packs.push(obj.pack); _savePacks(packs);
         ov.remove();
-        typeof window.toast==='function'&&window.toast('✅ Импортирован: '+obj.pack.name+' ('+((obj.pack.stickers||[]).length)+' стикеров)');
-        var panel=document.getElementById('mc-sticker-panel');
-        if(panel){ var w=document.getElementById('_custom-sticker-wrap'); if(w)w.remove(); _renderStickerPacksTab(panel); }
-      } catch(e){ typeof window.toast==='function'&&window.toast('❌ '+e.message); }
+        typeof window.toast==='function' && window.toast('✅ Импортирован: '+obj.pack.name+' ('+((obj.pack.stickers||[]).length)+' стикеров)');
+        _spSwitch('sticker');
+      } catch(e){ typeof window.toast==='function' && window.toast('❌ '+e.message); }
     });
   }
 
   function _deletePackConfirm(packId){
-    var packs=_loadPacks(), pack=packs.find(function(p){return p.id===packId;});
+    var packs = _loadPacks(), pack = packs.find(function(p){ return p.id === packId; });
     if (!pack) return;
-    var ov=document.createElement('div');
-    ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
-    ov.innerHTML='<div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:300px">'
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:var(--surface);border-radius:20px;padding:24px;width:100%;max-width:300px">'
       +'<div style="font-size:28px;text-align:center;margin-bottom:10px">🗑</div>'
       +'<div style="font-size:16px;font-weight:700;text-align:center;margin-bottom:6px">Удалить пак?</div>'
       +'<div style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:18px">'+pack.icon+' '+pack.name+' · '+((pack.stickers||[]).length)+' стикеров</div>'
@@ -851,17 +1091,32 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
       +'<button id="_dp-ok" style="flex:1;padding:11px;background:#ff5050;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer">Удалить</button>'
       +'</div></div>';
     document.body.appendChild(ov);
-    ov.querySelector('#_dp-cancel').addEventListener('click',function(){ov.remove();});
-    ov.querySelector('#_dp-ok').addEventListener('click',function(){
-      _savePacks(_loadPacks().filter(function(p){return p.id!==packId;}));
-      ov.remove(); typeof window.toast==='function'&&window.toast('🗑 Пак удалён');
-      var panel=document.getElementById('mc-sticker-panel');
-      if(panel){ var w=document.getElementById('_custom-sticker-wrap'); if(w)w.remove(); _renderStickerPacksTab(panel); }
+    ov.querySelector('#_dp-cancel').addEventListener('click', function(){ ov.remove(); });
+    ov.querySelector('#_dp-ok').addEventListener('click', function(){
+      _savePacks(_loadPacks().filter(function(p){ return p.id !== packId; }));
+      ov.remove();
+      typeof window.toast==='function' && window.toast('\uD83D\uDDD1 Пак удалён');
+      _spSwitch('sticker');
     });
   }
 
+  // Автоимпорт пака из [STKPACK:...] в сообщении
+  window._tryImportStickerPack = function(text){
+    var m = text && text.match(/\[STKPACK:([A-Za-z0-9+/=]+)\]/);
+    if (!m) return false;
+    try {
+      var obj = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+      if (obj._type !== 'sapp_sticker_pack' || !obj.pack) return false;
+      var packs = _loadPacks();
+      if (packs.find(function(p){ return p.id === obj.pack.id; })){
+        typeof window.toast==='function' && window.toast('\u2139\uFE0F Пак «'+obj.pack.name+'» уже есть'); return true;
+      }
+      packs.push(obj.pack); _savePacks(packs);
+      typeof window.toast==='function' && window.toast('✅ Добавлен пак «'+obj.pack.name+'» ('+((obj.pack.stickers||[]).length)+' стикеров)');
+      return true;
+    } catch(_){ return false; }
+  };
 
-  // ═══════════════════════════════════════════════════════════════
   // vipGrantTo — пишем vip_expires_at в Supabase
   // ═══════════════════════════════════════════════════════════════
   _waitFor(function(){ return typeof window.vipGrantTo==='function'; }, function(){
@@ -995,4 +1250,217 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
 
 
   _log('v3.2 — все патчи применены (fix: Android file picker fallback, GIF avatar, PNG crop, PC update)');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // 14. DRAG-AND-DROP ФАЙЛОВ В ЧАТ (PC)
+  // ═══════════════════════════════════════════════════════════════
+  (function _initDragDrop(){
+    var _ddZone = null; // оверлей-подсказка
+
+    function _showDDOverlay(){
+      if (document.getElementById('_dd-overlay')) return;
+      var ov = document.createElement('div');
+      ov.id = '_dd-overlay';
+      ov.style.cssText =
+        'position:fixed;inset:0;z-index:19999;pointer-events:none;'
+        +'display:flex;align-items:center;justify-content:center;'
+        +'background:rgba(var(--accent-rgb,54,132,255),.13);'
+        +'border:3px dashed var(--accent,#3684ff);'
+        +'transition:opacity .15s;box-sizing:border-box';
+      ov.innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:10px;'
+        +'background:var(--surface,#1c1c1e);border-radius:20px;padding:28px 36px;'
+        +'box-shadow:0 8px 32px rgba(0,0,0,.45)">'
+        +'<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#3684ff)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+        +'<div style="font-size:16px;font-weight:700;color:var(--text)">Отпусти для отправки</div>'
+        +'<div style="font-size:12px;color:var(--muted)">Файл будет загружен и отправлен в чат</div>'
+        +'</div>';
+      document.body.appendChild(ov);
+    }
+
+    function _hideDDOverlay(){
+      var ov = document.getElementById('_dd-overlay');
+      if (ov) ov.remove();
+    }
+
+    function _isChatOpen(){
+      // Чат открыт если mc-sticker-panel или mc-input в DOM и видимы
+      var inp = document.getElementById('mc-input');
+      return !!(inp && inp.offsetParent !== null && window._msgCurrentChat);
+    }
+
+    var _ddCounter = 0; // dragenter/dragleave counter
+
+    document.addEventListener('dragenter', function(e){
+      if (!_isChatOpen()) return;
+      _ddCounter++;
+      if (_ddCounter === 1) _showDDOverlay();
+      e.preventDefault();
+    }, false);
+
+    document.addEventListener('dragleave', function(e){
+      if (!_isChatOpen()) return;
+      _ddCounter--;
+      if (_ddCounter <= 0){ _ddCounter = 0; _hideDDOverlay(); }
+    }, false);
+
+    document.addEventListener('dragover', function(e){
+      if (!_isChatOpen()) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }, false);
+
+    document.addEventListener('drop', function(e){
+      _ddCounter = 0;
+      _hideDDOverlay();
+      if (!_isChatOpen()) return;
+      e.preventDefault();
+      var files = Array.from(e.dataTransfer.files || []);
+      if (!files.length) return;
+      // Обрабатываем по одному файлу (как в mcPickMedia)
+      files.forEach(function(file){ _ddSendFile(file); });
+    }, false);
+
+    function _ddSendFile(file){
+      var p = typeof window.profileLoad==='function' ? window.profileLoad() : null;
+      if (!p || !window._msgCurrentChat){
+        typeof window.toast==='function' && window.toast('❌ Открой чат'); return;
+      }
+      if (file.size > 50*1024*1024){
+        typeof window.toast==='function' && window.toast('❌ Файл > 50 МБ'); return;
+      }
+      typeof window.toast==='function' && window.toast('⬆️ Загружаю «'+file.name+'»...');
+
+      var reader = new FileReader();
+      reader.onload = function(ev){
+        var dataUrl = ev.target.result;
+        var isImage = file.type.startsWith('image/');
+        var isVideo = file.type.startsWith('video/');
+        var isAudio = file.type.startsWith('audio/');
+
+        if ((isImage || isVideo) && window.Android && typeof window.Android.nativeUploadFileAsync === 'function'){
+          // Загружаем через Java → catbox
+          var cbId = 'dd_'+Date.now();
+          var b64  = dataUrl.split(',')[1];
+          var prevOnDone  = window.onUploadDone;
+          var prevOnError = window.onUploadError;
+          window.onUploadDone = function(id, url){
+            if (id !== cbId){ prevOnDone && prevOnDone(id,url); return; }
+            window.onUploadDone  = prevOnDone;
+            window.onUploadError = prevOnError;
+            _ddPostMessage(p, url, file, isImage, isVideo);
+          };
+          window.onUploadError = function(id, err){
+            if (id !== cbId){ prevOnError && prevOnError(id,err); return; }
+            window.onUploadDone  = prevOnDone;
+            window.onUploadError = prevOnError;
+            typeof window.toast==='function' && window.toast('❌ Ошибка загрузки');
+          };
+          window.Android.nativeUploadFileAsync(b64, file.name, file.type, cbId);
+        } else {
+          // ПК без Java или текстовый файл — embedim base64 локально (только изображения)
+          if (isImage){
+            _ddPostMessage(p, dataUrl, file, true, false);
+          } else {
+            // Для видео/аудио/прочего на ПК без Android — отправляем как ссылку placeholder
+            typeof window.toast==='function' && window.toast('ℹ️ На ПК без Java только изображения можно встроить');
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function _ddPostMessage(p, url, file, isImage, isVideo){
+      var ts  = Date.now();
+      var msg = {
+        from: p.username, to: window._msgCurrentChat, ts, delivered: false, read: false,
+        text: '',
+        image: isImage || isVideo ? url : null,
+        fileType: isVideo ? 'video' : isImage ? 'image' : 'file',
+        fileName: file.name,
+        fileSize: file.size,
+      };
+      var msgs = typeof window.msgLoad==='function' ? window.msgLoad() : {};
+      if (!msgs[window._msgCurrentChat]) msgs[window._msgCurrentChat] = [];
+      msgs[window._msgCurrentChat].push(msg);
+      typeof window.msgSave==='function' && window.msgSave(msgs);
+      typeof window.messengerRenderMessages==='function' && window.messengerRenderMessages(true);
+      if (typeof window.sbInsert==='function'){
+        window.sbInsert('messages',{
+          chat_key: typeof window.sbChatKey==='function' ? window.sbChatKey(p.username, window._msgCurrentChat) : '',
+          from_user: p.username, to_user: window._msgCurrentChat,
+          text: '[Файл: '+file.name+']', ts,
+          extra: JSON.stringify({ image: url, fileType: msg.fileType, fileName: file.name })
+        });
+      }
+      typeof window.toast==='function' && window.toast('✅ Отправлено: '+file.name);
+    }
+
+    _log('drag-and-drop initialized');
+  })();
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // 15. РЕНДЕР [STKPACK:...] КАК КНОПКИ «УСТАНОВИТЬ ПАК»
+  // ═══════════════════════════════════════════════════════════════
+  (function _initStkpackRender(){
+    // Патчим messengerRenderMessages чтобы после рендера
+    // находить [STKPACK:...] тексты и заменять их кнопкой
+    _waitFor(function(){ return typeof window.messengerRenderMessages === 'function'; }, function(){
+      var _oRender = window.messengerRenderMessages;
+      window.messengerRenderMessages = function(){
+        _oRender.apply(this, arguments);
+        setTimeout(_patchStkpackBubbles, 60);
+      };
+    });
+
+    function _patchStkpackBubbles(){
+      var container = document.getElementById('mc-messages');
+      if (!container) return;
+      container.querySelectorAll('.mc-bubble-text,[class*="bubble"],[class*="msg-text"]').forEach(function(el){
+        if (el.dataset.stkDone) return;
+        var txt = el.textContent || '';
+        if (!txt.includes('[STKPACK:')) return;
+        el.dataset.stkDone = '1';
+        var m = txt.match(/\[STKPACK:([A-Za-z0-9+/=]+)\]/);
+        if (!m) return;
+        try {
+          var obj = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+          if (!obj.pack) return;
+          var pack = obj.pack;
+          // Заменяем весь текст на красивую карточку
+          var preText = txt.slice(0, txt.indexOf('[STKPACK:')).trim();
+          el.innerHTML = '';
+          if (preText){
+            var pre = document.createElement('div');
+            pre.style.cssText = 'font-size:13px;color:var(--muted);margin-bottom:8px;word-break:break-word';
+            pre.textContent = preText;
+            el.appendChild(pre);
+          }
+          var card = document.createElement('div');
+          card.style.cssText =
+            'display:flex;align-items:center;gap:10px;'
+            +'background:rgba(255,255,255,.06);border-radius:14px;padding:10px 14px;'
+            +'border:1.5px solid rgba(255,255,255,.1);cursor:pointer;'
+            +'transition:background .15s';
+          card.innerHTML =
+            '<div style="font-size:32px;flex-shrink:0">'+pack.icon+'</div>'
+            +'<div style="flex:1;min-width:0">'
+            +'<div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escHtml(pack.name)+'</div>'
+            +'<div style="font-size:11px;color:var(--muted)">'+((pack.stickers||[]).length)+' стикеров · Нажми чтобы установить</div>'
+            +'</div>'
+            +'<div style="font-size:18px">📥</div>';
+          card.addEventListener('mouseover', function(){ card.style.background='rgba(255,255,255,.1)'; });
+          card.addEventListener('mouseout',  function(){ card.style.background='rgba(255,255,255,.06)'; });
+          card.addEventListener('click', function(){
+            typeof window._tryImportStickerPack==='function' && window._tryImportStickerPack(txt);
+          });
+          el.appendChild(card);
+        } catch(_){}
+      });
+    }
+    _log('STKPACK bubble renderer initialized');
+  })();
+
 })();

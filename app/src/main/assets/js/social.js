@@ -1534,12 +1534,7 @@ function _profileHandleAvatarDataUrl(dataUrl, skipCrop = false) {
 // Перехватываем onNativeBgImagePicked для профиля если ждём фото
 const _origOnNativeBgImagePicked = window.onNativeBgImagePicked;
 window.onNativeBgImagePicked = function(dataUrl) {
-  // desktop-patch.js ставит window._profileWaitingForPhoto (глобально),
-  // social.js ставит локальный _profileWaitingForPhoto — проверяем оба
-  const waiting = _profileWaitingForPhoto || window._profileWaitingForPhoto;
-  if (waiting) {
-    _profileWaitingForPhoto = false;
-    window._profileWaitingForPhoto = false;
+  if (_profileWaitingForPhoto) {
     _profileHandleAvatarDataUrl(dataUrl);
   } else {
     if (_origOnNativeBgImagePicked) _origOnNativeBgImagePicked(dataUrl);
@@ -8542,19 +8537,21 @@ async function mcEnforceMessageLimit(username) {
 
 // ┄┄ Forward ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _mcForwardText = null;
+let _mcForwardMsg  = null; // весь объект сообщения для пересылки
 
 function mcForwardMsg(idx) {
   const msgs = msgLoad();
-  const msg  = (msgs[_msgCurrentChat] || [])[idx];
-  if (!msg) return;
-  _mcForwardText = msg.text || msg.sticker || '';
-  // Show chat picker
+  const orig = (msgs[_msgCurrentChat] || [])[idx];
+  if (!orig) return;
+  _mcForwardMsg  = orig;
+  _mcForwardText = orig.text || orig.sticker || ''; // совместимость
+
   const chats = chatsLoad().filter(u => u !== _msgCurrentChat);
   if (chats.length === 0) { toast('Нет других чатов'); return; }
 
   const sheet = document.createElement('div');
   sheet.id = 'mc-forward-sheet';
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9200;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:fadeIn .12s ease';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9200;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:mcFadeIn .12s ease';
   const p = profileLoad();
   const chatItems = chats.map(u => {
     const peer = _profileOnlinePeers.find(x=>x.username===u) || _allKnownUsers.find(x=>x.username===u);
@@ -8564,10 +8561,14 @@ function mcForwardMsg(idx) {
       <span style="font-weight:600">${escHtml(peer?.name||u)}</span>
     </button>`;
   }).join('');
+  // Превью пересылаемого сообщения
+  const prevText = orig.text ? orig.text.slice(0,60)+(orig.text.length>60?'…':'')
+    : orig.image ? '🖼 Медиа' : orig.fileType==='sticker' ? '🎨 Стикер' : '💬 Сообщение';
   sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(14px + var(--safe-bot));max-height:70vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(14px + var(--safe-bot));max-height:70vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:8px auto 4px"></div>
-      <div style="font-size:14px;font-weight:700;color:var(--muted);padding:8px 20px 10px">Переслать в...</div>
+      <div style="font-size:14px;font-weight:700;color:var(--muted);padding:8px 20px 4px">Переслать...</div>
+      <div style="font-size:12px;color:var(--muted);padding:0 20px 10px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">↩ ${escHtml(prevText)}</div>
       ${chatItems}
     </div>`;
   sheet.addEventListener('click', () => sheet.remove());
@@ -8575,19 +8576,34 @@ function mcForwardMsg(idx) {
 }
 
 function mcDoForward(toUsername) {
-  if (!_mcForwardText) return;
+  const orig = _mcForwardMsg;
+  if (!orig && !_mcForwardText) return;
   const p = profileLoad();
   if (!p) return;
   const ts = Date.now();
-  const msg = { from: p.username, to: toUsername, text: '↩ ' + _mcForwardText, ts, delivered: false, read: false };
+  // Сохраняем медиа при пересылке (картинки, файлы, стикеры)
+  const fwd = {
+    from: p.username, to: toUsername, ts, delivered: false, read: false,
+    text: orig ? (orig.text ? '↩ ' + orig.text : '') : ('↩ ' + _mcForwardText),
+    ...(orig?.image    ? { image: orig.image }                               : {}),
+    ...(orig?.fileLink ? { fileLink: orig.fileLink, fileName: orig.fileName,
+                           fileType: orig.fileType, fileSize: orig.fileSize } : {}),
+    ...(orig?.duration ? { duration: orig.duration }                         : {}),
+  };
   const msgs = msgLoad();
   if (!msgs[toUsername]) msgs[toUsername] = [];
-  msgs[toUsername].push(msg);
+  msgs[toUsername].push(fwd);
   msgSave(msgs);
   const chats = chatsLoad();
   if (!chats.includes(toUsername)) { chats.unshift(toUsername); chatsSave(chats); }
-  sbInsert('messages', { chat_key: sbChatKey(p.username, toUsername), from_user: p.username, to_user: toUsername, text: msg.text, ts });
+  sbInsert('messages', {
+    chat_key: sbChatKey(p.username, toUsername),
+    from_user: p.username, to_user: toUsername,
+    text: fwd.text || '↩ Медиа', ts,
+    ...(orig?.image ? { extra: JSON.stringify({ image: orig.image, fileType: orig.fileType || 'image' }) } : {}),
+  });
   _mcForwardText = null;
+  _mcForwardMsg  = null;
   toast('↪️ Переслано');
 }
 
@@ -11641,30 +11657,7 @@ function _closeSheet(sheetEl) {
   };
 })();
 
-// ┄┄ Патч forward sheet: добавляем анимацию и slide-up ┄┄
-(function() {
-  const orig = window.mcForwardMsg;
-  if (typeof orig !== 'function') return;
-  window.mcForwardMsg = function(idx) {
-    orig(idx);
-    // Добавляем анимацию к inner div
-    setTimeout(() => {
-      const sheet = document.getElementById('mc-forward-sheet');
-      if (!sheet) return;
-      const inner = sheet.querySelector('[style*="border-radius:20px 20px 0 0"]');
-      if (inner && !inner.style.animation) {
-        inner.style.animation = 'mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)';
-      }
-      // Закрытие с анимацией
-      const oldListener = sheet._clickHandler;
-      sheet.removeEventListener('click', oldListener);
-      sheet._clickHandler = (e) => {
-        if (e.target === sheet) _closeSheet(sheet);
-      };
-      sheet.addEventListener('click', sheet._clickHandler);
-    }, 0);
-  };
-})();
+// ┄┄ (forward sheet patch removed — mcForwardMsg rebuilt inline) ┄┄
 
 // ┄┄ Мотивация ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 // mcEmojiIn используется в mute sheet   убедимся что анимация определена
