@@ -41,22 +41,22 @@ const AVATAR_EMOJIS = [
 function profileLoad()    { try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || null; } catch(e){ return null; } }
 function profileSave(p) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
-  // Keep accounts store in sync — including banner/avatar/vip for correct restore on switch
+  // Keep accounts store in sync — but NEVER store large base64 blobs here (causes QuotaExceededError).
+  // avatarData / avatarVideo / banner are persisted in IndexedDB only.
   if (p && p.username) {
     const accounts = accountsLoad();
     if (!accounts[p.username]) accounts[p.username] = {};
-    accounts[p.username].name       = p.name;
-    accounts[p.username].avatar     = p.avatar;
-    accounts[p.username].avatarType = p.avatarType || 'emoji';
-    accounts[p.username].avatarData = p.avatarData || null;
-    accounts[p.username].avatarVideo= p.avatarVideo|| null;
-    accounts[p.username].banner     = p.banner     || null;
-    accounts[p.username].bio        = p.bio        || '';
-    accounts[p.username].color      = p.color      || 'var(--accent)';
-    accounts[p.username].frame      = p.frame      || 'none';
-    accounts[p.username].badge      = p.badge      || null;
-    accounts[p.username].vip        = p.vip        || false;
-    accounts[p.username].createdAt  = p.createdAt;
+    accounts[p.username].name        = p.name;
+    accounts[p.username].avatar      = p.avatar;
+    accounts[p.username].avatarType  = p.avatarType  || 'emoji';
+    accounts[p.username].avatarVideoUrl = p.avatarVideoUrl || null; // только URL, не base64
+    // avatarData / avatarVideo / banner намеренно НЕ сохраняются в localStorage — только IndexedDB
+    accounts[p.username].bio         = p.bio         || '';
+    accounts[p.username].color       = p.color       || 'var(--accent)';
+    accounts[p.username].frame       = p.frame       || 'none';
+    accounts[p.username].badge       = p.badge       || null;
+    accounts[p.username].vip         = p.vip         || false;
+    accounts[p.username].createdAt   = p.createdAt;
     if (p.pwdHash) accounts[p.username].pwdHash = p.pwdHash;
     accountsSave(accounts);
     // Persist large avatar/banner data to IndexedDB so it survives localStorage limits
@@ -68,7 +68,21 @@ function profileSave(p) {
   }
 }
 function accountsLoad()   { try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || {}; } catch(e){ return {}; } }
-function accountsSave(a)  { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); }
+function accountsSave(a) {
+  // Защита от QuotaExceededError: перед записью убираем большие поля если есть
+  try {
+    const safe = JSON.parse(JSON.stringify(a));
+    Object.values(safe).forEach(acc => {
+      delete acc.avatarData;
+      delete acc.avatarVideo;
+      delete acc.banner;
+    });
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(safe));
+  } catch(e) {
+    // Если всё равно не лезет — тихо игнорируем, данные есть в IndexedDB
+    console.warn('[accountsSave] localStorage quota exceeded, skipping:', e.message);
+  }
+}
 function friendsLoad()    { try { return JSON.parse(localStorage.getItem(FRIENDS_KEY)) || []; } catch(e){ return []; } }
 function friendsSave(f)   { localStorage.setItem(FRIENDS_KEY, JSON.stringify(f)); }
 
@@ -169,8 +183,9 @@ function updateNavProfileIcon(p) {
   const btn = document.getElementById('nav-profile');
   const wrap = btn?.querySelector('.nav-icon-wrap');
   if (!wrap) return;
-  if (p && p.avatarType === 'video' && p.avatarVideo) {
-    wrap.innerHTML = `<video src="${p.avatarVideo}" autoplay loop muted playsinline style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block"></video>`;
+  if (p && p.avatarType === 'video' && (p.avatarVideoUrl || p.avatarVideo)) {
+    const src = p.avatarVideoUrl || p.avatarVideo;
+    wrap.innerHTML = `<video src="${src}" autoplay loop muted playsinline style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block"></video>`;
   } else if (p && p.avatarType === 'emoji' && p.avatar) {
     wrap.innerHTML = `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center">${_emojiImg(p.avatar,24)}</div>`;
   } else if (p && p.avatarType === 'photo' && p.avatarData) {
@@ -179,6 +194,31 @@ function updateNavProfileIcon(p) {
   } else {
     wrap.innerHTML = `<svg class="nav-icon" id="nav-profile-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
   }
+}
+
+/**
+ * Универсальный рендер аватарки пользователя (своей или чужой).
+ * Поддерживает: video URL (анимация), GIF/фото base64, emoji.
+ * @param {object} u - объект пользователя с полями avatarType, avatarData, avatarVideoUrl, avatar
+ * @param {number} size - размер в пикселях
+ * @returns {string} HTML-строка
+ */
+function _renderAvatarHtml(u, size) {
+  const sz = size || 40;
+  const st = `width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;display:block`;
+  const aType = u?.avatarType || u?.avatar_type || 'emoji';
+  const aData  = u?.avatarData  || u?.avatar_data  || null;
+  const aVideo = u?.avatarVideoUrl || u?.avatar_video_url || null;
+  const aEmoji = u?.avatar || '😊';
+  if (aType === 'video' && aVideo) {
+    return `<video src="${aVideo}" autoplay loop muted playsinline style="${st}"></video>`;
+  }
+  if (aType === 'photo' && aData) {
+    // <img> автоматически анимирует GIF
+    return `<img src="${aData}" style="${st}" alt="avatar">`;
+  }
+  // emoji fallback
+  return `<span style="font-size:${Math.round(sz*0.6)}px;line-height:${sz}px;display:block;text-align:center">${_emojiImg(aEmoji, Math.round(sz*0.65))}</span>`;
 }
 
 // ══ ЭКРАН ЛОГИНА ═════════════════════════════════════════════════
@@ -834,14 +874,14 @@ async function accountSwitcherSwitch(username) {
   if (!acc) return;
   const cur = profileLoad();
   if (cur) {
-    // Save FULL profile snapshot into accounts cache before switching
+    // Save profile snapshot into accounts cache before switching.
+    // avatarData / avatarVideo / banner хранятся только в IndexedDB, не в accounts.
     accounts[cur.username] = {
       name:        cur.name,
       avatar:      cur.avatar,
       avatarType:  cur.avatarType  || 'emoji',
-      avatarData:  cur.avatarData  || null,
-      avatarVideo: cur.avatarVideo || null,
-      banner:      cur.banner      || null,
+      avatarVideoUrl: cur.avatarVideoUrl || null,
+      // avatarData / avatarVideo / banner — не сохраняем, они в IndexedDB
       bio:         cur.bio         || '',
       color:       cur.color       || 'var(--accent)',
       frame:       cur.frame       || 'none',
@@ -1476,7 +1516,7 @@ function _profilePickVideoAvatar() {
     const file = inp.files?.[0]; if (!file) return;
     if (file.size > 20 * 1024 * 1024) { toast('❌ Видео слишком большое (макс 20 МБ)'); return; }
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = async e => {
       const dataUrl = e.target.result;
       const p = profileLoad(); if (!p) return;
       p.avatarType  = 'video';
@@ -1486,7 +1526,28 @@ function _profilePickVideoAvatar() {
       updateNavProfileIcon(p);
       profileRenderScreen();
       sbPresencePut(p);
-      toast('✅ Видео-аватар установлен');
+      toast('⬆️ Загружаю видео на сервер...');
+      try {
+        const b64  = dataUrl.split(',')[1];
+        const mime = (dataUrl.match(/^data:([^;]+)/) || [])[1] || 'video/mp4';
+        const ext  = mime.split('/')[1] || 'mp4';
+        const url  = await _catboxUpload(b64, `avatar_${p.username}_${Date.now()}.${ext}`, mime);
+        if (url) {
+          p.avatarVideoUrl = url;
+          profileSave(p);
+          if (sbReady()) {
+            await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+              { avatar_type: 'video', avatar_video_url: url },
+              { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+            ).catch(() => {});
+          }
+          toast('✅ Видео-аватар виден всем!');
+        } else {
+          toast('✅ Видео-аватар установлен (локально)');
+        }
+      } catch(_err) {
+        toast('✅ Видео установлен (без синхронизации)');
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -1534,12 +1595,7 @@ function _profileHandleAvatarDataUrl(dataUrl, skipCrop = false) {
 // Перехватываем onNativeBgImagePicked для профиля если ждём фото
 const _origOnNativeBgImagePicked = window.onNativeBgImagePicked;
 window.onNativeBgImagePicked = function(dataUrl) {
-  // desktop-patch.js ставит window._profileWaitingForPhoto (глобально),
-  // social.js ставит локальный _profileWaitingForPhoto — проверяем оба
-  const waiting = _profileWaitingForPhoto || window._profileWaitingForPhoto;
-  if (waiting) {
-    _profileWaitingForPhoto = false;
-    window._profileWaitingForPhoto = false;
+  if (_profileWaitingForPhoto) {
     _profileHandleAvatarDataUrl(dataUrl);
   } else {
     if (_origOnNativeBgImagePicked) _origOnNativeBgImagePicked(dataUrl);
@@ -1675,7 +1731,45 @@ async function profileSaveEdit() {
 
   showScreen('s-profile', 'back');
   setTimeout(profileRenderScreen, 100);
-  toast(usernameChanged ? '✅ Юзернейм изменён   чаты сохранены' : '✅ Профиль сохранён');
+
+  // ── Telegram-style эффект сохранения ─────────────────────────────
+  const _savedMsg = usernameChanged ? '✅ Юзернейм изменён · чаты сохранены' : '✅ Профиль сохранён';
+  toast(_savedMsg);
+  // Анимированный overlay-чекмарк поверх экрана профиля
+  requestAnimationFrame(() => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = [
+      'position:fixed;inset:0;z-index:9999;pointer-events:none',
+      'display:flex;align-items:center;justify-content:center',
+    ].join(';');
+    overlay.innerHTML = `
+      <div id="_save-check" style="
+        width:72px;height:72px;border-radius:50%;
+        background:var(--accent,#e87722);
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 6px 30px rgba(0,0,0,.35);
+        transform:scale(0);opacity:0;
+        transition:transform .22s cubic-bezier(.34,1.5,.64,1),opacity .15s ease;
+      ">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+          stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+          style="transform:scale(0);transition:transform .2s cubic-bezier(.34,1.4,.64,1) .15s">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>`;
+    document.body.appendChild(overlay);
+    const circle = overlay.querySelector('#_save-check');
+    const svg    = overlay.querySelector('svg');
+    requestAnimationFrame(() => {
+      circle.style.transform = 'scale(1)'; circle.style.opacity = '1';
+      svg.style.transform = 'scale(1)';
+    });
+    setTimeout(() => {
+      circle.style.transition = 'transform .18s ease,opacity .18s ease';
+      circle.style.transform = 'scale(0)'; circle.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 200);
+    }, 900);
+  });
 }
 
 async function profileDeleteAccount() {
@@ -2271,8 +2365,9 @@ async function sbSaveUser(p) {
     name:        p.name,
     pwd_hash:    p.pwdHash    || null,
     avatar:      p.avatar     || '😊',
-    avatar_type: p.avatarType || 'emoji',
-    avatar_data: p.avatarData || null,
+    avatar_type:      p.avatarType     || 'emoji',
+    avatar_data:      p.avatarData     || null,
+    avatar_video_url: p.avatarVideoUrl || null,
     bio:         p.bio        || '',
     status:      p.status     || 'online',
     color:       p.color      || '#e87722',
@@ -2765,6 +2860,7 @@ async function sbPollPresence() {
   const _mapU = u => ({
     username: u.username, name: u.name,
     avatar: u.avatar, avatarType: u.avatar_type, avatarData: u.avatar_data,
+    avatarVideoUrl: u.avatar_video_url || null,
     color: u.color, status: u.status,
     vip: u.vip, badge: u.badge,
     banner: u.banner || null, frame: u.frame || null, bio: u.bio || ''
@@ -2788,7 +2884,7 @@ async function sbEnrichUsersFromUsersTable() {
   try {
     const usernames = _allKnownUsers.map(u => u.username).slice(0, 50);
     const q = usernames.map(u => encodeURIComponent(u)).join(',');
-    const rows = await sbGet('users', `select=username,banner,frame,bio,avatar_data,avatar_type,vip,badge,color&username=in.(${usernames.map(u => '"' + u + '"').join(',')})&limit=50`);
+    const rows = await sbGet('users', `select=username,banner,frame,bio,avatar_data,avatar_type,avatar_video_url,vip,badge,color&username=in.(${usernames.map(u => '"' + u + '"').join(',')})&limit=50`);
     if (!Array.isArray(rows)) return;
     rows.forEach(row => {
       const user = _allKnownUsers.find(u => u.username === row.username);
@@ -2800,6 +2896,8 @@ async function sbEnrichUsersFromUsersTable() {
         if (row.badge     !== undefined) user.badge     = row.badge;
         if (row.color     !== undefined) user.color     = row.color;
         if (row.avatar_data && !user.avatarData) user.avatarData = row.avatar_data;
+        if (row.avatar_type) user.avatarType = row.avatar_type;
+        if (row.avatar_video_url) user.avatarVideoUrl = row.avatar_video_url;
       }
       const peer = _profileOnlinePeers.find(u => u.username === row.username);
       if (peer) {
@@ -2810,6 +2908,8 @@ async function sbEnrichUsersFromUsersTable() {
         if (row.badge     !== undefined) peer.badge     = row.badge;
         if (row.color     !== undefined) peer.color     = row.color;
         if (row.avatar_data && !peer.avatarData) peer.avatarData = row.avatar_data;
+        if (row.avatar_type) peer.avatarType = row.avatar_type;
+        if (row.avatar_video_url) peer.avatarVideoUrl = row.avatar_video_url;
       }
     });
   } catch(e) {}
@@ -3472,14 +3572,15 @@ function profileRenderOnline() {
     const unknownFriends = friends.filter(u => !_allKnownUsers.some(x => x.username === u));
     if (unknownFriends.length) {
       const unames = unknownFriends.slice(0,20).map(u => '"'+u+'"').join(',');
-      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,color,status,vip,badge&username=in.(${unames})&limit=20`)
+      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,avatar_video_url,color,status,vip,badge&username=in.(${unames})&limit=20`)
         .then(rows => {
           if (!Array.isArray(rows)) return;
           let added = false;
           rows.forEach(u => {
             if (!_allKnownUsers.some(x => x.username === u.username)) {
               _allKnownUsers.push({ username: u.username, name: u.name, avatar: u.avatar,
-                avatarType: u.avatar_type, avatarData: u.avatar_data, color: u.color,
+                avatarType: u.avatar_type, avatarData: u.avatar_data,
+                avatarVideoUrl: u.avatar_video_url || null, color: u.color,
                 status: u.status, vip: u.vip, badge: u.badge, _online: false });
               added = true;
             }
@@ -3500,10 +3601,8 @@ function profileRenderOnline() {
     return `
       <div class="online-user-row" onclick="${isMe ? '' : `peerProfileOpen('${escHtml(u.username)}')`}"
         style="cursor:${isMe ? 'default' : 'pointer'};-webkit-tap-highlight-color:transparent">
-        <div style="width:48px;height:48px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;position:relative">
-          ${u.avatarType === 'photo' && u.avatarData
-            ? `<img src="${u.avatarData}" style="width:48px;height:48px;border-radius:50%;object-fit:cover">`
-            : (u.avatar || '😊')}
+        <div style="width:48px;height:48px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;position:relative;overflow:hidden">
+          ${_renderAvatarHtml(u, 48)}
           <div style="position:absolute;bottom:1px;right:1px;width:12px;height:12px;border-radius:50%;background:${isOnline?'#4caf7d':'#666'};border:2px solid var(--surface)"></div>
         </div>
         <div style="flex:1;min-width:0">
@@ -6480,10 +6579,75 @@ function showChatContextMenu(username) {
         style="width:100%;padding:14px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:16px;-webkit-tap-highlight-color:transparent">
         <span style="font-size:20px">☑️</span> Выбрать
       </button>
+      <div style="height:1px;background:rgba(255,255,255,.06);margin:0 16px"></div>
+      <button onclick="document.getElementById('chat-ctx-menu')?.remove();_confirmDeleteChatForBoth('${escHtml(username)}')"
+        style="width:100%;padding:14px 20px;background:none;border:none;color:var(--danger,#e05555);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:16px;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:20px">🗑</span> Удалить переписку для всех
+      </button>
     </div>`;
 
   sheet.addEventListener('click', () => sheet.remove());
   document.body.appendChild(sheet);
+}
+
+// ┄┄ Удаление переписки для обоих участников (с сервера) ┄┄┄┄┄┄┄┄┄┄┄
+function _confirmDeleteChatForBoth(username) {
+  const peer = peersLoad()[username] || {};
+  const name = peer.displayName || peer.display_name || username;
+  const sh = document.createElement('div');
+  sh.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
+  sh.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot,0px));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">🗑 Удалить переписку?</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">
+        Все сообщения с <b>${escHtml(name)}</b> будут удалены у <b>обоих</b> участников с сервера. Это действие нельзя отменить.
+      </div>
+      <button id="_dfb-btn" style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
+        🗑 Удалить для всех
+      </button>
+      <button onclick="this.closest('[style*=fixed]').remove()"
+        style="width:100%;padding:14px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">
+        Отмена
+      </button>
+    </div>`;
+  sh.addEventListener('click', () => sh.remove());
+  document.body.appendChild(sh);
+  sh.querySelector('#_dfb-btn').addEventListener('click', async () => {
+    sh.remove();
+    await _doDeleteChatForBoth(username);
+  });
+}
+
+async function _doDeleteChatForBoth(username) {
+  const p = profileLoad();
+  if (!p) return;
+  const chatKey = sbChatKey(p.username, username);
+
+  // 1. Удаляем с Supabase все сообщения чата
+  if (sbReady()) {
+    try {
+      await sbDelete('messages', `chat_key=eq.${encodeURIComponent(chatKey)}`);
+      toast('🗑 Переписка удалена с сервера');
+    } catch(_) {
+      toast('⚠️ Не удалось удалить с сервера');
+    }
+  }
+
+  // 2. Удаляем локально
+  const msgs = msgLoad();
+  delete msgs[username];
+  msgSave(msgs);
+
+  // 3. Убираем из списка чатов
+  const chats = chatsLoad().filter(u => u !== username);
+  chatsSave(chats);
+
+  // 4. Помечаем как удалённый (hidden_chats) для синхронизации
+  _markChatDeleted(username);
+
+  messengerUpdateBadge();
+  messengerRenderList();
 }
 
 let _msgSelectMode = false;
@@ -6806,13 +6970,10 @@ function messengerRenderList(filter) {
       ? `msgToggleSelect('${username}', event)`
       : `messengerOpenChat('${username}')`;
 
-    // avatar: photo support (группы и личные чаты)
-    const avatarData = peer?.avatarData || peer?.avatar_data;
+    // avatar: photo/video support (группы и личные чаты)
     const avatarHtml = (_isGroupChat && _groupData?.avatarType === 'photo' && _groupData?.avatarData)
       ? `<img src="${_groupData.avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
-      : (peer?.avatarType === 'photo' || peer?.avatar_type === 'photo') && avatarData
-        ? `<img src="${avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
-        : `${_emojiImg(avatar,30)}`;
+      : peer ? _renderAvatarHtml(peer, 52) : `${_emojiImg(avatar,30)}`;
 
     const _pinned = _pins.includes(username);
     // Локальный никнейм (если задан)
@@ -6995,13 +7156,13 @@ function _doOpenChat(username) {
   if (hdrAvatar) {
     const _hdrGrp = _openedGroup;
     const hasGrpPhoto = _hdrGrp?.avatarType === 'photo' && _hdrGrp?.avatarData;
-    const hasPhoto = !hasGrpPhoto && (peer?.avatarType === 'photo') && peer?.avatarData;
+    const hasPeerAvatar = !hasGrpPhoto && peer && (peer.avatarType === 'photo' || peer.avatarType === 'video');
     if (hasGrpPhoto) {
       hdrAvatar.style.background = 'transparent';
       hdrAvatar.innerHTML = `<img src="${_hdrGrp.avatarData}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">`;
-    } else if (hasPhoto) {
+    } else if (hasPeerAvatar) {
       hdrAvatar.style.background = 'transparent';
-      hdrAvatar.innerHTML = `<img src="${peer.avatarData}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">`;
+      hdrAvatar.innerHTML = _renderAvatarHtml(peer, 36);
     } else {
       hdrAvatar.style.background = _hdrGrp ? 'linear-gradient(135deg,#2b5797,#1e3f6f)' : (peer?.color || 'var(--surface3)');
       hdrAvatar.innerHTML = _hdrGrp
@@ -7037,7 +7198,7 @@ function _doOpenChat(username) {
     );
     if (unknownMembers.length) {
       const unames = unknownMembers.slice(0, 30).map(u => `"${u}"`).join(',');
-      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,color,status,vip,badge&username=in.(${unames})&limit=30`)
+      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,avatar_video_url,color,status,vip,badge&username=in.(${unames})&limit=30`)
         .then(rows => {
           if (!Array.isArray(rows)) return;
           rows.forEach(u => {
@@ -7045,7 +7206,8 @@ function _doOpenChat(username) {
             _allKnownUsers.push({
               username: u.username, name: u.name,
               avatar: u.avatar, avatarType: u.avatar_type,
-              avatarData: u.avatar_data, color: u.color,
+              avatarData: u.avatar_data, avatarVideoUrl: u.avatar_video_url || null,
+              color: u.color,
               status: u.status, vip: u.vip, badge: u.badge, _online: false
             });
           });
@@ -7059,7 +7221,7 @@ function _doOpenChat(username) {
     ))];
     if (msgAuthors.length) {
       const unames2 = msgAuthors.slice(0, 30).map(u => `"${u}"`).join(',');
-      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,color,status,vip,badge&username=in.(${unames2})&limit=30`)
+      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,avatar_video_url,color,status,vip,badge&username=in.(${unames2})&limit=30`)
         .then(rows => {
           if (!Array.isArray(rows)) return;
           rows.forEach(u => {
@@ -7067,7 +7229,8 @@ function _doOpenChat(username) {
             _allKnownUsers.push({
               username: u.username, name: u.name,
               avatar: u.avatar, avatarType: u.avatar_type,
-              avatarData: u.avatar_data, color: u.color,
+              avatarData: u.avatar_data, avatarVideoUrl: u.avatar_video_url || null,
+              color: u.color,
               status: u.status, vip: u.vip, badge: u.badge, _online: false
             });
           });
@@ -7130,10 +7293,7 @@ function messengerRenderMessages(animateLast) {
 
     // Аватар: фото > emoji > первая буква
     const _peerColor = peer?.color || 'var(--surface3)';
-    const _hasPhoto = (peer?.avatarType === 'photo' || peer?.avatar_type === 'photo') && (peer?.avatarData || peer?.avatar_data);
-    const _peerAvatar = _hasPhoto
-      ? `<img src="${peer.avatarData||peer.avatar_data}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`
-      : `${_emojiImg(peer?.avatar || msg.from.charAt(0).toUpperCase(), 18)}`;
+    const _peerAvatar = peer ? _renderAvatarHtml(peer, 28) : `${_emojiImg(msg.from.charAt(0).toUpperCase(), 18)}`;
 
     const avatarEl = (_isGroupChat && showAvatar && !isMe)
       ? `<div style="width:28px;height:28px;border-radius:50%;background:${_peerColor};display:flex;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-end;overflow:hidden;cursor:pointer" onclick="peerProfileOpen('${msg.from}')">${_peerAvatar}</div>`
@@ -8429,7 +8589,7 @@ function mcCopyMsg(idx) {
 }
 
 // ┄┄ Удаление сообщения: анимация + сервер + синхронизация для всех ┄┄
-async function mcDeleteMsg(idx) {
+async function mcDeleteMsg(idx, forAll = true) {
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) return;
   const msg = msgs[_msgCurrentChat][idx];
@@ -8453,7 +8613,7 @@ async function mcDeleteMsg(idx) {
 
   // 3. Удаляем с сервера (chat_key одинаковый для обоих)
   const p = profileLoad();
-  if (p && sbReady() && msg.ts) {
+  if (forAll && p && sbReady() && msg.ts) {
     const chatKey = sbChatKey(p.username, _msgCurrentChat);
     sbDelete('messages',
       `chat_key=eq.${encodeURIComponent(chatKey)}&ts=eq.${msg.ts}`
@@ -8479,11 +8639,20 @@ function mcConfirmDelete(idx) {
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">Удалить сообщение?</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:20px">${isMe
         ? 'Сообщение будет удалено у всех участников.'
-        : 'Сообщение будет удалено только у тебя.'}</div>
-      <button onclick="mcDeleteMsg(${idx});document.getElementById('mc-delete-confirm')?.remove()"
-        style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
-        🗑 Удалить${isMe ? ' для всех' : ''}
-      </button>
+        : 'Выбери, у кого удалить сообщение.'}</div>
+      ${isMe
+        ? `<button onclick="mcDeleteMsg(${idx},true);document.getElementById('mc-delete-confirm')?.remove()"
+          style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
+          🗑 Удалить для всех
+        </button>`
+        : `<button onclick="mcDeleteMsg(${idx},true);document.getElementById('mc-delete-confirm')?.remove()"
+          style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
+          🗑 Удалить у всех
+        </button>
+        <button onclick="mcDeleteMsg(${idx},false);document.getElementById('mc-delete-confirm')?.remove()"
+          style="width:100%;padding:14px;background:rgba(200,80,80,.18);border:none;border-radius:14px;color:var(--danger,#e05555);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px">
+          🗑 Удалить у себя
+        </button>`}
       <button onclick="document.getElementById('mc-delete-confirm')?.remove()"
         style="width:100%;padding:14px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">
         Отмена
@@ -8542,19 +8711,21 @@ async function mcEnforceMessageLimit(username) {
 
 // ┄┄ Forward ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _mcForwardText = null;
+let _mcForwardMsg  = null; // весь объект сообщения для пересылки
 
 function mcForwardMsg(idx) {
   const msgs = msgLoad();
-  const msg  = (msgs[_msgCurrentChat] || [])[idx];
-  if (!msg) return;
-  _mcForwardText = msg.text || msg.sticker || '';
-  // Show chat picker
+  const orig = (msgs[_msgCurrentChat] || [])[idx];
+  if (!orig) return;
+  _mcForwardMsg  = orig;
+  _mcForwardText = orig.text || orig.sticker || ''; // совместимость
+
   const chats = chatsLoad().filter(u => u !== _msgCurrentChat);
   if (chats.length === 0) { toast('Нет других чатов'); return; }
 
   const sheet = document.createElement('div');
   sheet.id = 'mc-forward-sheet';
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9200;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:fadeIn .12s ease';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9200;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:mcFadeIn .12s ease';
   const p = profileLoad();
   const chatItems = chats.map(u => {
     const peer = _profileOnlinePeers.find(x=>x.username===u) || _allKnownUsers.find(x=>x.username===u);
@@ -8564,10 +8735,14 @@ function mcForwardMsg(idx) {
       <span style="font-weight:600">${escHtml(peer?.name||u)}</span>
     </button>`;
   }).join('');
+  // Превью пересылаемого сообщения
+  const prevText = orig.text ? orig.text.slice(0,60)+(orig.text.length>60?'…':'')
+    : orig.image ? '🖼 Медиа' : orig.fileType==='sticker' ? '🎨 Стикер' : '💬 Сообщение';
   sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(14px + var(--safe-bot));max-height:70vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(14px + var(--safe-bot));max-height:70vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:8px auto 4px"></div>
-      <div style="font-size:14px;font-weight:700;color:var(--muted);padding:8px 20px 10px">Переслать в...</div>
+      <div style="font-size:14px;font-weight:700;color:var(--muted);padding:8px 20px 4px">Переслать...</div>
+      <div style="font-size:12px;color:var(--muted);padding:0 20px 10px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">↩ ${escHtml(prevText)}</div>
       ${chatItems}
     </div>`;
   sheet.addEventListener('click', () => sheet.remove());
@@ -8575,19 +8750,34 @@ function mcForwardMsg(idx) {
 }
 
 function mcDoForward(toUsername) {
-  if (!_mcForwardText) return;
+  const orig = _mcForwardMsg;
+  if (!orig && !_mcForwardText) return;
   const p = profileLoad();
   if (!p) return;
   const ts = Date.now();
-  const msg = { from: p.username, to: toUsername, text: '↩ ' + _mcForwardText, ts, delivered: false, read: false };
+  // Сохраняем медиа при пересылке (картинки, файлы, стикеры)
+  const fwd = {
+    from: p.username, to: toUsername, ts, delivered: false, read: false,
+    text: orig ? (orig.text ? '↩ ' + orig.text : '') : ('↩ ' + _mcForwardText),
+    ...(orig?.image    ? { image: orig.image }                               : {}),
+    ...(orig?.fileLink ? { fileLink: orig.fileLink, fileName: orig.fileName,
+                           fileType: orig.fileType, fileSize: orig.fileSize } : {}),
+    ...(orig?.duration ? { duration: orig.duration }                         : {}),
+  };
   const msgs = msgLoad();
   if (!msgs[toUsername]) msgs[toUsername] = [];
-  msgs[toUsername].push(msg);
+  msgs[toUsername].push(fwd);
   msgSave(msgs);
   const chats = chatsLoad();
   if (!chats.includes(toUsername)) { chats.unshift(toUsername); chatsSave(chats); }
-  sbInsert('messages', { chat_key: sbChatKey(p.username, toUsername), from_user: p.username, to_user: toUsername, text: msg.text, ts });
+  sbInsert('messages', {
+    chat_key: sbChatKey(p.username, toUsername),
+    from_user: p.username, to_user: toUsername,
+    text: fwd.text || '↩ Медиа', ts,
+    ...(orig?.image ? { extra: JSON.stringify({ image: orig.image, fileType: orig.fileType || 'image' }) } : {}),
+  });
   _mcForwardText = null;
+  _mcForwardMsg  = null;
   toast('↪️ Переслано');
 }
 
@@ -10569,13 +10759,10 @@ function peerProfileOpen(username) {
   const noCopy    = isCopyBlocked(username);
 
   // Баннер/фон   тот же подход что и у своего профиля
-  const hasPhoto  = peer.avatarType === 'photo' && peer.avatarData;
   const peerBannerStyle = peer.banner
     ? (peer.banner.startsWith('background:') ? peer.banner : `background:${peer.banner}`)
     : `background:linear-gradient(135deg,${peer.color||'var(--accent)'}66,${peer.color||'var(--accent)'}22)`;
-  const peerAvatarHtml = hasPhoto
-    ? `<img src="${peer.avatarData}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-    : `<span style="font-size:46px;line-height:1">${peer.avatar||'😊'}</span>`;
+  const peerAvatarHtml = _renderAvatarHtml(peer, 96);
 
   if (body) body.innerHTML = `
     <!-- Баннер + аватар (тот же стиль что и собственный профиль) -->
@@ -11373,22 +11560,13 @@ function messengerUpdateBadge() {
   const badge = document.getElementById('msg-unread-badge');
   if (badge) { badge.style.display = total > 0 ? '' : 'none'; badge.textContent = total; }
 
-  // Красная точка на кнопке мессенджера в нав-баре
+  // Красная точка на кнопке мессенджера в нав-баре (только там!)
   const navMsgDot = document.getElementById('nav-msg-dot');
   if (navMsgDot) navMsgDot.style.display = total > 0 ? '' : 'none';
 
-  // Также точка на кнопке профиля (если вдруг оба используются)
-  let navDot = document.getElementById('nav-profile-msg-dot');
-  const navProfile = document.getElementById('nav-profile');
-  if (navProfile && !navDot) {
-    navDot = document.createElement('span');
-    navDot.id = 'nav-profile-msg-dot';
-    navDot.className = 'nav-badge';
-    navDot.style.cssText = 'position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#e05555;border:2px solid var(--bg,#0d0d0d);display:none';
-    const wrap = navProfile.querySelector('.nav-icon-wrap');
-    if (wrap) { wrap.style.position = 'relative'; wrap.appendChild(navDot); }
-  }
-  if (navDot) navDot.style.display = total > 0 ? '' : 'none';
+  // Убираем старую точку с кнопки профиля если была добавлена ранее
+  const oldNavDot = document.getElementById('nav-profile-msg-dot');
+  if (oldNavDot) oldNavDot.remove();
 }
 
 function messengerOpenChatFrom(username) {
@@ -11641,30 +11819,7 @@ function _closeSheet(sheetEl) {
   };
 })();
 
-// ┄┄ Патч forward sheet: добавляем анимацию и slide-up ┄┄
-(function() {
-  const orig = window.mcForwardMsg;
-  if (typeof orig !== 'function') return;
-  window.mcForwardMsg = function(idx) {
-    orig(idx);
-    // Добавляем анимацию к inner div
-    setTimeout(() => {
-      const sheet = document.getElementById('mc-forward-sheet');
-      if (!sheet) return;
-      const inner = sheet.querySelector('[style*="border-radius:20px 20px 0 0"]');
-      if (inner && !inner.style.animation) {
-        inner.style.animation = 'mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)';
-      }
-      // Закрытие с анимацией
-      const oldListener = sheet._clickHandler;
-      sheet.removeEventListener('click', oldListener);
-      sheet._clickHandler = (e) => {
-        if (e.target === sheet) _closeSheet(sheet);
-      };
-      sheet.addEventListener('click', sheet._clickHandler);
-    }, 0);
-  };
-})();
+// ┄┄ (forward sheet patch removed — mcForwardMsg rebuilt inline) ┄┄
 
 // ┄┄ Мотивация ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 // mcEmojiIn используется в mute sheet   убедимся что анимация определена
