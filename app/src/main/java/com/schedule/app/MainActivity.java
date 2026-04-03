@@ -2274,7 +2274,7 @@ public class MainActivity extends Activity {
                     UploadProgressCallback progressCb = (pct) -> {
                         final int p = pct;
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadProgress='function')onUploadProgress('"
+                            "if(typeof onUploadProgress==='function')onUploadProgress('"
                             + id + "'," + p + ")", null));
                     };
                     // Сначала пробуем pixeldrain (быстрее)
@@ -2298,19 +2298,19 @@ public class MainActivity extends Activity {
                     if (res.optBoolean("ok")) {
                         final String fileUrl = res.getString("url");
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadDone='function')onUploadDone('"
+                            "if(typeof onUploadDone==='function')onUploadDone('"
                             + id + "','" + fileUrl + "')", null));
                     } else {
                         final String err = res.optString("error", "Upload failed");
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadError='function')onUploadError('"
+                            "if(typeof onUploadError==='function')onUploadError('"
                             + id + "','" + err.replace("'", "\\'") + "')", null));
                     }
                 } catch (Exception e) {
                     log.e(TAG, "nativeUploadFileAsync error: " + e.getMessage());
                     final String err = e.getMessage() != null ? e.getMessage() : "Unknown error";
                     webView.post(() -> webView.evaluateJavascript(
-                        "if(typeof onUploadError='function')onUploadError('"
+                        "if(typeof onUploadError==='function')onUploadError('"
                         + id + "','" + err.replace("'", "\\'") + "')", null));
                 }
             }).start();
