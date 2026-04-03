@@ -462,54 +462,161 @@ const DNS_PROVIDERS={
 
 // ══ ПРОКСИ провайдеры ══
 // format:
-// ══ GITHUB FALLBACK ══════════════════════════════════════════════
-// Если файлы расписания не грузятся с Яндекс Диска,
-// пробуем взять их из репозитория на GitHub.
+// ══ GITHUB РАСПИСАНИЕ ════════════════════════════════════════════
+// Репозиторий с файлами расписания. Может быть основным источником
+// или резервом при недоступности Яндекс Диска.
 const GITHUB_FALLBACK = {
-  owner: 'LomKich',
-  repo:  'scheduletxt',
-  branch: 'main',
+  owner:   'LomKich',
+  repo:    'scheduletxt',
+  branch:  'main',
   apiBase: 'https://api.github.com/repos/LomKich/scheduletxt/contents/',
   rawBase: 'https://raw.githubusercontent.com/LomKich/scheduletxt/main/',
 };
 
-// Получить список файлов расписания из GitHub
-async function githubListFiles() {
-  const url = GITHUB_FALLBACK.apiBase;
-  let resp;
-  // На десктопе и Android — прямой fetch; в браузере нужен прокси
-  if (window.__desktopMode || (window.Android && window.Android.nativeFetch)) {
-    resp = await fetch(url, {
-      headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'ScheduleApp' },
-      signal: AbortSignal.timeout(15000)
-    });
-  } else {
-    // В браузере GitHub API не требует прокси (нет CORS-блока)
-    resp = await fetch(url, {
-      headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'ScheduleApp' },
-      signal: AbortSignal.timeout(15000)
-    });
-  }
-  if (!resp.ok) throw new Error('GitHub API: HTTP ' + resp.status);
-  const items = await resp.json();
-  // Фильтруем только .doc/.docx файлы
-  return items
-    .filter(i => i.type === 'file' && /\.(doc|docx)$/i.test(i.name))
-    .map(i => ({
-      name: i.name,
-      path: '/' + i.name,
-      size: i.size || 0,
-      resourceId: i.sha || '',
-      _githubRaw: GITHUB_FALLBACK.rawBase + encodeURIComponent(i.name),
-    }));
+// Зеркала GitHub API (обход блокировок в РФ)
+const GITHUB_API_MIRRORS = [
+  'https://api.github.com/repos/LomKich/scheduletxt/contents/',
+  'https://api.github.moeyy.xyz/repos/LomKich/scheduletxt/contents/',
+  'https://api.kgithub.com/repos/LomKich/scheduletxt/contents/',
+];
+// Зеркала raw.githubusercontent.com
+const GITHUB_RAW_MIRRORS = [
+  'https://raw.githubusercontent.com/LomKich/scheduletxt/main/',
+  'https://ghproxy.com/https://raw.githubusercontent.com/LomKich/scheduletxt/main/',
+  'https://mirror.ghproxy.com/https://raw.githubusercontent.com/LomKich/scheduletxt/main/',
+  'https://ghfast.top/https://raw.githubusercontent.com/LomKich/scheduletxt/main/',
+];
+
+// PAT-токен (Personal Access Token) — снимает лимит 60 req/час
+// Сохраняется в localStorage, задаётся командой /github token <PAT>
+function githubGetPAT() {
+  return localStorage.getItem('sapp_github_pat') || '';
+}
+function githubSetPAT(token) {
+  if (token) localStorage.setItem('sapp_github_pat', token);
+  else localStorage.removeItem('sapp_github_pat');
+}
+function githubApiHeaders() {
+  const h = { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'ScheduleApp' };
+  const pat = githubGetPAT();
+  if (pat) h['Authorization'] = 'Bearer ' + pat;
+  return h;
 }
 
-// Скачать файл расписания напрямую с GitHub (raw URL)
+// Форматы файлов расписания (добавь нужные)
+const SCHEDULE_FILE_REGEX = /\.(doc|docx|xlsx|txt|pdf)$/i;
+
+// Получить список файлов из GitHub (с перебором зеркал)
+async function githubListFiles() {
+  const headers = githubApiHeaders();
+  let lastErr = null;
+
+  for (const apiUrl of GITHUB_API_MIRRORS) {
+    try {
+      let items;
+      if (window.Android && window.Android.nativeFetch) {
+        // Android: через Java-бридж (обходит CORS и блокировки)
+        const resStr = await new Promise((res, rej) => setTimeout(() => {
+          try { res(window.Android.nativeFetch(apiUrl)); }
+          catch(e) { rej(e); }
+        }, 0));
+        const parsed = JSON.parse(resStr);
+        if (!parsed.ok) throw new Error('nativeFetch: ' + (parsed.error || parsed.status));
+        items = JSON.parse(parsed.body);
+      } else if (window.__desktopMode) {
+        // Electron: webSecurity=false, прямой fetch
+        const r = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(15000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        items = await r.json();
+      } else {
+        // Браузер: прямой fetch (GitHub API не блокирует CORS)
+        const r = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(15000) });
+        if (r.status === 403) throw new Error('Rate limit. Добавь PAT-токен: /github token <TOKEN>');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        items = await r.json();
+      }
+
+      if (!Array.isArray(items)) throw new Error('Ожидался массив файлов');
+
+      const files = items
+        .filter(i => i.type === 'file' && SCHEDULE_FILE_REGEX.test(i.name))
+        .map(i => ({
+          name: i.name,
+          path: '/' + i.name,
+          size: i.size || 0,
+          resourceId: i.sha || '',
+          _githubRaw: GITHUB_FALLBACK.rawBase + encodeURIComponent(i.name),
+          _githubSha: i.sha || '',
+        }));
+
+      appLog('ok', 'githubListFiles: ' + files.length + ' файлов с ' + apiUrl);
+      return files;
+    } catch(e) {
+      appLog('warn', 'githubListFiles mirror failed [' + apiUrl + ']: ' + e.message);
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('Все зеркала GitHub API недоступны');
+}
+
+// Скачать файл с GitHub (перебор raw-зеркал + nativeDownloadBase64 на Android)
 async function githubDownloadFile(rawUrl) {
   appLog('info', 'githubDownloadFile: ' + rawUrl);
-  const resp = await fetch(rawUrl, { signal: AbortSignal.timeout(30000) });
-  if (!resp.ok) throw new Error('GitHub raw: HTTP ' + resp.status);
-  return resp.arrayBuffer();
+
+  // Строим список зеркал из исходного rawUrl
+  const fileName = rawUrl.split('/').pop();
+  const mirrorUrls = GITHUB_RAW_MIRRORS.map(base => base + fileName);
+  // Если rawUrl уже зеркало — ставим его первым
+  if (!mirrorUrls.includes(rawUrl)) mirrorUrls.unshift(rawUrl);
+
+  let lastErr = null;
+  for (const url of mirrorUrls) {
+    try {
+      if (window.Android && window.Android.nativeDownloadBase64) {
+        // Android: Java качает напрямую (без CORS, без блокировок через прокси-настройки)
+        const buf = await nativeDownloadBuf(url);
+        appLog('ok', 'githubDownloadFile OK via nativeDownloadBase64: ' + url);
+        return buf;
+      } else if (window.__desktopMode) {
+        const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.arrayBuffer();
+      } else {
+        // Браузер: прямой fetch (raw.githubusercontent.com поддерживает CORS)
+        const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.arrayBuffer();
+      }
+    } catch(e) {
+      appLog('warn', 'githubDownloadFile failed [' + url + ']: ' + e.message);
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('Не удалось скачать файл с GitHub');
+}
+
+// Показывает в статус-баре состояние GitHub (лимит, токен)
+async function githubCheckStatus() {
+  try {
+    const headers = githubApiHeaders();
+    const checkUrl = 'https://api.github.com/rate_limit';
+    let data;
+    if (window.Android && window.Android.nativeFetch) {
+      const r = JSON.parse(window.Android.nativeFetch(checkUrl));
+      if (!r.ok) throw new Error(r.error);
+      data = JSON.parse(r.body);
+    } else {
+      const r = await fetch(checkUrl, { headers, signal: AbortSignal.timeout(8000) });
+      data = await r.json();
+    }
+    const core = data?.rate || data?.resources?.core || {};
+    const rem  = core.remaining ?? '?';
+    const lim  = core.limit     ?? '?';
+    const pat  = githubGetPAT();
+    return `GitHub: ${rem}/${lim} запросов${pat ? ' (токен активен ✅)' : ' (без токена)'}`;
+  } catch(e) {
+    return 'GitHub: статус недоступен';
+  }
 }
 
 //   'append_encoded' → proxy_url + encodeURIComponent(target)
@@ -958,6 +1065,17 @@ function loadLocal(){
     if(pi)pi.value=S.customProxy;
     const ci=document.getElementById('custom-dns-input');
     if(ci)ci.value=S.customDns;
+    // Восстанавливаем сохранённый GitHub-репозиторий
+    const savedRepo = localStorage.getItem('sapp_github_repo');
+    if (savedRepo && savedRepo.includes('/')) {
+      const [ghOwner, ghRepo] = savedRepo.split('/');
+      GITHUB_FALLBACK.owner   = ghOwner;
+      GITHUB_FALLBACK.repo    = ghRepo;
+      GITHUB_FALLBACK.apiBase = `https://api.github.com/repos/${savedRepo}/contents/`;
+      GITHUB_FALLBACK.rawBase = `https://raw.githubusercontent.com/${savedRepo}/main/`;
+      GITHUB_API_MIRRORS[0]   = GITHUB_FALLBACK.apiBase;
+      GITHUB_RAW_MIRRORS[0]   = GITHUB_FALLBACK.rawBase;
+    }
   }catch(e){}
 }
 function saveLocal(){
@@ -2803,11 +2921,10 @@ function saveUrlAndLoad(){
 }
 async function loadFiles(){
   appLog('info','loadFiles: start, url='+S.url?.slice(0,40));
-  if(!S.url){showHomeState('no-url');return;}
   hideHomeHints();
 
   // Если есть кэшированный список — показываем сразу, не ждём сеть
-  const hasCached=S.files&&S.files.length>0;
+  const hasCached = S.files && S.files.length > 0;
   if(hasCached){
     renderFileList(true);
     setStatus('home-status','📦 Из кэша, обновляю...');
@@ -2815,46 +2932,80 @@ async function loadFiles(){
     setStatus('home-status','Загружаю файлы...');setBar('home-bar',30);
   }
 
-  // Попытка 1: Яндекс Диск
-  try{
-    const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
-    S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&/\.(doc|docx)$/i.test(i.name))
-      .map(i=>({name:i.name,path:i.path||('/'+i.name),size:i.size||0,resourceId:i.resource_id||''}));
-    setBar('home-bar',100);setStatus('home-status',`Найдено: ${S.files.length} файлов`);
-    setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
-    saveLocal();
-    appLog('ok','loadFiles: loaded '+S.files.length+' files from Yandex');
-    renderFileList(false);
-    return;
-  }catch(yadErr){
-    appLog('warn','loadFiles: Yandex failed ('+yadErr.message+'), trying GitHub fallback...');
-  }
+  // Режим источника: 'github' — только GitHub; 'yandex' — Яндекс → GitHub; по умолчанию github
+  const srcMode = localStorage.getItem('sapp_schedule_source') || 'github';
 
-  // Попытка 2: GitHub-репозиторий (LomKich/scheduletxt)
-  try{
-    setStatus('home-status','📡 Яндекс недоступен, пробую GitHub...');setBar('home-bar',50);
-    const ghFiles = await githubListFiles();
-    if(ghFiles.length > 0){
+  // ── Источник: GitHub (первичный или единственный) ────────────────
+  if (srcMode === 'github' || !S.url) {
+    try{
+      setStatus('home-status','📡 Загружаю с GitHub...');setBar('home-bar',40);
+      const ghFiles = await githubListFiles();
+      if(ghFiles.length === 0) throw new Error('Репозиторий пуст (нет .doc/.docx/.xlsx файлов)');
       S.files = ghFiles;
       setBar('home-bar',100);
       setStatus('home-status',`GitHub: ${S.files.length} файлов`);
-      setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','📂 GitHub-резерв');},1200);
+      setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
       saveLocal();
-      appLog('ok','loadFiles: loaded '+S.files.length+' files from GitHub');
+      appLog('ok','loadFiles: ' + S.files.length + ' файлов с GitHub');
       renderFileList(false, /*githubMode=*/true);
       return;
-    }else{
-      throw new Error('Репозиторий пуст или файлов нет');
+    }catch(ghErr){
+      appLog('err','loadFiles: GitHub failed: '+ghErr.message);
+      if(hasCached){
+        renderFileList(true);
+        toast('📡 GitHub недоступен — расписание из кэша');
+        setBar('home-bar',0);setStatus('home-status','');
+        return;
+      }
+      if(!S.url){ showHomeState('error','GitHub недоступен: '+ghErr.message); setBar('home-bar',0);setStatus('home-status',''); return; }
+      // Если задан Яндекс URL — пробуем его как запасной
+      appLog('warn','loadFiles: GitHub fail, trying Yandex fallback...');
     }
-  }catch(ghErr){
-    appLog('err','loadFiles: GitHub fallback failed: '+ghErr.message);
-    setBar('home-bar',0);setStatus('home-status','');
-    if(hasCached){
-      renderFileList(true);
-      toast('📡 Нет соединения — расписание из кэша');
-    }else{
-      showHomeState('error','Яндекс Диск и GitHub резерв недоступны');
+  }
+
+  // ── Источник: Яндекс Диск ────────────────────────────────────────
+  if(!S.url){ showHomeState('no-url'); return; }
+  try{
+    setStatus('home-status','Загружаю с Яндекс Диска...');setBar('home-bar',50);
+    const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
+    S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&SCHEDULE_FILE_REGEX.test(i.name))
+      .map(i=>({name:i.name,path:i.path||('/'+i.name),size:i.size||0,resourceId:i.resource_id||''}));
+    setBar('home-bar',100);setStatus('home-status',`Яндекс: ${S.files.length} файлов`);
+    setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
+    saveLocal();
+    appLog('ok','loadFiles: '+S.files.length+' файлов с Яндекс Диска');
+    renderFileList(false);
+    return;
+  }catch(yadErr){
+    appLog('warn','loadFiles: Yandex failed ('+yadErr.message+')');
+  }
+
+  // ── Оба источника недоступны — пробуем GitHub как последний шанс ─
+  if(srcMode !== 'github'){
+    try{
+      setStatus('home-status','📡 Яндекс недоступен, пробую GitHub...');setBar('home-bar',70);
+      const ghFiles = await githubListFiles();
+      if(ghFiles.length === 0) throw new Error('GitHub: файлов нет');
+      S.files = ghFiles;
+      setBar('home-bar',100);
+      setStatus('home-status',`GitHub: ${S.files.length} файлов (резерв)`);
+      setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','📂 GitHub-резерв');},1200);
+      saveLocal();
+      appLog('ok','loadFiles: '+S.files.length+' файлов с GitHub (fallback)');
+      renderFileList(false, /*githubMode=*/true);
+      return;
+    }catch(ghErr){
+      appLog('err','loadFiles: GitHub fallback also failed: '+ghErr.message);
     }
+  }
+
+  // ── Всё недоступно ───────────────────────────────────────────────
+  setBar('home-bar',0);setStatus('home-status','');
+  if(hasCached){
+    renderFileList(true);
+    toast('📡 Нет соединения — расписание из кэша');
+  }else{
+    showHomeState('error','Расписание недоступно. Проверь интернет или зайди позже.');
   }
 }
 function hideHomeHints(){
@@ -3485,6 +3636,7 @@ function cmdExec(raw){
       cmdPrint('out','  donate              — поддержать проект');
       cmdPrint('out','  vip <код>           — активировать VIP');
       cmdPrint('out','  checker [add|remove] <user> — проверкеры VIP');
+      cmdPrint('out','  github              — управление GitHub-расписанием');
       cmdPrint('out', '');
       cmdPrint('info','── React Native UI (preview) ──');
       cmdPrint('out','  rn home             — Главная (RN)');
@@ -3507,6 +3659,74 @@ function cmdExec(raw){
         Object.entries(GAME_NAMES).forEach(([k,n])=>{
           cmdPrint(h[k]?'ok':'out','  '+(n+':').padEnd(18)+(h[k]||'нет'));
         });
+      }
+    } break;
+    case 'github': {
+      const ghSub  = (parts[1] || '').toLowerCase();
+      const ghArg  = parts.slice(2).join(' ').trim();
+      if (ghSub === 'token') {
+        if (!ghArg) {
+          const cur = githubGetPAT();
+          if (cur) cmdPrint('ok', '🔑 PAT-токен установлен (****' + cur.slice(-4) + ')');
+          else cmdPrint('out', '❌ PAT-токен не установлен. Лимит: 60 req/час');
+          cmdPrint('out', '  Установить:  /github token <ваш_токен>');
+          cmdPrint('out', '  Удалить:     /github token clear');
+        } else if (ghArg === 'clear') {
+          githubSetPAT('');
+          cmdPrint('ok', '🗑 PAT-токен удалён');
+        } else {
+          githubSetPAT(ghArg);
+          cmdPrint('ok', '✅ PAT-токен сохранён (****' + ghArg.slice(-4) + ')');
+          cmdPrint('out', 'Теперь лимит GitHub API: 5000 req/час');
+        }
+      } else if (ghSub === 'source') {
+        if (ghArg === 'github') {
+          localStorage.setItem('sapp_schedule_source', 'github');
+          cmdPrint('ok', '✅ Источник расписания: GitHub (основной)');
+        } else if (ghArg === 'yandex') {
+          localStorage.setItem('sapp_schedule_source', 'yandex');
+          cmdPrint('ok', '✅ Источник расписания: Яндекс Диск → GitHub (резерв)');
+        } else {
+          const cur = localStorage.getItem('sapp_schedule_source') || 'github';
+          cmdPrint('info', 'Текущий источник: ' + cur);
+          cmdPrint('out', '  /github source github  — GitHub основной');
+          cmdPrint('out', '  /github source yandex  — Яндекс + GitHub резерв');
+        }
+      } else if (ghSub === 'status') {
+        cmdPrint('info', 'Проверяю GitHub API...');
+        githubCheckStatus().then(msg => cmdPrint('ok', msg)).catch(e => cmdPrint('err', e.message));
+      } else if (ghSub === 'reload') {
+        cmdPrint('info', '🔄 Перезагружаю список файлов с GitHub...');
+        S.files = [];
+        loadFiles().then(() => cmdPrint('ok', 'Готово')).catch(e => cmdPrint('err', e.message));
+      } else if (ghSub === 'repo') {
+        if (ghArg) {
+          // /github repo LomKich/scheduletxt
+          const parts2 = ghArg.split('/');
+          if (parts2.length !== 2) { cmdPrint('err', 'Формат: /github repo owner/repo'); break; }
+          GITHUB_FALLBACK.owner   = parts2[0];
+          GITHUB_FALLBACK.repo    = parts2[1];
+          GITHUB_FALLBACK.apiBase = `https://api.github.com/repos/${ghArg}/contents/`;
+          GITHUB_FALLBACK.rawBase = `https://raw.githubusercontent.com/${ghArg}/main/`;
+          GITHUB_API_MIRRORS[0]   = GITHUB_FALLBACK.apiBase;
+          GITHUB_RAW_MIRRORS[0]   = GITHUB_FALLBACK.rawBase;
+          localStorage.setItem('sapp_github_repo', ghArg);
+          cmdPrint('ok', '✅ Репозиторий: ' + ghArg);
+          cmdPrint('out', 'Запусти /github reload чтобы обновить список файлов');
+        } else {
+          const saved = localStorage.getItem('sapp_github_repo') || 'LomKich/scheduletxt';
+          cmdPrint('info', 'Репозиторий: ' + GITHUB_FALLBACK.owner + '/' + GITHUB_FALLBACK.repo);
+          cmdPrint('out', '  /github repo owner/repo  — сменить репозиторий');
+        }
+      } else {
+        cmdPrint('info', '── GitHub расписание ──');
+        cmdPrint('out', '  /github status            — лимиты API');
+        cmdPrint('out', '  /github token <PAT>       — задать токен (5000 req/hr)');
+        cmdPrint('out', '  /github token clear       — удалить токен');
+        cmdPrint('out', '  /github source github     — GitHub как основной источник');
+        cmdPrint('out', '  /github source yandex     — Яндекс + GitHub резерв');
+        cmdPrint('out', '  /github repo owner/repo   — сменить репозиторий');
+        cmdPrint('out', '  /github reload            — перечитать список файлов');
       }
     } break;
     case 'version':
