@@ -477,6 +477,8 @@ const GITHUB_FALLBACK = {
   circlesFolder:  'circles',
   voicesFolder:   'voices',
   videosFolder:   'videos',
+  imagesFolder:   'images',
+  filesFolder:    'files',
 };
 
 // Зеркала GitHub API (обход блокировок в РФ)

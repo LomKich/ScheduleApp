@@ -9865,7 +9865,7 @@ function mcPickVideo() {
         _mcVideoThumb(file)
       ]);
       const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
-      const url = await _catboxUpload(b64, file.name || ('video_' + Date.now() + '.' + ext), file.type || 'video/mp4');
+      const url = await _githubOrCatboxUpload(b64, file.name || ('video_' + Date.now() + '.' + ext), GITHUB_FALLBACK?.videosFolder || 'videos', file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: file.name || 'Видео', fileType: 'video',
         fileSize: file.size, thumbData, _blob: file, _mime: file.type });
       _mcInChatSendingHide();
@@ -9893,7 +9893,7 @@ function mcPickFile() {
         r.onerror = rej;
         r.readAsDataURL(file);
       });
-      const url = await _catboxUpload(b64, file.name || ('file_' + Date.now()), file.type || 'application/octet-stream');
+      const url = await _githubOrCatboxUpload(b64, file.name || ('file_' + Date.now()), GITHUB_FALLBACK?.filesFolder || 'files', file.type || 'application/octet-stream');
       _mcSendMediaMsg({ url, fileName: file.name || 'Файл', fileType: 'file',
         fileSize: file.size, _blob: file, _mime: file.type });
       _mcInChatSendingHide();
@@ -10596,49 +10596,65 @@ function _gdFileEmoji(name) {
   return map[ext] || '📄';
 }
 
-function mcSendImage(dataUrl) {
+async function mcSendImage(dataUrl) {
   const p = profileLoad();
   if (!p || !_msgCurrentChat) return;
   const ts = Date.now();
   const replyTo = _mcReplyTo ? { from: _mcReplyTo.from, text: _mcReplyTo.text } : null;
-  const msg = { from: p.username, to: _msgCurrentChat, text: '', image: dataUrl, ts, delivered: false, read: false, replyTo };
-  mcCancelReply();
-  const msgs = msgLoad();
-  if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
-  msgs[_msgCurrentChat].push(msg);
-  msgSave(msgs);
-  const chats = chatsLoad();
-  if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
-  messengerRenderMessages(true);
-  SFX.play('msgSend');
-  // Send button bounce
-  const _sb2 = document.getElementById('mc-action-btn');
-  if (_sb2) { _sb2.classList.remove('mc-send-bounce'); void _sb2.offsetWidth; _sb2.classList.add('mc-send-bounce'); setTimeout(()=>_sb2.classList.remove('mc-send-bounce'),300); }
-  setTimeout(() => { const body = document.getElementById('mc-messages'); if (body) body.scrollTop = body.scrollHeight; }, 80);
-  sbPollChat(p.username, _msgCurrentChat);
+  
+  // Показываем UI что идет загрузка
   _mcShowUploadToast('image', 'Фото');
-  const chatKey = sbChatKey(p.username, _msgCurrentChat);
-  const _imgData = {
-    chat_key: chatKey, from_user: p.username,
-    to_user: _msgCurrentChat, text: '📷 Фото', ts,
-    extra: JSON.stringify({ image: dataUrl, ...(replyTo ? { replyTo } : {}) })
-  };
-  const _imgItem = { id: 'img_' + ts, type: 'message', localChat: _msgCurrentChat, ts, data: _imgData };
-  sbInsert('messages', _imgData).then(res => {
-    if (res) {
-      msg.delivered = true; msg.pending = false;
-      msgSave(msgs); messengerRenderMessages();
-      _mcHideUploadToast(true); _outboxUpdateStatusBar();
-    } else {
+  
+  try {
+    // Извлекаем base64 из data URL
+    const base64 = dataUrl.split(',')[1];
+    const fileName = 'image_' + Date.now() + '.jpg';
+    
+    // Загружаем на GitHub (или catbox как fallback)
+    const imageUrl = await _githubOrCatboxUpload(base64, fileName, GITHUB_FALLBACK?.imagesFolder || 'images', 'image/jpeg');
+    
+    // Создаем сообщение с URL вместо data URL
+    const msg = { from: p.username, to: _msgCurrentChat, text: '', image: imageUrl, ts, delivered: false, read: false, replyTo };
+    mcCancelReply();
+    const msgs = msgLoad();
+    if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
+    msgs[_msgCurrentChat].push(msg);
+    msgSave(msgs);
+    const chats = chatsLoad();
+    if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
+    messengerRenderMessages(true);
+    SFX.play('msgSend');
+    // Send button bounce
+    const _sb2 = document.getElementById('mc-action-btn');
+    if (_sb2) { _sb2.classList.remove('mc-send-bounce'); void _sb2.offsetWidth; _sb2.classList.add('mc-send-bounce'); setTimeout(()=>_sb2.classList.remove('mc-send-bounce'),300); }
+    setTimeout(() => { const body = document.getElementById('mc-messages'); if (body) body.scrollTop = body.scrollHeight; }, 80);
+    sbPollChat(p.username, _msgCurrentChat);
+    const chatKey = sbChatKey(p.username, _msgCurrentChat);
+    const _imgData = {
+      chat_key: chatKey, from_user: p.username,
+      to_user: _msgCurrentChat, text: '📷 Фото', ts,
+      extra: JSON.stringify({ image: imageUrl, ...(replyTo ? { replyTo } : {}) })
+    };
+    const _imgItem = { id: 'img_' + ts, type: 'message', localChat: _msgCurrentChat, ts, data: _imgData };
+    sbInsert('messages', _imgData).then(res => {
+      if (res) {
+        msg.delivered = true; msg.pending = false;
+        msgSave(msgs); messengerRenderMessages();
+        _mcHideUploadToast(true); _outboxUpdateStatusBar();
+      } else {
+        msg.pending = true; msgSave(msgs);
+        outboxPush(_imgItem);
+        messengerRenderMessages(); _mcHideUploadToast(false); _outboxUpdateStatusBar();
+      }
+    }).catch(() => {
       msg.pending = true; msgSave(msgs);
       outboxPush(_imgItem);
       messengerRenderMessages(); _mcHideUploadToast(false); _outboxUpdateStatusBar();
-    }
-  }).catch(() => {
-    msg.pending = true; msgSave(msgs);
-    outboxPush(_imgItem);
-    messengerRenderMessages(); _mcHideUploadToast(false); _outboxUpdateStatusBar();
-  });
+    });
+  } catch(err) {
+    _mcHideUploadToast(false);
+    toast('❌ ' + (err.message || 'Ошибка загрузки фото'));
+  }
 }
 
 // ┄┄ Хедер чата: компенсируем системный сдвиг окна при клавиатуре ┄┄

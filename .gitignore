@@ -1,0 +1,41 @@
+# Build artifacts
+build/
+*.apk
+*.aab
+*.class
+*.dex
+
+# Gradle
+.gradle/
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Android
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# ВАЖНО: НЕ игнорируем медиафайлы!
+# Эти папки ДОЛЖНЫ коммититься в репозиторий:
+# !avatars/
+# !circles/
+# !voices/
+# !videos/
+# !images/
+# !files/
