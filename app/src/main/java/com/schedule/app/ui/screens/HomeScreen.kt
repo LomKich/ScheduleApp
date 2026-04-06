@@ -47,6 +47,7 @@ fun HomeScreen(
     onModeChange: (Boolean) -> Unit,
     onFileClick: (ScheduleFile) -> Unit,
     onRetry: () -> Unit,
+    onRefresh: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenHomework: () -> Unit = {},
     onOpenConsole: () -> Unit = {},
@@ -54,8 +55,28 @@ fun HomeScreen(
     val t = LocalTheme.current
     val density = LocalDensity.current
 
-    // ── Свайп вверх → консоль ─────────────────────────────────────────────
-    val swipeModifier = Modifier.pointerInput(onOpenConsole) {
+    // ── Pull-to-refresh состояние ─────────────────────────────────────────
+    var pullOffsetPx by remember { mutableStateOf(0f) }
+    var pullFired    by remember { mutableStateOf(false) }
+    val pullThreshPx = with(density) { 72.dp.toPx() }
+    // Анимация: плавно возвращаем индикатор на 0 после срабатывания
+    val pullAnim by animateFloatAsState(
+        targetValue = if (isLoading) pullThreshPx * 0.6f else 0f,
+        animationSpec = spring(stiffness = 260f),
+        label = "pullAnim",
+    )
+    val indicatorOffset = if (pullOffsetPx > 0f) pullOffsetPx.coerceAtMost(pullThreshPx * 1.2f)
+                          else pullAnim
+    val indicatorAlpha  = (indicatorOffset / pullThreshPx).coerceIn(0f, 1f)
+    val indicatorRotate by animateFloatAsState(
+        targetValue = if (isLoading) 360f else indicatorOffset / pullThreshPx * 180f,
+        animationSpec = if (isLoading) infiniteRepeatable(tween(700), RepeatMode.Restart)
+                        else spring(),
+        label = "pullRotate",
+    )
+
+    // ── Свайп вверх → консоль / свайп вниз → обновление ─────────────────
+    val swipeModifier = Modifier.pointerInput(onOpenConsole, onRefresh) {
         var startY    = Float.NaN
         var startX    = Float.NaN
         var touchId   = PointerId(0L)
@@ -67,19 +88,31 @@ fun HomeScreen(
                     when {
                         !ch.previousPressed && ch.pressed -> {
                             startY = ch.position.y; startX = ch.position.x
-                            touchId = ch.id; fired = false
+                            touchId = ch.id; fired = false; pullFired = false
                         }
                         ch.pressed && ch.id == touchId && !startY.isNaN() -> {
+                            val dy = startY - ch.position.y   // > 0 = вверх, < 0 = вниз
+                            val dx = abs(ch.position.x - startX)
                             if (!fired) {
-                                val dy = startY - ch.position.y
-                                val dx = abs(ch.position.x - startX)
+                                // Свайп ВВЕРХ → консоль
                                 if (dy > with(density) { 80.dp.toPx() } && dy > dx * 2f) {
-                                    fired = true; onOpenConsole()
+                                    fired = true; pullOffsetPx = 0f; onOpenConsole()
+                                }
+                                // Свайп ВНИЗ → pull-to-refresh
+                                if (dy < 0f && abs(dy) > dx * 1.5f) {
+                                    pullOffsetPx = (-dy).coerceAtLeast(0f)
+                                    if (!pullFired && pullOffsetPx >= pullThreshPx) {
+                                        pullFired = true
+                                    }
                                 }
                             }
                         }
                         !ch.pressed && ch.id == touchId -> {
+                            if (pullFired && !isLoading) {
+                                onRefresh()
+                            }
                             startY = Float.NaN; fired = false
+                            pullOffsetPx = 0f; pullFired = false
                         }
                     }
                 }
@@ -87,12 +120,34 @@ fun HomeScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(t.bg)
             .then(swipeModifier),
     ) {
+        // ── Pull-to-refresh индикатор ─────────────────────────────────────
+        if (indicatorAlpha > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = with(density) { (indicatorOffset * 0.5f).toDp() } + 4.dp)
+                    .size(36.dp)
+                    .graphicsLayer { alpha = indicatorAlpha }
+                    .clip(CircleShape)
+                    .background(t.surface2),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "↻",
+                    color = if (pullFired || isLoading) t.accent else t.muted,
+                    fontSize = 18.sp,
+                    modifier = Modifier.graphicsLayer { rotationZ = indicatorRotate },
+                )
+            }
+        }
+
+        Column(modifier = Modifier.fillMaxSize()) {
         // .body — единственный scrollable контейнер, padding 16px 18px как в CSS
         Column(
             modifier = Modifier
@@ -161,7 +216,8 @@ fun HomeScreen(
 
             Spacer(Modifier.height(100.dp)) // под nav bar
         }
-    }
+        } // Column (outer)
+    } // Box
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

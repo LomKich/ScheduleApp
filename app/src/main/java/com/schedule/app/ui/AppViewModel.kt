@@ -145,15 +145,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var statusText    by mutableStateOf("")
 
     fun loadFiles() {
-        if (yandexUrl.isEmpty()) return
         viewModelScope.launch {
-            isLoading = true; statusText = "Загружаю файлы..."; loadProgress = 0.3f
+            isLoading = true; loadProgress = 0.2f
             try {
-                files = withContext(Dispatchers.IO) { fetchYandexFiles(yandexUrl) }
-                loadProgress = 1f; statusText = "Найдено: ${files.size} файлов"
+                // ── Попытка 1: Яндекс.Диск ───────────────────────────────
+                if (yandexUrl.isNotEmpty()) {
+                    try {
+                        statusText = "Загружаю с Яндекс.Диска..."
+                        files = withContext(Dispatchers.IO) { fetchYandexFiles(yandexUrl) }
+                        loadProgress = 1f
+                        statusText = "Найдено: ${files.size} файлов"
+                        delay(1200); loadProgress = 0f; statusText = ""
+                        return@launch
+                    } catch (e: Exception) {
+                        log.w("AppViewModel", "Яндекс недоступен: ${e.message}")
+                        statusText = "⚠️ Яндекс недоступен, ищу на GitHub..."
+                        loadProgress = 0.5f
+                    }
+                } else {
+                    statusText = "Ищу файлы на GitHub..."
+                    loadProgress = 0.4f
+                }
+
+                // ── Попытка 2: GitHub ─────────────────────────────────────
+                files = withContext(Dispatchers.IO) { fetchGitHubFiles() }
+                loadProgress = 1f
+                statusText = "GitHub: ${files.size} файлов"
                 delay(1200); loadProgress = 0f; statusText = ""
+
             } catch (e: Exception) {
-                loadProgress = 0f; statusText = "⚠️ ${e.message}"
+                loadProgress = 0f
+                statusText = "❌ ${e.message}"
             } finally { isLoading = false }
         }
     }
@@ -892,18 +914,70 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 "?public_key=${URLEncoder.encode(publicKey, "UTF-8")}&limit=100"
         val conn = URL(url).openConnection() as java.net.HttpURLConnection
         conn.connectTimeout = 10_000; conn.readTimeout = 10_000
+        val code = conn.responseCode
+        if (code !in 200..299) {
+            val err = (conn.errorStream ?: conn.inputStream).bufferedReader().readText()
+            val msg = try { JSONObject(err).optString("message", "HTTP $code") }
+                      catch (_: Exception) { "HTTP $code" }
+            throw Exception(msg)
+        }
         val body = conn.inputStream.bufferedReader().readText()
         val json = JSONObject(body)
         val items = json.getJSONObject("_embedded").getJSONArray("items")
         return (0 until items.length())
             .map { items.getJSONObject(it) }
-            .filter { it.getString("type")=="file" &&
+            .filter { it.getString("type") == "file" &&
                     it.getString("name").matches(Regex(".*\\.(doc|docx)", RegexOption.IGNORE_CASE)) }
             .map { ScheduleFile(
                 name = it.getString("name"),
-                path = it.optString("path", "/"+it.getString("name")),
-                size = it.optLong("size", 0)
+                path = it.optString("path", "/" + it.getString("name")),
+                size = it.optLong("size", 0),
             )}
+    }
+
+    /** Получает список файлов расписания с GitHub репозитория */
+    private suspend fun fetchGitHubFiles(): List<ScheduleFile> {
+        val repo   = DocParser.GITHUB_REPO
+        val branch = DocParser.GITHUB_BRANCH
+        val apiUrls = listOf(
+            "https://api.github.com/repos/$repo/contents/?ref=$branch",
+            "https://api.github.moeyy.xyz/repos/$repo/contents/?ref=$branch",
+            "https://api.kgithub.com/repos/$repo/contents/?ref=$branch",
+        )
+        var lastErr: Exception? = null
+        for (apiUrl in apiUrls) {
+            try {
+                val conn = URL(apiUrl).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 10_000; conn.readTimeout = 10_000
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                conn.setRequestProperty("User-Agent", "ScheduleApp/1.0")
+                val code = conn.responseCode
+                if (code !in 200..299) throw Exception("HTTP $code")
+                val body  = conn.inputStream.bufferedReader().readText()
+                val items = JSONArray(body)
+                val result = mutableListOf<ScheduleFile>()
+                for (i in 0 until items.length()) {
+                    val item = items.getJSONObject(i)
+                    val name = item.optString("name", "")
+                    val type = item.optString("type", "")
+                    if (type == "file" &&
+                        name.matches(Regex(".*\\.(doc|docx)", RegexOption.IGNORE_CASE))) {
+                        result.add(ScheduleFile(
+                            name = name,
+                            // префикс "github:" — сигнал DocParser скачивать с GitHub
+                            path = "github:$name",
+                            size = item.optLong("size", 0),
+                        ))
+                    }
+                }
+                log.i("AppViewModel", "GitHub: найдено ${result.size} файлов")
+                return result
+            } catch (e: Exception) {
+                log.w("AppViewModel", "GitHub API failed [$apiUrl]: ${e.message}")
+                lastErr = e
+            }
+        }
+        throw Exception("GitHub API недоступен: ${lastErr?.message}")
     }
 
 

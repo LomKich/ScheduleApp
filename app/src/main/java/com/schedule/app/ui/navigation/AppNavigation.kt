@@ -112,6 +112,7 @@ fun AppScreen(
                         else navigate(Screen.Groups)
                     },
                     onRetry        = vm::loadFiles,
+                    onRefresh      = vm::loadFiles,
                     onOpenSettings = { navigate(Screen.Settings) },
                     onOpenHomework = { navigate(Screen.Homework) },
                     onOpenConsole  = { vm.showConsole = true },
@@ -353,6 +354,7 @@ fun AppScreen(
                     },
                     onNewChat    = { vm.loadOnlineUsers(); navigate(Screen.OnlineUsers) },
                     onNewGroup   = { vm.loadGroupChats(); navigate(Screen.GroupChats) },
+                    onRefresh    = { vm.startMessengerPoller() },
                     onBack       = { goBack(Screen.Home) },
                     )
                 }

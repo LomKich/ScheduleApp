@@ -3162,6 +3162,37 @@ html.notch-off #s-login {
   width: 100%; height: 100%;
   border: none;
 }
+
+/* ── Pull-to-refresh индикатор ───────────────────────────────────── */
+#ptr-ind {
+  position: fixed;
+  top: 0;
+  left: calc(50% - 18px);
+  width: 36px; height: 36px;
+  background: var(--surface2);
+  border: 1.5px solid var(--surface3);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; line-height: 1;
+  opacity: 0;
+  transform: translateY(-44px) rotate(0deg);
+  z-index: 9999;
+  pointer-events: none;
+  box-shadow: 0 2px 12px rgba(0,0,0,.35);
+  will-change: transform, opacity;
+  user-select: none;
+}
+#ptr-ind.ptr-snap {
+  transition: opacity .28s ease, transform .32s cubic-bezier(.34,1.4,.64,1) !important;
+}
+@keyframes ptr-spin {
+  from { transform: translateY(44px) rotate(0deg); }
+  to   { transform: translateY(44px) rotate(360deg); }
+}
+#ptr-ind.ptr-spin {
+  animation: ptr-spin .7s linear infinite;
+  opacity: 1 !important;
+}
 </style>
 <body>
 <div id="bg-layer"></div>

@@ -380,73 +380,134 @@ object DocParser {
         return m.value
     }
 
-    // ── Скачивание файла с Яндекс.Диска ─────────────────────────────────────
+    // ── Скачивание файла с Яндекс.Диска / GitHub ─────────────────────────────
 
     private val fileCache = mutableMapOf<String, ByteArray>()
 
+    // GitHub репозиторий с файлами расписания
+    const val GITHUB_REPO = "LomKich/scheduletxt"
+    const val GITHUB_BRANCH = "main"
+
     /**
-     * Скачивает файл с Яндекс.Диска по публичной ссылке.
+     * Скачивает файл. Сначала пробует Яндекс.Диск, при ошибке — GitHub.
      * filePath — путь внутри публичной папки (может начинаться с "disk:/", убираем).
+     * Если filePath начинается с "github:", скачивает только с GitHub.
      */
     suspend fun downloadFile(
         publicKey: String,
         filePath: String,
         onProgress: (Float) -> Unit = {},
     ): ByteArray = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        // Яндекс возвращает path вида "disk:/folder/file.doc" — для публичных ресурсов
-        // endpoint /download ожидает путь без префикса "disk:", т.е. "/folder/file.doc"
+
+        // Файл пришёл из GitHub — сразу качаем оттуда
+        if (filePath.startsWith("github:")) {
+            val filename = filePath.removePrefix("github:")
+            return@withContext downloadFromGitHub(filename, onProgress)
+        }
+
+        // Яндекс возвращает path вида "disk:/folder/file.doc"
         val normalizedPath = when {
             filePath.startsWith("disk:/") -> filePath.removePrefix("disk:")
-            filePath.startsWith("disk:") -> "/" + filePath.removePrefix("disk:")
-            filePath.startsWith("/") -> filePath
-            else -> "/$filePath"
+            filePath.startsWith("disk:")  -> "/" + filePath.removePrefix("disk:")
+            filePath.startsWith("/")      -> filePath
+            else                          -> "/$filePath"
         }
 
         val cacheKey = "$publicKey|$normalizedPath"
         fileCache[cacheKey]?.let { return@withContext it }
 
-        val enc     = java.net.URLEncoder.encode(publicKey,     "UTF-8")
-        val pathEnc = java.net.URLEncoder.encode(normalizedPath,"UTF-8")
-        val dlUrl   = "https://cloud-api.yandex.net/v1/disk/public/resources/download" +
-                      "?public_key=$enc&path=$pathEnc"
+        // ── Попытка 1: Яндекс.Диск ───────────────────────────────────────
+        try {
+            val enc     = java.net.URLEncoder.encode(publicKey,      "UTF-8")
+            val pathEnc = java.net.URLEncoder.encode(normalizedPath, "UTF-8")
+            val dlUrl   = "https://cloud-api.yandex.net/v1/disk/public/resources/download" +
+                          "?public_key=$enc&path=$pathEnc"
 
-        onProgress(0.2f)
-        val conn = java.net.URL(dlUrl).openConnection() as java.net.HttpURLConnection
-        conn.connectTimeout = 15_000
-        conn.readTimeout    = 30_000
+            onProgress(0.1f)
+            val conn = java.net.URL(dlUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 12_000
+            conn.readTimeout    = 25_000
 
-        val code1 = conn.responseCode
-        val body1 = if (code1 in 200..299)
-            conn.inputStream.bufferedReader().readText()
-        else
-            (conn.errorStream ?: conn.inputStream).bufferedReader().readText()
+            val code1 = conn.responseCode
+            val body1 = if (code1 in 200..299)
+                conn.inputStream.bufferedReader().readText()
+            else
+                (conn.errorStream ?: conn.inputStream).bufferedReader().readText()
 
-        if (code1 !in 200..299) {
-            val msg = try {
-                org.json.JSONObject(body1).optString("message", "HTTP $code1")
-            } catch (_: Exception) { "HTTP $code1" }
-            throw Exception("Яндекс: $msg (path=$normalizedPath)")
+            if (code1 !in 200..299) {
+                val msg = try { org.json.JSONObject(body1).optString("message", "HTTP $code1") }
+                          catch (_: Exception) { "HTTP $code1" }
+                throw Exception("Яндекс: $msg")
+            }
+
+            val href = org.json.JSONObject(body1).optString("href")
+            if (href.isNullOrEmpty()) throw Exception("Яндекс не вернул ссылку")
+
+            onProgress(0.4f)
+            val fc = java.net.URL(href).openConnection() as java.net.HttpURLConnection
+            fc.connectTimeout = 12_000
+            fc.readTimeout    = 90_000
+            fc.instanceFollowRedirects = true
+
+            if (fc.responseCode !in 200..299)
+                throw Exception("Ошибка загрузки: HTTP ${fc.responseCode}")
+
+            val bytes = fc.inputStream.readBytes()
+            onProgress(1.0f)
+            fileCache[cacheKey] = bytes
+            return@withContext bytes
+
+        } catch (yandexErr: Exception) {
+            android.util.Log.w("DocParser", "Яндекс недоступен, пробуем GitHub: ${yandexErr.message}")
         }
 
-        val dlJson = org.json.JSONObject(body1)
-        val href   = dlJson.optString("href")
-        if (href.isNullOrEmpty()) throw Exception("Яндекс не вернул ссылку (path=$normalizedPath)")
-
-        onProgress(0.5f)
-        val fc = java.net.URL(href).openConnection() as java.net.HttpURLConnection
-        fc.connectTimeout = 15_000
-        fc.readTimeout    = 90_000
-        fc.instanceFollowRedirects = true
-
-        val code2 = fc.responseCode
-        if (code2 !in 200..299) {
-            throw Exception("Ошибка скачивания файла: HTTP $code2")
-        }
-
-        val bytes = fc.inputStream.readBytes()
-        onProgress(1.0f)
+        // ── Попытка 2: GitHub ─────────────────────────────────────────────
+        val filename = normalizedPath.substringAfterLast("/")
+        val bytes = downloadFromGitHub(filename, onProgress)
         fileCache[cacheKey] = bytes
         bytes
+    }
+
+    /**
+     * Скачивает файл напрямую с GitHub (raw content).
+     * Пробует основной URL и несколько зеркал.
+     */
+    private fun downloadFromGitHub(
+        filename: String,
+        onProgress: (Float) -> Unit = {},
+    ): ByteArray {
+        val rawBase    = "https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH"
+        val mirrors    = listOf(
+            "$rawBase/$filename",
+            "https://mirror.ghproxy.com/$rawBase/$filename",
+            "https://ghfast.top/$rawBase/$filename",
+            "https://ghproxy.com/$rawBase/$filename",
+        )
+
+        onProgress(0.2f)
+        var lastErr: Exception? = null
+        mirrors.forEachIndexed { i, url ->
+            try {
+                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 12_000
+                conn.readTimeout    = 60_000
+                conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "ScheduleApp/1.0")
+
+                if (conn.responseCode !in 200..299)
+                    throw Exception("HTTP ${conn.responseCode}")
+
+                val bytes = conn.inputStream.readBytes()
+                onProgress(1.0f)
+                android.util.Log.i("DocParser", "GitHub OK: $url")
+                return bytes
+            } catch (e: Exception) {
+                android.util.Log.w("DocParser", "GitHub mirror[$i] failed: ${e.message}")
+                lastErr = e
+                onProgress(0.2f + (i + 1) * 0.2f)
+            }
+        }
+        throw Exception("GitHub недоступен: ${lastErr?.message}")
     }
 
     fun clearCache() = fileCache.clear()

@@ -1,7 +1,7 @@
 package com.schedule.app.ui.screens
 
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -15,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -23,6 +25,7 @@ import com.schedule.app.ui.components.*
 import com.schedule.app.ui.theme.LocalTheme
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.abs
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA MODELS
@@ -77,10 +80,62 @@ fun MessengerScreen(
     onChatClick: (String) -> Unit,
     onNewChat: () -> Unit,
     onNewGroup: () -> Unit,
+    onRefresh: () -> Unit = {},
     onBack: () -> Unit,
 ) {
-    val t = LocalTheme.current
+    val t       = LocalTheme.current
+    val density = LocalDensity.current
     var showFab by remember { mutableStateOf(false) }
+
+    // ── Pull-to-refresh ───────────────────────────────────────────────────
+    var pullOffsetPx by remember { mutableStateOf(0f) }
+    var pullFired    by remember { mutableStateOf(false) }
+    val pullThreshPx = with(density) { 72.dp.toPx() }
+    val pullAnim by animateFloatAsState(
+        targetValue = if (isLoading) pullThreshPx * 0.6f else 0f,
+        animationSpec = spring(stiffness = 260f),
+        label = "messengerPullAnim",
+    )
+    val indicatorOffset = if (pullOffsetPx > 0f) pullOffsetPx.coerceAtMost(pullThreshPx * 1.2f)
+                          else pullAnim
+    val indicatorAlpha  = (indicatorOffset / pullThreshPx).coerceIn(0f, 1f)
+    val indicatorRotate by animateFloatAsState(
+        targetValue = if (isLoading) 360f else indicatorOffset / pullThreshPx * 180f,
+        animationSpec = if (isLoading) infiniteRepeatable(tween(700), RepeatMode.Restart)
+                        else spring(),
+        label = "messengerPullRotate",
+    )
+
+    val pullModifier = Modifier.pointerInput(onRefresh) {
+        var startY  = Float.NaN
+        var startX  = Float.NaN
+        var touchId = PointerId(0L)
+        awaitPointerEventScope {
+            while (true) {
+                val ev = awaitPointerEvent(pass = PointerEventPass.Initial)
+                for (ch in ev.changes) {
+                    when {
+                        !ch.previousPressed && ch.pressed -> {
+                            startY = ch.position.y; startX = ch.position.x
+                            touchId = ch.id; pullFired = false
+                        }
+                        ch.pressed && ch.id == touchId && !startY.isNaN() -> {
+                            val dy = startY - ch.position.y   // < 0 = вниз
+                            val dx = abs(ch.position.x - startX)
+                            if (dy < 0f && abs(dy) > dx * 1.5f) {
+                                pullOffsetPx = (-dy).coerceAtLeast(0f)
+                                if (!pullFired && pullOffsetPx >= pullThreshPx) pullFired = true
+                            }
+                        }
+                        !ch.pressed && ch.id == touchId -> {
+                            if (pullFired && !isLoading) onRefresh()
+                            startY = Float.NaN; pullOffsetPx = 0f; pullFired = false
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     val filtered = if (searchQuery.isEmpty()) chats
     else chats.filter {
@@ -88,7 +143,29 @@ fun MessengerScreen(
         it.id.contains(searchQuery, ignoreCase = true)
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(t.bg)) {
+    Box(modifier = Modifier.fillMaxSize().background(t.bg).then(pullModifier)) {
+
+        // ── Pull-to-refresh индикатор ─────────────────────────────────────
+        if (indicatorAlpha > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = with(density) { (indicatorOffset * 0.5f).toDp() } + 48.dp)
+                    .size(36.dp)
+                    .graphicsLayer { alpha = indicatorAlpha }
+                    .clip(CircleShape)
+                    .background(t.surface2),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "↻",
+                    color = if (pullFired || isLoading) t.accent else t.muted,
+                    fontSize = 18.sp,
+                    modifier = Modifier.graphicsLayer { rotationZ = indicatorRotate },
+                )
+            }
+        }
+
         Column(modifier = Modifier.fillMaxSize()) {
             AppHeader(title = "💬 Сообщения", onBack = onBack)
 
