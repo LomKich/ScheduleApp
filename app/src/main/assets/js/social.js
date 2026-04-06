@@ -1,4 +1,19 @@
 // ┄┄ Логирование ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+
+// ── GitHub-first upload: пробует GitHub, при ошибке — catbox ─────────────────
+async function _githubOrCatboxUpload(base64, fileName, folder, mimeType, onProgress) {
+  if (typeof githubUploadMedia === 'function' && typeof githubGetPAT === 'function' && githubGetPAT()) {
+    try {
+      const url = await githubUploadMedia(base64, fileName, folder);
+      onProgress && onProgress(100);
+      return url;
+    } catch(ghErr) {
+      console.warn('[upload] GitHub failed, falling back to catbox:', ghErr.message);
+    }
+  }
+  return _catboxUpload(base64, fileName, mimeType, onProgress);
+}
+
 function sLog(level, msg) {
   try {
     const tag = '[SOCIAL]';
@@ -1531,7 +1546,7 @@ function _profilePickVideoAvatar() {
         const b64  = dataUrl.split(',')[1];
         const mime = (dataUrl.match(/^data:([^;]+)/) || [])[1] || 'video/mp4';
         const ext  = mime.split('/')[1] || 'mp4';
-        const url  = await _catboxUpload(b64, `avatar_${p.username}_${Date.now()}.${ext}`, mime);
+        const url  = await _githubOrCatboxUpload(b64, `avatar_${p.username}_${Date.now()}.${ext}`, GITHUB_FALLBACK?.avatarsFolder || 'avatars', mime);
         if (url) {
           p.avatarVideoUrl = url;
           profileSave(p);
@@ -9258,7 +9273,7 @@ function mcPickAudio() {
         r.onerror = rej;
         r.readAsDataURL(file);
       });
-      const url = await _catboxUpload(b64, file.name || ('audio_' + Date.now()), file.type || 'audio/mpeg');
+      const url = await _githubOrCatboxUpload(b64, file.name || ('audio_' + Date.now()), GITHUB_FALLBACK?.voicesFolder || 'voices', file.type || 'audio/mpeg');
       _mcSendMediaMsg({ url, fileName: file.name || 'Аудио', fileType: 'voice', fileSize: file.size,
         _blob: file, _mime: file.type });
       _mcHideUploadToast(true);
@@ -10021,7 +10036,7 @@ function _mcPickCircleFile() {
         _mcVideoThumb(file)
       ]);
       const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
-      const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.' + ext, file.type || 'video/mp4');
+      const url = await _githubOrCatboxUpload(b64, 'circle_' + Date.now() + '.' + ext, GITHUB_FALLBACK?.circlesFolder || 'circles', file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: file.name, fileType: 'circle', fileSize: file.size, thumbData });
       _mcInChatSendingHide();
     } catch(err) { _mcInChatSendingHide(); toast('❌ ' + (err.message || 'Ошибка')); }
@@ -10056,7 +10071,7 @@ function _mcPickCircleCameraActual() {
         new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }),
         _mcVideoThumb(file)
       ]);
-      const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.mp4', file.type || 'video/mp4');
+      const url = await _githubOrCatboxUpload(b64, 'circle_' + Date.now() + '.mp4', GITHUB_FALLBACK?.circlesFolder || 'circles', file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle', fileSize: file.size, thumbData });
       _mcInChatSendingHide();
     } catch(err) { _mcInChatSendingHide(); toast('❌ ' + (err.message || 'Ошибка')); }
@@ -10438,7 +10453,7 @@ async function _mcVoiceFinalize() {
     });
     const fileName = 'voice_' + Date.now() + '.' + ext;
     _pendingUploadBlob = blob; _pendingUploadMime = mimeType;
-    const url = await _catboxUpload(b64, fileName, mimeType);
+    const url = await _githubOrCatboxUpload(b64, fileName, GITHUB_FALLBACK?.voicesFolder || 'voices', mimeType);
     // Кэшируем blob   _catboxUpload мог сбросить _pendingUploadBlob через onUploadDone
     _mcSendMediaMsg({ url, fileName, fileType: 'voice', fileSize: blob.size, duration: dur,
       _blob: blob, _mime: mimeType });

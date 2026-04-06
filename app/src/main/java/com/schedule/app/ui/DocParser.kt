@@ -401,8 +401,8 @@ object DocParser {
 
         // Файл пришёл из GitHub — сразу качаем оттуда
         if (filePath.startsWith("github:")) {
-            val filename = filePath.removePrefix("github:")
-            return@withContext downloadFromGitHub(filename, onProgress)
+            val relativePath = filePath.removePrefix("github:")  // напр. "schedule/file.doc"
+            return@withContext downloadFromGitHub(relativePath, onProgress)
         }
 
         // Яндекс возвращает path вида "disk:/folder/file.doc"
@@ -462,26 +462,29 @@ object DocParser {
         }
 
         // ── Попытка 2: GitHub ─────────────────────────────────────────────
-        val filename = normalizedPath.substringAfterLast("/")
-        val bytes = downloadFromGitHub(filename, onProgress)
+        val relativePath = normalizedPath.trimStart('/')
+        val bytes = downloadFromGitHub(relativePath, onProgress)
         fileCache[cacheKey] = bytes
         bytes
     }
 
     /**
      * Скачивает файл напрямую с GitHub (raw content).
+     * relativePath — путь относительно корня репо, напр. "schedule/file.doc"
      * Пробует основной URL и несколько зеркал.
      */
     private fun downloadFromGitHub(
-        filename: String,
+        relativePath: String,
         onProgress: (Float) -> Unit = {},
     ): ByteArray {
-        val rawBase    = "https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH"
-        val mirrors    = listOf(
-            "$rawBase/$filename",
-            "https://mirror.ghproxy.com/$rawBase/$filename",
-            "https://ghfast.top/$rawBase/$filename",
-            "https://ghproxy.com/$rawBase/$filename",
+        val rawBase = "https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH"
+        val encoded = relativePath.split("/")
+            .joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8") }
+        val mirrors = listOf(
+            "$rawBase/$encoded",
+            "https://mirror.ghproxy.com/$rawBase/$encoded",
+            "https://ghfast.top/$rawBase/$encoded",
+            "https://ghproxy.com/$rawBase/$encoded",
         )
 
         onProgress(0.2f)

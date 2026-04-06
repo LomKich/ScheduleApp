@@ -939,10 +939,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun fetchGitHubFiles(): List<ScheduleFile> {
         val repo   = DocParser.GITHUB_REPO
         val branch = DocParser.GITHUB_BRANCH
+        val folder = "schedule"
         val apiUrls = listOf(
-            "https://api.github.com/repos/$repo/contents/?ref=$branch",
-            "https://api.github.moeyy.xyz/repos/$repo/contents/?ref=$branch",
-            "https://api.kgithub.com/repos/$repo/contents/?ref=$branch",
+            "https://api.github.com/repos/$repo/contents/$folder?ref=$branch",
+            "https://api.github.moeyy.xyz/repos/$repo/contents/$folder?ref=$branch",
+            "https://api.kgithub.com/repos/$repo/contents/$folder?ref=$branch",
         )
         var lastErr: Exception? = null
         for (apiUrl in apiUrls) {
@@ -964,13 +965,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         name.matches(Regex(".*\\.(doc|docx)", RegexOption.IGNORE_CASE))) {
                         result.add(ScheduleFile(
                             name = name,
-                            // префикс "github:" — сигнал DocParser скачивать с GitHub
-                            path = "github:$name",
+                            // префикс "github:schedule/" — сигнал DocParser скачивать из schedule/
+                            path = "github:$folder/$name",
                             size = item.optLong("size", 0),
                         ))
                     }
                 }
-                log.i("AppViewModel", "GitHub: найдено ${result.size} файлов")
+                log.i("AppViewModel", "GitHub schedule/: найдено ${result.size} файлов")
                 return result
             } catch (e: Exception) {
                 log.w("AppViewModel", "GitHub API failed [$apiUrl]: ${e.message}")

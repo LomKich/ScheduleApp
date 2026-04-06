@@ -2328,6 +2328,68 @@ public class MainActivity extends Activity {
             return _pixeldrainUploadBytes(b, fn, mt, null);
         }
 
+        /**
+         * Загружает файл на GitHub через Contents API (PUT).
+         * Вызывается из JS: Android.nativeGitHubUpload(apiUrl, bodyJson, pat, callbackId)
+         * По завершении вызывает window.__ghUpDone_<id>(rawUrl) или window.__ghUpErr_<id>(errMsg).
+         */
+        @android.webkit.JavascriptInterface
+        public void nativeGitHubUpload(final String apiUrl, final String bodyJson,
+                                       final String pat, final String callbackId) {
+            log.i(TAG, "nativeGitHubUpload: " + apiUrl.substring(0, Math.min(80, apiUrl.length())));
+            new Thread(() -> {
+                try {
+                    java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) new java.net.URL(apiUrl).openConnection();
+                    conn.setRequestMethod("PUT");
+                    conn.setRequestProperty("Accept",        "application/vnd.github.v3+json");
+                    conn.setRequestProperty("Authorization", "Bearer " + pat);
+                    conn.setRequestProperty("Content-Type",  "application/json");
+                    conn.setRequestProperty("User-Agent",    "ScheduleApp/1.0");
+                    conn.setConnectTimeout(20_000);
+                    conn.setReadTimeout(120_000);
+                    conn.setDoOutput(true);
+
+                    byte[] bodyBytes = bodyJson.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    conn.setFixedLengthStreamingMode(bodyBytes.length);
+                    conn.getOutputStream().write(bodyBytes);
+                    conn.getOutputStream().flush();
+
+                    int code = conn.getResponseCode();
+                    java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream()
+                        : conn.getErrorStream();
+                    String resp = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8))
+                        .lines().collect(java.util.stream.Collectors.joining());
+
+                    if (code < 200 || code >= 300) {
+                        throw new Exception("HTTP " + code + ": " + resp.substring(0, Math.min(120, resp.length())));
+                    }
+
+                    // Строим raw-URL из apiUrl
+                    // apiUrl: https://api.github.com/repos/owner/repo/contents/folder/file
+                    // rawUrl: https://raw.githubusercontent.com/owner/repo/main/folder/file
+                    String rawUrl = apiUrl
+                        .replace("api.github.com/repos/", "raw.githubusercontent.com/")
+                        .replace("/contents/", "/main/");
+
+                    final String safeUrl = rawUrl.replace("'", "\'");
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof window['__ghUpDone_" + callbackId + "']==='function')" +
+                        "window['__ghUpDone_" + callbackId + "']('" + safeUrl + "')", null));
+
+                } catch (Exception e) {
+                    log.e(TAG, "nativeGitHubUpload error: " + e.getMessage());
+                    final String err = (e.getMessage() != null ? e.getMessage() : "Unknown")
+                        .replace("'", "\'");
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof window['__ghUpErr_" + callbackId + "']==='function')" +
+                        "window['__ghUpErr_" + callbackId + "']('" + err + "')", null));
+                }
+            }).start();
+        }
+
         private String _catboxUploadBytes(byte[] fileBytes, String fileName,
                                            String mimeType, UploadProgressCallback progressCb) {
             String boundary = "----CatboxBoundary" + Long.toHexString(System.currentTimeMillis());

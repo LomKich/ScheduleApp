@@ -471,6 +471,12 @@ const GITHUB_FALLBACK = {
   branch:  'main',
   apiBase: 'https://api.github.com/repos/LomKich/scheduletxt/contents/',
   rawBase: 'https://raw.githubusercontent.com/LomKich/scheduletxt/main/',
+  // Папки внутри репозитория
+  scheduleFolder: 'schedule',
+  avatarsFolder:  'avatars',
+  circlesFolder:  'circles',
+  voicesFolder:   'voices',
+  videosFolder:   'videos',
 };
 
 // Зеркала GitHub API (обход блокировок в РФ)
@@ -506,16 +512,17 @@ function githubApiHeaders() {
 // Форматы файлов расписания (добавь нужные)
 const SCHEDULE_FILE_REGEX = /\.(doc|docx|xlsx|txt|pdf)$/i;
 
-// Получить список файлов из GitHub (с перебором зеркал)
+// Получить список файлов из GitHub папки schedule/ (с перебором зеркал)
 async function githubListFiles() {
+  const folder  = GITHUB_FALLBACK.scheduleFolder;
   const headers = githubApiHeaders();
   let lastErr = null;
 
-  for (const apiUrl of GITHUB_API_MIRRORS) {
+  for (const apiBase of GITHUB_API_MIRRORS) {
+    const apiUrl = apiBase + folder;
     try {
       let items;
       if (window.Android && window.Android.nativeFetch) {
-        // Android: через Java-бридж (обходит CORS и блокировки)
         const resStr = await new Promise((res, rej) => setTimeout(() => {
           try { res(window.Android.nativeFetch(apiUrl)); }
           catch(e) { rej(e); }
@@ -524,12 +531,10 @@ async function githubListFiles() {
         if (!parsed.ok) throw new Error('nativeFetch: ' + (parsed.error || parsed.status));
         items = JSON.parse(parsed.body);
       } else if (window.__desktopMode) {
-        // Electron: webSecurity=false, прямой fetch
         const r = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(15000) });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         items = await r.json();
       } else {
-        // Браузер: прямой fetch (GitHub API не блокирует CORS)
         const r = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(15000) });
         if (r.status === 403) throw new Error('Rate limit. Добавь PAT-токен: /github token <TOKEN>');
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -542,14 +547,14 @@ async function githubListFiles() {
         .filter(i => i.type === 'file' && SCHEDULE_FILE_REGEX.test(i.name))
         .map(i => ({
           name: i.name,
-          path: '/' + i.name,
+          path: '/' + folder + '/' + i.name,
           size: i.size || 0,
           resourceId: i.sha || '',
-          _githubRaw: GITHUB_FALLBACK.rawBase + encodeURIComponent(i.name),
+          _githubRaw: GITHUB_FALLBACK.rawBase + folder + '/' + encodeURIComponent(i.name),
           _githubSha: i.sha || '',
         }));
 
-      appLog('ok', 'githubListFiles: ' + files.length + ' файлов с ' + apiUrl);
+      appLog('ok', 'githubListFiles: ' + files.length + ' файлов из ' + folder + '/ (' + apiUrl + ')');
       return files;
     } catch(e) {
       appLog('warn', 'githubListFiles mirror failed [' + apiUrl + ']: ' + e.message);
@@ -593,6 +598,62 @@ async function githubDownloadFile(rawUrl) {
     }
   }
   throw lastErr || new Error('Не удалось скачать файл с GitHub');
+}
+
+/**
+ * Загружает медиафайл на GitHub в нужную папку репозитория.
+ * @param {string} base64   — чистый base64 без data:... префикса
+ * @param {string} fileName — имя файла (напр. "avatar_user_123.gif")
+ * @param {string} folder   — 'avatars' | 'circles' | 'voices' | 'videos'
+ * @returns {Promise<string>} raw-URL файла
+ */
+async function githubUploadMedia(base64, fileName, folder) {
+  const pat = githubGetPAT();
+  if (!pat) throw new Error('Нужен PAT-токен GitHub — введи /github token <TOKEN> в консоли');
+
+  const { owner, repo, branch } = GITHUB_FALLBACK;
+  const path   = folder + '/' + fileName;
+  const apiUrl = 'https://api.github.com/repos/' + owner + '/' + repo + '/contents/' + path;
+  const rawUrl = 'https://raw.githubusercontent.com/' + owner + '/' + repo + '/' + branch + '/' + path;
+
+  // Получаем sha если файл уже существует (нужен для перезаписи)
+  let sha = null;
+  try {
+    const chk = await fetch(apiUrl, { headers: githubApiHeaders(), signal: AbortSignal.timeout(10000) });
+    if (chk.ok) { const j = await chk.json(); sha = j.sha || null; }
+  } catch(_) {}
+
+  const bodyObj = { message: 'Upload ' + folder + '/' + fileName, content: base64, branch };
+  if (sha) bodyObj.sha = sha;
+
+  const headers = { ...githubApiHeaders(), 'Content-Type': 'application/json' };
+
+  // Android — нативный PUT через Java-бридж
+  if (window.Android && typeof window.Android.nativeGitHubUpload === 'function') {
+    return new Promise((resolve, reject) => {
+      const cbId = 'ghup_' + Date.now();
+      window['__ghUpDone_' + cbId]  = (url) => { delete window['__ghUpDone_' + cbId]; delete window['__ghUpErr_' + cbId]; resolve(url); };
+      window['__ghUpErr_' + cbId]   = (err) => { delete window['__ghUpDone_' + cbId]; delete window['__ghUpErr_' + cbId]; reject(new Error(err)); };
+      try {
+        window.Android.nativeGitHubUpload(apiUrl, JSON.stringify(bodyObj), pat, cbId);
+      } catch(e) { reject(e); }
+      setTimeout(() => reject(new Error('Таймаут загрузки на GitHub (2 мин)')), 120000);
+    });
+  }
+
+  // Браузер / Electron — прямой fetch
+  const r = await fetch(apiUrl, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(bodyObj),
+    signal: AbortSignal.timeout(120000),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error('GitHub upload HTTP ' + r.status + ': ' + t.slice(0, 120));
+  }
+  appLog('ok', 'githubUploadMedia OK: ' + rawUrl);
+  return rawUrl;
 }
 
 // Показывает в статус-баре состояние GitHub (лимит, токен)
