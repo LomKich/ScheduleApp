@@ -1,6 +1,6 @@
 {
   "name": "scheduleapp-desktop",
-  "version": "4.9.10",
+  "version": "4.9.11",
   "description": "ScheduleApp — desktop version (Electron)",
   "main": "main.js",
   "scripts": {
