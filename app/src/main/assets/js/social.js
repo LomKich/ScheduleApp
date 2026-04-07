@@ -1497,8 +1497,12 @@ function profilePickPhoto() {
 // Выбрать только фото (без выбора типа)
 function _profilePickPhotoOnly() {
   _profileWaitingForPhoto = true;
-  if (window.Android && typeof Android.pickImageForBackground === 'function') {
-    Android.pickImageForBackground();
+  // ВАЖНО: НЕ используем Android.pickImageForBackground() — он устанавливает фон приложения
+  // как побочный эффект, даже если мы перехватываем колбэк для аватарки.
+  // Используем Android.pickImage() (чистый пикер без side-эффектов),
+  // либо стандартный <input type="file"> как запасной вариант.
+  if (window.Android && typeof Android.pickImage === 'function') {
+    Android.pickImage();
   } else {
     const inp = document.createElement('input');
     // Принимаем все форматы изображений включая GIF и WebP
@@ -1614,6 +1618,13 @@ window.onNativeBgImagePicked = function(dataUrl) {
     _profileHandleAvatarDataUrl(dataUrl);
   } else {
     if (_origOnNativeBgImagePicked) _origOnNativeBgImagePicked(dataUrl);
+  }
+};
+
+// Колбэк от Android.pickImage() — чистый пикер без установки фона
+window.onNativeImagePicked = function(dataUrl) {
+  if (_profileWaitingForPhoto) {
+    _profileHandleAvatarDataUrl(dataUrl);
   }
 };
 
