@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.schedule.app.AppLogger
+import com.schedule.app.BuildConfig
 import com.schedule.app.SupabaseClient
 import com.schedule.app.ui.screens.*
 import com.schedule.app.ui.theme.AppColors
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
@@ -880,6 +882,116 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // ЗАГРУЗКА ФАЙЛОВ В GITHUB
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private val GITHUB_REPO = DocParser.GITHUB_REPO  // "LomKich/scheduletxt"
+
+    /** Загружает байты в GitHub репозиторий, возвращает raw URL */
+    suspend fun uploadToGitHub(bytes: ByteArray, fileName: String, folder: String): String {
+        val token = BuildConfig.GITHUB_TOKEN
+        if (token.isBlank()) throw Exception("GitHub токен не задан в local.properties")
+
+        val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        val path   = "$folder/$fileName"
+        val apiUrl = "https://api.github.com/repos/$GITHUB_REPO/contents/$path"
+
+        return withContext(Dispatchers.IO) {
+            // Проверяем, существует ли файл (нужен sha для обновления)
+            var existingSha: String? = null
+            try {
+                val checkConn = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
+                checkConn.setRequestProperty("Authorization", "token $token")
+                checkConn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                if (checkConn.responseCode == 200) {
+                    val resp = checkConn.inputStream.bufferedReader().readText()
+                    existingSha = JSONObject(resp).optString("sha").ifEmpty { null }
+                }
+            } catch (_: Exception) {}
+
+            val bodyObj = JSONObject().apply {
+                put("message", "Upload $fileName")
+                put("content", base64)
+                if (existingSha != null) put("sha", existingSha)
+            }
+
+            val conn = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "PUT"
+            conn.setRequestProperty("Authorization", "token $token")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            conn.doOutput = true
+            conn.outputStream.write(bodyObj.toString().toByteArray(Charsets.UTF_8))
+
+            val code = conn.responseCode
+            if (code in 200..201) {
+                "https://raw.githubusercontent.com/$GITHUB_REPO/main/$path"
+            } else {
+                val err = conn.errorStream?.bufferedReader()?.readText() ?: "unknown"
+                throw Exception("GitHub upload failed $code: $err")
+            }
+        }
+    }
+
+    /** Отправляет медиа-сообщение: загружает файл в GitHub, затем сохраняет ссылку в Supabase */
+    fun sendMediaMessage(uri: android.net.Uri, cr: android.content.ContentResolver) {
+        val myUsername = userProfile?.username ?: return
+        val toUsername = currentChatUser ?: return
+
+        viewModelScope.launch {
+            sendingMessage = true
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    cr.openInputStream(uri)?.readBytes()
+                } ?: return@launch
+
+                val mimeType = cr.getType(uri) ?: "application/octet-stream"
+                val ext = when {
+                    mimeType == "image/gif"         -> "gif"
+                    mimeType == "image/webp"        -> "webp"
+                    mimeType.startsWith("image/")   -> "jpg"
+                    mimeType.startsWith("video/")   -> "mp4"
+                    else                             -> "bin"
+                }
+                val folder = when {
+                    mimeType.startsWith("image/") -> "avatars"
+                    mimeType.startsWith("video/") -> "videos"
+                    else                           -> "files"
+                }
+                val fileName = "${myUsername}_${System.currentTimeMillis()}.$ext"
+                val fileUrl  = uploadToGitHub(bytes, fileName, folder)
+
+                val msgType = when {
+                    mimeType.startsWith("video/") -> "video"
+                    mimeType.startsWith("image/") -> "image"
+                    else                           -> "file"
+                }
+
+                val chatKey = listOf(myUsername, toUsername).sorted().joinToString("_")
+                val ts      = System.currentTimeMillis()
+
+                val msgJson = JSONObject().apply {
+                    put("chat_key",  chatKey)
+                    put("from_user", myUsername)
+                    put("to_user",   toUsername)
+                    put("text",      "")
+                    put("file_url",  fileUrl)
+                    put("type",      msgType)
+                    put("ts",        ts)
+                }.toString()
+
+                withContext(Dispatchers.IO) { sb.insert("messages", msgJson) }
+
+            } catch (e: Exception) {
+                log.e("AppViewModel", "sendMediaMessage error: ${e.message}")
+                showToast("❌ Не удалось отправить файл: ${e.message}")
+            } finally {
+                sendingMessage = false
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // UI СОСТОЯНИЯ
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -1562,23 +1674,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val bytes = withContext(Dispatchers.IO) {
                 cr.openInputStream(uri)?.readBytes() ?: return@withContext null
             } ?: return@launch
-            val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-            val mimeType = cr.getType(uri) ?: "image/jpeg"
-            val dataUri = "data:$mimeType;base64,$base64"
 
-            // Обновляем локально
-            userProfile = p.copy(avatarType = "photo", avatarData = dataUri)
+            val mimeType = cr.getType(uri) ?: "image/jpeg"
+            val ext = when (mimeType) {
+                "image/gif"  -> "gif"
+                "image/webp" -> "webp"
+                else         -> "jpg"
+            }
+            val fileName = "avatar_${p.username}_${System.currentTimeMillis()}.$ext"
+
+            // Загружаем в GitHub — получаем raw URL (поддерживает GIF-анимацию)
+            val avatarUrl = uploadToGitHub(bytes, fileName, "avatars")
+
+            // Обновляем локально: avatarData = URL, а не base64
+            userProfile = p.copy(avatarType = "photo", avatarData = avatarUrl)
 
             // Сохраняем в Supabase
             val updateJson = JSONObject().apply {
                 put("avatar_type", "photo")
-                put("avatar_data", dataUri)
+                put("avatar_data", avatarUrl)
             }.toString()
             withContext(Dispatchers.IO) {
                 sb.update("users", "username=eq.${p.username}", updateJson)
             }
         } catch (e: Exception) {
             log.e("AppViewModel", "onPhotoPicked error: ${e.message}")
+            showToast("❌ Не удалось загрузить аватар: ${e.message}")
         }
     }
     } // end onPhotoPicked

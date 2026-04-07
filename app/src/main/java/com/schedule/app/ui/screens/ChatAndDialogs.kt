@@ -17,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -24,6 +26,11 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import coil.ImageLoader
+import coil.compose.AsyncImage
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.request.ImageRequest
 import com.schedule.app.ui.ChatMessage
 import com.schedule.app.ui.components.*
 import com.schedule.app.ui.theme.LocalTheme
@@ -43,6 +50,7 @@ fun ChatScreen(
     messageInput: String,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
+    onPickMedia: () -> Unit = {},
     onBack: () -> Unit,
 ) {
     val t = LocalTheme.current
@@ -202,6 +210,7 @@ fun ChatScreen(
                 value     = messageInput,
                 onChanged = onInputChange,
                 onSend    = { onSend(); replyTo = null },
+                onPickMedia = onPickMedia,
             )
         }
 
@@ -277,12 +286,86 @@ private fun ChatBubble(
                 .padding(horizontal = 14.dp, vertical = 9.dp),
         ) {
             Column {
-                Text(
-                    text       = message.text,
-                    color      = if (isFromMe) t.btnText else t.text,
-                    fontSize   = 14.sp,
-                    lineHeight = 20.sp,
-                )
+                // ── Медиа-контент (фото/видео/файл из GitHub) ────────────────
+                val fileUrl = message.fileUrl
+                if (fileUrl != null && fileUrl.isNotEmpty()) {
+                    val context = LocalContext.current
+                    val isImage = fileUrl.contains(".jpg") || fileUrl.contains(".jpeg") ||
+                                  fileUrl.contains(".png") || fileUrl.contains(".gif") ||
+                                  fileUrl.contains(".webp")
+                    val isVideo = fileUrl.contains(".mp4") || fileUrl.contains(".webm")
+
+                    if (isImage) {
+                        // Поддержка GIF и обычных картинок через Coil
+                        val imageLoader = remember(context) {
+                            ImageLoader.Builder(context)
+                                .components {
+                                    if (android.os.Build.VERSION.SDK_INT >= 28) {
+                                        add(ImageDecoderDecoder.Factory())
+                                    } else {
+                                        add(GifDecoder.Factory())
+                                    }
+                                }
+                                .build()
+                        }
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(fileUrl)
+                                .crossfade(true)
+                                .build(),
+                            imageLoader = imageLoader,
+                            contentDescription = "Изображение",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 220.dp)
+                                .clip(RoundedCornerShape(10.dp)),
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    } else if (isVideo) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.Black.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("▶ Видео", color = Color.White, fontSize = 16.sp)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    } else {
+                        // Прочий файл
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black.copy(alpha = 0.15f))
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text("📄", fontSize = 20.sp)
+                            Text(
+                                fileUrl.substringAfterLast("/"),
+                                color = if (isFromMe) t.btnText else t.text,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+                }
+
+                // ── Текст сообщения ───────────────────────────────────────────
+                if (message.text.isNotEmpty()) {
+                    Text(
+                        text       = message.text,
+                        color      = if (isFromMe) t.btnText else t.text,
+                        fontSize   = 14.sp,
+                        lineHeight = 20.sp,
+                    )
+                }
                 Row(
                     modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -307,6 +390,7 @@ private fun ChatInputBar(
     value: String,
     onChanged: (String) -> Unit,
     onSend: () -> Unit,
+    onPickMedia: () -> Unit = {},
 ) {
     val t = LocalTheme.current
 
@@ -319,6 +403,18 @@ private fun ChatInputBar(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // ── Кнопка прикрепить файл/фото/видео ────────────────────────────
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(t.surface2)
+                .clickable(onClick = onPickMedia),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("📎", fontSize = 20.sp)
+        }
+
         // Input field
         Box(
             modifier = Modifier

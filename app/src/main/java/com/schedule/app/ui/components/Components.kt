@@ -13,6 +13,8 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.geometry.Offset
@@ -24,6 +26,11 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import coil.ImageLoader
+import coil.compose.AsyncImage
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.request.ImageRequest
 import com.schedule.app.ui.theme.LocalTheme
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -631,7 +638,7 @@ fun EmojiInput(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AVATAR  — shows emoji or photo, clipped to circle
+// AVATAR  — показывает emoji, base64-фото или URL (в т.ч. анимированный GIF)
 // ─────────────────────────────────────────────────────────────────────────────
 @Composable
 fun AvatarView(
@@ -653,24 +660,53 @@ fun AvatarView(
         contentAlignment = Alignment.Center,
     ) {
         if (avatarType == "photo" && avatarData != null) {
-            // Decode base64 image
-            val bitmap = remember(avatarData) {
-                try {
-                    val clean = if (avatarData.contains(",")) avatarData.substringAfter(",") else avatarData
-                    val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
-                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                } catch (e: Exception) { null }
-            }
-            if (bitmap != null) {
-                androidx.compose.foundation.Image(
-                    bitmap      = bitmap.asImageBitmap(),
+
+            // ── Вариант 1: URL (GitHub raw или любой https) — поддержка GIF ──
+            if (avatarData.startsWith("http")) {
+                val context = LocalContext.current
+                val imageLoader = remember(context) {
+                    ImageLoader.Builder(context)
+                        .components {
+                            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                                add(ImageDecoderDecoder.Factory())
+                            } else {
+                                add(GifDecoder.Factory())
+                            }
+                        }
+                        .build()
+                }
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(avatarData)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader    = imageLoader,
                     contentDescription = "avatar",
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier    = Modifier.fillMaxSize(),
+                    contentScale   = ContentScale.Crop,
+                    modifier       = Modifier.fillMaxSize(),
                 )
+
+            // ── Вариант 2: base64 data URI ────────────────────────────────────
             } else {
-                Text(avatar.ifEmpty { "😊" }, fontSize = (size.value * 0.5f).sp)
+                val bitmap = remember(avatarData) {
+                    try {
+                        val clean = if (avatarData.contains(",")) avatarData.substringAfter(",") else avatarData
+                        val bytes = android.util.Base64.decode(clean, android.util.Base64.DEFAULT)
+                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    } catch (e: Exception) { null }
+                }
+                if (bitmap != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap      = bitmap.asImageBitmap(),
+                        contentDescription = "avatar",
+                        contentScale = ContentScale.Crop,
+                        modifier    = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text(avatar.ifEmpty { "😊" }, fontSize = (size.value * 0.5f).sp)
+                }
             }
+
         } else {
             Text(avatar.ifEmpty { "😊" }, fontSize = (size.value * 0.5f).sp)
         }

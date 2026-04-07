@@ -50,6 +50,7 @@ fun AppScreen(
     onSwitchToWebView: () -> Unit,
     onPickPhoto: () -> Unit,
     onPickBgImage: () -> Unit = {},
+    onPickChatMedia: () -> Unit = {},
 ) {
     val t = LocalTheme.current
 
@@ -337,6 +338,7 @@ fun AppScreen(
                         messageInput   = vm.messageInput,
                         onInputChange  = { vm.messageInput = it },
                         onSend         = vm::sendMessage,
+                        onPickMedia    = onPickChatMedia,
                         onBack         = { vm.closeChat(); goBack(Screen.Messenger) },
                     )
                 }
@@ -405,6 +407,7 @@ fun AppScreen(
                     messageInput = vm.messageInput,
                     onInputChange= { vm.messageInput = it },
                     onSend       = vm::sendMessage,
+                    onPickMedia  = onPickChatMedia,
                     onBack       = { vm.closeChat(); goBack(Screen.GroupChats) },
                 )
 

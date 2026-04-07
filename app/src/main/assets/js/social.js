@@ -536,7 +536,7 @@ function profileCreate() {
   accountsSave(accounts);
   sbSaveUser(profile);
   updateNavProfileIcon(profile);
-  profileConnect(profile);
+  profileConnect(profile);  // e2eReinit вызовется внутри profileConnect
   profileRenderScreen();
   showScreen('s-profile');
   toast('🎉 Добро пожаловать, ' + name + '!');
@@ -1886,200 +1886,161 @@ async function _sbFetch(method, path, body, extraHeaders) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════════════════
-// 🔐 E2E ШИФРОВАНИЕ   ECDH + AES-GCM (WebCrypto API)
+// 🔐 E2E ШИФРОВАНИЕ   ECDH + AES-GCM  —  МУЛЬТИУСТРОЙСТВЕННАЯ СХЕМА v2
 //
-// Схема:
-//     Каждый пользователь имеет пару ECDH ключей (P-256)
-//     Публичный ключ хранится в Supabase users.pubkey (base64)
-//     Приватный ключ   только в localStorage (никогда не уходит с устройства)
-//     При отправке: ECDH shared secret ↩ HKDF ↩ AES-256-GCM
-//     В Supabase хранится: зашифрованный текст + IV (оба base64, разделитель '.')
-//     Формат в поле text: 'ENC:BASE64_IV.BASE64_CIPHERTEXT'
-//     Если расшифровка не удалась   показывается '🔒 [зашифровано]'
+// Ключи привязаны к аккаунту, а не к устройству:
+//   KEK = PBKDF2(pwdHash, username + "_kek_v2", 300k итераций)
+//   pwdHash уже хранится в profileLoad() — пользователь ничего не вводит
+//   Приватный ключ шифруется KEK → хранится в Supabase users.encrypted_privkey
+//   На новом устройстве: входишь → pwdHash подтягивается → ключ расшифровывается
+//   Сервер видит только зашифрованный ключ, E2E не нарушается
 // ══════════════════════════════════════════════════════════════════════════
 
-const E2E_PRIVKEY_KEY = 'sapp_e2e_priv_v1'; // localStorage ключ
-const E2E_PUBKEY_KEY  = 'sapp_e2e_pub_v1';
-const E2E_PREFIX      = 'ENC:';
+const E2E_PRIVKEY_KEY    = 'sapp_e2e_priv_v1';
+const E2E_PUBKEY_KEY     = 'sapp_e2e_pub_v1';
+const E2E_PREFIX         = 'ENC:';
+const E2E_ENCPRIV_PREFIX = 'ENC_PRIV:';
 
-// Кэш: username ↩ CryptoKey (публичный ECDH)
 const _e2ePeerPubKeys = {};
-// Кэш: chatKey ↩ CryptoKey (AES-GCM, производный от ECDH shared secret)
-const _e2eAesCache = {};
+const _e2eAesCache    = {};
 
-let _e2ePrivKey = null;  // CryptoKey   наш приватный ECDH
-let _e2ePubKey  = null;  // CryptoKey   наш публичный ECDH
+let _e2ePrivKey = null;
+let _e2ePubKey  = null;
 let _e2eEnabled = false;
 
-// ┄┄ Инициализация: генерация или загрузка ключей ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ── Вывод KEK из pwdHash через PBKDF2 ────────────────────────────────────────
+async function e2eDeriveKEK(pwdHash, username) {
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(pwdHash), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: new TextEncoder().encode(username + '_kek_v2'), iterations: 300000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false, ['encrypt', 'decrypt']
+  );
+}
+
+// ── Зашифровать приватный ключ через KEK ─────────────────────────────────────
+async function e2eEncryptPrivKey(privJwkStr, kek) {
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const enc = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, kek, new TextEncoder().encode(privJwkStr));
+  const b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
+  return E2E_ENCPRIV_PREFIX + b64(iv) + '.' + b64(enc);
+}
+
+// ── Расшифровать приватный ключ через KEK ────────────────────────────────────
+async function e2eDecryptPrivKey(encStr, kek) {
+  if (!encStr || !encStr.startsWith(E2E_ENCPRIV_PREFIX)) return null;
+  const [ivB64, encB64] = encStr.slice(E2E_ENCPRIV_PREFIX.length).split('.');
+  if (!ivB64 || !encB64) return null;
+  const from = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  try {
+    const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: from(ivB64) }, kek, from(encB64));
+    return new TextDecoder().decode(dec);
+  } catch(_) { return null; }
+}
+
+// ── Инициализация — всё автоматически из профиля ─────────────────────────────
 async function e2eInit() {
   try {
-    // Пробуем localStorage, затем IndexedDB как резерв (переживает полную очистку)
+    const profile  = profileLoad();
+    const username = profile?.username;
+    const pwdHash  = profile?.pwdHash;
+
+    // 1) Локальный кэш (быстро, без сети)
     let storedPriv = localStorage.getItem(E2E_PRIVKEY_KEY);
     let storedPub  = localStorage.getItem(E2E_PUBKEY_KEY);
 
     if (!storedPriv || !storedPub) {
-      // localStorage пуст — пробуем IndexedDB
       try {
         const idbPriv = await idbGet('e2e_priv_v1');
         const idbPub  = await idbGet('e2e_pub_v1');
         if (idbPriv && idbPub) {
-          storedPriv = idbPriv;
-          storedPub  = idbPub;
-          // Восстанавливаем обратно в localStorage для быстрого доступа
+          storedPriv = idbPriv; storedPub = idbPub;
           localStorage.setItem(E2E_PRIVKEY_KEY, storedPriv);
           localStorage.setItem(E2E_PUBKEY_KEY,  storedPub);
-          console.log('[E2E] ключи восстановлены из IndexedDB');
+          console.log('[E2E] ключи из IndexedDB ✓');
         }
       } catch(_) {}
     }
 
+    // 2) Нет кэша + есть профиль + есть сеть → тянем с сервера (новое устройство)
+    if (!storedPriv && username && pwdHash && sbReady()) {
+      try {
+        const rows = await sbGet('users', `select=encrypted_privkey&username=eq.${encodeURIComponent(username)}&limit=1`);
+        const encPriv = rows?.[0]?.encrypted_privkey;
+        if (encPriv) {
+          const kek = await e2eDeriveKEK(pwdHash, username);
+          const privJwkStr = await e2eDecryptPrivKey(encPriv, kek);
+          if (privJwkStr) {
+            const privJwk = JSON.parse(privJwkStr);
+            storedPriv = privJwkStr;
+            storedPub  = JSON.stringify({ kty: privJwk.kty, crv: privJwk.crv, x: privJwk.x, y: privJwk.y });
+            localStorage.setItem(E2E_PRIVKEY_KEY, storedPriv);
+            localStorage.setItem(E2E_PUBKEY_KEY,  storedPub);
+            idbSet('e2e_priv_v1', storedPriv).catch(()=>{});
+            idbSet('e2e_pub_v1',  storedPub).catch(()=>{});
+            console.log('[E2E] ключ восстановлен с сервера ✓');
+          } else {
+            console.warn('[E2E] не удалось расшифровать — pwdHash не совпадает?');
+          }
+        }
+      } catch(err) { console.warn('[E2E] ошибка загрузки с сервера:', err.message); }
+    }
+
     if (storedPriv && storedPub) {
-      // Загружаем существующие ключи
-      _e2ePrivKey = await crypto.subtle.importKey(
-        'jwk', JSON.parse(storedPriv),
-        { name: 'ECDH', namedCurve: 'P-256' },
-        false, ['deriveKey', 'deriveBits']
-      );
-      _e2ePubKey = await crypto.subtle.importKey(
-        'jwk', JSON.parse(storedPub),
-        { name: 'ECDH', namedCurve: 'P-256' },
-        true, []
-      );
-    } else {
-      // Генерируем новую пару
-      const pair = await crypto.subtle.generateKey(
-        { name: 'ECDH', namedCurve: 'P-256' },
-        true, ['deriveKey', 'deriveBits']
-      );
+      // 3) Загружаем в память
+      _e2ePrivKey = await crypto.subtle.importKey('jwk', JSON.parse(storedPriv), { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+      _e2ePubKey  = await crypto.subtle.importKey('jwk', JSON.parse(storedPub),  { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+    } else if (username && pwdHash) {
+      // 4) Первый запуск — генерируем и сразу сохраняем на сервер
+      console.log('[E2E] генерация новой пары...');
+      const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
       _e2ePrivKey = pair.privateKey;
       _e2ePubKey  = pair.publicKey;
-      // Сохраняем в оба хранилища
       const privJwk = await crypto.subtle.exportKey('jwk', _e2ePrivKey);
       const pubJwk  = await crypto.subtle.exportKey('jwk', _e2ePubKey);
       const privStr = JSON.stringify(privJwk);
-      const pubStr  = JSON.stringify(pubJwk);
+      const pubStr  = JSON.stringify({ kty: pubJwk.kty, crv: pubJwk.crv, x: pubJwk.x, y: pubJwk.y });
       localStorage.setItem(E2E_PRIVKEY_KEY, privStr);
       localStorage.setItem(E2E_PUBKEY_KEY,  pubStr);
-      // IndexedDB — резервная копия, переживает localStorage.clear()
       idbSet('e2e_priv_v1', privStr).catch(()=>{});
       idbSet('e2e_pub_v1',  pubStr).catch(()=>{});
+      if (sbReady()) {
+        try {
+          const kek     = await e2eDeriveKEK(pwdHash, username);
+          const encPriv = await e2eEncryptPrivKey(privStr, kek);
+          await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
+            { encrypted_privkey: encPriv },
+            { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+          );
+          console.log('[E2E] encrypted_privkey → Supabase ✓');
+        } catch(err) { console.warn('[E2E] не удалось сохранить:', err.message); }
+      }
+    } else {
+      // Пользователь не залогинен
+      _e2eEnabled = false;
+      return;
     }
+
     _e2eEnabled = true;
+    console.log('[E2E] мультиустройственный режим активен ✓');
   } catch(e) {
     console.warn('[E2E] init failed:', e.message);
     _e2eEnabled = false;
   }
 }
 
-// ┄┄ Получить публичный ключ в виде base64 для отправки на сервер ┄┄┄┄┄┄┄┄┄┄
-async function e2eGetMyPubKeyB64() {
-  if (!_e2ePubKey) return null;
-  try {
-    const raw = await crypto.subtle.exportKey('raw', _e2ePubKey);
-    return btoa(String.fromCharCode(...new Uint8Array(raw)));
-  } catch(e) { return null; }
+// Повторная инициализация после входа (вызывается из profileConnect)
+async function e2eReinit() {
+  _e2ePrivKey = null; _e2ePubKey = null; _e2eEnabled = false;
+  Object.keys(_e2ePeerPubKeys).forEach(k => delete _e2ePeerPubKeys[k]);
+  Object.keys(_e2eAesCache).forEach(k => delete _e2eAesCache[k]);
+  await e2eInit();
 }
 
-// ┄┄ Загрузить публичный ключ собеседника из Supabase ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eLoadPeerKey(username) {
-  if (_e2ePeerPubKeys[username]) return _e2ePeerPubKeys[username];
-  try {
-    const rows = await sbGet('users', `select=pubkey&username=eq.${encodeURIComponent(username)}&limit=1`);
-    if (!Array.isArray(rows) || !rows[0]?.pubkey) return null;
-    const raw = Uint8Array.from(atob(rows[0].pubkey), c => c.charCodeAt(0));
-    const key = await crypto.subtle.importKey(
-      'raw', raw,
-      { name: 'ECDH', namedCurve: 'P-256' },
-      false, []
-    );
-    _e2ePeerPubKeys[username] = key;
-    return key;
-  } catch(e) { return null; }
-}
-
-// ┄┄ Вывести AES ключ из ECDH shared secret (HKDF-SHA-256) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eDeriveAES(peerPubKey) {
-  const shared = await crypto.subtle.deriveBits(
-    { name: 'ECDH', public: peerPubKey },
-    _e2ePrivKey, 256
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('ScheduleAppE2E') },
-    await crypto.subtle.importKey('raw', shared, 'HKDF', false, ['deriveKey']),
-    { name: 'AES-GCM', length: 256 },
-    false, ['encrypt', 'decrypt']
-  );
-}
-
-// ┄┄ Получить или кэшировать AES ключ для чата ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eGetAES(otherUsername) {
-  if (_e2eAesCache[otherUsername]) return _e2eAesCache[otherUsername];
-  const peerKey = await e2eLoadPeerKey(otherUsername);
-  if (!peerKey) return null;
-  const aes = await e2eDeriveAES(peerKey);
-  _e2eAesCache[otherUsername] = aes;
-  return aes;
-}
-
-// ┄┄ Зашифровать текст ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eEncrypt(text, otherUsername) {
-  if (!_e2eEnabled || !text) return text;
-  try {
-    const aes = await e2eGetAES(otherUsername);
-    if (!aes) return text; // нет ключа   шлём открыто
-    const iv  = crypto.getRandomValues(new Uint8Array(12));
-    const enc = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      aes, new TextEncoder().encode(text)
-    );
-    const ivB64  = btoa(String.fromCharCode(...iv));
-    const encB64 = btoa(String.fromCharCode(...new Uint8Array(enc)));
-    return E2E_PREFIX + ivB64 + '.' + encB64;
-  } catch(e) {
-    console.warn('[E2E] encrypt failed:', e.message);
-    return text;
-  }
-}
-
-// ┄┄ Расшифровать текст ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eDecrypt(ciphertext, otherUsername) {
-  if (!ciphertext || !ciphertext.startsWith(E2E_PREFIX)) return ciphertext;
-  if (!_e2eEnabled) return '🔒 [зашифровано]';
-  try {
-    const payload = ciphertext.slice(E2E_PREFIX.length);
-    const dotIdx  = payload.indexOf('.');
-    if (dotIdx < 0) return '🔒 [зашифровано]';
-    const iv  = Uint8Array.from(atob(payload.slice(0, dotIdx)), c => c.charCodeAt(0));
-    const enc = Uint8Array.from(atob(payload.slice(dotIdx + 1)),  c => c.charCodeAt(0));
-    const aes = await e2eGetAES(otherUsername);
-    if (!aes) return '🔒 [зашифровано]';
-    const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aes, enc);
-    return new TextDecoder().decode(dec);
-  } catch(e) {
-    return '🔒 [зашифровано]';
-  }
-}
-
-// ┄┄ Синхронизировать публичный ключ на сервер при входе ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eSyncPubKey(username) {
-  if (!_e2eEnabled || !username) return;
-  try {
-    const pubB64 = await e2eGetMyPubKeyB64();
-    if (!pubB64) return;
-    // Проверяем: нужно ли обновить
-    const rows = await sbGet('users', `select=pubkey&username=eq.${encodeURIComponent(username)}&limit=1`);
-    if (Array.isArray(rows) && rows[0]?.pubkey === pubB64) return; // уже актуальный
-    await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
-      { pubkey: pubB64 },
-      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
-    );
-    console.log('[E2E] pubkey synced to server');
-  } catch(e) {}
-}
-
-// ┄┄ Инициализация при старте ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// Автозапуск при загрузке страницы
 e2eInit().then(() => {
   console.log('[E2E] ready, enabled=' + _e2eEnabled);
 });
@@ -2489,6 +2450,8 @@ async function profileConnect(p) {
     // Синхронизируем VIP/badge/frame с сервера (server source of truth)
     vipSyncFromServer(p.username).catch(()=>{});
     // Синхронизируем публичный E2E ключ на сервер
+    // Переинициализируем E2E с актуальным профилем (подтягивает ключ если новое устройство)
+    e2eReinit().catch(()=>{});
     e2eSyncPubKey(p.username).catch(()=>{});
     // Сбрасываем очередь отложенных сообщений (появился интернет)
     if (outboxLoad().length > 0) {

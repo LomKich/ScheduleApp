@@ -3,6 +3,11 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// ── Читаем токен из local.properties (не попадает в git) ──────────────────────
+def localProps = new Properties()
+def localFile = rootProject.file("local.properties")
+if (localFile.exists()) localProps.load(localFile.newDataInputStream())
+
 android {
     namespace 'com.schedule.app'
     compileSdk 34
@@ -12,7 +17,9 @@ android {
         minSdk 23
         targetSdk 34
         versionCode 14
-        versionName "4.9.13"
+        versionName "4.9.14"
+        // GitHub токен встраивается в BuildConfig из local.properties
+        buildConfigField "String", "GITHUB_TOKEN", "\"${localProps['github.token'] ?: ''}\""
     }
 
     signingConfigs {
@@ -47,6 +54,7 @@ android {
 
     buildFeatures {
         compose true
+        buildConfig true
     }
 
     composeOptions {
@@ -59,6 +67,9 @@ dependencies {
     implementation 'org.json:json:20231013'
     implementation 'androidx.core:core:1.13.1'
     implementation 'androidx.core:core-ktx:1.13.1'
+    // Coil — загрузка картинок по URL, поддерживает GIF
+    implementation 'io.coil-kt:coil-compose:2.6.0'
+    implementation 'io.coil-kt:coil-gif:2.6.0'
 
     def composeBom = platform('androidx.compose:compose-bom:2024.05.00')
     implementation composeBom

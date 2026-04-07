@@ -41,22 +41,29 @@ class ComposeActivity : ComponentActivity() {
         setContent {
             AppTheme(themeState = vm.themeState, fontId = vm.currentFontId) {
 
-                // ── Photo picker launcher ─────────────────────────────────────
-                val photoLauncher = rememberLauncherForActivityResult(
+                // ── Единый picker: флаг определяет — аватар или фон ──────────
+                // ФИКС: два отдельных GetContent()-лаунчера путались местами —
+                // Android регистрирует их в порядке объявления и иногда возвращает
+                // результат не тому. Один лаунчер с флагом решает проблему.
+                var pendingPickType by remember { mutableStateOf("avatar") }
+
+                val imageLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.GetContent()
                 ) { uri: Uri? ->
                     if (uri != null) {
-                        vm.onPhotoPicked(uri, contentResolver)
+                        if (pendingPickType == "avatar") {
+                            vm.onPhotoPicked(uri, contentResolver)
+                        } else {
+                            vm.onBgImagePicked(uri, contentResolver)
+                        }
                     }
                 }
 
-                // ── Background image picker ───────────────────────────────────
-                val bgLauncher = rememberLauncherForActivityResult(
+                // ── Media picker для чата (фото/видео/файлы) ─────────────────
+                val mediaLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.GetContent()
                 ) { uri: Uri? ->
-                    if (uri != null) {
-                        vm.onBgImagePicked(uri, contentResolver)
-                    }
+                    if (uri != null) vm.sendMediaMessage(uri, contentResolver)
                 }
 
                 // Share text via Android share sheet
@@ -92,8 +99,9 @@ class ComposeActivity : ComponentActivity() {
                     AppScreen(
                         vm               = vm,
                         onSwitchToWebView= ::switchToWebView,
-                        onPickPhoto      = { photoLauncher.launch("image/*") },
-                        onPickBgImage    = { bgLauncher.launch("image/*") },
+                        onPickPhoto      = { pendingPickType = "avatar"; imageLauncher.launch("image/*") },
+                        onPickBgImage    = { pendingPickType = "bg";     imageLauncher.launch("image/*") },
+                        onPickChatMedia  = { mediaLauncher.launch("*/*") },
                     )
                 }
             }
