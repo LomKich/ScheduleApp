@@ -45,7 +45,7 @@ class ComposeActivity : ComponentActivity() {
                 // ФИКС: два отдельных GetContent()-лаунчера путались местами —
                 // Android регистрирует их в порядке объявления и иногда возвращает
                 // результат не тому. Один лаунчер с флагом решает проблему.
-                var pendingPickType by remember { mutableStateOf("avatar") }
+                var pendingPickType by rememberSaveable { mutableStateOf("avatar") }
 
                 val imageLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.GetContent()
