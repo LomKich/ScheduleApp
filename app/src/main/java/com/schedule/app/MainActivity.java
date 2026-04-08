@@ -77,7 +77,8 @@ public class MainActivity extends Activity {
     private SupabaseClient         supabase;
     private SupabaseHelper         helper;
     private ValueCallback<Uri[]>   fileChooserCallback = null;
-    private boolean                isNativeBgPick = false;
+    private boolean                isNativeBgPick     = false;
+    private boolean                isNativeAvatarPick = false;
     private android.webkit.PermissionRequest _pendingPermissionRequest = null;
 
     // ── Нативная запись голосовых (обход ограничений WebView getUserMedia) ──
@@ -778,12 +779,14 @@ public class MainActivity extends Activity {
                 Uri uri = data.getData();
                 log.i(TAG, "Файл выбран: " + uri + " | нативный режим: " + isNativeBgPick);
                 final Uri finalUri = uri;
-                final boolean wasNativePick = isNativeBgPick;
-                isNativeBgPick = false;
+                final boolean wasNativePick  = isNativeBgPick;
+                final boolean wasAvatarPick  = isNativeAvatarPick;
+                isNativeBgPick     = false;
+                isNativeAvatarPick = false;
 
-                // Если это НЕ нативный пик фона, а <input type="file"> из WebView —
+                // Если это НЕ нативный пик фона/аватара, а <input type="file"> из WebView —
                 // просто возвращаем URI в callback, без image-обработки
-                if (!wasNativePick && fileChooserCallback != null) {
+                if (!wasNativePick && !wasAvatarPick && fileChooserCallback != null) {
                     log.i(TAG, "Передаём URI в fileChooserCallback напрямую");
                     fileChooserCallback.onReceiveValue(new Uri[]{finalUri});
                     fileChooserCallback = null;
@@ -841,13 +844,22 @@ public class MainActivity extends Activity {
                                 fileChooserCallback.onReceiveValue(null);
                                 fileChooserCallback = null;
                             }
-                            // Передаём изображение в JS (только для нативного пика фона)
                             String escaped = jsDataUrl.replace("\\", "\\\\").replace("'", "\\'");
-                            webView.evaluateJavascript(
-                                "if(typeof onNativeBgImagePicked==='function')onNativeBgImagePicked('" + escaped + "')",
-                                null
-                            );
-                            log.i(TAG, "Фон передан в JS, размер: " + finalBytes.length + " байт");
+                            if (wasAvatarPick) {
+                                // Аватар — отдельный колбэк
+                                webView.evaluateJavascript(
+                                    "if(typeof onNativeAvatarPhotoPicked==='function')onNativeAvatarPhotoPicked('" + escaped + "')",
+                                    null
+                                );
+                                log.i(TAG, "Аватар передан в JS, размер: " + finalBytes.length + " байт");
+                            } else {
+                                // Фон — старый колбэк
+                                webView.evaluateJavascript(
+                                    "if(typeof onNativeBgImagePicked==='function')onNativeBgImagePicked('" + escaped + "')",
+                                    null
+                                );
+                                log.i(TAG, "Фон передан в JS, размер: " + finalBytes.length + " байт");
+                            }
                         });
                     } catch (Exception e) {
                         log.e(TAG, "Ошибка чтения изображения: " + e.getMessage());
@@ -1574,6 +1586,38 @@ public class MainActivity extends Activity {
                 } catch (Exception e) {
                     isNativeBgPick = false;
                     log.e(TAG, "pickImageForBackground error: " + e.getMessage());
+                    webView.evaluateJavascript(
+                        "if(typeof toast==='function')toast('❌ Не удалось открыть галерею')",
+                        null
+                    );
+                }
+            });
+        }
+
+        /**
+         * Открывает галерею для выбора АВАТАР-ФОТО.
+         * Результат возвращается через JS-функцию onNativeAvatarPhotoPicked(dataUrl)
+         */
+        @JavascriptInterface
+        public void pickImageForAvatar() {
+            log.i(TAG, "pickImageForAvatar");
+            runOnUiThread(() -> {
+                if (fileChooserCallback != null) {
+                    fileChooserCallback.onReceiveValue(null);
+                    fileChooserCallback = null;
+                }
+                isNativeAvatarPick = true;
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("image/*");
+                try {
+                    startActivityForResult(
+                        Intent.createChooser(intent, "Выбери фото для аватара"),
+                        IMAGE_PICK_CODE
+                    );
+                } catch (Exception e) {
+                    isNativeAvatarPick = false;
+                    log.e(TAG, "pickImageForAvatar error: " + e.getMessage());
                     webView.evaluateJavascript(
                         "if(typeof toast==='function')toast('❌ Не удалось открыть галерею')",
                         null
