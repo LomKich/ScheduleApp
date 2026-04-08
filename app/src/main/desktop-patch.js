@@ -191,7 +191,26 @@ body.glass-mode.glass-optimized .btn,body.glass-mode.glass-optimized .diff-btn {
     var _oP = window._profilePickPhotoOnly;
     window._profilePickPhotoOnly = function(){
       if (window.Android&&typeof window.Android.pickImageForBackground==='function'){
-        window._profileWaitingForPhoto=true; window.Android.pickImageForBackground();
+        window._profileWaitingForPhoto=true;
+        // Перехватываем onNativeBgImagePicked — единственный колбэк, который
+        // MainActivity вызывает после выбора изображения.
+        // Восстанавливаем оригинал сразу после срабатывания.
+        var _origBgPicked = window.onNativeBgImagePicked;
+        window.onNativeBgImagePicked = function(dataUrl) {
+          window.onNativeBgImagePicked = _origBgPicked;
+          window._profileWaitingForPhoto = false;
+          if (!dataUrl) return;
+          var p = typeof window.profileLoad==='function' ? window.profileLoad() : null;
+          if (!p) return;
+          p.avatarType='photo'; p.avatarData=dataUrl; p.avatarVideo=null;
+          typeof window.profileSave==='function' && window.profileSave(p);
+          typeof window.updateNavProfileIcon==='function' && window.updateNavProfileIcon(p);
+          typeof window.profileRenderScreen==='function' && window.profileRenderScreen();
+          typeof window.sbPresencePut==='function' && window.sbPresencePut(p);
+          typeof window.toast==='function' && window.toast('\u2705 \u0410\u0432\u0430\u0442\u0430\u0440 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d');
+          _log('Avatar photo set from Android picker');
+        };
+        window.Android.pickImageForBackground();
       } else { _oP.apply(this,arguments); }
     };
     var _oV = window._profilePickVideoAvatar;
