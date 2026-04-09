@@ -77,8 +77,7 @@ public class MainActivity extends Activity {
     private SupabaseClient         supabase;
     private SupabaseHelper         helper;
     private ValueCallback<Uri[]>   fileChooserCallback = null;
-    private boolean                isNativeBgPick     = false;
-    private boolean                isNativeAvatarPick = false;
+    private boolean                isNativeBgPick = false;
     private android.webkit.PermissionRequest _pendingPermissionRequest = null;
 
     // ── Нативная запись голосовых (обход ограничений WebView getUserMedia) ──
@@ -386,19 +385,6 @@ public class MainActivity extends Activity {
                 startJavaPollTimer();
                 // Передаём реальную высоту статус-бара в CSS-переменную
                 injectStatusBarHeight();
-                // Watchdog: ждём heartbeat от JS — если не придёт, предлагаем откат
-                BackupManager.get(MainActivity.this).startWatchdog(new BackupManager.WatchdogCallback() {
-                    @Override public void onAppHealthy() {
-                        log.i(TAG, "Watchdog: приложение работает нормально ✅");
-                    }
-                    @Override public void onAppUnhealthy(String reason, String backupVer, String backupPath) {
-                        if (backupPath == null) {
-                            log.w(TAG, "Watchdog FAIL, но бэкапа нет — ничего не делаем");
-                            return;
-                        }
-                        runOnUiThread(() -> _showRestoreDialog(reason, backupVer, backupPath));
-                    }
-                });
             }
 
             @Override
@@ -418,23 +404,6 @@ public class MainActivity extends Activity {
                     log.i(TAG, "fetch → " + url);
                 }
                 // ── Hot-patch: если файл был обновлён — отдаём из filesDir ────────────
-                // ── Sounds: кастомная схема https://sounds.local/ ────────────────────
-                // fetch('file:///android_asset/sounds/') не работает в WebView — используем HTTPS
-                if (url.startsWith("https://sounds.local/")) {
-                    String soundFile = req.getUrl().getPath(); // напр. "/msg_send.ogg"
-                    if (soundFile != null && soundFile.startsWith("/")) {
-                        soundFile = soundFile.substring(1);
-                    }
-                    try {
-                        java.io.InputStream is = getAssets().open("sounds/" + soundFile);
-                        java.util.Map<String, String> h = new java.util.HashMap<>();
-                        h.put("Access-Control-Allow-Origin", "*");
-                        return new WebResourceResponse("audio/ogg", null, 200, "OK", h, is);
-                    } catch (Exception e) {
-                        log.w(TAG, "sound not found: sounds/" + soundFile);
-                        return null;
-                    }
-                }
                 // ── Emoji pack: кастомная схема https://emoji.local/ ──────────────────
                 // file:///android_asset/ не перехватывается надёжно — используем HTTPS
                 if (url.startsWith("https://emoji.local/")) {
@@ -809,14 +778,12 @@ public class MainActivity extends Activity {
                 Uri uri = data.getData();
                 log.i(TAG, "Файл выбран: " + uri + " | нативный режим: " + isNativeBgPick);
                 final Uri finalUri = uri;
-                final boolean wasNativePick  = isNativeBgPick;
-                final boolean wasAvatarPick  = isNativeAvatarPick;
-                isNativeBgPick     = false;
-                isNativeAvatarPick = false;
+                final boolean wasNativePick = isNativeBgPick;
+                isNativeBgPick = false;
 
-                // Если это НЕ нативный пик фона/аватара, а <input type="file"> из WebView —
+                // Если это НЕ нативный пик фона, а <input type="file"> из WebView —
                 // просто возвращаем URI в callback, без image-обработки
-                if (!wasNativePick && !wasAvatarPick && fileChooserCallback != null) {
+                if (!wasNativePick && fileChooserCallback != null) {
                     log.i(TAG, "Передаём URI в fileChooserCallback напрямую");
                     fileChooserCallback.onReceiveValue(new Uri[]{finalUri});
                     fileChooserCallback = null;
@@ -868,25 +835,19 @@ public class MainActivity extends Activity {
                         String dataUrl = "data:" + mime + ";base64," + b64;
                         final String jsDataUrl = dataUrl;
 
+                        final byte[] finalBytes = bytes;
                         runOnUiThread(() -> {
                             if (fileChooserCallback != null) {
                                 fileChooserCallback.onReceiveValue(null);
                                 fileChooserCallback = null;
                             }
+                            // Передаём изображение в JS (только для нативного пика фона)
                             String escaped = jsDataUrl.replace("\\", "\\\\").replace("'", "\\'");
-                            if (wasAvatarPick) {
-                                webView.evaluateJavascript(
-                                    "if(typeof onNativeAvatarPhotoPicked==='function')onNativeAvatarPhotoPicked('" + escaped + "')",
-                                    null
-                                );
-                                log.i(TAG, "Аватар передан в JS, размер: " + bytes.length + " байт");
-                            } else {
-                                webView.evaluateJavascript(
-                                    "if(typeof onNativeBgImagePicked==='function')onNativeBgImagePicked('" + escaped + "')",
-                                    null
-                                );
-                                log.i(TAG, "Фон передан в JS, размер: " + bytes.length + " байт");
-                            }
+                            webView.evaluateJavascript(
+                                "if(typeof onNativeBgImagePicked==='function')onNativeBgImagePicked('" + escaped + "')",
+                                null
+                            );
+                            log.i(TAG, "Фон передан в JS, размер: " + finalBytes.length + " байт");
                         });
                     } catch (Exception e) {
                         log.e(TAG, "Ошибка чтения изображения: " + e.getMessage());
@@ -915,7 +876,6 @@ public class MainActivity extends Activity {
         } else if (requestCode == CIRCLE_RECORD_CODE) {
             if (resultCode == RESULT_OK && data != null) {
                 String videoPath = data.getStringExtra(CircleRecordActivity.EXTRA_VIDEO_PATH);
-                boolean isFrontCam = data.getBooleanExtra(CircleRecordActivity.EXTRA_FRONT_CAMERA, true);
                 if (videoPath != null && !videoPath.isEmpty()) {
                     log.i(TAG, "CircleRecord: got video path=" + videoPath);
                     // Уведомляем JS что видео снято, идёт загрузка
@@ -968,7 +928,7 @@ public class MainActivity extends Activity {
                                         log.i(TAG, "CircleRecord: CDN OK url=" + fileUrl);
                                         runOnUiThread(() -> webView.evaluateJavascript(
                                             "if(typeof onNativeCircleUploaded==='function')onNativeCircleUploaded('" +
-                                            fileUrl.replace("'", "\'") + "'," + fileSize + "," + isFrontCam + ")", null));
+                                            fileUrl.replace("'", "\'") + "'," + fileSize + ")", null));
                                         return;
                                     }
                                 } catch (Exception je) { log.e(TAG, "parse url: " + je.getMessage()); }
@@ -1623,39 +1583,6 @@ public class MainActivity extends Activity {
         }
 
         /**
-         * Открывает системный пикер изображений для выбора АВАТАРА.
-         * Результат возвращается через JS-функцию onNativeAvatarPhotoPicked(dataUrl)
-         * — отдельный колбэк, никогда не конфликтует с фоном.
-         */
-        @JavascriptInterface
-        public void pickImageForAvatar() {
-            log.i(TAG, "pickImageForAvatar");
-            runOnUiThread(() -> {
-                if (fileChooserCallback != null) {
-                    fileChooserCallback.onReceiveValue(null);
-                    fileChooserCallback = null;
-                }
-                isNativeAvatarPick = true;
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("image/*");
-                try {
-                    startActivityForResult(
-                        Intent.createChooser(intent, "Выбери фото для аватара"),
-                        IMAGE_PICK_CODE
-                    );
-                } catch (Exception e) {
-                    isNativeAvatarPick = false;
-                    log.e(TAG, "pickImageForAvatar error: " + e.getMessage());
-                    webView.evaluateJavascript(
-                        "if(typeof toast==='function')toast('❌ Не удалось открыть галерею')",
-                        null
-                    );
-                }
-            });
-        }
-
-        /**
          * Переключает ориентацию экрана для DOOM и других игр
          * orientation: "landscape" | "portrait"
          */
@@ -1929,78 +1856,6 @@ public class MainActivity extends Activity {
             }
         }
 
-        public void hotPatchClearAll() {
-            try {
-                java.io.File dir = new java.io.File(getFilesDir(), "hotpatch");
-                deleteRecursive(dir);
-                log.i(TAG, "hotPatchClearAll: done");
-            } catch (Exception e) {
-                log.e(TAG, "hotPatchClearAll error: " + e.getMessage());
-            }
-        }
-
-        // ── Backup & Watchdog ─────────────────────────────────────────────────
-
-        /** JS вызывает при каждом успешном старте (через 3-5 сек после инита) */
-        @JavascriptInterface
-        public void heartbeat() {
-            BackupManager.get(MainActivity.this).onHeartbeat();
-        }
-
-        /** Возвращает JSON с информацией о последнем бэкапе */
-        @JavascriptInterface
-        public String getBackupInfo() {
-            BackupManager bm = BackupManager.get(MainActivity.this);
-            java.io.File[] backups = bm.listBackups();
-            org.json.JSONObject obj = new org.json.JSONObject();
-            try {
-                obj.put("hasBackup",    bm.hasBackup());
-                obj.put("lastVersion",  bm.getLastBackupVersion() != null ? bm.getLastBackupVersion() : "");
-                obj.put("lastTs",       bm.getLastBackupTimestamp());
-                obj.put("lastDate",     bm.getLastBackupTimestamp() > 0
-                    ? BackupManager.formatDate(bm.getLastBackupTimestamp()) : "");
-                obj.put("totalSize",    BackupManager.formatSize(bm.getTotalBackupSize()));
-                obj.put("count",        backups.length);
-                org.json.JSONArray arr = new org.json.JSONArray();
-                for (java.io.File f : backups) {
-                    org.json.JSONObject b = new org.json.JSONObject();
-                    b.put("name",    f.getName());
-                    b.put("path",    f.getAbsolutePath());
-                    b.put("size",    BackupManager.formatSize(f.length()));
-                    b.put("date",    BackupManager.formatDate(f.lastModified()));
-                    arr.put(b);
-                }
-                obj.put("backups", arr);
-            } catch (Exception ignored) {}
-            return obj.toString();
-        }
-
-        /** Устанавливает последний бэкап */
-        @JavascriptInterface
-        public void restoreBackup() {
-            log.i(TAG, "restoreBackup called from JS");
-            BackupManager bm = BackupManager.get(MainActivity.this);
-            runOnUiThread(() -> {
-                boolean ok = bm.restoreLatestBackup(MainActivity.this);
-                if (!ok) {
-                    webView.evaluateJavascript("toast('❌ Бэкап не найден или повреждён')", null);
-                }
-            });
-        }
-
-        /** Устанавливает бэкап по пути */
-        @JavascriptInterface
-        public void restoreBackupByPath(String path) {
-            log.i(TAG, "restoreBackupByPath: " + path);
-            BackupManager bm = BackupManager.get(MainActivity.this);
-            runOnUiThread(() -> {
-                boolean ok = bm.restoreBackup(MainActivity.this, new java.io.File(path));
-                if (!ok) {
-                    webView.evaluateJavascript("toast('❌ Не удалось установить бэкап')", null);
-                }
-            });
-        }
-
         private void deleteRecursive(java.io.File f) {
             if (f.isDirectory()) {
                 java.io.File[] ch = f.listFiles();
@@ -2034,37 +1889,6 @@ public class MainActivity extends Activity {
             boolean ready = marker.exists();
             log.i(TAG, "isEmojiPackReady: " + ready);
             return ready;
-        }
-
-        /**
-         * Возвращает JSON-массив всех файлов в filesDir/emoji/ (рекурсивно).
-         * Пути относительные: "food/Hot Beverage.png", "nat/Fire.png" и т.д.
-         * Используется JS-диагностикой для сравнения с IOS_EMOJI_MAP.
-         */
-        @JavascriptInterface
-        public String getEmojiFileList() {
-            java.io.File emojiDir = new java.io.File(getFilesDir(), "emoji");
-            StringBuilder sb = new StringBuilder("[");
-            collectEmojiFiles(emojiDir, emojiDir, sb);
-            if (sb.length() > 1) sb.setLength(sb.length() - 1); // убрать последнюю запятую
-            sb.append("]");
-            return sb.toString();
-        }
-
-        private void collectEmojiFiles(java.io.File root, java.io.File dir, StringBuilder sb) {
-            java.io.File[] files = dir.listFiles();
-            if (files == null) return;
-            java.util.Arrays.sort(files);
-            for (java.io.File f : files) {
-                if (f.isDirectory()) {
-                    collectEmojiFiles(root, f, sb);
-                } else if (f.getName().endsWith(".png")) {
-                    String rel = f.getAbsolutePath().substring(root.getAbsolutePath().length() + 1);
-                    // JSON-экранирование
-                    rel = rel.replace("\\", "\\\\").replace("\"", "\\\"");
-                    sb.append("\"").append(rel).append("\",");
-                }
-            }
         }
 
         /**
@@ -2280,16 +2104,6 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void downloadAndInstallApk(String originalUrl) {
             log.i(TAG, "downloadAndInstallApk: " + originalUrl);
-
-            // Сохраняем текущую версию как бэкап ПЕРЕД скачиванием новой
-            new Thread(() -> {
-                String backupPath = BackupManager.get(MainActivity.this).backupCurrentApk();
-                if (backupPath != null) {
-                    log.i(TAG, "Pre-update backup saved: " + backupPath);
-                } else {
-                    log.w(TAG, "Pre-update backup FAILED — продолжаем без бэкапа");
-                }
-            }).start();
             final String[] candidates = {
                 originalUrl,
                 "https://ghproxy.com/"        + originalUrl,
@@ -2387,36 +2201,6 @@ public class MainActivity extends Activity {
             }).start();
         }
 
-        /**
-         * Показывает нативный диалог с предложением откатиться к предыдущей версии.
-         * Вызывается watchdog когда JS не прислал heartbeat.
-         */
-        private void _showRestoreDialog(String reason, String backupVersion, String backupPath) {
-            log.i(TAG, "_showRestoreDialog: " + reason);
-            String title   = "⚠️ Проблема с приложением";
-            String msg     = reason + "\n\n" +
-                "Доступна резервная версия: v" + (backupVersion != null ? backupVersion : "?") + "\n\n" +
-                "Установить предыдущую версию?";
-
-            new android.app.AlertDialog.Builder(MainActivity.this)
-                .setTitle(title)
-                .setMessage(msg)
-                .setPositiveButton("↩ Восстановить", (d, w) -> {
-                    boolean ok = BackupManager.get(MainActivity.this)
-                        .restoreBackup(MainActivity.this, new java.io.File(backupPath));
-                    if (!ok) {
-                        new android.app.AlertDialog.Builder(MainActivity.this)
-                            .setTitle("Ошибка")
-                            .setMessage("Не удалось запустить установку бэкапа.\nФайл: " + backupPath)
-                            .setPositiveButton("OK", null)
-                            .show();
-                    }
-                })
-                .setNegativeButton("Пропустить", null)
-                .setCancelable(false)
-                .show();
-        }
-
         private void _jsProgress(int pct, String label) {
             final String js = String.format(
                 "var b=document.getElementById('ota-progress-bar');" +
@@ -2490,7 +2274,7 @@ public class MainActivity extends Activity {
                     UploadProgressCallback progressCb = (pct) -> {
                         final int p = pct;
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadProgress='function')onUploadProgress('"
+                            "if(typeof onUploadProgress==='function')onUploadProgress('"
                             + id + "'," + p + ")", null));
                     };
                     // Сначала пробуем pixeldrain (быстрее)
@@ -2514,19 +2298,19 @@ public class MainActivity extends Activity {
                     if (res.optBoolean("ok")) {
                         final String fileUrl = res.getString("url");
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadDone='function')onUploadDone('"
+                            "if(typeof onUploadDone==='function')onUploadDone('"
                             + id + "','" + fileUrl + "')", null));
                     } else {
                         final String err = res.optString("error", "Upload failed");
                         webView.post(() -> webView.evaluateJavascript(
-                            "if(typeof onUploadError='function')onUploadError('"
+                            "if(typeof onUploadError==='function')onUploadError('"
                             + id + "','" + err.replace("'", "\\'") + "')", null));
                     }
                 } catch (Exception e) {
                     log.e(TAG, "nativeUploadFileAsync error: " + e.getMessage());
                     final String err = e.getMessage() != null ? e.getMessage() : "Unknown error";
                     webView.post(() -> webView.evaluateJavascript(
-                        "if(typeof onUploadError='function')onUploadError('"
+                        "if(typeof onUploadError==='function')onUploadError('"
                         + id + "','" + err.replace("'", "\\'") + "')", null));
                 }
             }).start();
@@ -2542,6 +2326,68 @@ public class MainActivity extends Activity {
         }
         String _pixeldrainUploadBytesPublic(byte[] b, String fn, String mt) {
             return _pixeldrainUploadBytes(b, fn, mt, null);
+        }
+
+        /**
+         * Загружает файл на GitHub через Contents API (PUT).
+         * Вызывается из JS: Android.nativeGitHubUpload(apiUrl, bodyJson, pat, callbackId)
+         * По завершении вызывает window.__ghUpDone_<id>(rawUrl) или window.__ghUpErr_<id>(errMsg).
+         */
+        @android.webkit.JavascriptInterface
+        public void nativeGitHubUpload(final String apiUrl, final String bodyJson,
+                                       final String pat, final String callbackId) {
+            log.i(TAG, "nativeGitHubUpload: " + apiUrl.substring(0, Math.min(80, apiUrl.length())));
+            new Thread(() -> {
+                try {
+                    java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) new java.net.URL(apiUrl).openConnection();
+                    conn.setRequestMethod("PUT");
+                    conn.setRequestProperty("Accept",        "application/vnd.github.v3+json");
+                    conn.setRequestProperty("Authorization", "Bearer " + pat);
+                    conn.setRequestProperty("Content-Type",  "application/json");
+                    conn.setRequestProperty("User-Agent",    "ScheduleApp/1.0");
+                    conn.setConnectTimeout(20_000);
+                    conn.setReadTimeout(120_000);
+                    conn.setDoOutput(true);
+
+                    byte[] bodyBytes = bodyJson.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    conn.setFixedLengthStreamingMode(bodyBytes.length);
+                    conn.getOutputStream().write(bodyBytes);
+                    conn.getOutputStream().flush();
+
+                    int code = conn.getResponseCode();
+                    java.io.InputStream is = (code >= 200 && code < 300)
+                        ? conn.getInputStream()
+                        : conn.getErrorStream();
+                    String resp = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8))
+                        .lines().collect(java.util.stream.Collectors.joining());
+
+                    if (code < 200 || code >= 300) {
+                        throw new Exception("HTTP " + code + ": " + resp.substring(0, Math.min(120, resp.length())));
+                    }
+
+                    // Строим raw-URL из apiUrl
+                    // apiUrl: https://api.github.com/repos/owner/repo/contents/folder/file
+                    // rawUrl: https://raw.githubusercontent.com/owner/repo/main/folder/file
+                    String rawUrl = apiUrl
+                        .replace("api.github.com/repos/", "raw.githubusercontent.com/")
+                        .replace("/contents/", "/main/");
+
+                    final String safeUrl = rawUrl.replace("'", "\'");
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof window['__ghUpDone_" + callbackId + "']==='function')" +
+                        "window['__ghUpDone_" + callbackId + "']('" + safeUrl + "')", null));
+
+                } catch (Exception e) {
+                    log.e(TAG, "nativeGitHubUpload error: " + e.getMessage());
+                    final String err = (e.getMessage() != null ? e.getMessage() : "Unknown")
+                        .replace("'", "\'");
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof window['__ghUpErr_" + callbackId + "']==='function')" +
+                        "window['__ghUpErr_" + callbackId + "']('" + err + "')", null));
+                }
+            }).start();
         }
 
         private String _catboxUploadBytes(byte[] fileBytes, String fileName,
@@ -3645,7 +3491,6 @@ public class MainActivity extends Activity {
                         }, CAMERA_PERM_CODE);
                     return;
                 }
-                // Не скрываем клавиатуру — пользователь хочет её сохранить
                 // Сбрасываем флаги перед открытием
                 CircleRecordActivity.shouldStop   = false;
                 CircleRecordActivity.shouldCancel = false;

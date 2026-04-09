@@ -306,6 +306,9 @@ body.custom-bg-active:not(.liveblur-ready) .hero-card{
 
 .pair-top{display:flex;align-items:flex-start;padding:13px 14px 8px;gap:10px}
 .pair-num{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--muted);min-width:26px;text-transform:uppercase;padding-top:2px;flex-shrink:0}
+/* Slashed zero fix: JetBrains Mono рендерит 0 с точкой, которая издалека похожа на 8 */
+.pair-num,.pair-remain,.pair-time-val,.bell-num,.bell-slot-time,
+.egg-score,.ttt-score-val,.chk-score-val,.chess-score-val{font-feature-settings:"zero" 1;font-variant-numeric:slashed-zero}
 .pair-subject-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
 .pair-subject{font-size:14px;font-weight:700;line-height:1.35;word-break:break-word;letter-spacing:-.01em}
 .pair-subject.empty{color:var(--muted);font-weight:400;font-style:italic}

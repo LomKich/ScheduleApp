@@ -13,7 +13,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.schedule.app.ui.navigation.AppScreen
@@ -46,7 +45,7 @@ class ComposeActivity : ComponentActivity() {
                 // ФИКС: два отдельных GetContent()-лаунчера путались местами —
                 // Android регистрирует их в порядке объявления и иногда возвращает
                 // результат не тому. Один лаунчер с флагом решает проблему.
-                var pendingPickType by rememberSaveable { mutableStateOf("avatar") }
+                var pendingPickType by remember { mutableStateOf("avatar") }
 
                 val imageLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.GetContent()

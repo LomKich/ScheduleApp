@@ -1,4 +1,19 @@
 // ┄┄ Логирование ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+
+// ── GitHub-first upload: пробует GitHub, при ошибке — catbox ─────────────────
+async function _githubOrCatboxUpload(base64, fileName, folder, mimeType, onProgress) {
+  if (typeof githubUploadMedia === 'function' && typeof githubGetPAT === 'function' && githubGetPAT()) {
+    try {
+      const url = await githubUploadMedia(base64, fileName, folder);
+      onProgress && onProgress(100);
+      return url;
+    } catch(ghErr) {
+      console.warn('[upload] GitHub failed, falling back to catbox:', ghErr.message);
+    }
+  }
+  return _catboxUpload(base64, fileName, mimeType, onProgress);
+}
+
 function sLog(level, msg) {
   try {
     const tag = '[SOCIAL]';
@@ -41,19 +56,48 @@ const AVATAR_EMOJIS = [
 function profileLoad()    { try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || null; } catch(e){ return null; } }
 function profileSave(p) {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
-  // Keep accounts store in sync
+  // Keep accounts store in sync — but NEVER store large base64 blobs here (causes QuotaExceededError).
+  // avatarData / avatarVideo / banner are persisted in IndexedDB only.
   if (p && p.username) {
     const accounts = accountsLoad();
     if (!accounts[p.username]) accounts[p.username] = {};
-    accounts[p.username].name = p.name;
-    accounts[p.username].avatar = p.avatar;
-    accounts[p.username].createdAt = p.createdAt;
+    accounts[p.username].name        = p.name;
+    accounts[p.username].avatar      = p.avatar;
+    accounts[p.username].avatarType  = p.avatarType  || 'emoji';
+    accounts[p.username].avatarVideoUrl = p.avatarVideoUrl || null; // только URL, не base64
+    // avatarData / avatarVideo / banner намеренно НЕ сохраняются в localStorage — только IndexedDB
+    accounts[p.username].bio         = p.bio         || '';
+    accounts[p.username].color       = p.color       || 'var(--accent)';
+    accounts[p.username].frame       = p.frame       || 'none';
+    accounts[p.username].badge       = p.badge       || null;
+    accounts[p.username].vip         = p.vip         || false;
+    accounts[p.username].createdAt   = p.createdAt;
     if (p.pwdHash) accounts[p.username].pwdHash = p.pwdHash;
     accountsSave(accounts);
+    // Persist large avatar/banner data to IndexedDB so it survives localStorage limits
+    if (typeof idbSet === 'function') {
+      if (p.avatarData)  idbSet('profile_avatar:'  + p.username, p.avatarData).catch(()=>{});
+      if (p.avatarVideo) idbSet('profile_video:'   + p.username, p.avatarVideo).catch(()=>{});
+      if (p.banner)      idbSet('profile_banner:'  + p.username, p.banner).catch(()=>{});
+    }
   }
 }
 function accountsLoad()   { try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || {}; } catch(e){ return {}; } }
-function accountsSave(a)  { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(a)); }
+function accountsSave(a) {
+  // Защита от QuotaExceededError: перед записью убираем большие поля если есть
+  try {
+    const safe = JSON.parse(JSON.stringify(a));
+    Object.values(safe).forEach(acc => {
+      delete acc.avatarData;
+      delete acc.avatarVideo;
+      delete acc.banner;
+    });
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(safe));
+  } catch(e) {
+    // Если всё равно не лезет — тихо игнорируем, данные есть в IndexedDB
+    console.warn('[accountsSave] localStorage quota exceeded, skipping:', e.message);
+  }
+}
 function friendsLoad()    { try { return JSON.parse(localStorage.getItem(FRIENDS_KEY)) || []; } catch(e){ return []; } }
 function friendsSave(f)   { localStorage.setItem(FRIENDS_KEY, JSON.stringify(f)); }
 
@@ -150,17 +194,184 @@ function profileBootstrap() {
 }
 
 // ┄┄ Обновить иконку в нав-баре ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VIDEO AVATAR MANAGER — оптимизация FPS при множестве видео-аватарок
+//
+// Проблема: каждый <video autoplay loop> — отдельный декодер в GPU.
+// При 30 сообщениях от пользователя с видео-аватаркой = 30 параллельных декодеров.
+//
+// Решение:
+//   1. Пул источников: один скрытый <video> на уникальный URL
+//   2. Маленькие аватарки (≤48px) → <canvas> с рисовкой через rAF на 15fps
+//      (вместо 60fps × N GPU-декодеров — один декодер, N canvas-рисовок)
+//   3. Большие аватарки (>48px) → <video> с IntersectionObserver (пауза вне viewport)
+//   4. Canvas тоже останавливается когда не видим — IntersectionObserver
+// ══════════════════════════════════════════════════════════════════════════════
+const _VAM = (() => {
+  // Пул скрытых video-источников: url → HTMLVideoElement
+  const _pool = Object.create(null);
+  // IntersectionObserver для больших video-элементов
+  const _ioVideo = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      const v = e.target;
+      if (e.isIntersecting) { if (v.paused) v.play().catch(() => {}); }
+      else                  { if (!v.paused) v.pause(); }
+    });
+  }, { rootMargin: '120px', threshold: 0 });
+
+  // Получить или создать скрытый video-источник
+  function _source(src) {
+    if (_pool[src]) return _pool[src];
+    const v = document.createElement('video');
+    v.src = src;
+    v.loop = true; v.muted = true; v.playsInline = true; v.autoplay = true;
+    v.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;pointer-events:none;opacity:0';
+    document.body.appendChild(v);
+    v.play().catch(() => {});
+    _pool[src] = v;
+    return v;
+  }
+
+  // Создать <canvas> аватарку, рисующую из pool-источника на 15fps
+  function _canvas(src, size) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cv = document.createElement('canvas');
+    cv.width = size * dpr; cv.height = size * dpr;
+    cv.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;display:block;will-change:transform`;
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const video = _source(src);
+    let rafId = null, lastTs = 0;
+    const FRAME_MS = 1000 / 15; // 15 fps достаточно для маленькой аватарки
+
+    function tick(ts) {
+      rafId = requestAnimationFrame(tick);
+      if (ts - lastTs < FRAME_MS) return;
+      lastTs = ts;
+      if (video.readyState < 2) return;
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(video, 0, 0, size, size);
+      ctx.restore();
+    }
+
+    // Останавливаем rAF когда canvas вне viewport
+    const io = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        if (!rafId) rafId = requestAnimationFrame(tick);
+      } else {
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      }
+    }, { rootMargin: '200px', threshold: 0 });
+    io.observe(cv);
+
+    // Авто-очистка при удалении из DOM
+    const mo = new MutationObserver(() => {
+      if (!cv.isConnected) {
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        io.disconnect();
+        mo.disconnect();
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+
+    return cv;
+  }
+
+  // Создать <video> с IntersectionObserver (для крупных аватарок)
+  function _video(src, size) {
+    const v = document.createElement('video');
+    v.src = src; v.loop = true; v.muted = true; v.playsInline = true;
+    v.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;display:block;will-change:transform;contain:layout style paint`;
+    v.play().catch(() => {});
+    _ioVideo.observe(v);
+    return v;
+  }
+
+  return {
+    // Вернуть оптимизированный DOM-элемент для вставки
+    make(src, size) {
+      if (!src) return null;
+      return size <= 48 ? _canvas(src, size) : _video(src, size);
+    },
+
+    // Смонтировать placeholder-ы [data-va-src] внутри контейнера
+    mount(container) {
+      (container || document).querySelectorAll('[data-va-src]').forEach(ph => {
+        const src  = ph.dataset.vaSrc;
+        const size = parseInt(ph.dataset.vaSz, 10) || 28;
+        const el   = this.make(src, size);
+        if (el) ph.replaceWith(el);
+      });
+    }
+  };
+})();
+
+// MutationObserver: авто-маунт новых placeholder-ов в DOM
+(() => {
+  const mo = new MutationObserver(muts => {
+    for (const m of muts) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        if (node.dataset?.vaSrc) { _VAM.mount(node.parentElement); return; }
+        if (node.querySelector?.('[data-va-src]')) { _VAM.mount(node); }
+      }
+    }
+  });
+  // Запускаем после DOMContentLoaded чтобы body был доступен
+  if (document.body) mo.observe(document.body, { childList: true, subtree: true });
+  else document.addEventListener('DOMContentLoaded', () =>
+    mo.observe(document.body, { childList: true, subtree: true }));
+})();
+
 function updateNavProfileIcon(p) {
   const btn = document.getElementById('nav-profile');
   const wrap = btn?.querySelector('.nav-icon-wrap');
   if (!wrap) return;
-  if (p && p.avatarType === 'emoji' && p.avatar) {
+  if (p && p.avatarType === 'video' && (p.avatarVideoUrl || p.avatarVideo)) {
+    const src = p.avatarVideoUrl || p.avatarVideo;
+    // Используем VAM: canvas@15fps вместо прямого <video>
+    wrap.innerHTML = '';
+    const el = _VAM.make(src, 28);
+    if (el) wrap.appendChild(el);
+  } else if (p && p.avatarType === 'emoji' && p.avatar) {
     wrap.innerHTML = `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center">${_emojiImg(p.avatar,24)}</div>`;
   } else if (p && p.avatarType === 'photo' && p.avatarData) {
+    // GIF-аватарки отображаем через <img> (браузер анимирует автоматически)
     wrap.innerHTML = `<img src="${p.avatarData}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`;
   } else {
     wrap.innerHTML = `<svg class="nav-icon" id="nav-profile-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>`;
   }
+}
+
+/**
+ * Универсальный рендер аватарки пользователя (своей или чужой).
+ * Поддерживает: video URL (анимация), GIF/фото base64, emoji.
+ * @param {object} u - объект пользователя с полями avatarType, avatarData, avatarVideoUrl, avatar
+ * @param {number} size - размер в пикселях
+ * @returns {string} HTML-строка
+ */
+function _renderAvatarHtml(u, size) {
+  const sz = size || 40;
+  const st = `width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;display:block`;
+  const aType = u?.avatarType || u?.avatar_type || 'emoji';
+  const aData  = u?.avatarData  || u?.avatar_data  || null;
+  const aVideo = u?.avatarVideoUrl || u?.avatar_video_url || null;
+  const aEmoji = u?.avatar || '😊';
+  if (aType === 'video' && aVideo) {
+    // Placeholder: MutationObserver подхватит и заменит на VAM-элемент (canvas или video)
+    return `<span data-va-src="${aVideo}" data-va-sz="${sz}" style="${st}"></span>`;
+  }
+  if (aType === 'photo' && aData) {
+    // <img> автоматически анимирует GIF
+    return `<img src="${aData}" style="${st}" alt="avatar">`;
+  }
+  // emoji fallback
+  return `<span style="font-size:${Math.round(sz*0.6)}px;line-height:${sz}px;display:block;text-align:center">${_emojiImg(aEmoji, Math.round(sz*0.65))}</span>`;
 }
 
 // ══ ЭКРАН ЛОГИНА ═════════════════════════════════════════════════
@@ -168,16 +379,15 @@ let _loginSelectedEmoji = '😊';
 
 function profileInitLoginScreen() {
   _loginSelectedEmoji = '😊';
-  // Reset custom emoji input
   const customInput = document.getElementById('login-custom-emoji-input');
   const customPreview = document.getElementById('login-custom-emoji-preview');
   const customErr = document.getElementById('login-custom-emoji-error');
-  if (customInput) { customInput.value = ''; customInput.style.borderColor = 'var(--surface3)'; }
+  if (customInput) { customInput.value = ''; customInput.style.borderColor = ''; }
   if (customPreview) customPreview.textContent = '';
   if (customErr) customErr.textContent = '';
-  // Reset tabs to register view
-  loginShowRegister();
-  // Emoji grid removed - user inputs emoji via keyboard
+  // Сбрасываем wizard на шаг 0
+  wizardGoTo(0);
+  wizardSwitchTab('reg');
 }
 
 // ┄┄ Валидация эмодзи ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -293,6 +503,13 @@ function randomEmojiPick(ctx) {
     const inp     = document.getElementById('login-custom-emoji-input');
     if (preview) preview.textContent = emoji;
     if (inp)     inp.value           = emoji;
+    // Обновляем большой аватар в wizard
+    const bigAvatar = document.getElementById('wizard-avatar-big');
+    if (bigAvatar) {
+      bigAvatar.textContent = emoji;
+      bigAvatar.style.transform = 'scale(1.3) rotate(-8deg)';
+      setTimeout(() => { bigAvatar.style.transform = ''; }, 250);
+    }
   }
   // Маленькая анимация
   const previewEl = document.getElementById(ctx + '-custom-emoji-preview');
@@ -331,7 +548,9 @@ function loginCustomEmojiInput(el) {
     if (preview) preview.textContent = emoji;
     if (errEl) errEl.textContent = '';
     el.style.borderColor = 'var(--accent)';
-    // Deselect preset grid
+    // Обновляем большой аватар wizard
+    const bigAvatar = document.getElementById('wizard-avatar-big');
+    if (bigAvatar) bigAvatar.textContent = emoji;
     document.querySelectorAll('#login-emoji-grid button').forEach(b => b.style.borderColor = 'var(--surface3)');
   } else {
     if (errEl) errEl.textContent = 'Это не эмодзи   вставь символ с клавиатуры';
@@ -372,7 +591,7 @@ function editCustomEmojiInput(el) {
 let _loginCheckTimer = null;
 function loginCheckUsername(val) {
   const status = document.getElementById('login-username-status');
-  const btn = document.getElementById('login-submit-btn');
+  const btn = document.getElementById('wbtn-1');
   if (!val) { if(status)status.textContent=''; if(btn)btn.disabled=true; return; }
   const clean = val.replace(/[^a-zA-Z0-9_]/g, '');
   if (document.getElementById('login-username')) document.getElementById('login-username').value = clean;
@@ -455,7 +674,7 @@ function profileCreate() {
   accountsSave(accounts);
   sbSaveUser(profile);
   updateNavProfileIcon(profile);
-  profileConnect(profile);
+  profileConnect(profile);  // e2eReinit вызовется внутри profileConnect
   profileRenderScreen();
   showScreen('s-profile');
   toast('🎉 Добро пожаловать, ' + name + '!');
@@ -463,22 +682,10 @@ function profileCreate() {
   try { window.Android?.setCurrentUser?.(username); } catch(_) {}
 }
 
-function loginShowRegister() {
-  document.getElementById('login-register-form').style.display = '';
-  document.getElementById('login-auth-form').style.display = 'none';
-  const tabReg = document.getElementById('login-tab-reg');
-  const tabAuth = document.getElementById('login-tab-auth');
-  if (tabReg) { tabReg.style.background = 'var(--accent)'; tabReg.style.color = 'var(--btn-text,#fff)'; }
-  if (tabAuth) { tabAuth.style.background = 'transparent'; tabAuth.style.color = 'var(--muted)'; }
-}
+function loginShowRegister() { wizardSwitchTab('reg'); }
 
 function loginShowAuth(username) {
-  document.getElementById('login-register-form').style.display = 'none';
-  document.getElementById('login-auth-form').style.display = '';
-  const tabReg = document.getElementById('login-tab-reg');
-  const tabAuth = document.getElementById('login-tab-auth');
-  if (tabReg) { tabReg.style.background = 'transparent'; tabReg.style.color = 'var(--muted)'; }
-  if (tabAuth) { tabAuth.style.background = 'var(--accent)'; tabAuth.style.color = 'var(--btn-text,#fff)'; }
+  wizardSwitchTab('auth');
   const unEl = document.getElementById('login-auth-username');
   if (unEl && username) unEl.value = username;
   setTimeout(() => {
@@ -486,7 +693,7 @@ function loginShowAuth(username) {
       ? document.getElementById('login-auth-password')
       : document.getElementById('login-auth-username');
     focus?.focus();
-  }, 200);
+  }, 300);
 }
 
 function loginAuthUsernameInput(val) {
@@ -645,7 +852,6 @@ function profileRenderScreen() {
   const statusObj = PROFILE_STATUSES.find(s => s.id === p.status) || PROFILE_STATUSES[0];
   const onlinePeers = _profileOnlinePeers || [];
   const vip = p.vip;
-  if (typeof PROFILE_FRAMES === 'undefined') { setTimeout(profileRenderScreen, 200); return; }
   const frameStyle = PROFILE_FRAMES[p.frame] || PROFILE_FRAMES['none'];
   const badgeObj = PROFILE_BADGES ? PROFILE_BADGES.find(b => b.id === p.badge) : null;
 
@@ -653,7 +859,9 @@ function profileRenderScreen() {
     ? (p.banner.startsWith('background:') ? p.banner : `background:${p.banner}`)
     : `background:linear-gradient(135deg,${p.color||'var(--accent)'}66,${p.color||'var(--accent)'}22)`;
 
-  const avatarHtml = p.avatarType === 'photo' && p.avatarData
+  const avatarHtml = p.avatarType === 'video' && (p.avatarVideoUrl || p.avatarVideo)
+    ? `<span data-va-src="${p.avatarVideoUrl || p.avatarVideo}" data-va-sz="80" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block"></span>`
+    : p.avatarType === 'photo' && p.avatarData
     ? `<img src="${p.avatarData}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     : `<div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center">${_emojiImg(p.avatar||'😊',46)}</div>`;
 
@@ -719,14 +927,7 @@ function profileRenderScreen() {
 
     <!-- Карточка: Таблица лидеров + Друзья + Группы -->
     <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;overflow:hidden;border:1.5px solid var(--surface3)">
-      <div onclick="showScreen('s-leaderboard')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
-        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg></span>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">Таблица лидеров</div>
-          <div style="font-size:12px;color:var(--muted)">Рекорды в играх</div>
-        </div>
-        <span style="color:var(--muted);font-size:18px"> </span>
-      </div>
+
       <div onclick="profileRenderOnline();showScreen('s-online')" style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--surface3);cursor:pointer;-webkit-tap-highlight-color:transparent">
         <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span>
         <div style="flex:1">
@@ -744,54 +945,181 @@ function profileRenderScreen() {
       </div>
     </div>
 
-    <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 -->
-    <div style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
+    <!-- Карточка: Подключение -->
+    <div id="profile-connect-card" style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
       <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
         <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M1 9l2 2c2.88-2.88 6.79-4.08 10.53-3.62l1.19-1.19C9.89 5.6 4.91 7.12 1 9zm8 8l3 3 3-3c-1.65-1.64-3.96-2.4-6-2.4S10.65 15.36 9 17zm-4-4l2 2c1.88-1.87 4.45-2.83 7-2.83s5.12.96 7 2.83l2-2C21 10.46 16.81 9 12 9c-4.81 0-9 1.46-11 4z"/></svg></span>
         <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435</div>
-          <div style="font-size:12px;color:var(--muted)" id="profile-p2p-status">${_profilePeerReady ? '\u{1F7E2} \u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E' : '\u{1F534} \u041E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E'}</div>
+          <div style="font-size:14px;font-weight:700">\u041F\u043E\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435</div>
+          <div style="font-size:12px;color:var(--muted)" id="profile-p2p-status">${_profilePeerReady ? '\u{1F7E2} \u041F\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u043e' : '\u{1F534} \u041e\u0442\u043a\u043b\u044e\u0447\u0435\u043d\u043e'}</div>
         </div>
         <button onclick="profileConnect(profileLoad())" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px;line-height:1">\u21BB</button>
       </div>
     </div>
 
-    <!-- \u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430: \u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F -->
-    <div id="push-notif-row" style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
-      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
-        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg></span>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">\u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F</div>
-          <div style="font-size:12px;color:var(--muted)" id="push-notif-status">${pushGetStatusText()}</div>
-        </div>
-        <button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:12px;flex-shrink:0" onclick="pushRequestPermission()" id="push-notif-btn">${pushGetBtnText()}</button>
-      </div>
-    </div>
-    <!-- Фоновое соединение (Telegram-style keep-alive) -->
-    <div id="bg-service-row" style="background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3)">
-      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
-        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
-        </span>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">Фоновое соединение</div>
-          <div style="font-size:12px;color:var(--muted)" id="bg-service-status">Проверяем...</div>
-        </div>
-        <div id="bg-service-toggle" onclick="toggleBackgroundService()"
-          style="width:51px;height:31px;border-radius:16px;position:relative;cursor:pointer;transition:background .25s;flex-shrink:0">
-          <div id="bg-service-knob"
-            style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;
-                   box-shadow:0 1px 4px rgba(0,0,0,.35);transition:left .25s"></div>
-        </div>
-      </div>
-      <div style="padding:0 16px 12px;font-size:11px;color:var(--muted);line-height:1.5">
-        Получайте сообщения даже когда приложение закрыто. Работает как в Telegram.
-      </div>
-    </div>
-
     <div style="height:8px"></div>
   `;
-  _bgServiceUpdateUI();
+  _renderAccountSwitcher();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 👥 МУЛЬТИАККАУНТ — Telegram-style переключение аккаунтов
+// ══════════════════════════════════════════════════════════════════
+
+function _renderAccountSwitcher() {
+  const body = document.getElementById('profile-body');
+  if (!body) return;
+  const accounts = accountsLoad();
+  const current  = profileLoad();
+  const allNames = Object.keys(accounts);
+  if (allNames.length === 0) return;
+
+  document.getElementById('account-switcher-bar')?.remove();
+
+  const bar = document.createElement('div');
+  bar.id = 'account-switcher-bar';
+  bar.style.cssText = 'background:var(--surface2);border-radius:16px;margin-bottom:10px;border:1.5px solid var(--surface3);overflow:hidden';
+
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'padding:12px 16px 8px;display:flex;align-items:center;justify-content:space-between';
+  hdr.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Аккаунты</div>
+    <button onclick="accountSwitcherAddNew()" style="background:none;border:none;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:8px;-webkit-tap-highlight-color:transparent">+ Добавить</button>`;
+  bar.appendChild(hdr);
+
+  const list = document.createElement('div');
+  allNames.forEach(username => {
+    const acc = accounts[username];
+    const isCurrent = username === current?.username;
+    const row = document.createElement('div');
+    row.style.cssText = `display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:${isCurrent ? 'default' : 'pointer'};border-top:1px solid var(--surface3);-webkit-tap-highlight-color:transparent;${isCurrent ? 'background:rgba(255,255,255,.03)' : ''}`;
+    if (!isCurrent) {
+      row.ontouchstart = function() { this.style.background = 'var(--surface3)'; };
+      row.ontouchend   = function() { this.style.background = ''; };
+      row.onclick = () => accountSwitcherSwitch(username);
+    }
+    const avatarData = isCurrent ? current?.avatarData : null;
+    const avatarType = isCurrent ? current?.avatarType : null;
+    const avatarEmoji = acc.avatar || '\u{1F60A}';
+    const avatarHtml = (avatarType === 'photo' && avatarData)
+      ? `<img src="${avatarData}" style="width:40px;height:40px;border-radius:50%;object-fit:cover">`
+      : `<span style="font-size:22px">${avatarEmoji}</span>`;
+    row.innerHTML = `<div style="width:40px;height:40px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;${isCurrent ? 'border:2px solid var(--accent)' : ''}">${avatarHtml}</div>
+      <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:${isCurrent ? '700' : '500'};color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(acc.name || username)}</div>
+      <div style="font-size:12px;color:var(--muted)">@${escHtml(username)}</div></div>
+      ${isCurrent ? '<span style="font-size:11px;font-weight:700;color:var(--accent);flex-shrink:0">\u2713 \u0410\u043A\u0442\u0438\u0432\u0435\u043D</span>' : '<span style="font-size:18px;color:var(--muted);flex-shrink:0">\u203a</span>'}`;
+    list.appendChild(row);
+  });
+  bar.appendChild(list);
+  // Insert AFTER the connection card (profile-connect-card), not at top
+  const connectCard = body.querySelector('#profile-connect-card');
+  if (connectCard && connectCard.nextSibling) {
+    body.insertBefore(bar, connectCard.nextSibling);
+  } else if (connectCard) {
+    body.appendChild(bar);
+  } else {
+    body.insertBefore(bar, body.firstChild);
+  }
+}
+
+async function accountSwitcherSwitch(username) {
+  const accounts = accountsLoad();
+  const acc = accounts[username];
+  if (!acc) return;
+  const cur = profileLoad();
+  if (cur) {
+    // Save profile snapshot into accounts cache before switching.
+    // avatarData / avatarVideo / banner хранятся только в IndexedDB, не в accounts.
+    accounts[cur.username] = {
+      name:        cur.name,
+      avatar:      cur.avatar,
+      avatarType:  cur.avatarType  || 'emoji',
+      avatarVideoUrl: cur.avatarVideoUrl || null,
+      // avatarData / avatarVideo / banner — не сохраняем, они в IndexedDB
+      bio:         cur.bio         || '',
+      color:       cur.color       || 'var(--accent)',
+      frame:       cur.frame       || 'none',
+      badge:       cur.badge       || null,
+      vip:         cur.vip         || false,
+      createdAt:   cur.createdAt,
+      pwdHash:     cur.pwdHash,
+    };
+    accountsSave(accounts);
+    profileDisconnect();
+  }
+  if (acc.pwdHash) {
+    toast('\u23F3 \u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0435\u043C \u0430\u043A\u043A\u0430\u0443\u043D\u0442...');
+    localStorage.removeItem(PROFILE_KEY);
+    if (sbReady()) {
+      try {
+        const rows = await sbGet('users', `select=*&username=eq.${encodeURIComponent(username)}&limit=1`);
+        if (Array.isArray(rows) && rows.length > 0) _mapProfileRow(rows[0]);
+      } catch(e) {}
+    }
+    let p = profileLoad();
+    if (!p || p.username !== username) {
+      // Restore full profile from accounts cache (includes banner, video, vip etc.)
+      p = {
+        username,
+        name:        acc.name        || username,
+        avatar:      acc.avatar      || '\u{1F60A}',
+        avatarType:  acc.avatarType  || 'emoji',
+        avatarData:  acc.avatarData  || null,
+        avatarVideo: acc.avatarVideo || null,
+        banner:      acc.banner      || null,
+        bio:         acc.bio         || '',
+        status:      'online',
+        color:       acc.color       || 'var(--accent)',
+        frame:       acc.frame       || 'none',
+        badge:       acc.badge       || null,
+        vip:         acc.vip         || false,
+        pwdHash:     acc.pwdHash,
+        createdAt:   acc.createdAt   || Date.now(),
+        uid:         username,
+      };
+      profileSave(p);
+    }
+    // Try to restore large data from IndexedDB (avatarData/banner may be too big for accounts obj)
+    if (typeof idbGet === 'function') {
+      const restoreFromIdb = async () => {
+        const fresh = profileLoad();
+        if (!fresh || fresh.username !== username) return;
+        let changed = false;
+        if (!fresh.avatarData && fresh.avatarType === 'photo') {
+          const d = await idbGet('profile_avatar:' + username).catch(()=>null);
+          if (d) { fresh.avatarData = d; changed = true; }
+        }
+        if (!fresh.avatarVideo && fresh.avatarType === 'video') {
+          const d = await idbGet('profile_video:' + username).catch(()=>null);
+          if (d) { fresh.avatarVideo = d; changed = true; }
+        }
+        if (!fresh.banner) {
+          const d = await idbGet('profile_banner:' + username).catch(()=>null);
+          if (d) { fresh.banner = d; changed = true; }
+        }
+        if (changed) { profileSave(fresh); updateNavProfileIcon(fresh); profileRenderScreen(); }
+      };
+      restoreFromIdb();
+    }
+    updateNavProfileIcon(p);
+    profileConnect(p);
+    profileRenderScreen();
+    showScreen('s-profile');
+    toast('\u{1F44B} \u041F\u0440\u0438\u0432\u0435\u0442, ' + (p.name || username) + '!');
+    try { window.Android?.setCurrentUser?.(username); } catch(_) {}
+  } else {
+    profileInitLoginScreen();
+    showScreen('s-login');
+    loginShowAuth(username);
+    toast('\u{1F511} \u0412\u0432\u0435\u0434\u0438 \u043F\u0430\u0440\u043E\u043B\u044C \u0434\u043B\u044F @' + username);
+  }
+}
+
+function accountSwitcherAddNew() {
+  const cur = profileLoad();
+  if (cur) { profileDisconnect(); localStorage.removeItem(PROFILE_KEY); updateNavProfileIcon(null); }
+  profileInitLoginScreen();
+  showScreen('s-login');
+  toast('\u{1F464} \u0412\u043E\u0439\u0434\u0438 \u0438\u043B\u0438 \u0441\u043E\u0437\u0434\u0430\u0439 \u043D\u043E\u0432\u044B\u0439 \u0430\u043A\u043A\u0430\u0443\u043D\u0442');
 }
 
 // ┄┄ Фоновый сервис: управление и UI ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -926,10 +1254,8 @@ function profileInitEditScreen() {
     });
   }
 
-  // ┄┄ VIP-секции (рамки, значки, баннер, фото) ┄┄
+  // ┄┄ VIP-секции (значки, фото-аватар, фото-баннер) ┄┄
   document.getElementById('vip-edit-section')?.remove();
-
-  if (typeof PROFILE_FRAMES === 'undefined') return; // VIP скрипт ещё не загружен
 
   const body = document.querySelector('#s-profile-edit .body');
   if (!body) return;
@@ -937,24 +1263,7 @@ function profileInitEditScreen() {
   const vipSec = document.createElement('div');
   vipSec.id = 'vip-edit-section';
 
-  // ┄┄ Кнопка доната (всегда видна) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-  const donateRow = document.createElement('div');
-  donateRow.innerHTML = `<div class="sep"></div>`;
-  const donateBtn = document.createElement('button');
-  donateBtn.className = 'btn btn-accent';
-  donateBtn.style.cssText = 'margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px';
-  donateBtn.innerHTML = `<span style="font-size:18px">💝</span> Поддержать проект   VIP`;
-  donateBtn.onclick = showDonateSheet;
-  donateRow.appendChild(donateBtn);
-  if (!isVip) {
-    const subNote = document.createElement('div');
-    subNote.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:14px;text-align:center';
-    subNote.textContent = 'Донат через СБП   VIP активируется автоматически';
-    donateRow.appendChild(subNote);
-  }
-  vipSec.appendChild(donateRow);
-
-
+  // Фото аватара (VIP)
   const photoRow = document.createElement('div');
   photoRow.innerHTML = `<div class="sep"></div>
     <div class="section-label" style="display:flex;align-items:center;gap:8px">
@@ -978,30 +1287,11 @@ function profileInitEditScreen() {
   }
   vipSec.appendChild(photoRow);
 
-  // Рамки
-  const framesDiv = document.createElement('div');
-  framesDiv.innerHTML = '<div class="section-label">🖼 Рамка профиля</div>';
-  const framesWrap = document.createElement('div');
-  framesWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px';
-  Object.entries(PROFILE_FRAMES).forEach(([id, f]) => {
-    const locked = f.vip && !isVip;
-    const sel = (p.frame || 'none') === id;
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-surface';
-    btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);box-shadow:0 0 0 2px var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
-    btn.innerHTML = f.label + (locked ? ' '+(typeof _emojiImg==="function"?_emojiImg("👑",12):"👑") : '');
-    btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetFrame(id);
-    framesWrap.appendChild(btn);
-  });
-  framesDiv.appendChild(framesWrap);
-  vipSec.appendChild(framesDiv);
-
   // Значки
   const badgesDiv = document.createElement('div');
   badgesDiv.innerHTML = '<div class="section-label">🏷 Значок профиля</div>';
   const badgesWrap = document.createElement('div');
   badgesWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px';
-  // Кнопка "Нет"
   const noneBtn = document.createElement('button');
   noneBtn.className = 'btn btn-surface';
   noneBtn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${!p.badge ? 'color:var(--accent);' : ''}`;
@@ -1021,24 +1311,12 @@ function profileInitEditScreen() {
   badgesDiv.appendChild(badgesWrap);
   vipSec.appendChild(badgesDiv);
 
-  // Баннеры
+  // Баннер (только фото, только VIP)
   const bannersDiv = document.createElement('div');
-  const bannerLabel = isVip ? '🎨 Баннер профиля' : '🎨 Баннер профиля <span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>';
+  const bannerLabel = isVip
+    ? '🎨 Баннер профиля'
+    : '🎨 Баннер профиля <span style="font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>';
   bannersDiv.innerHTML = `<div class="section-label">${bannerLabel}</div>`;
-  const bannersWrap = document.createElement('div');
-  bannersWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px';
-  PROFILE_BANNERS.forEach(b => {
-    const locked = b.vip && !isVip;
-    const sel = p.banner === b.style || (!p.banner && b.id === 'none');
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-surface';
-    btn.style.cssText = `width:auto;padding:8px 14px;font-size:12px;${sel ? 'color:var(--accent);border-color:var(--accent);' : ''}${locked ? 'opacity:.45;' : ''}`;
-    btn.innerHTML = b.label + (locked ? ' ' + (typeof _emojiImg==='function' ? _emojiImg('👑',12) : '👑') : '');
-    btn.onclick = locked ? () => toast('🔒 Только VIP') : () => profileSetBanner(b.id);
-    bannersWrap.appendChild(btn);
-  });
-  bannersDiv.appendChild(bannersWrap);
-  // VIP-only: upload custom photo banner
   if (isVip) {
     const uploadRow = document.createElement('div');
     uploadRow.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:16px';
@@ -1049,13 +1327,14 @@ function profileInitEditScreen() {
         <span style="font-size:13px;color:${hasPhotoBanner ? 'var(--accent)' : 'var(--muted)'};">${hasPhotoBanner ? 'Фото-баннер установлен' : 'Загрузить фото как баннер'}</span>
         <input type="file" accept="image/*" style="display:none" onchange="profileUploadPhotoBanner(this)">
       </label>
-      ${hasPhotoBanner ? '<button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="profileSetBanner(\'none\')">✅ Убрать</button>' : ''}
+      ${hasPhotoBanner ? '<button class="btn btn-surface" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="profileClearBanner()">✕ Убрать</button>' : ''}
     `;
     bannersDiv.appendChild(uploadRow);
   } else {
-    const spacer = document.createElement('div');
-    spacer.style.marginBottom = '16px';
-    bannersDiv.appendChild(spacer);
+    const lockBanner = document.createElement('div');
+    lockBanner.style.cssText = 'font-size:12px;color:var(--muted);margin-bottom:16px;padding:10px;background:var(--surface2);border-radius:10px';
+    lockBanner.textContent = '🔒 Фото-баннер доступен только для VIP';
+    bannersDiv.appendChild(lockBanner);
   }
   vipSec.appendChild(bannersDiv);
 
@@ -1067,8 +1346,8 @@ function profileInitEditScreen() {
       <div style="background:linear-gradient(135deg,#f5c51822,#e8772222);border:1px solid #f5c51844;border-radius:14px;padding:16px;text-align:center;margin-bottom:12px">
         <div style="font-size:24px;margin-bottom:6px">${typeof _emojiImg==="function"?_emojiImg("👑",24):"👑"}</div>
         <div style="font-weight:800;margin-bottom:4px">VIP Аккаунт</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Фото-аватар · рамки · значки · баннеры</div>
-        <div style="font-size:11px;color:var(--muted)">Введи <code style="color:var(--accent);background:var(--surface3);padding:2px 6px;border-radius:4px">/vip КОД</code> в CMD</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Фото-аватар · значки · фото-баннер</div>
+        <div style="font-size:11px;color:var(--muted)">Перейди в <b>Настройки</b> → Получить VIP</div>
       </div>
     `;
     vipSec.appendChild(promo);
@@ -1099,7 +1378,7 @@ function profileCheckUsername(val) {
 
 let _editSelectedEmoji = '😊', _editSelectedColor = PROFILE_COLORS[0], _editSelectedStatus = 'online';
 let _profileAvatarMode = 'emoji';
-let _profileWaitingForPhoto = false;
+window._profileWaitingForPhoto = false; // window-scope для доступа из core.js
 
 function profilePickAvatarType() {
   const pickerEl = document.getElementById('edit-avatar-emoji-picker');
@@ -1151,7 +1430,7 @@ function openImageCrop(dataUrl, options) {
     </div>
     <div class="img-crop-actions">
       <button class="btn btn-surface" onclick="closeCrop()">Отмена</button>
-      <button class="btn" style="background:var(--accent);color:var(--btn-text,#fff)" onclick="applyCrop()">✅ Применить</button>
+      <button class="btn" style="background:var(--accent);color:var(--btn-text,#fff)" onclick="applyCrop()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><polyline points="20 6 9 17 4 12"/></svg> Применить</button>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -1185,24 +1464,37 @@ function openImageCrop(dataUrl, options) {
   };
   tmpImg.src = dataUrl;
 
-  // ┄┄ Pointer drag ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-  function onDown(e) {
+  // ┄┄ Drag через Pointer Events (надёжно на Android WebView) ┄┄┄┄┄┄┄
+  // setPointerCapture гарантирует, что все события идут сюда,
+  // даже если палец вышел за пределы cropBox. Надёжнее touchmove на window.
+  function onPointerDown(e) {
     e.preventDefault();
+    if (e.pointerType === 'touch' || e.pointerType === 'mouse' || e.pointerType === 'pen') {
+      // Захватываем этот pointer — все последующие move/up придут на cropBox
+      try { cropBox.setPointerCapture(e.pointerId); } catch(_) {}
+    }
     st.dragging = true;
-    const pt = e.touches ? e.touches[0] : e;
-    st.lastX = pt.clientX; st.lastY = pt.clientY;
-    // Pinch-zoom init
-    if (e.touches && e.touches.length === 2) {
+    st.lastX = e.clientX; st.lastY = e.clientY;
+    // Pinch: отслеживаем второй pointer отдельно
+    if (!st._activePointers) st._activePointers = {};
+    st._activePointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    const ptrs = Object.values(st._activePointers);
+    if (ptrs.length === 2) {
+      const dx = ptrs[0].x - ptrs[1].x, dy = ptrs[0].y - ptrs[1].y;
       st.pinching = true;
-      st.pinchDist = _pinchDist(e.touches);
+      st.pinchDist = Math.sqrt(dx*dx + dy*dy);
       st.pinchScale = st.scale;
     }
   }
-  function onMove(e) {
+  function onPointerMove(e) {
     e.preventDefault();
     if (!st.dragging) return;
-    if (e.touches && e.touches.length === 2 && st.pinching) {
-      const d = _pinchDist(e.touches);
+    if (!st._activePointers) st._activePointers = {};
+    st._activePointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    const ptrs = Object.values(st._activePointers);
+    if (ptrs.length === 2 && st.pinching) {
+      const dx = ptrs[0].x - ptrs[1].x, dy = ptrs[0].y - ptrs[1].y;
+      const d = Math.sqrt(dx*dx + dy*dy);
       const newScale = Math.max(st.minScale, Math.min(st.minScale * 4, st.pinchScale * d / st.pinchDist));
       st.scale = newScale;
       zoomEl.value = Math.round(newScale * 100);
@@ -1211,28 +1503,29 @@ function openImageCrop(dataUrl, options) {
       return;
     }
     st.pinching = false;
-    const pt = e.touches ? e.touches[0] : e;
-    st.x += pt.clientX - st.lastX;
-    st.y += pt.clientY - st.lastY;
-    st.lastX = pt.clientX; st.lastY = pt.clientY;
+    st.x += e.clientX - st.lastX;
+    st.y += e.clientY - st.lastY;
+    st.lastX = e.clientX; st.lastY = e.clientY;
     _cropClamp();
     _cropApplyTransform();
   }
-  function onUp() { st.dragging = false; st.pinching = false; }
+  function onPointerUp(e) {
+    if (st._activePointers) delete st._activePointers[e.pointerId];
+    if (!st._activePointers || Object.keys(st._activePointers).length === 0) {
+      st.dragging = false; st.pinching = false;
+    }
+  }
 
-  cropBox.addEventListener('mousedown',  onDown, {passive:false});
-  cropBox.addEventListener('touchstart', onDown, {passive:false});
-  window.addEventListener('mousemove',  onMove, {passive:false});
-  window.addEventListener('touchmove',  onMove, {passive:false});
-  window.addEventListener('mouseup',   onUp);
-  window.addEventListener('touchend',  onUp);
+  cropBox.style.touchAction = 'none'; // дублируем CSS на случай если WebView игнорирует стиль
+  cropBox.addEventListener('pointerdown', onPointerDown);
+  cropBox.addEventListener('pointermove', onPointerMove);
+  cropBox.addEventListener('pointerup',   onPointerUp);
+  cropBox.addEventListener('pointercancel', onPointerUp);
   st._cleanupListeners = () => {
-    cropBox.removeEventListener('mousedown',  onDown);
-    cropBox.removeEventListener('touchstart', onDown);
-    window.removeEventListener('mousemove',  onMove);
-    window.removeEventListener('touchmove',  onMove);
-    window.removeEventListener('mouseup',   onUp);
-    window.removeEventListener('touchend',  onUp);
+    cropBox.removeEventListener('pointerdown',   onPointerDown);
+    cropBox.removeEventListener('pointermove',   onPointerMove);
+    cropBox.removeEventListener('pointerup',     onPointerUp);
+    cropBox.removeEventListener('pointercancel', onPointerUp);
   };
 
   // ┄┄ Zoom slider ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -1288,8 +1581,21 @@ function applyCrop() {
   }
   const tmpImg = new Image();
   tmpImg.onload = () => {
+    // Если у источника прозрачность (PNG/WebP) — сохраняем как PNG,
+    // чтобы не было чёрного фона вместо прозрачных пикселей
+    const srcMime = (st.rawSrc || '').match(/^data:([^;]+)/)?.[1] || 'image/jpeg';
+    const hasTrans = srcMime === 'image/png' || srcMime === 'image/webp';
+    if (hasTrans) {
+      // Белый фон для аватарок (PNG с прозрачностью выглядит чисто)
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, st.cropW, st.cropH);
+      ctx.globalCompositeOperation = 'source-over';
+    }
     ctx.drawImage(tmpImg, st.x, st.y, st.natW * st.scale, st.natH * st.scale);
-    const out = canvas.toDataURL('image/jpeg', 0.88);
+    const out = hasTrans
+      ? canvas.toDataURL('image/png')
+      : canvas.toDataURL('image/jpeg', 0.88);
     closeCrop();
     st.onDone(out);
   };
@@ -1298,76 +1604,149 @@ function applyCrop() {
 // ═════════════════════════════════════════════════════════════════
 
 function profilePickPhoto() {
-  // Кнопка «Выбрать фото» на главном экране профиля   только VIP
+  // Кнопка «Выбрать фото» на главном экране профиля — только VIP
   const onEditScreen = document.getElementById('s-profile-edit')?.classList.contains('active');
   if (!onEditScreen && !vipCheck()) {
-    toast('👑 Фото профиля   только для VIP');
+    toast('👑 Фото профиля — только для VIP');
     return;
   }
+
+  // Показываем меню: фото или видео (видео — только VIP)
+  const isVip = typeof vipCheck === 'function' ? vipCheck() : false;
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px;animation:mcFadeIn .15s ease';
+  sheet.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px;width:100%;max-width:400px;overflow:hidden;animation:mcSlideUp .25s cubic-bezier(.34,1.26,.64,1)" onclick="event.stopPropagation()">
+      <div style="padding:16px 20px 8px;font-size:13px;font-weight:700;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.5px">Аватарка профиля</div>
+      <button onclick="this.closest('[style*=fixed]').remove();_profilePickPhotoOnly()" style="width:100%;padding:16px 20px;background:none;border:none;border-top:1px solid var(--surface3);color:var(--text);font-family:inherit;font-size:16px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--accent)"><path d="M9 3L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2h-3.17L15 3H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.65 0-3 1.35-3 3s1.35 3 3 3 3-1.35 3-3-1.35-3-3-3z"/></svg>
+        Выбрать фото
+      </button>
+      <button onclick="${isVip ? "this.closest('[style*=fixed]').remove();_profilePickVideoAvatar()" : "toast('👑 Видео-аватар — только для VIP')"}" style="width:100%;padding:16px 20px;background:none;border:none;border-top:1px solid var(--surface3);color:${isVip ? 'var(--text)' : 'var(--muted)'};font-family:inherit;font-size:16px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="${isVip ? 'var(--accent)' : 'var(--muted)'}"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+        Видео-аватар ${isVip ? '' : '<span style="margin-left:6px;font-size:10px;font-weight:800;background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:2px 7px;border-radius:6px">VIP</span>'}
+      </button>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="width:100%;padding:14px 20px;background:none;border:none;border-top:1px solid var(--surface3);color:var(--muted);font-family:inherit;font-size:15px;cursor:pointer">Отмена</button>
+    </div>`;
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.remove(); });
+  document.body.appendChild(sheet);
+}
+
+// Выбрать только фото (без выбора типа)
+function _profilePickPhotoOnly() {
   _profileWaitingForPhoto = true;
-  if (window.Android && typeof Android.pickImageForAvatar === 'function') {
-    // Новый метод — результат придёт в onNativeAvatarPhotoPicked напрямую
-    Android.pickImageForAvatar();
-  } else if (window.Android && typeof Android.pickImageForBackground === 'function') {
-    // Фолбэк для старых сборок — через флаг
+  if (window.Android && typeof Android.pickImageForBackground === 'function') {
     Android.pickImageForBackground();
   } else {
     const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = 'image/*';
+    // Принимаем все форматы изображений включая GIF и WebP
+    inp.type = 'file'; inp.accept = 'image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/*';
     inp.onchange = () => {
       const file = inp.files?.[0]; if (!file) return;
+      if (file.size > 15 * 1024 * 1024) { toast('❌ Файл слишком большой (макс. 15 МБ)'); return; }
       const reader = new FileReader();
-      reader.onload = e => _profileHandleAvatarDataUrl(e.target.result);
+      reader.onload = e => {
+        const mime = file.type || '';
+        // GIF — сохраняем без crop чтобы не убить анимацию
+        if (mime === 'image/gif') {
+          _profileHandleAvatarDataUrl(e.target.result, true);
+        } else {
+          _profileHandleAvatarDataUrl(e.target.result, false);
+        }
+      };
       reader.readAsDataURL(file);
     };
     inp.click();
   }
 }
 
-// Колбэк для нового Android.pickImageForAvatar() — чистый, без конфликтов
-function onNativeAvatarPhotoPicked(dataUrl) {
-  _profileWaitingForPhoto = false;
-  _profileHandleAvatarDataUrl(dataUrl);
+// Выбрать видео для аватарки (только VIP)
+function _profilePickVideoAvatar() {
+  if (!vipCheck()) { toast('👑 Видео-аватар — только для VIP'); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'video/mp4,video/webm,video/mov,video/*';
+  inp.onchange = () => {
+    const file = inp.files?.[0]; if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { toast('❌ Видео слишком большое (макс 20 МБ)'); return; }
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const dataUrl = e.target.result;
+      const p = profileLoad(); if (!p) return;
+      p.avatarType  = 'video';
+      p.avatarVideo = dataUrl;
+      p.avatarData  = null; // фото убираем
+      profileSave(p);
+      updateNavProfileIcon(p);
+      profileRenderScreen();
+      sbPresencePut(p);
+      toast('⬆️ Загружаю видео на сервер...');
+      try {
+        const b64  = dataUrl.split(',')[1];
+        const mime = (dataUrl.match(/^data:([^;]+)/) || [])[1] || 'video/mp4';
+        const ext  = mime.split('/')[1] || 'mp4';
+        const url  = await _githubOrCatboxUpload(b64, `avatar_${p.username}_${Date.now()}.${ext}`, GITHUB_FALLBACK?.avatarsFolder || 'avatars', mime);
+        if (url) {
+          p.avatarVideoUrl = url;
+          profileSave(p);
+          if (sbReady()) {
+            await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
+              { avatar_type: 'video', avatar_video_url: url },
+              { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+            ).catch(() => {});
+          }
+          toast('✅ Видео-аватар виден всем!');
+        } else {
+          toast('✅ Видео-аватар установлен (локально)');
+        }
+      } catch(_err) {
+        toast('✅ Видео установлен (без синхронизации)');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
 }
 
-function _profileHandleAvatarDataUrl(dataUrl) {
+function _profileHandleAvatarDataUrl(dataUrl, skipCrop = false) {
   _profileWaitingForPhoto = false;
   const onEditScreen = document.getElementById('s-profile-edit')?.classList.contains('active');
-  openImageCrop(dataUrl, {
-    mode: 'avatar',
-    onDone: cropped => {
-      _profileAvatarMode = 'photo';
-      window._profileTempAvatarData = cropped;
-      if (onEditScreen) {
-        // Обновляем превью на экране редактирования
-        const inner = document.getElementById('edit-avatar-inner');
-        if (inner) inner.innerHTML = `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
-      } else {
-        // Сохраняем сразу   пользователь нажал "Выбрать фото" с экрана профиля
-        const p = profileLoad();
-        if (!p) return;
-        p.avatarType = 'photo';
-        p.avatarData = cropped;
-        profileSave(p);
-        window._profileTempAvatarData = null;
-        updateNavProfileIcon(p);
-        profileRenderScreen();
-        sbPresencePut(p);
-        toast('✅ Фото обновлено');
-      }
+
+  // skipCrop=true для GIF — анимацию нельзя кадрировать через canvas (убьёт анимацию)
+  const _applyAvatar = (cropped) => {
+    _profileAvatarMode = 'photo';
+    window._profileTempAvatarData = cropped;
+    if (onEditScreen) {
+      const inner = document.getElementById('edit-avatar-inner');
+      // Для GIF показываем тег img с loop, для фото — обычный img
+      const isGif = cropped.startsWith('data:image/gif');
+      if (inner) inner.innerHTML = isGif
+        ? `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`
+        : `<img src="${cropped}" style="width:96px;height:96px;object-fit:cover;border-radius:50%">`;
+    } else {
+      const p = profileLoad();
+      if (!p) return;
+      p.avatarType = 'photo';
+      p.avatarData = cropped;
+      profileSave(p);
+      window._profileTempAvatarData = null;
+      updateNavProfileIcon(p);
+      profileRenderScreen();
+      sbPresencePut(p);
+      const isGif = cropped.startsWith('data:image/gif');
+      toast(isGif ? '✅ Анимированный аватар установлен' : '✅ Фото обновлено');
     }
-  });
+  };
+
+  if (skipCrop) {
+    // Для GIF/анимированных — сохраняем как есть без crop
+    _applyAvatar(dataUrl);
+  } else {
+    openImageCrop(dataUrl, { mode: 'avatar', onDone: _applyAvatar });
+  }
 }
 
-// Перехватываем onNativeBgImagePicked для профиля если ждём фото
-const _origOnNativeBgImagePicked = window.onNativeBgImagePicked;
-window.onNativeBgImagePicked = function(dataUrl) {
-  if (_profileWaitingForPhoto) {
-    _profileHandleAvatarDataUrl(dataUrl);
-  } else {
-    if (_origOnNativeBgImagePicked) _origOnNativeBgImagePicked(dataUrl);
-  }
-};
+// Роутинг onNativeBgImagePicked для аватара теперь встроен в core.js.
+// _profileWaitingForPhoto и _profileHandleAvatarDataUrl доступны глобально (window.*).
 
 async function profileSaveEdit() {
   const p = profileLoad();
@@ -1387,10 +1766,14 @@ async function profileSaveEdit() {
   p.bio      = bio;
   p.status   = _editSelectedStatus;
   p.color    = _editSelectedColor;
-  if (_profileAvatarMode === 'photo' && window._profileTempAvatarData) {
+  if (_profileAvatarMode === 'photo') {
     p.avatarType = 'photo';
-    p.avatarData = window._profileTempAvatarData;
-    window._profileTempAvatarData = null;
+    if (window._profileTempAvatarData) {
+      // Новое фото загружено — сохраняем его
+      p.avatarData = window._profileTempAvatarData;
+      window._profileTempAvatarData = null;
+    }
+    // Если нет нового фото — avatarData уже в p (из profileLoad), оставляем как есть
   } else {
     p.avatarType = 'emoji';
     p.avatar     = _editSelectedEmoji;
@@ -1494,7 +1877,45 @@ async function profileSaveEdit() {
 
   showScreen('s-profile', 'back');
   setTimeout(profileRenderScreen, 100);
-  toast(usernameChanged ? '✅ Юзернейм изменён   чаты сохранены' : '✅ Профиль сохранён');
+
+  // ── Telegram-style эффект сохранения ─────────────────────────────
+  const _savedMsg = usernameChanged ? '✅ Юзернейм изменён · чаты сохранены' : '✅ Профиль сохранён';
+  toast(_savedMsg);
+  // Анимированный overlay-чекмарк поверх экрана профиля
+  requestAnimationFrame(() => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = [
+      'position:fixed;inset:0;z-index:9999;pointer-events:none',
+      'display:flex;align-items:center;justify-content:center',
+    ].join(';');
+    overlay.innerHTML = `
+      <div id="_save-check" style="
+        width:72px;height:72px;border-radius:50%;
+        background:var(--accent,#e87722);
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 6px 30px rgba(0,0,0,.35);
+        transform:scale(0);opacity:0;
+        transition:transform .22s cubic-bezier(.34,1.5,.64,1),opacity .15s ease;
+      ">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+          stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+          style="transform:scale(0);transition:transform .2s cubic-bezier(.34,1.4,.64,1) .15s">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>`;
+    document.body.appendChild(overlay);
+    const circle = overlay.querySelector('#_save-check');
+    const svg    = overlay.querySelector('svg');
+    requestAnimationFrame(() => {
+      circle.style.transform = 'scale(1)'; circle.style.opacity = '1';
+      svg.style.transform = 'scale(1)';
+    });
+    setTimeout(() => {
+      circle.style.transition = 'transform .18s ease,opacity .18s ease';
+      circle.style.transform = 'scale(0)'; circle.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 200);
+    }, 900);
+  });
 }
 
 async function profileDeleteAccount() {
@@ -1525,8 +1946,11 @@ async function profileDeleteAccount() {
   // 5. Очищаем все личные данные
   localStorage.removeItem(PROFILE_KEY);
   localStorage.removeItem(FRIENDS_KEY);
-  localStorage.removeItem(MSG_STORE_KEY);
-  localStorage.removeItem(MSG_CHATS_KEY);
+  localStorage.removeItem(_msgStoreKey());
+  localStorage.removeItem(_msgChatsKey());
+  // Also remove legacy shared keys in case they exist
+  localStorage.removeItem(MSG_STORE_KEY_BASE);
+  localStorage.removeItem(MSG_CHATS_KEY_BASE);
 
   updateNavProfileIcon(null);
   profileInitLoginScreen();
@@ -1550,6 +1974,7 @@ function profileLogout() {
   }
   profileDisconnect();
   localStorage.removeItem(PROFILE_KEY);
+  localStorage.removeItem(GROUPS_KEY); // очищаем кэш групп — при следующем входе загрузим с сервера
   updateNavProfileIcon(null);
   profileInitLoginScreen();
   showScreen('s-login');
@@ -1592,178 +2017,161 @@ async function _sbFetch(method, path, body, extraHeaders) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════════════════
-// 🔐 E2E ШИФРОВАНИЕ   ECDH + AES-GCM (WebCrypto API)
+// 🔐 E2E ШИФРОВАНИЕ   ECDH + AES-GCM  —  МУЛЬТИУСТРОЙСТВЕННАЯ СХЕМА v2
 //
-// Схема:
-//     Каждый пользователь имеет пару ECDH ключей (P-256)
-//     Публичный ключ хранится в Supabase users.pubkey (base64)
-//     Приватный ключ   только в localStorage (никогда не уходит с устройства)
-//     При отправке: ECDH shared secret ↩ HKDF ↩ AES-256-GCM
-//     В Supabase хранится: зашифрованный текст + IV (оба base64, разделитель '.')
-//     Формат в поле text: 'ENC:BASE64_IV.BASE64_CIPHERTEXT'
-//     Если расшифровка не удалась   показывается '🔒 [зашифровано]'
+// Ключи привязаны к аккаунту, а не к устройству:
+//   KEK = PBKDF2(pwdHash, username + "_kek_v2", 300k итераций)
+//   pwdHash уже хранится в profileLoad() — пользователь ничего не вводит
+//   Приватный ключ шифруется KEK → хранится в Supabase users.encrypted_privkey
+//   На новом устройстве: входишь → pwdHash подтягивается → ключ расшифровывается
+//   Сервер видит только зашифрованный ключ, E2E не нарушается
 // ══════════════════════════════════════════════════════════════════════════
 
-const E2E_PRIVKEY_KEY = 'sapp_e2e_priv_v1'; // localStorage ключ
-const E2E_PUBKEY_KEY  = 'sapp_e2e_pub_v1';
-const E2E_PREFIX      = 'ENC:';
+const E2E_PRIVKEY_KEY    = 'sapp_e2e_priv_v1';
+const E2E_PUBKEY_KEY     = 'sapp_e2e_pub_v1';
+const E2E_PREFIX         = 'ENC:';
+const E2E_ENCPRIV_PREFIX = 'ENC_PRIV:';
 
-// Кэш: username ↩ CryptoKey (публичный ECDH)
 const _e2ePeerPubKeys = {};
-// Кэш: chatKey ↩ CryptoKey (AES-GCM, производный от ECDH shared secret)
-const _e2eAesCache = {};
+const _e2eAesCache    = {};
 
-let _e2ePrivKey = null;  // CryptoKey   наш приватный ECDH
-let _e2ePubKey  = null;  // CryptoKey   наш публичный ECDH
+let _e2ePrivKey = null;
+let _e2ePubKey  = null;
 let _e2eEnabled = false;
 
-// ┄┄ Инициализация: генерация или загрузка ключей ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ── Вывод KEK из pwdHash через PBKDF2 ────────────────────────────────────────
+async function e2eDeriveKEK(pwdHash, username) {
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(pwdHash), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: new TextEncoder().encode(username + '_kek_v2'), iterations: 300000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false, ['encrypt', 'decrypt']
+  );
+}
+
+// ── Зашифровать приватный ключ через KEK ─────────────────────────────────────
+async function e2eEncryptPrivKey(privJwkStr, kek) {
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const enc = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, kek, new TextEncoder().encode(privJwkStr));
+  const b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
+  return E2E_ENCPRIV_PREFIX + b64(iv) + '.' + b64(enc);
+}
+
+// ── Расшифровать приватный ключ через KEK ────────────────────────────────────
+async function e2eDecryptPrivKey(encStr, kek) {
+  if (!encStr || !encStr.startsWith(E2E_ENCPRIV_PREFIX)) return null;
+  const [ivB64, encB64] = encStr.slice(E2E_ENCPRIV_PREFIX.length).split('.');
+  if (!ivB64 || !encB64) return null;
+  const from = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  try {
+    const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: from(ivB64) }, kek, from(encB64));
+    return new TextDecoder().decode(dec);
+  } catch(_) { return null; }
+}
+
+// ── Инициализация — всё автоматически из профиля ─────────────────────────────
 async function e2eInit() {
   try {
-    const storedPriv = localStorage.getItem(E2E_PRIVKEY_KEY);
-    const storedPub  = localStorage.getItem(E2E_PUBKEY_KEY);
+    const profile  = profileLoad();
+    const username = profile?.username;
+    const pwdHash  = profile?.pwdHash;
+
+    // 1) Локальный кэш (быстро, без сети)
+    let storedPriv = localStorage.getItem(E2E_PRIVKEY_KEY);
+    let storedPub  = localStorage.getItem(E2E_PUBKEY_KEY);
+
+    if (!storedPriv || !storedPub) {
+      try {
+        const idbPriv = await idbGet('e2e_priv_v1');
+        const idbPub  = await idbGet('e2e_pub_v1');
+        if (idbPriv && idbPub) {
+          storedPriv = idbPriv; storedPub = idbPub;
+          localStorage.setItem(E2E_PRIVKEY_KEY, storedPriv);
+          localStorage.setItem(E2E_PUBKEY_KEY,  storedPub);
+          console.log('[E2E] ключи из IndexedDB ✓');
+        }
+      } catch(_) {}
+    }
+
+    // 2) Нет кэша + есть профиль + есть сеть → тянем с сервера (новое устройство)
+    if (!storedPriv && username && pwdHash && sbReady()) {
+      try {
+        const rows = await sbGet('users', `select=encrypted_privkey&username=eq.${encodeURIComponent(username)}&limit=1`);
+        const encPriv = rows?.[0]?.encrypted_privkey;
+        if (encPriv) {
+          const kek = await e2eDeriveKEK(pwdHash, username);
+          const privJwkStr = await e2eDecryptPrivKey(encPriv, kek);
+          if (privJwkStr) {
+            const privJwk = JSON.parse(privJwkStr);
+            storedPriv = privJwkStr;
+            storedPub  = JSON.stringify({ kty: privJwk.kty, crv: privJwk.crv, x: privJwk.x, y: privJwk.y });
+            localStorage.setItem(E2E_PRIVKEY_KEY, storedPriv);
+            localStorage.setItem(E2E_PUBKEY_KEY,  storedPub);
+            idbSet('e2e_priv_v1', storedPriv).catch(()=>{});
+            idbSet('e2e_pub_v1',  storedPub).catch(()=>{});
+            console.log('[E2E] ключ восстановлен с сервера ✓');
+          } else {
+            console.warn('[E2E] не удалось расшифровать — pwdHash не совпадает?');
+          }
+        }
+      } catch(err) { console.warn('[E2E] ошибка загрузки с сервера:', err.message); }
+    }
 
     if (storedPriv && storedPub) {
-      // Загружаем существующие ключи
-      _e2ePrivKey = await crypto.subtle.importKey(
-        'jwk', JSON.parse(storedPriv),
-        { name: 'ECDH', namedCurve: 'P-256' },
-        false, ['deriveKey', 'deriveBits']
-      );
-      _e2ePubKey = await crypto.subtle.importKey(
-        'jwk', JSON.parse(storedPub),
-        { name: 'ECDH', namedCurve: 'P-256' },
-        true, []
-      );
-    } else {
-      // Генерируем новую пару
-      const pair = await crypto.subtle.generateKey(
-        { name: 'ECDH', namedCurve: 'P-256' },
-        true, ['deriveKey', 'deriveBits']
-      );
+      // 3) Загружаем в память
+      _e2ePrivKey = await crypto.subtle.importKey('jwk', JSON.parse(storedPriv), { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+      _e2ePubKey  = await crypto.subtle.importKey('jwk', JSON.parse(storedPub),  { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+    } else if (username && pwdHash) {
+      // 4) Первый запуск — генерируем и сразу сохраняем на сервер
+      console.log('[E2E] генерация новой пары...');
+      const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
       _e2ePrivKey = pair.privateKey;
       _e2ePubKey  = pair.publicKey;
-      // Сохраняем
       const privJwk = await crypto.subtle.exportKey('jwk', _e2ePrivKey);
       const pubJwk  = await crypto.subtle.exportKey('jwk', _e2ePubKey);
-      localStorage.setItem(E2E_PRIVKEY_KEY, JSON.stringify(privJwk));
-      localStorage.setItem(E2E_PUBKEY_KEY,  JSON.stringify(pubJwk));
+      const privStr = JSON.stringify(privJwk);
+      const pubStr  = JSON.stringify({ kty: pubJwk.kty, crv: pubJwk.crv, x: pubJwk.x, y: pubJwk.y });
+      localStorage.setItem(E2E_PRIVKEY_KEY, privStr);
+      localStorage.setItem(E2E_PUBKEY_KEY,  pubStr);
+      idbSet('e2e_priv_v1', privStr).catch(()=>{});
+      idbSet('e2e_pub_v1',  pubStr).catch(()=>{});
+      if (sbReady()) {
+        try {
+          const kek     = await e2eDeriveKEK(pwdHash, username);
+          const encPriv = await e2eEncryptPrivKey(privStr, kek);
+          await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
+            { encrypted_privkey: encPriv },
+            { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+          );
+          console.log('[E2E] encrypted_privkey → Supabase ✓');
+        } catch(err) { console.warn('[E2E] не удалось сохранить:', err.message); }
+      }
+    } else {
+      // Пользователь не залогинен
+      _e2eEnabled = false;
+      return;
     }
+
     _e2eEnabled = true;
+    console.log('[E2E] мультиустройственный режим активен ✓');
   } catch(e) {
     console.warn('[E2E] init failed:', e.message);
     _e2eEnabled = false;
   }
 }
 
-// ┄┄ Получить публичный ключ в виде base64 для отправки на сервер ┄┄┄┄┄┄┄┄┄┄
-async function e2eGetMyPubKeyB64() {
-  if (!_e2ePubKey) return null;
-  try {
-    const raw = await crypto.subtle.exportKey('raw', _e2ePubKey);
-    return btoa(String.fromCharCode(...new Uint8Array(raw)));
-  } catch(e) { return null; }
+// Повторная инициализация после входа (вызывается из profileConnect)
+async function e2eReinit() {
+  _e2ePrivKey = null; _e2ePubKey = null; _e2eEnabled = false;
+  Object.keys(_e2ePeerPubKeys).forEach(k => delete _e2ePeerPubKeys[k]);
+  Object.keys(_e2eAesCache).forEach(k => delete _e2eAesCache[k]);
+  await e2eInit();
 }
 
-// ┄┄ Загрузить публичный ключ собеседника из Supabase ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eLoadPeerKey(username) {
-  if (_e2ePeerPubKeys[username]) return _e2ePeerPubKeys[username];
-  try {
-    const rows = await sbGet('users', `select=pubkey&username=eq.${encodeURIComponent(username)}&limit=1`);
-    if (!Array.isArray(rows) || !rows[0]?.pubkey) return null;
-    const raw = Uint8Array.from(atob(rows[0].pubkey), c => c.charCodeAt(0));
-    const key = await crypto.subtle.importKey(
-      'raw', raw,
-      { name: 'ECDH', namedCurve: 'P-256' },
-      false, []
-    );
-    _e2ePeerPubKeys[username] = key;
-    return key;
-  } catch(e) { return null; }
-}
-
-// ┄┄ Вывести AES ключ из ECDH shared secret (HKDF-SHA-256) ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eDeriveAES(peerPubKey) {
-  const shared = await crypto.subtle.deriveBits(
-    { name: 'ECDH', public: peerPubKey },
-    _e2ePrivKey, 256
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('ScheduleAppE2E') },
-    await crypto.subtle.importKey('raw', shared, 'HKDF', false, ['deriveKey']),
-    { name: 'AES-GCM', length: 256 },
-    false, ['encrypt', 'decrypt']
-  );
-}
-
-// ┄┄ Получить или кэшировать AES ключ для чата ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eGetAES(otherUsername) {
-  if (_e2eAesCache[otherUsername]) return _e2eAesCache[otherUsername];
-  const peerKey = await e2eLoadPeerKey(otherUsername);
-  if (!peerKey) return null;
-  const aes = await e2eDeriveAES(peerKey);
-  _e2eAesCache[otherUsername] = aes;
-  return aes;
-}
-
-// ┄┄ Зашифровать текст ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eEncrypt(text, otherUsername) {
-  if (!_e2eEnabled || !text) return text;
-  try {
-    const aes = await e2eGetAES(otherUsername);
-    if (!aes) return text; // нет ключа   шлём открыто
-    const iv  = crypto.getRandomValues(new Uint8Array(12));
-    const enc = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      aes, new TextEncoder().encode(text)
-    );
-    const ivB64  = btoa(String.fromCharCode(...iv));
-    const encB64 = btoa(String.fromCharCode(...new Uint8Array(enc)));
-    return E2E_PREFIX + ivB64 + '.' + encB64;
-  } catch(e) {
-    console.warn('[E2E] encrypt failed:', e.message);
-    return text;
-  }
-}
-
-// ┄┄ Расшифровать текст ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eDecrypt(ciphertext, otherUsername) {
-  if (!ciphertext || !ciphertext.startsWith(E2E_PREFIX)) return ciphertext;
-  if (!_e2eEnabled) return '🔒 [зашифровано]';
-  try {
-    const payload = ciphertext.slice(E2E_PREFIX.length);
-    const dotIdx  = payload.indexOf('.');
-    if (dotIdx < 0) return '🔒 [зашифровано]';
-    const iv  = Uint8Array.from(atob(payload.slice(0, dotIdx)), c => c.charCodeAt(0));
-    const enc = Uint8Array.from(atob(payload.slice(dotIdx + 1)),  c => c.charCodeAt(0));
-    const aes = await e2eGetAES(otherUsername);
-    if (!aes) return '🔒 [зашифровано]';
-    const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aes, enc);
-    return new TextDecoder().decode(dec);
-  } catch(e) {
-    return '🔒 [зашифровано]';
-  }
-}
-
-// ┄┄ Синхронизировать публичный ключ на сервер при входе ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-async function e2eSyncPubKey(username) {
-  if (!_e2eEnabled || !username) return;
-  try {
-    const pubB64 = await e2eGetMyPubKeyB64();
-    if (!pubB64) return;
-    // Проверяем: нужно ли обновить
-    const rows = await sbGet('users', `select=pubkey&username=eq.${encodeURIComponent(username)}&limit=1`);
-    if (Array.isArray(rows) && rows[0]?.pubkey === pubB64) return; // уже актуальный
-    await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
-      { pubkey: pubB64 },
-      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
-    );
-    console.log('[E2E] pubkey synced to server');
-  } catch(e) {}
-}
-
-// ┄┄ Инициализация при старте ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// Автозапуск при загрузке страницы
 e2eInit().then(() => {
   console.log('[E2E] ready, enabled=' + _e2eEnabled);
 });
@@ -1851,7 +2259,21 @@ async function outboxFlush() {
 }
 
 // ┄┄ Слушатели сети ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-window.addEventListener('online',  () => { _netOnline = true;  setTimeout(outboxFlush, 600); });
+window.addEventListener('online', () => {
+  _netOnline = true;
+  setTimeout(outboxFlush, 600);
+  // Переподключаемся к Supabase при появлении сети (как Telegram)
+  setTimeout(() => {
+    const p = profileLoad();
+    if (p && sbReady() && !_profilePeerReady) {
+      console.log('[NET] Сеть появилась — переподключаюсь');
+      profileConnect(p);
+    } else if (p && sbReady() && _profilePeerReady) {
+      // Уже подключены — просто форс-тик для быстрой доставки
+      if (typeof window._javaTick === 'function') window._javaTick();
+    }
+  }, 1000);
+});
 window.addEventListener('offline', () => { _netOnline = false; });
 
 // Также пытаемся сбрасывать очередь каждые 12 секунд пока есть pending
@@ -1994,6 +2416,25 @@ function _inboxTsLoad() {
 }
 function _inboxTsSave(ts) {
   try { localStorage.setItem(INBOX_TS_KEY, String(ts)); } catch(e) {}
+  // Дублируем в IndexedDB — переживает полную очистку localStorage
+  if (typeof idbSet === 'function') idbSet('inbox_last_ts', String(ts)).catch(()=>{});
+}
+// Восстанавливает lastTs из IndexedDB если localStorage был очищен
+// Вызывается при входе/connect, предотвращает повторное получение старых сообщений
+async function _inboxTsRecover() {
+  if (_fbInboxLastTs > 0) return; // уже есть — не нужно
+  try {
+    if (typeof idbGet !== 'function') return;
+    const cached = await idbGet('inbox_last_ts');
+    if (cached) {
+      const ts = parseInt(cached) || 0;
+      if (ts > 0) {
+        _fbInboxLastTs = ts;
+        localStorage.setItem(INBOX_TS_KEY, String(ts));
+        console.log('[INBOX] lastTs восстановлен из IndexedDB:', ts);
+      }
+    }
+  } catch(e) {}
 }
 let _fbInboxLastTs = _inboxTsLoad();
 let _superPoller         = null; // единый таймер вместо всех отдельных
@@ -2031,8 +2472,9 @@ async function sbSaveUser(p) {
     name:        p.name,
     pwd_hash:    p.pwdHash    || null,
     avatar:      p.avatar     || '😊',
-    avatar_type: p.avatarType || 'emoji',
-    avatar_data: p.avatarData || null,
+    avatar_type:      p.avatarType     || 'emoji',
+    avatar_data:      p.avatarData     || null,
+    avatar_video_url: p.avatarVideoUrl || null,
     bio:         p.bio        || '',
     status:      p.status     || 'online',
     color:       p.color      || '#e87722',
@@ -2103,7 +2545,10 @@ async function profileConnect(p) {
     _profilePeerReady = true;
     profileUpdateP2PStatus('🟢 @' + p.username + ' · 🔗 Прямое');
 
-    if (!_fbInboxLastTs) _fbInboxLastTs = _inboxTsLoad() || (Date.now() - 30 * 24 * 60 * 60 * 1000);
+    if (!_fbInboxLastTs) {
+      await _inboxTsRecover(); // восстанавливаем из IndexedDB если localStorage пуст
+      _fbInboxLastTs = _fbInboxLastTs || _inboxTsLoad() || (Date.now() - 30 * 24 * 60 * 60 * 1000);
+    }
 
     await sbPollPresence();
     if (sessionId !== _connectSessionId) return;
@@ -2136,6 +2581,8 @@ async function profileConnect(p) {
     // Синхронизируем VIP/badge/frame с сервера (server source of truth)
     vipSyncFromServer(p.username).catch(()=>{});
     // Синхронизируем публичный E2E ключ на сервер
+    // Переинициализируем E2E с актуальным профилем (подтягивает ключ если новое устройство)
+    e2eReinit().catch(()=>{});
     e2eSyncPubKey(p.username).catch(()=>{});
     // Сбрасываем очередь отложенных сообщений (появился интернет)
     if (outboxLoad().length > 0) {
@@ -2354,13 +2801,22 @@ window._javaTick = async function() {
 };
 // Каждые 2 сек: inbox + открытый чат
 // Каждые 10 сек: presence heartbeat + список онлайн
-// Android убивает кучу мелких таймеров, но один активный   живёт
+// Основной механизм — Java Handler через window._javaTick()
+// JS setInterval — запасной fallback когда нет Android моста
 let _superPollerTick = 0;
 function _startSuperPoller(p, sessionId) {
-  // Отключён   всю работу делает Java Handler через window._javaTick()
-  // Java Handler не замораживается Android в отличие от JS setInterval
   clearInterval(_superPoller);
-  _superPoller = null;
+  // Если есть Android Java Handler — он делает всё сам, JS таймер не нужен
+  if (window.Android && typeof Android.startBackgroundService === 'function') {
+    _superPoller = null;
+    return;
+  }
+  // Fallback: JS setInterval для браузера / устройств без Java Handler
+  _superPollerTick = 0;
+  _superPoller = setInterval(async () => {
+    if (sessionId !== _connectSessionId) { clearInterval(_superPoller); return; }
+    if (typeof window._javaTick === 'function') await window._javaTick();
+  }, 2500);
 }
 
 // ┄┄ Удаление медиа-сообщений старше 3 дней из Supabase ┄┄┄┄┄┄┄┄┄┄┄
@@ -2422,22 +2878,33 @@ let _presenceFirstPut = true;
 async function sbPresencePut(p) {
   if (!p || !sbReady()) return;
   // Compress photo avatar to 80x80px base64 for presence storage
+  // GIF и WebP НЕ сжимаем через canvas — canvas убивает анимацию и даёт чёрный фон
   let avatarDataToStore = null;
   if (p.avatarType === 'photo' && p.avatarData) {
-    try {
-      await new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          const cv = document.createElement('canvas');
-          cv.width = cv.height = 80;
-          cv.getContext('2d').drawImage(img, 0, 0, 80, 80);
-          avatarDataToStore = cv.toDataURL('image/jpeg', 0.75);
-          resolve();
-        };
-        img.onerror = () => resolve();
-        img.src = p.avatarData;
-      });
-    } catch(_) {}
+    const isAnimated = p.avatarData.startsWith('data:image/gif') || p.avatarData.startsWith('data:image/webp');
+    if (isAnimated) {
+      // Анимированные форматы передаём как есть (canvas убьёт анимацию и сделает изображение чёрным)
+      avatarDataToStore = p.avatarData;
+    } else {
+      try {
+        await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const cv = document.createElement('canvas');
+            cv.width = cv.height = 80;
+            const ctx = cv.getContext('2d');
+            // Белый фон перед drawImage: без него прозрачные PNG дают чёрный фон в JPEG
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 80, 80);
+            ctx.drawImage(img, 0, 0, 80, 80);
+            avatarDataToStore = cv.toDataURL('image/jpeg', 0.75);
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = p.avatarData;
+        });
+      } catch(_) {}
+    }
   }
   const payload = {
     username: p.username, name: p.name,
@@ -2502,6 +2969,7 @@ async function sbPollPresence() {
   const _mapU = u => ({
     username: u.username, name: u.name,
     avatar: u.avatar, avatarType: u.avatar_type, avatarData: u.avatar_data,
+    avatarVideoUrl: u.avatar_video_url || null,
     color: u.color, status: u.status,
     vip: u.vip, badge: u.badge,
     banner: u.banner || null, frame: u.frame || null, bio: u.bio || ''
@@ -2525,7 +2993,7 @@ async function sbEnrichUsersFromUsersTable() {
   try {
     const usernames = _allKnownUsers.map(u => u.username).slice(0, 50);
     const q = usernames.map(u => encodeURIComponent(u)).join(',');
-    const rows = await sbGet('users', `select=username,banner,frame,bio,avatar_data,avatar_type,vip,badge,color&username=in.(${usernames.map(u => '"' + u + '"').join(',')})&limit=50`);
+    const rows = await sbGet('users', `select=username,banner,frame,bio,avatar_data,avatar_type,avatar_video_url,vip,badge,color&username=in.(${usernames.map(u => '"' + u + '"').join(',')})&limit=50`);
     if (!Array.isArray(rows)) return;
     rows.forEach(row => {
       const user = _allKnownUsers.find(u => u.username === row.username);
@@ -2537,6 +3005,8 @@ async function sbEnrichUsersFromUsersTable() {
         if (row.badge     !== undefined) user.badge     = row.badge;
         if (row.color     !== undefined) user.color     = row.color;
         if (row.avatar_data && !user.avatarData) user.avatarData = row.avatar_data;
+        if (row.avatar_type) user.avatarType = row.avatar_type;
+        if (row.avatar_video_url) user.avatarVideoUrl = row.avatar_video_url;
       }
       const peer = _profileOnlinePeers.find(u => u.username === row.username);
       if (peer) {
@@ -2547,6 +3017,8 @@ async function sbEnrichUsersFromUsersTable() {
         if (row.badge     !== undefined) peer.badge     = row.badge;
         if (row.color     !== undefined) peer.color     = row.color;
         if (row.avatar_data && !peer.avatarData) peer.avatarData = row.avatar_data;
+        if (row.avatar_type) peer.avatarType = row.avatar_type;
+        if (row.avatar_video_url) peer.avatarVideoUrl = row.avatar_video_url;
       }
     });
   } catch(e) {}
@@ -3140,13 +3612,13 @@ function profileRenderOnline() {
     });
     peers = friendUsers;
   } else if (isAtSearch) {
-    // @поиск   по username среди всех (не только друзей)
+    // @поиск — только точное совпадение по полному нику
     peers = _allKnownUsers.filter(u =>
       u.username !== p?.username &&
-      u.username?.toLowerCase().includes(searchVal)
+      u.username?.toLowerCase() === searchVal
     );
   } else {
-    // Обычный поиск   по имени только среди друзей
+    // Обычный поиск — по имени только среди друзей
     peers = _allKnownUsers.filter(u =>
       friends.includes(u.username) &&
       (u.name?.toLowerCase().includes(searchVal) || u.username?.toLowerCase().includes(searchVal))
@@ -3156,25 +3628,26 @@ function profileRenderOnline() {
   const hintEl = document.getElementById('online-search-hint');
   if (hintEl) {
     if (!raw)            hintEl.textContent = '';
-    else if (isAtSearch) hintEl.textContent = '🔍 Поиск по @юзернейму среди всех пользователей';
+    else if (isAtSearch) hintEl.textContent = '🔍 Введи точный @юзернейм для поиска';
     else                 hintEl.textContent = '👥 Поиск по имени/нику среди друзей';
   }
 
   if (peers.length === 0) {
     let emptyText = !raw
       ? '👥 Нет друзей. Найди людей через @поиск и добавь в друзья!'
-      : isAtSearch ? 'Ищем @' + searchVal + '...'
+      : isAtSearch ? '🔍 Введи полный ник: @' + searchVal
                    : 'Друзей с именем «' + raw + '» не найдено';
     list.innerHTML = `<div style="color:var(--muted);text-align:center;padding:30px;font-size:13px;line-height:1.6" id="online-empty-msg">${emptyText}</div>`;
   }
 
-  // Supabase-поиск при @поиске или когда друг неизвестен
+  // Supabase-поиск при @поиске — только точное совпадение
   if (isAtSearch && searchVal && sbReady()) {
     clearTimeout(_onlineSearchTimer);
     _onlineSearchTimer = setTimeout(async () => {
       try {
         const q = encodeURIComponent(searchVal);
-        const rows = await sbGet('presence', `select=*&username=ilike.*${q}*&limit=20`);
+        // ilike.val — точное совпадение (без звёздочек), нечувствительно к регистру
+        const rows = await sbGet('presence', `select=*&username=ilike.${q}&limit=5`);
         if (!Array.isArray(rows)) return;
         let added = false;
         rows.forEach(u => {
@@ -3208,14 +3681,15 @@ function profileRenderOnline() {
     const unknownFriends = friends.filter(u => !_allKnownUsers.some(x => x.username === u));
     if (unknownFriends.length) {
       const unames = unknownFriends.slice(0,20).map(u => '"'+u+'"').join(',');
-      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,color,status,vip,badge&username=in.(${unames})&limit=20`)
+      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,avatar_video_url,color,status,vip,badge&username=in.(${unames})&limit=20`)
         .then(rows => {
           if (!Array.isArray(rows)) return;
           let added = false;
           rows.forEach(u => {
             if (!_allKnownUsers.some(x => x.username === u.username)) {
               _allKnownUsers.push({ username: u.username, name: u.name, avatar: u.avatar,
-                avatarType: u.avatar_type, avatarData: u.avatar_data, color: u.color,
+                avatarType: u.avatar_type, avatarData: u.avatar_data,
+                avatarVideoUrl: u.avatar_video_url || null, color: u.color,
                 status: u.status, vip: u.vip, badge: u.badge, _online: false });
               added = true;
             }
@@ -3236,10 +3710,8 @@ function profileRenderOnline() {
     return `
       <div class="online-user-row" onclick="${isMe ? '' : `peerProfileOpen('${escHtml(u.username)}')`}"
         style="cursor:${isMe ? 'default' : 'pointer'};-webkit-tap-highlight-color:transparent">
-        <div style="width:48px;height:48px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;position:relative">
-          ${u.avatarType === 'photo' && u.avatarData
-            ? `<img src="${u.avatarData}" style="width:48px;height:48px;border-radius:50%;object-fit:cover">`
-            : (u.avatar || '😊')}
+        <div style="width:48px;height:48px;border-radius:50%;background:${u.color||'var(--surface3)'};display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;position:relative;overflow:hidden">
+          ${_renderAvatarHtml(u, 48)}
           <div style="position:absolute;bottom:1px;right:1px;width:12px;height:12px;border-radius:50%;background:${isOnline?'#4caf7d':'#666'};border:2px solid var(--surface)"></div>
         </div>
         <div style="flex:1;min-width:0">
@@ -3500,12 +3972,17 @@ async function syncGroupsFromServer(username) {
     const raw = rows[0].groups;
     const serverGroups = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(serverGroups)) return;
-    const local  = groupsLoad();
-    // Merge: добавляем серверные группы которых нет локально
-    const merged = [...local];
-    serverGroups.forEach(sg => {
-      if (!merged.find(g => g.id === sg.id)) merged.push(sg);
-    });
+    const local = groupsLoad();
+    // Сервер — источник истины для групп.
+    // Старая логика (additive merge) оставляла удалённые группы в локальном кэше.
+    // Теперь: берём серверный список, добавляем только те локальные группы,
+    // которые были созданы офлайн (есть локально, нет на сервере) — edge case.
+    const localOnlyGroups = local.filter(lg =>
+      lg.id !== PUBLIC_GROUP_ID && !serverGroups.find(sg => sg.id === lg.id)
+    );
+    // localOnlyGroups почти всегда пуст (groupCreate всегда пишет на сервер).
+    // Это подстраховка на случай потери связи при создании группы.
+    const merged = [...serverGroups, ...localOnlyGroups];
     groupsSave(merged);
 
     // ┄┄ Авто-вступление в публичную группу ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
@@ -4328,7 +4805,7 @@ function showCreateGroupDialog() {
   sheet.innerHTML = `
     <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot));max-height:80vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="font-size:17px;font-weight:700;margin-bottom:12px">👥 Создать группу</div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Создать группу</div>
       <input id="grp-name-inp" class="inp" placeholder="Название группы" style="margin-bottom:12px">
       <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Участники (друзья и онлайн):</div>
       <div id="grp-members-list">
@@ -5318,6 +5795,8 @@ async function donateConfirm() {
     );
     if (res.ok || res.status === 201) {
       document.getElementById('donate-sheet')?.remove();
+      const tier = DONATE_TIERS[_selectedDoneTierIdx];
+      _vipBotNotify(p, tier.amount, tier.label, txn);
       toast('🎉 Заявка отправлена! VIP активируется после проверки.');
     } else {
       throw new Error(res.status);
@@ -5526,17 +6005,30 @@ if (typeof cmdExec === 'function') {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// 🖼 РАМКИ, ЗНАЧКИ, БАННЕРЫ
+// 🖼 ЗНАЧКИ, РАМКИ, БАННЕРЫ
+// Рамки и баннеры скрыты из UI редактирования, но работают для тех кто их поставил
+// и могут быть выставлены через /frame и /banner в CMD
 // ══════════════════════════════════════════════════════════════════
 const PROFILE_FRAMES = {
-  'none':     { cls: '',          style: '',                                               label: 'Нет',         vip: false },
-  'accent':   { cls: '',          style: 'box-shadow:0 0 0 3px var(--accent)',              label: '🔶 Акцент',   vip: false },
-  'glow':     { cls: '',          style: 'box-shadow:0 0 16px 4px var(--accent)',           label: '✅ Свечение', vip: true  },
-  'rainbow':  { cls: 'frame-rainbow', style: '',                                           label: '🌈 Радуга',   vip: true  },
-  'gold':     { cls: '',          style: 'box-shadow:0 0 0 3px #f5c518,0 0 12px #f5c51866', label: '🥇 Золото',  vip: true  },
-  'neon':     { cls: '',          style: 'box-shadow:0 0 0 3px #00e5ff,0 0 20px #00e5ff88', label: '💠 Неон',    vip: true  },
-  'fire':     { cls: 'frame-fire', style: '',                                              label: '🔥 Огонь',    vip: true  },
+  'none':     { cls: '',               style: '',                                                label: 'Нет',         vip: false },
+  'accent':   { cls: '',               style: 'box-shadow:0 0 0 3px var(--accent)',              label: '🔶 Акцент',   vip: false },
+  'glow':     { cls: '',               style: 'box-shadow:0 0 16px 4px var(--accent)',           label: '✅ Свечение', vip: true  },
+  'rainbow':  { cls: 'frame-rainbow',  style: '',                                                label: '🌈 Радуга',   vip: true  },
+  'gold':     { cls: '',               style: 'box-shadow:0 0 0 3px #f5c518,0 0 12px #f5c51866', label: '🥇 Золото',  vip: true  },
+  'neon':     { cls: '',               style: 'box-shadow:0 0 0 3px #00e5ff,0 0 20px #00e5ff88', label: '💠 Неон',    vip: true  },
+  'fire':     { cls: 'frame-fire',     style: '',                                                label: '🔥 Огонь',   vip: true  },
 };
+
+const PROFILE_BANNERS = [
+  { id: 'none',    label: 'Нет',         style: 'background:var(--surface2)',                                    vip: false },
+  { id: 'accent',  label: 'Акцент',      style: 'background:linear-gradient(135deg,var(--accent)66,var(--surface2))', vip: false },
+  { id: 'sunset',  label: '🌅 Закат',    style: 'background:linear-gradient(135deg,#e87722,#c94f4f,#a78bfa)',    vip: true  },
+  { id: 'ocean',   label: '🌊 Океан',    style: 'background:linear-gradient(135deg,#00e5ff,#60cdff,#4caf7d)',    vip: true  },
+  { id: 'night',   label: '🌌 Ночь',     style: 'background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)',    vip: true  },
+  { id: 'candy',   label: '🍭 Конфета',  style: 'background:linear-gradient(135deg,#ff66aa,#a78bfa,#60cdff)',    vip: true  },
+  { id: 'gold',    label: '🥇 Золото',   style: 'background:linear-gradient(135deg,#f5c518,#e87722,#c94f4f)',    vip: true  },
+  { id: 'matrix',  label: '💚 Матрица',  style: 'background:linear-gradient(135deg,#0d0d0d,#0a3d0a,#00ff41)',   vip: true  },
+];
 
 const PROFILE_BADGES = [
   { id: 'early',  emoji: '🌟', label: 'Первый',  color: '#f5c518', vip: false },
@@ -5547,18 +6039,7 @@ const PROFILE_BADGES = [
   { id: 'ghost',  emoji: '👻', label: 'Призрак', color: '#a78bfa', vip: true  },
 ];
 
-const PROFILE_BANNERS = [
-  { id: 'none',    label: 'Нет',          style: 'background:var(--surface2)',                                   vip: false },
-  { id: 'accent',  label: 'Акцент',       style: 'background:linear-gradient(135deg,var(--accent)66,var(--surface2))', vip: false },
-  { id: 'sunset',  label: '🌅 Закат',     style: 'background:linear-gradient(135deg,#e87722,#c94f4f,#a78bfa)',   vip: true  },
-  { id: 'ocean',   label: '🌊 Океан',     style: 'background:linear-gradient(135deg,#00e5ff,#60cdff,#4caf7d)',   vip: true  },
-  { id: 'night',   label: '🌌 Ночь',      style: 'background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)',   vip: true  },
-  { id: 'candy',   label: '🍭 Конфета',   style: 'background:linear-gradient(135deg,#ff66aa,#a78bfa,#60cdff)',   vip: true  },
-  { id: 'gold',    label: '🥇 Золото',    style: 'background:linear-gradient(135deg,#f5c518,#e87722,#c94f4f)',   vip: true  },
-  { id: 'matrix',  label: '💚 Матрица',   style: 'background:linear-gradient(135deg,#0d0d0d,#0a3d0a,#00ff41)',   vip: true  },
-];
-
-// ┄┄ CSS для спец-рамок и мессенджера ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ┄┄ CSS для рамок и мессенджера ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 (function injectFrameCSS() {
   const style = document.createElement('style');
   style.textContent = `
@@ -5580,27 +6061,248 @@ const PROFILE_BANNERS = [
   document.head.appendChild(style);
 })();
 
-// profileInitEditScreen теперь единая функция в profile-script блоке выше.
-// VIP-секции рендерятся внутри неё напрямую через PROFILE_FRAMES/BADGES/BANNERS.
+// ══════════════════════════════════════════════════════════════════
+// 👑 VIP БОТ — чат с поддержкой/заявками на VIP
+// ══════════════════════════════════════════════════════════════════
+const VIP_BOT_ID       = 'vip_bot';
 
+// ── Динамический список проверкеров (управляется через CMD: checker add/remove) ──
+const VIP_CHECKERS_KEY = 'sapp_vip_checkers_v1';
+function vipCheckersLoad() {
+  try { return JSON.parse(localStorage.getItem(VIP_CHECKERS_KEY) || '["lomkich"]'); }
+  catch(e) { return ['lomkich']; }
+}
+function vipCheckersSave(arr) {
+  localStorage.setItem(VIP_CHECKERS_KEY, JSON.stringify(arr));
+}
+function isVipChecker(username) {
+  if (!username) return false;
+  return vipCheckersLoad().map(u => u.toLowerCase()).includes(username.toLowerCase());
+}
+// Первый в списке — главный получатель уведомлений (обратная совместимость)
+function getVipAdminUser() { return vipCheckersLoad()[0] || 'lomkich'; }
+
+const VIP_ADMIN_USER = getVipAdminUser(); // для совместимости с местами, где используется напрямую
+const VIP_BOT_NAME     = 'VIP Поддержка';
+const VIP_BOT_AVATAR   = '👑';
+const VIP_BOT_COLOR    = '#f5c518';
+
+// Добавляет VIP-бот в список чатов и сохраняет сообщение о заявке
+function _vipBotNotify(p, amount, tier, txn) {
+  try {
+    // Добавляем бот-чат в список чатов пользователя
+    const chats = chatsLoad();
+    if (!chats.includes(VIP_BOT_ID)) {
+      chats.unshift(VIP_BOT_ID);
+      chatsSave(chats);
+    }
+    // Локальное сообщение-подтверждение для пользователя
+    const msgs = msgLoad();
+    if (!msgs[VIP_BOT_ID]) msgs[VIP_BOT_ID] = [];
+    const ts = Date.now();
+    msgs[VIP_BOT_ID].push({
+      from: VIP_BOT_ID,
+      to: p.username,
+      text: `🎉 Заявка на VIP отправлена!\n\nТариф: ${tier}\nСумма: ${amount}₽\nНомер транзакции: ${txn}\n\nВаша заявка будет проверена администратором. VIP активируется после подтверждения.`,
+      ts,
+      delivered: true, read: false,
+      _bot: true
+    });
+    msgSave(msgs);
+    messengerUpdateBadge?.();
+
+    // Уведомляем администратора (@lomkich) через Supabase messages
+    if (sbReady()) {
+      const adminKey = sbChatKey(p.username, getVipAdminUser());
+      const adminMsg = {
+        from_user: p.username,
+        to_user:   getVipAdminUser(),
+        chat_key:  adminKey,
+        text:      `[VIP ЗАЯВКА]\nПользователь: @${p.username} (${p.name})\nТариф: ${tier}\nСумма: ${amount}₽\nТранзакция: ${txn}\nВремя: ${new Date(ts).toLocaleString('ru')}`,
+        ts,
+        delivered: false, read: false
+      };
+      _sbFetch('POST', '/rest/v1/messages', adminMsg, {
+        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+      }).catch(() => {});
+    }
+  } catch(e) { console.warn('[VipBot] notify error', e); }
+}
+
+// Рендер чата VIP-бота: для @lomkich — таблица заявок из Supabase donations;
+// для остальных — локальные сообщения бота
+async function _vipBotOpenChat() {
+  const p = profileLoad();
+  if (!p) return;
+
+  // Обновляем шапку чата
+  const hdrName   = document.getElementById('mc-hdr-name');
+  const hdrSub    = document.getElementById('mc-hdr-sub');
+  const hdrAvatar = document.getElementById('mc-hdr-avatar');
+  if (hdrName)   hdrName.textContent   = VIP_BOT_NAME;
+  if (hdrSub)    hdrSub.textContent    = isVipChecker(p.username) ? 'Все заявки на VIP' : 'Поддержка';
+  if (hdrAvatar) {
+    hdrAvatar.style.background = VIP_BOT_COLOR + '44';
+    hdrAvatar.innerHTML = `<span style="font-size:20px">${VIP_BOT_AVATAR}</span>`;
+  }
+
+  const msgBody = document.getElementById('mc-messages');
+  if (!msgBody) return;
+
+  if (isVipChecker(p.username)) {
+    // Администратор: грузим все заявки из таблицы donations
+    msgBody.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">⏳ Загрузка заявок...</div>';
+    try {
+      const rows = sbReady()
+        ? await sbGet('donations', 'order=ts.desc&limit=100')
+        : [];
+      if (!Array.isArray(rows) || rows.length === 0) {
+        msgBody.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">📭 Заявок пока нет</div>';
+        return;
+      }
+      msgBody.innerHTML = rows.map(r => {
+        const dt = new Date(r.ts || 0).toLocaleString('ru');
+        const statusColor = r.status === 'approved' ? '#4caf7d' : r.status === 'rejected' ? '#e05555' : '#f5c518';
+        const statusLabel = r.status === 'approved' ? '✅ Подтверждено' : r.status === 'rejected' ? '❌ Отклонено' : '⏳ На проверке';
+        return `<div style="margin:8px 12px;padding:12px 14px;background:var(--surface2);border-radius:14px;border-left:3px solid ${statusColor}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+            <div style="font-size:14px;font-weight:700">@${escHtml(r.username||'?')}</div>
+            <span style="font-size:11px;font-weight:700;color:${statusColor};flex-shrink:0">${statusLabel}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">${escHtml(r.tier||'?')} · ${r.amount||0}₽</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Транзакция: ${escHtml(r.txn_id||'—')}</div>
+          <div style="font-size:11px;color:var(--muted)">${dt}</div>
+          ${r.status === 'pending' ? `<div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-accent" style="flex:1;padding:8px;font-size:12px;margin:0" onclick="_vipAdminApprove('${escHtml(r.username||'')}',${r.id||0})"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><polyline points="20 6 9 17 4 12"/></svg> Подтвердить</button>
+            <button class="btn btn-surface" style="flex:1;padding:8px;font-size:12px;margin:0;color:#e05555" onclick="_vipAdminReject(${r.id||0})"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Отклонить</button>
+          </div>` : ''}
+        </div>`;
+      }).join('');
+    } catch(e) {
+      msgBody.innerHTML = `<div style="text-align:center;padding:30px;color:#e05555;font-size:13px">❌ Ошибка загрузки: ${e.message}</div>`;
+    }
+  } else {
+    // Обычный пользователь: показываем локальные сообщения бота
+    const msgs = msgLoad();
+    const botMsgs = msgs[VIP_BOT_ID] || [];
+    if (botMsgs.length === 0) {
+      msgBody.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">📭 Нет сообщений</div>';
+      return;
+    }
+    msgBody.innerHTML = botMsgs.map(m => {
+      const dt = msgFormatTime(m.ts);
+      const text = (m.text || '').replace(/\n/g, '<br>');
+      return `<div style="display:flex;justify-content:flex-start;padding:4px 12px">
+        <div style="max-width:82%;background:var(--surface2);border-radius:16px 16px 16px 4px;padding:10px 14px;position:relative">
+          <div style="font-size:13px;line-height:1.5;color:var(--text)">${text}</div>
+          <div style="font-size:10px;color:var(--muted);text-align:right;margin-top:4px">${dt}</div>
+        </div>
+      </div>`;
+    }).join('');
+    setTimeout(() => { msgBody.scrollTop = msgBody.scrollHeight; }, 50);
+    // Помечаем как прочитанные
+    botMsgs.forEach(m => { m.read = true; });
+    msgSave(msgs);
+    messengerUpdateBadge?.();
+  }
+}
+
+// Администратор: подтвердить VIP-заявку
+async function _vipAdminApprove(username, id) {
+  if (!sbReady() || !username) return;
+  try {
+    await _sbFetch('PATCH', `/rest/v1/donations?id=eq.${id}`,
+      { status: 'approved' },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+    // Активируем VIP пользователю в таблице users
+    await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(username)}`,
+      { vip: true },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+    toast(`✅ VIP активирован для @${username}`);
+    _vipBotOpenChat(); // перерендер
+  } catch(e) { toast('❌ Ошибка: ' + e.message); }
+}
+
+// Администратор: отклонить заявку
+async function _vipAdminReject(id) {
+  if (!sbReady()) return;
+  try {
+    await _sbFetch('PATCH', `/rest/v1/donations?id=eq.${id}`,
+      { status: 'rejected' },
+      { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
+    );
+    toast('❌ Заявка отклонена');
+    _vipBotOpenChat();
+  } catch(e) { toast('❌ Ошибка: ' + e.message); }
+}
+
+// Очистить фото-баннер профиля
+function profileClearBanner() {
+  const p = profileLoad(); if (!p) return;
+  _profileApplyPendingEdits(p);
+  p.banner = null; profileSave(p);
+  toast('✅ Баннер убран');
+  profileInitEditScreen();
+}
+
+// Применяет незасохранённые изменения из формы редактирования к объекту профиля.
+// Нужно вызывать перед profileSave() при промежуточных действиях (смена рамки/значка/баннера),
+// иначе аватарка, имя и цвет сбрасываются к последнему сохранённому значению.
+function _profileApplyPendingEdits(p) {
+  // Имя и биография из полей формы
+  const nameVal = (document.getElementById('edit-name')?.value || '').trim();
+  const bioVal  = (document.getElementById('edit-bio')?.value  || '').trim();
+  if (nameVal) p.name = nameVal;
+  if (bioVal  !== undefined) p.bio = bioVal;
+  // Цвет и статус из in-memory переменных
+  if (typeof _editSelectedColor  !== 'undefined') p.color  = _editSelectedColor;
+  if (typeof _editSelectedStatus !== 'undefined') p.status = _editSelectedStatus;
+  // Аватарка: фото или эмодзи
+  if (_profileAvatarMode === 'photo') {
+    p.avatarType = 'photo';
+    // Если пользователь выбрал новое фото — применяем, но не стираем _profileTempAvatarData
+    // (оно понадобится ещё раз при итоговом profileSaveEdit)
+    if (window._profileTempAvatarData) {
+      p.avatarData = window._profileTempAvatarData;
+    }
+  } else {
+    p.avatarType = 'emoji';
+    p.avatar = _editSelectedEmoji || p.avatar;
+    delete p.avatarData;
+  }
+}
+
+// profileSetFrame/profileSetBanner — используются только через CMD (/frame id, /banner id)
 function profileSetFrame(id) {
   const p = profileLoad(); if (!p) return;
-  p.frame = id; profileSave(p);
-  toast('✅ Рамка: ' + PROFILE_FRAMES[id].label);
-  profileInitEditScreen();
+  _profileApplyPendingEdits(p);
+  p.frame = PROFILE_FRAMES[id] ? id : 'none';
+  profileSave(p);
+  toast('✅ Рамка: ' + (PROFILE_FRAMES[p.frame]?.label || id));
+  profileRenderScreen();
 }
 function profileSetBadge(id) {
   const p = profileLoad(); if (!p) return;
+  _profileApplyPendingEdits(p);
   p.badge = id; profileSave(p);
   toast(id ? '✅ Значок выбран' : '✅ Значок убран');
   profileInitEditScreen();
 }
+// profileSetBanner — используется через CMD (/banner id) и для сброса
 function profileSetBanner(id) {
   const p = profileLoad(); if (!p) return;
-  const b = PROFILE_BANNERS.find(x => x.id === id);
-  p.banner = b ? b.style : null; profileSave(p);
+  _profileApplyPendingEdits(p);
+  if (id === 'none' || !id) {
+    p.banner = null;
+  } else {
+    const b = PROFILE_BANNERS.find(x => x.id === id);
+    p.banner = b ? b.style : null;
+  }
+  profileSave(p);
   toast('✅ Баннер обновлён');
-  profileInitEditScreen();
+  profileRenderScreen();
 }
 
 function profileUploadPhotoBanner(input) {
@@ -5752,22 +6454,39 @@ function _leaderboardDrawLocal() {
     <div class="diff-picker" style="flex-wrap:wrap;gap:6px;margin-bottom:12px">${tabsHtml}</div>
     ${myInfoHtml}
     ${rowsHtml}
-    <button class="btn btn-surface lb-refresh-btn" style="margin-top:8px" onclick="leaderboardRender()">🔄 Обновить из сети</button>
+    <button class="btn btn-surface lb-refresh-btn" style="margin-top:8px" onclick="leaderboardRender()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Обновить из сети</button>
   `;
 }
 
 // ══════════════════════════════════════════════════════════════════
 // 💬 МЕССЕНДЖЕР v2   Telegram стиль
 // ══════════════════════════════════════════════════════════════════
-const MSG_STORE_KEY = 'sapp_messages_v2';
-const MSG_CHATS_KEY = 'sapp_chats_v1';
+const MSG_STORE_KEY_BASE = 'sapp_messages_v2';
+const MSG_CHATS_KEY_BASE = 'sapp_chats_v1';
 let _msgCurrentChat = null;
 let _mcPollTimer = null;
 
-function msgLoad()    { try { return JSON.parse(localStorage.getItem(MSG_STORE_KEY)||'{}'); } catch(e){ return {}; } }
-function msgSave(d)   { localStorage.setItem(MSG_STORE_KEY, JSON.stringify(d)); }
-function chatsLoad()  { try { return JSON.parse(localStorage.getItem(MSG_CHATS_KEY)||'[]'); } catch(e){ return []; } }
-function chatsSave(d) { localStorage.setItem(MSG_CHATS_KEY, JSON.stringify(d)); }
+// Per-user storage keys — prevents cross-account data leakage and duplicate chats
+function _msgStoreKey() {
+  try { const p = JSON.parse(localStorage.getItem(PROFILE_KEY)); return p?.username ? MSG_STORE_KEY_BASE + '_' + p.username : MSG_STORE_KEY_BASE; } catch(e) { return MSG_STORE_KEY_BASE; }
+}
+function _msgChatsKey() {
+  try { const p = JSON.parse(localStorage.getItem(PROFILE_KEY)); return p?.username ? MSG_CHATS_KEY_BASE + '_' + p.username : MSG_CHATS_KEY_BASE; } catch(e) { return MSG_CHATS_KEY_BASE; }
+}
+
+function msgLoad()    { try { return JSON.parse(localStorage.getItem(_msgStoreKey())||'{}'); } catch(e){ return {}; } }
+function msgSave(d)   { localStorage.setItem(_msgStoreKey(), JSON.stringify(d)); }
+function chatsLoad()  {
+  const perUser = localStorage.getItem(_msgChatsKey());
+  if (perUser !== null) { try { return JSON.parse(perUser)||[]; } catch(e){ return []; } }
+  // Migrate from old shared key on first use
+  try {
+    const legacy = JSON.parse(localStorage.getItem(MSG_CHATS_KEY_BASE)||'[]');
+    if (legacy.length > 0) { localStorage.setItem(_msgChatsKey(), JSON.stringify(legacy)); }
+    return legacy;
+  } catch(e) { return []; }
+}
+function chatsSave(d) { localStorage.setItem(_msgChatsKey(), JSON.stringify(d)); }
 
 function messengerOpen() { showScreen('s-messenger'); }
 
@@ -5969,10 +6688,75 @@ function showChatContextMenu(username) {
         style="width:100%;padding:14px 20px;background:none;border:none;color:var(--text);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:16px;-webkit-tap-highlight-color:transparent">
         <span style="font-size:20px">☑️</span> Выбрать
       </button>
+      <div style="height:1px;background:rgba(255,255,255,.06);margin:0 16px"></div>
+      <button onclick="document.getElementById('chat-ctx-menu')?.remove();_confirmDeleteChatForBoth('${escHtml(username)}')"
+        style="width:100%;padding:14px 20px;background:none;border:none;color:var(--danger,#e05555);font-family:inherit;font-size:15px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:16px;-webkit-tap-highlight-color:transparent">
+        <span style="font-size:20px">🗑</span> Удалить переписку для всех
+      </button>
     </div>`;
 
   sheet.addEventListener('click', () => sheet.remove());
   document.body.appendChild(sheet);
+}
+
+// ┄┄ Удаление переписки для обоих участников (с сервера) ┄┄┄┄┄┄┄┄┄┄┄
+function _confirmDeleteChatForBoth(username) {
+  const peer = peersLoad()[username] || {};
+  const name = peer.displayName || peer.display_name || username;
+  const sh = document.createElement('div');
+  sh.style.cssText = 'position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.55);display:flex;flex-direction:column;justify-content:flex-end;animation:mcFadeIn .15s ease';
+  sh.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-bot,0px));animation:mcSlideUp .24s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
+      <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">🗑 Удалить переписку?</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">
+        Все сообщения с <b>${escHtml(name)}</b> будут удалены у <b>обоих</b> участников с сервера. Это действие нельзя отменить.
+      </div>
+      <button id="_dfb-btn" style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
+        🗑 Удалить для всех
+      </button>
+      <button onclick="this.closest('[style*=fixed]').remove()"
+        style="width:100%;padding:14px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">
+        Отмена
+      </button>
+    </div>`;
+  sh.addEventListener('click', () => sh.remove());
+  document.body.appendChild(sh);
+  sh.querySelector('#_dfb-btn').addEventListener('click', async () => {
+    sh.remove();
+    await _doDeleteChatForBoth(username);
+  });
+}
+
+async function _doDeleteChatForBoth(username) {
+  const p = profileLoad();
+  if (!p) return;
+  const chatKey = sbChatKey(p.username, username);
+
+  // 1. Удаляем с Supabase все сообщения чата
+  if (sbReady()) {
+    try {
+      await sbDelete('messages', `chat_key=eq.${encodeURIComponent(chatKey)}`);
+      toast('🗑 Переписка удалена с сервера');
+    } catch(_) {
+      toast('⚠️ Не удалось удалить с сервера');
+    }
+  }
+
+  // 2. Удаляем локально
+  const msgs = msgLoad();
+  delete msgs[username];
+  msgSave(msgs);
+
+  // 3. Убираем из списка чатов
+  const chats = chatsLoad().filter(u => u !== username);
+  chatsSave(chats);
+
+  // 4. Помечаем как удалённый (hidden_chats) для синхронизации
+  _markChatDeleted(username);
+
+  messengerUpdateBadge();
+  messengerRenderList();
 }
 
 let _msgSelectMode = false;
@@ -6216,7 +7000,7 @@ function messengerRenderList(filter) {
         <div style="font-size:52px">💬</div>
         <div style="font-size:17px;font-weight:700;color:var(--text)">Нет сообщений</div>
         <div style="font-size:13px;text-align:center">Открой список онлайн и начни общаться</div>
-        <button class="btn btn-accent" style="margin-top:8px;width:auto;padding:12px 24px" onclick="profileRenderOnline();showScreen('s-online')">👥 Найти собеседника</button>
+        <button class="btn btn-accent" style="margin-top:8px;width:auto;padding:12px 24px" onclick="profileRenderOnline();showScreen('s-online')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Найти собеседника</button>
       </div>`;
     return;
   }
@@ -6238,6 +7022,34 @@ function messengerRenderList(filter) {
     const peer     = _profileOnlinePeers.find(u => u.username === username)
                    || _allKnownUsers.find(u => u.username === username);
     const isOnline = !!_profileOnlinePeers.find(u => u.username === username);
+    // ── VIP-бот: спец-отрисовка ───────────────────────────────────────────────
+    if (username === VIP_BOT_ID) {
+      const botMsgs  = msgs[VIP_BOT_ID] || [];
+      const botUnread = botMsgs.filter(m => !m.read).length;
+      const botLast  = botMsgs[botMsgs.length - 1];
+      const botPrev  = botLast ? escHtml((botLast.text||'').split('\n')[0].slice(0,45)) : '<span style="color:var(--muted)">Нажми для открытия</span>';
+      const botTime  = botLast ? msgFormatTime(botLast.ts) : '';
+      const _pinned  = _pins.includes(VIP_BOT_ID);
+      return `<div
+          data-chat-user="${VIP_BOT_ID}"
+          onclick="messengerOpenChat('${VIP_BOT_ID}')"
+          class="chat-row"
+          style="display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04);${_pinned?'background:rgba(255,255,255,.025)':''}">
+        <div style="position:relative;flex-shrink:0">
+          <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#f5c518,#e87722);display:flex;align-items:center;justify-content:center;font-size:26px">👑</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+            <div style="font-size:15px;font-weight:600;color:var(--text)">${VIP_BOT_NAME}</div>
+            <span style="font-size:11px;color:${botUnread>0?'var(--accent)':'var(--muted)'}">${botTime}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80%">${botPrev}</div>
+            ${botUnread > 0 ? `<div style="min-width:20px;height:20px;border-radius:10px;background:var(--accent);color:#000;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px;flex-shrink:0">${botUnread}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }
     // ── Группы: берём имя/аватар из groupGet, а не из users ──────────────────
     const _isGroupChat = username === PUBLIC_GROUP_ID || username.startsWith('grp_');
     const _groupData   = _isGroupChat ? groupGet(username) : null;
@@ -6267,13 +7079,10 @@ function messengerRenderList(filter) {
       ? `msgToggleSelect('${username}', event)`
       : `messengerOpenChat('${username}')`;
 
-    // avatar: photo support (группы и личные чаты)
-    const avatarData = peer?.avatarData || peer?.avatar_data;
+    // avatar: photo/video support (группы и личные чаты)
     const avatarHtml = (_isGroupChat && _groupData?.avatarType === 'photo' && _groupData?.avatarData)
       ? `<img src="${_groupData.avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
-      : (peer?.avatarType === 'photo' || peer?.avatar_type === 'photo') && avatarData
-        ? `<img src="${avatarData}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`
-        : `${_emojiImg(avatar,30)}`;
+      : peer ? _renderAvatarHtml(peer, 52) : `${_emojiImg(avatar,30)}`;
 
     const _pinned = _pins.includes(username);
     // Локальный никнейм (если задан)
@@ -6395,6 +7204,16 @@ function messengerFilterChats(q) { messengerRenderList(q); }
 
 // ┄┄ Открытие чата ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 function messengerOpenChat(username) {
+  if (username === VIP_BOT_ID) {
+    _msgCurrentChat = VIP_BOT_ID;
+    showScreen('s-messenger-chat');
+    _vipBotOpenChat();
+    _mcUpdateMuteIcon?.();
+    // скрываем инпут-бар для бота
+    const inputBar = document.getElementById('mc-input-bar');
+    if (inputBar) inputBar.style.display = 'none';
+    return;
+  }
   if (username === PUBLIC_GROUP_ID) {
     _showPublicGroupSplash(() => _doOpenChat(username));
     return;
@@ -6404,6 +7223,9 @@ function messengerOpenChat(username) {
 
 function _doOpenChat(username) {
   _msgCurrentChat = username;
+  // Восстанавливаем инпут-бар (мог быть скрыт при открытии vip_bot)
+  const inputBar = document.getElementById('mc-input-bar');
+  if (inputBar) inputBar.style.display = '';
   // Сбрасываем уведомления от этого пользователя
   try { window.Android?.dismissNotifications?.(); } catch(_) {}
   // Сообщения помечаются прочитанными только при скролле до конца (см. messengerMarkRead)
@@ -6443,13 +7265,13 @@ function _doOpenChat(username) {
   if (hdrAvatar) {
     const _hdrGrp = _openedGroup;
     const hasGrpPhoto = _hdrGrp?.avatarType === 'photo' && _hdrGrp?.avatarData;
-    const hasPhoto = !hasGrpPhoto && (peer?.avatarType === 'photo') && peer?.avatarData;
+    const hasPeerAvatar = !hasGrpPhoto && peer && (peer.avatarType === 'photo' || peer.avatarType === 'video');
     if (hasGrpPhoto) {
       hdrAvatar.style.background = 'transparent';
       hdrAvatar.innerHTML = `<img src="${_hdrGrp.avatarData}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">`;
-    } else if (hasPhoto) {
+    } else if (hasPeerAvatar) {
       hdrAvatar.style.background = 'transparent';
-      hdrAvatar.innerHTML = `<img src="${peer.avatarData}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">`;
+      hdrAvatar.innerHTML = _renderAvatarHtml(peer, 36);
     } else {
       hdrAvatar.style.background = _hdrGrp ? 'linear-gradient(135deg,#2b5797,#1e3f6f)' : (peer?.color || 'var(--surface3)');
       hdrAvatar.innerHTML = _hdrGrp
@@ -6485,7 +7307,7 @@ function _doOpenChat(username) {
     );
     if (unknownMembers.length) {
       const unames = unknownMembers.slice(0, 30).map(u => `"${u}"`).join(',');
-      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,color,status,vip,badge&username=in.(${unames})&limit=30`)
+      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,avatar_video_url,color,status,vip,badge&username=in.(${unames})&limit=30`)
         .then(rows => {
           if (!Array.isArray(rows)) return;
           rows.forEach(u => {
@@ -6493,7 +7315,8 @@ function _doOpenChat(username) {
             _allKnownUsers.push({
               username: u.username, name: u.name,
               avatar: u.avatar, avatarType: u.avatar_type,
-              avatarData: u.avatar_data, color: u.color,
+              avatarData: u.avatar_data, avatarVideoUrl: u.avatar_video_url || null,
+              color: u.color,
               status: u.status, vip: u.vip, badge: u.badge, _online: false
             });
           });
@@ -6507,7 +7330,7 @@ function _doOpenChat(username) {
     ))];
     if (msgAuthors.length) {
       const unames2 = msgAuthors.slice(0, 30).map(u => `"${u}"`).join(',');
-      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,color,status,vip,badge&username=in.(${unames2})&limit=30`)
+      sbGet('users', `select=username,name,avatar,avatar_type,avatar_data,avatar_video_url,color,status,vip,badge&username=in.(${unames2})&limit=30`)
         .then(rows => {
           if (!Array.isArray(rows)) return;
           rows.forEach(u => {
@@ -6515,7 +7338,8 @@ function _doOpenChat(username) {
             _allKnownUsers.push({
               username: u.username, name: u.name,
               avatar: u.avatar, avatarType: u.avatar_type,
-              avatarData: u.avatar_data, color: u.color,
+              avatarData: u.avatar_data, avatarVideoUrl: u.avatar_video_url || null,
+              color: u.color,
               status: u.status, vip: u.vip, badge: u.badge, _online: false
             });
           });
@@ -6578,10 +7402,7 @@ function messengerRenderMessages(animateLast) {
 
     // Аватар: фото > emoji > первая буква
     const _peerColor = peer?.color || 'var(--surface3)';
-    const _hasPhoto = (peer?.avatarType === 'photo' || peer?.avatar_type === 'photo') && (peer?.avatarData || peer?.avatar_data);
-    const _peerAvatar = _hasPhoto
-      ? `<img src="${peer.avatarData||peer.avatar_data}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block">`
-      : `${_emojiImg(peer?.avatar || msg.from.charAt(0).toUpperCase(), 18)}`;
+    const _peerAvatar = peer ? _renderAvatarHtml(peer, 28) : `${_emojiImg(msg.from.charAt(0).toUpperCase(), 18)}`;
 
     const avatarEl = (_isGroupChat && showAvatar && !isMe)
       ? `<div style="width:28px;height:28px;border-radius:50%;background:${_peerColor};display:flex;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-end;overflow:hidden;cursor:pointer" onclick="peerProfileOpen('${msg.from}')">${_peerAvatar}</div>`
@@ -6737,13 +7558,14 @@ function messengerRenderMessages(animateLast) {
             const cid = 'circ_' + idx + '_' + msg.ts;
             const circumference = 2 * Math.PI * 97;
             const mirrorStyle = isFrontCircle ? 'transform:scaleX(-1);' : '';
-            // Маленький кружок (96px) в покое, расширяется до 280px при воспроизведении
-            return `<div data-no-menu id="cw_${cid}"
-               style="position:relative;width:96px;height:96px;border-radius:50%;overflow:hidden;cursor:pointer;background:#1a1a1a;flex-shrink:0;transition:width .28s cubic-bezier(.34,1.1,.64,1),height .28s cubic-bezier(.34,1.1,.64,1)"
-               onclick="mcCircleToggle('${cid}','${safeUrl}')">
+            // 160px в покое (density-independent), 280px при полном воспроизведении
+            const SZ = Math.round(160 * (window.devicePixelRatio > 2 ? 1.2 : 1));
+            return `<div data-no-menu id="cw_${cid}" data-circle-url="${safeUrl}"
+               style="position:relative;width:${SZ}px;height:${SZ}px;border-radius:50%;overflow:hidden;cursor:pointer;background:#1a1a1a;flex-shrink:0;transition:width .3s cubic-bezier(.34,1.1,.64,1),height .3s cubic-bezier(.34,1.1,.64,1)"
+               onclick="mcCircleToggle('${cid}','${safeUrl}',false)">
              <div id="cposter_${cid}" style="position:absolute;inset:0">
                <div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center">
-                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="rgba(255,255,255,.6)"/></svg>
+                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="rgba(255,255,255,.65)"/></svg>
                </div>
              </div>
              <div id="cvid_${cid}" style="position:absolute;inset:0;display:none;border-radius:50%;overflow:hidden;${mirrorStyle}"></div>
@@ -6754,15 +7576,15 @@ function messengerRenderMessages(animateLast) {
                  stroke-linecap="round" transform="rotate(-90 100 100)"
                  style="transition:stroke-dashoffset .12s linear"/>
              </svg>
-             <div style="position:absolute;bottom:5px;right:5px;display:flex;align-items:center;gap:2px;pointer-events:none">
-               <span id="ctime_${cid}" style="font-size:9px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.8)">${msgFormatTime(msg.ts)}</span>
-               <span style="font-size:9px;color:rgba(255,255,255,.85)">${status}</span>
+             <div style="position:absolute;bottom:6px;right:6px;display:flex;align-items:center;gap:2px;pointer-events:none">
+               <span id="ctime_${cid}" style="font-size:10px;color:rgba(255,255,255,.9);text-shadow:0 1px 3px rgba(0,0,0,.8)">${msgFormatTime(msg.ts)}</span>
+               <span style="font-size:10px;color:rgba(255,255,255,.85)">${status}</span>
              </div>
            </div>`;
           })()
-      // ┄┄ ВИДЕО   превью + круглая play + duration badge ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+      // ┄┄ ВИДЕО   превью + круглая play + автоплей без звука при появлении ┄┄┄┄
       : isVideo
-        ? `<div data-no-menu style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;min-width:140px;cursor:pointer;background:#111"
+        ? `<div data-no-menu data-video-url="${safeUrl}" style="position:relative;border-radius:14px;overflow:hidden;max-width:260px;min-width:140px;cursor:pointer;background:#111"
                onclick="mcVideoOpen('${safeUrl}','${safeName}')">
              ${msg.thumbData
                ? `<img src="${escHtml(msg.thumbData)}" style="display:block;width:100%;max-width:260px;min-height:80px;border-radius:14px;object-fit:cover" loading="lazy">`
@@ -6869,9 +7691,78 @@ function messengerRenderMessages(animateLast) {
       }
     }
   });
+  // Запускаем автоплей кружков и видео которые в поле зрения
+  requestAnimationFrame(_mcAttachAutoplayObserver);
 }
 
-// ┄┄ Отправка ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+// ── Автоплей кружков и видео при появлении в viewport ──────────────────────
+let _mcAutoplayObserver = null;
+
+function _mcAttachAutoplayObserver() {
+  const body = document.getElementById('mc-messages');
+  if (!body) return;
+
+  // Отключаем старый наблюдатель
+  if (_mcAutoplayObserver) { _mcAutoplayObserver.disconnect(); _mcAutoplayObserver = null; }
+
+  _mcAutoplayObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const el = entry.target;
+
+      // ── Кружки ──────────────────────────────────────────────────────
+      if (el.dataset.circleUrl) {
+        const cid = el.id.replace('cw_', '');
+        const url = el.dataset.circleUrl;
+        if (entry.isIntersecting) {
+          // Виден — запускаем беззвучно если не играет
+          const state = _circleState[cid];
+          if (!state) {
+            mcCircleToggle(cid, url, true); // muted=true
+          } else if (!state.playing) {
+            state.video.play().then(() => { state.playing = true; }).catch(() => {});
+          }
+        } else {
+          // Ушёл из поля зрения — паузируем беззвучный
+          const state = _circleState[cid];
+          if (state && state.muted && state.playing) {
+            state.video.pause();
+            state.playing = false;
+          }
+        }
+      }
+
+      // ── Видео ────────────────────────────────────────────────────────
+      if (el.dataset.videoUrl) {
+        const videoId = el.dataset.videoId;
+        let vid = el._autoVid;
+        if (entry.isIntersecting) {
+          if (!vid) {
+            vid = document.createElement('video');
+            vid.src = el.dataset.videoUrl;
+            vid.muted = true;
+            vid.playsInline = true;
+            vid.loop = true;
+            vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:14px;z-index:0';
+            el.appendChild(vid);
+            el._autoVid = vid;
+          }
+          vid.play().catch(() => {});
+        } else {
+          if (vid) { vid.pause(); }
+        }
+      }
+    });
+  }, {
+    root: body,
+    rootMargin: '60px',
+    threshold: 0.4
+  });
+
+  // Наблюдаем за всеми кружками
+  body.querySelectorAll('[data-circle-url]').forEach(el => _mcAutoplayObserver.observe(el));
+  // Наблюдаем за всеми видео
+  body.querySelectorAll('[data-video-url]').forEach(el => _mcAutoplayObserver.observe(el));
+}
 function messengerSend() {
   const inp = document.getElementById('mc-input');
   if (!inp || !_msgCurrentChat) return;
@@ -6945,17 +7836,12 @@ function messengerSend() {
 
   const chatKey = sbChatKey(p.username, _msgCurrentChat);
 
-  // Шифруем текст перед отправкой:
-  // — если чат помечен как секретный → всегда шифруем (e2eEncrypt форсированно)
-  // — иначе → e2eEncrypt сам решит на основе _e2eEnabled
+  // Шифруем текст перед отправкой ТОЛЬКО для секретных чатов
   const _sendEncrypted = async () => {
-    let encText;
+    let encText = text; // по умолчанию — открытый текст
     if (isChatEncrypted(_msgCurrentChat)) {
-      // Форсируем шифрование: временно включаем E2E если не включён
-      const wasEnabled = _e2eEnabled;
-      if (!wasEnabled) { await e2eInit(); }
-      encText = await e2eEncrypt(text, _msgCurrentChat);
-    } else {
+      // Секретный чат — форсируем E2E шифрование
+      if (!_e2eEnabled) await e2eInit();
       encText = await e2eEncrypt(text, _msgCurrentChat);
     }
     const outboxItem = {
@@ -7708,37 +8594,37 @@ function mcShowMsgMenu(idx) {
         border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.45)">
         <button class="mc-action-btn"
           onclick="mcSetReply(${idx});mcCloseMenu()">
-          <span style="font-size:20px">↩</span> Ответить
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg></span> Ответить
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcPinMsg(${idx});mcCloseMenu()">
-          <span style="font-size:20px">📌</span> Закрепить
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg></span> Закрепить
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcForwardMsg(${idx});mcCloseMenu()">
-          <span style="font-size:20px">↩</span> Переслать
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg></span> Переслать
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcCopyMsg(${idx});mcCloseMenu()">
-          <span style="font-size:20px">📋</span> Копировать
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span> Копировать
         </button>
         ${msg.image ? `<div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcSaveImage(${idx});mcCloseMenu()">
-          <span style="font-size:20px">💾</span> Сохранить фото
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span> Сохранить фото
         </button>` : ''}
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn"
           onclick="mcCloseMenu();_mcEnterSelectMode(null,${idx})">
-          <span style="font-size:20px">☑️</span> Выбрать
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span> Выбрать
         </button>
         <div class="mc-action-sep"></div>
         <button class="mc-action-btn" style="color:var(--danger,#e05555)"
           onclick="mcConfirmDelete(${idx});mcCloseMenu()">
-          <span style="font-size:20px">🗑</span> Удалить${isMe ? '' : ' у себя'}
+          <span style="width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></span> Удалить${isMe ? '' : ' у себя'}
         </button>
       </div>
     </div>`;
@@ -7812,7 +8698,7 @@ function mcCopyMsg(idx) {
 }
 
 // ┄┄ Удаление сообщения: анимация + сервер + синхронизация для всех ┄┄
-async function mcDeleteMsg(idx) {
+async function mcDeleteMsg(idx, forAll = true) {
   const msgs = msgLoad();
   if (!msgs[_msgCurrentChat]) return;
   const msg = msgs[_msgCurrentChat][idx];
@@ -7836,7 +8722,7 @@ async function mcDeleteMsg(idx) {
 
   // 3. Удаляем с сервера (chat_key одинаковый для обоих)
   const p = profileLoad();
-  if (p && sbReady() && msg.ts) {
+  if (forAll && p && sbReady() && msg.ts) {
     const chatKey = sbChatKey(p.username, _msgCurrentChat);
     sbDelete('messages',
       `chat_key=eq.${encodeURIComponent(chatKey)}&ts=eq.${msg.ts}`
@@ -7862,11 +8748,20 @@ function mcConfirmDelete(idx) {
       <div style="font-size:16px;font-weight:700;margin-bottom:6px">Удалить сообщение?</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:20px">${isMe
         ? 'Сообщение будет удалено у всех участников.'
-        : 'Сообщение будет удалено только у тебя.'}</div>
-      <button onclick="mcDeleteMsg(${idx});document.getElementById('mc-delete-confirm')?.remove()"
-        style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
-        🗑 Удалить${isMe ? ' для всех' : ''}
-      </button>
+        : 'Выбери, у кого удалить сообщение.'}</div>
+      ${isMe
+        ? `<button onclick="mcDeleteMsg(${idx},true);document.getElementById('mc-delete-confirm')?.remove()"
+          style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
+          🗑 Удалить для всех
+        </button>`
+        : `<button onclick="mcDeleteMsg(${idx},true);document.getElementById('mc-delete-confirm')?.remove()"
+          style="width:100%;padding:14px;background:var(--danger,#c94f4f);border:none;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
+          🗑 Удалить у всех
+        </button>
+        <button onclick="mcDeleteMsg(${idx},false);document.getElementById('mc-delete-confirm')?.remove()"
+          style="width:100%;padding:14px;background:rgba(200,80,80,.18);border:none;border-radius:14px;color:var(--danger,#e05555);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px">
+          🗑 Удалить у себя
+        </button>`}
       <button onclick="document.getElementById('mc-delete-confirm')?.remove()"
         style="width:100%;padding:14px;background:var(--surface2);border:none;border-radius:14px;color:var(--text);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer">
         Отмена
@@ -7925,19 +8820,21 @@ async function mcEnforceMessageLimit(username) {
 
 // ┄┄ Forward ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 let _mcForwardText = null;
+let _mcForwardMsg  = null; // весь объект сообщения для пересылки
 
 function mcForwardMsg(idx) {
   const msgs = msgLoad();
-  const msg  = (msgs[_msgCurrentChat] || [])[idx];
-  if (!msg) return;
-  _mcForwardText = msg.text || msg.sticker || '';
-  // Show chat picker
+  const orig = (msgs[_msgCurrentChat] || [])[idx];
+  if (!orig) return;
+  _mcForwardMsg  = orig;
+  _mcForwardText = orig.text || orig.sticker || ''; // совместимость
+
   const chats = chatsLoad().filter(u => u !== _msgCurrentChat);
   if (chats.length === 0) { toast('Нет других чатов'); return; }
 
   const sheet = document.createElement('div');
   sheet.id = 'mc-forward-sheet';
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9200;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:fadeIn .12s ease';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9200;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,.5);animation:mcFadeIn .12s ease';
   const p = profileLoad();
   const chatItems = chats.map(u => {
     const peer = _profileOnlinePeers.find(x=>x.username===u) || _allKnownUsers.find(x=>x.username===u);
@@ -7947,10 +8844,14 @@ function mcForwardMsg(idx) {
       <span style="font-weight:600">${escHtml(peer?.name||u)}</span>
     </button>`;
   }).join('');
+  // Превью пересылаемого сообщения
+  const prevText = orig.text ? orig.text.slice(0,60)+(orig.text.length>60?'…':'')
+    : orig.image ? '🖼 Медиа' : orig.fileType==='sticker' ? '🎨 Стикер' : '💬 Сообщение';
   sheet.innerHTML = `
-    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(14px + var(--safe-bot));max-height:70vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:8px 0 calc(14px + var(--safe-bot));max-height:70vh;overflow-y:auto;animation:mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)" onclick="event.stopPropagation()">
       <div style="width:40px;height:4px;background:var(--surface3);border-radius:2px;margin:8px auto 4px"></div>
-      <div style="font-size:14px;font-weight:700;color:var(--muted);padding:8px 20px 10px">Переслать в...</div>
+      <div style="font-size:14px;font-weight:700;color:var(--muted);padding:8px 20px 4px">Переслать...</div>
+      <div style="font-size:12px;color:var(--muted);padding:0 20px 10px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">↩ ${escHtml(prevText)}</div>
       ${chatItems}
     </div>`;
   sheet.addEventListener('click', () => sheet.remove());
@@ -7958,19 +8859,34 @@ function mcForwardMsg(idx) {
 }
 
 function mcDoForward(toUsername) {
-  if (!_mcForwardText) return;
+  const orig = _mcForwardMsg;
+  if (!orig && !_mcForwardText) return;
   const p = profileLoad();
   if (!p) return;
   const ts = Date.now();
-  const msg = { from: p.username, to: toUsername, text: '↩ ' + _mcForwardText, ts, delivered: false, read: false };
+  // Сохраняем медиа при пересылке (картинки, файлы, стикеры)
+  const fwd = {
+    from: p.username, to: toUsername, ts, delivered: false, read: false,
+    text: orig ? (orig.text ? '↩ ' + orig.text : '') : ('↩ ' + _mcForwardText),
+    ...(orig?.image    ? { image: orig.image }                               : {}),
+    ...(orig?.fileLink ? { fileLink: orig.fileLink, fileName: orig.fileName,
+                           fileType: orig.fileType, fileSize: orig.fileSize } : {}),
+    ...(orig?.duration ? { duration: orig.duration }                         : {}),
+  };
   const msgs = msgLoad();
   if (!msgs[toUsername]) msgs[toUsername] = [];
-  msgs[toUsername].push(msg);
+  msgs[toUsername].push(fwd);
   msgSave(msgs);
   const chats = chatsLoad();
   if (!chats.includes(toUsername)) { chats.unshift(toUsername); chatsSave(chats); }
-  sbInsert('messages', { chat_key: sbChatKey(p.username, toUsername), from_user: p.username, to_user: toUsername, text: msg.text, ts });
+  sbInsert('messages', {
+    chat_key: sbChatKey(p.username, toUsername),
+    from_user: p.username, to_user: toUsername,
+    text: fwd.text || '↩ Медиа', ts,
+    ...(orig?.image ? { extra: JSON.stringify({ image: orig.image, fileType: orig.fileType || 'image' }) } : {}),
+  });
   _mcForwardText = null;
+  _mcForwardMsg  = null;
   toast('↪️ Переслано');
 }
 
@@ -8121,6 +9037,95 @@ function confirmRestoreBackup() {
   </div>`;
   document.body.appendChild(d);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 🚨 CRITICAL ERROR → BACKUP DIALOG
+// Показывается автоматически при критических сбоях (падение экрана, JS-краш,
+// ошибки загрузки), чтобы пользователь мог быстро откатиться на прошлую версию.
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _critErrShown = false; // показываем только один раз за сессию
+
+window.showCriticalErrorBackupDialog = function(errorMsg) {
+  if (_critErrShown) return;
+  _critErrShown = true;
+
+  // Если нет Android-бриджа или бэкапов — показываем облегчённый вариант без кнопки отката
+  const hasBackup = (function() {
+    try {
+      if (!window.Android?.getBackupInfo) return false;
+      const info = JSON.parse(window.Android.getBackupInfo());
+      return !!(info.hasBackup && info.backups?.length);
+    } catch(e) { return false; }
+  })();
+
+  const d = document.createElement('div');
+  d.id = 'critical-error-overlay';
+  d.style.cssText = [
+    'position:fixed;inset:0;z-index:99999',
+    'background:rgba(0,0,0,.72)',
+    'display:flex;align-items:center;justify-content:center',
+    'padding:24px',
+    'animation:mcFadeIn .25s ease',
+  ].join(';');
+
+  const shortErr = (errorMsg || 'Неизвестная ошибка')
+    .replace(/https?:\/\/[^\s]*/g, '')
+    .slice(0, 120);
+
+  const backupBlock = hasBackup ? (() => {
+    let info = {};
+    try { info = JSON.parse(window.Android.getBackupInfo()); } catch(e) {}
+    return `
+      <div style="background:rgba(255,100,100,.12);border:1px solid rgba(255,100,100,.28);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:rgba(255,180,180,.95)">
+        💾 Доступна резервная копия: <strong>v${info.lastVersion || '?'}</strong>
+        <span style="color:rgba(255,255,255,.45);font-size:11px;margin-left:6px">${info.lastDate || ''}</span>
+      </div>
+      <button id="cerr-restore-btn" style="width:100%;padding:13px;background:#ff6b6b;border:none;border-radius:14px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px">
+        ↩ Восстановить предыдущую версию
+      </button>`;
+  })() : `
+      <div style="background:rgba(255,255,255,.06);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:rgba(255,255,255,.5)">
+        Резервных копий нет. Попробуй переустановить приложение вручную.
+      </div>`;
+
+  d.innerHTML = `
+    <div style="background:var(--surface,#1c1c1e);border-radius:22px;padding:24px;max-width:360px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,.7)">
+      <div style="font-size:36px;text-align:center;margin-bottom:10px">⚠️</div>
+      <div style="font-size:18px;font-weight:700;text-align:center;margin-bottom:6px;color:var(--text,#fff)">Критическая ошибка</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:20px;line-height:1.45">
+        Приложение обнаружило сбой и не может нормально работать.
+      </div>
+      <div style="background:rgba(255,255,255,.05);border-radius:10px;padding:10px 12px;margin-bottom:18px;font-size:11px;color:rgba(255,255,255,.35);font-family:monospace;word-break:break-all;max-height:60px;overflow:hidden">
+        ${shortErr}
+      </div>
+      ${backupBlock}
+      <button id="cerr-ignore-btn" style="width:100%;padding:12px;background:rgba(255,255,255,.07);border:none;border-radius:14px;color:rgba(255,255,255,.6);font-size:14px;font-weight:600;cursor:pointer">
+        Продолжить (нестабильно)
+      </button>
+    </div>`;
+
+  document.body.appendChild(d);
+
+  const restoreBtn = document.getElementById('cerr-restore-btn');
+  const ignoreBtn  = document.getElementById('cerr-ignore-btn');
+
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', () => {
+      restoreBtn.disabled = true;
+      restoreBtn.textContent = '⏳ Запуск установщика...';
+      try { window.Android.restoreBackup(); } catch(e) { toast('❌ Ошибка запуска'); }
+    });
+  }
+
+  if (ignoreBtn) {
+    ignoreBtn.addEventListener('click', () => {
+      d.remove();
+      // Сбрасываем флаг чтобы при следующей новой серьёзной ошибке диалог мог появиться снова
+      _critErrShown = false;
+    });
+  }
+};
 
 // Хранит данные категорий после первого build — не пересобираем каждый раз
 let _mcEmojiCats = null;
@@ -8362,7 +9367,7 @@ function mcPickAudio() {
         r.onerror = rej;
         r.readAsDataURL(file);
       });
-      const url = await _catboxUpload(b64, file.name || ('audio_' + Date.now()), file.type || 'audio/mpeg');
+      const url = await _githubOrCatboxUpload(b64, file.name || ('audio_' + Date.now()), GITHUB_FALLBACK?.voicesFolder || 'voices', file.type || 'audio/mpeg');
       _mcSendMediaMsg({ url, fileName: file.name || 'Аудио', fileType: 'voice', fileSize: file.size,
         _blob: file, _mime: file.type });
       _mcHideUploadToast(true);
@@ -8954,7 +9959,7 @@ function mcPickVideo() {
         _mcVideoThumb(file)
       ]);
       const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
-      const url = await _catboxUpload(b64, file.name || ('video_' + Date.now() + '.' + ext), file.type || 'video/mp4');
+      const url = await _githubOrCatboxUpload(b64, file.name || ('video_' + Date.now() + '.' + ext), GITHUB_FALLBACK?.videosFolder || 'videos', file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: file.name || 'Видео', fileType: 'video',
         fileSize: file.size, thumbData, _blob: file, _mime: file.type });
       _mcInChatSendingHide();
@@ -8982,7 +9987,7 @@ function mcPickFile() {
         r.onerror = rej;
         r.readAsDataURL(file);
       });
-      const url = await _catboxUpload(b64, file.name || ('file_' + Date.now()), file.type || 'application/octet-stream');
+      const url = await _githubOrCatboxUpload(b64, file.name || ('file_' + Date.now()), GITHUB_FALLBACK?.filesFolder || 'files', file.type || 'application/octet-stream');
       _mcSendMediaMsg({ url, fileName: file.name || 'Файл', fileType: 'file',
         fileSize: file.size, _blob: file, _mime: file.type });
       _mcInChatSendingHide();
@@ -9125,7 +10130,7 @@ function _mcPickCircleFile() {
         _mcVideoThumb(file)
       ]);
       const ext = (file.name.split('.').pop() || 'mp4').toLowerCase();
-      const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.' + ext, file.type || 'video/mp4');
+      const url = await _githubOrCatboxUpload(b64, 'circle_' + Date.now() + '.' + ext, GITHUB_FALLBACK?.circlesFolder || 'circles', file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: file.name, fileType: 'circle', fileSize: file.size, thumbData });
       _mcInChatSendingHide();
     } catch(err) { _mcInChatSendingHide(); toast('❌ ' + (err.message || 'Ошибка')); }
@@ -9160,7 +10165,7 @@ function _mcPickCircleCameraActual() {
         new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); }),
         _mcVideoThumb(file)
       ]);
-      const url = await _catboxUpload(b64, 'circle_' + Date.now() + '.mp4', file.type || 'video/mp4');
+      const url = await _githubOrCatboxUpload(b64, 'circle_' + Date.now() + '.mp4', GITHUB_FALLBACK?.circlesFolder || 'circles', file.type || 'video/mp4');
       _mcSendMediaMsg({ url, fileName: 'Видеосообщение', fileType: 'circle', fileSize: file.size, thumbData });
       _mcInChatSendingHide();
     } catch(err) { _mcInChatSendingHide(); toast('❌ ' + (err.message || 'Ошибка')); }
@@ -9542,7 +10547,7 @@ async function _mcVoiceFinalize() {
     });
     const fileName = 'voice_' + Date.now() + '.' + ext;
     _pendingUploadBlob = blob; _pendingUploadMime = mimeType;
-    const url = await _catboxUpload(b64, fileName, mimeType);
+    const url = await _githubOrCatboxUpload(b64, fileName, GITHUB_FALLBACK?.voicesFolder || 'voices', mimeType);
     // Кэшируем blob   _catboxUpload мог сбросить _pendingUploadBlob через onUploadDone
     _mcSendMediaMsg({ url, fileName, fileType: 'voice', fileSize: blob.size, duration: dur,
       _blob: blob, _mime: mimeType });
@@ -9685,49 +10690,65 @@ function _gdFileEmoji(name) {
   return map[ext] || '📄';
 }
 
-function mcSendImage(dataUrl) {
+async function mcSendImage(dataUrl) {
   const p = profileLoad();
   if (!p || !_msgCurrentChat) return;
   const ts = Date.now();
   const replyTo = _mcReplyTo ? { from: _mcReplyTo.from, text: _mcReplyTo.text } : null;
-  const msg = { from: p.username, to: _msgCurrentChat, text: '', image: dataUrl, ts, delivered: false, read: false, replyTo };
-  mcCancelReply();
-  const msgs = msgLoad();
-  if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
-  msgs[_msgCurrentChat].push(msg);
-  msgSave(msgs);
-  const chats = chatsLoad();
-  if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
-  messengerRenderMessages(true);
-  SFX.play('msgSend');
-  // Send button bounce
-  const _sb2 = document.getElementById('mc-action-btn');
-  if (_sb2) { _sb2.classList.remove('mc-send-bounce'); void _sb2.offsetWidth; _sb2.classList.add('mc-send-bounce'); setTimeout(()=>_sb2.classList.remove('mc-send-bounce'),300); }
-  setTimeout(() => { const body = document.getElementById('mc-messages'); if (body) body.scrollTop = body.scrollHeight; }, 80);
-  sbPollChat(p.username, _msgCurrentChat);
+  
+  // Показываем UI что идет загрузка
   _mcShowUploadToast('image', 'Фото');
-  const chatKey = sbChatKey(p.username, _msgCurrentChat);
-  const _imgData = {
-    chat_key: chatKey, from_user: p.username,
-    to_user: _msgCurrentChat, text: '📷 Фото', ts,
-    extra: JSON.stringify({ image: dataUrl, ...(replyTo ? { replyTo } : {}) })
-  };
-  const _imgItem = { id: 'img_' + ts, type: 'message', localChat: _msgCurrentChat, ts, data: _imgData };
-  sbInsert('messages', _imgData).then(res => {
-    if (res) {
-      msg.delivered = true; msg.pending = false;
-      msgSave(msgs); messengerRenderMessages();
-      _mcHideUploadToast(true); _outboxUpdateStatusBar();
-    } else {
+  
+  try {
+    // Извлекаем base64 из data URL
+    const base64 = dataUrl.split(',')[1];
+    const fileName = 'image_' + Date.now() + '.jpg';
+    
+    // Загружаем на GitHub (или catbox как fallback)
+    const imageUrl = await _githubOrCatboxUpload(base64, fileName, GITHUB_FALLBACK?.imagesFolder || 'images', 'image/jpeg');
+    
+    // Создаем сообщение с URL вместо data URL
+    const msg = { from: p.username, to: _msgCurrentChat, text: '', image: imageUrl, ts, delivered: false, read: false, replyTo };
+    mcCancelReply();
+    const msgs = msgLoad();
+    if (!msgs[_msgCurrentChat]) msgs[_msgCurrentChat] = [];
+    msgs[_msgCurrentChat].push(msg);
+    msgSave(msgs);
+    const chats = chatsLoad();
+    if (!chats.includes(_msgCurrentChat)) { chats.unshift(_msgCurrentChat); chatsSave(chats); }
+    messengerRenderMessages(true);
+    SFX.play('msgSend');
+    // Send button bounce
+    const _sb2 = document.getElementById('mc-action-btn');
+    if (_sb2) { _sb2.classList.remove('mc-send-bounce'); void _sb2.offsetWidth; _sb2.classList.add('mc-send-bounce'); setTimeout(()=>_sb2.classList.remove('mc-send-bounce'),300); }
+    setTimeout(() => { const body = document.getElementById('mc-messages'); if (body) body.scrollTop = body.scrollHeight; }, 80);
+    sbPollChat(p.username, _msgCurrentChat);
+    const chatKey = sbChatKey(p.username, _msgCurrentChat);
+    const _imgData = {
+      chat_key: chatKey, from_user: p.username,
+      to_user: _msgCurrentChat, text: '📷 Фото', ts,
+      extra: JSON.stringify({ image: imageUrl, ...(replyTo ? { replyTo } : {}) })
+    };
+    const _imgItem = { id: 'img_' + ts, type: 'message', localChat: _msgCurrentChat, ts, data: _imgData };
+    sbInsert('messages', _imgData).then(res => {
+      if (res) {
+        msg.delivered = true; msg.pending = false;
+        msgSave(msgs); messengerRenderMessages();
+        _mcHideUploadToast(true); _outboxUpdateStatusBar();
+      } else {
+        msg.pending = true; msgSave(msgs);
+        outboxPush(_imgItem);
+        messengerRenderMessages(); _mcHideUploadToast(false); _outboxUpdateStatusBar();
+      }
+    }).catch(() => {
       msg.pending = true; msgSave(msgs);
       outboxPush(_imgItem);
       messengerRenderMessages(); _mcHideUploadToast(false); _outboxUpdateStatusBar();
-    }
-  }).catch(() => {
-    msg.pending = true; msgSave(msgs);
-    outboxPush(_imgItem);
-    messengerRenderMessages(); _mcHideUploadToast(false); _outboxUpdateStatusBar();
-  });
+    });
+  } catch(err) {
+    _mcHideUploadToast(false);
+    toast('❌ ' + (err.message || 'Ошибка загрузки фото'));
+  }
 }
 
 // ┄┄ Хедер чата: компенсируем системный сдвиг окна при клавиатуре ┄┄
@@ -9863,13 +10884,10 @@ function peerProfileOpen(username) {
   const noCopy    = isCopyBlocked(username);
 
   // Баннер/фон   тот же подход что и у своего профиля
-  const hasPhoto  = peer.avatarType === 'photo' && peer.avatarData;
   const peerBannerStyle = peer.banner
     ? (peer.banner.startsWith('background:') ? peer.banner : `background:${peer.banner}`)
     : `background:linear-gradient(135deg,${peer.color||'var(--accent)'}66,${peer.color||'var(--accent)'}22)`;
-  const peerAvatarHtml = hasPhoto
-    ? `<img src="${peer.avatarData}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-    : `<span style="font-size:46px;line-height:1">${peer.avatar||'😊'}</span>`;
+  const peerAvatarHtml = _renderAvatarHtml(peer, 96);
 
   if (body) body.innerHTML = `
     <!-- Баннер + аватар (тот же стиль что и собственный профиль) -->
@@ -9890,7 +10908,7 @@ function peerProfileOpen(username) {
     <div style="text-align:center;padding:0 16px 16px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(peer.name||username)}</span>
-        ${peer.vip ? '<span style="background:linear-gradient(90deg,#f5c518,#e87722);color:#000;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800">${_emojiImg("👑",10)} VIP</span>' : ''}
+        ${peer.vip ? `<span class="vip-badge-pill">${_emojiImg('👑',10)} VIP</span>` : ''}
       </div>
       <div style="font-size:14px;color:var(--muted);margin-top:3px">@${escHtml(username)}</div>
       <div style="display:inline-flex;align-items:center;gap:5px;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px;background:${isOnline?'#4caf7d22':'rgba(255,255,255,.08)'};color:${isOnline?'#4caf7d':'var(--muted)'}">
@@ -10091,11 +11109,49 @@ function peerProfileOpen(username) {
 // ┄┄ Inline-плеер кружков (как в Telegram   воспроизводится прямо в чате) ┄┄
 const _circleState = {}; // cid ↩ { video, playing, circumference }
 
-function mcCircleToggle(cid, url) {
+// Размер кружка в покое (px, density-aware)
+function _circleIdleSize() {
+  return Math.round(160 * (window.devicePixelRatio > 2 ? 1.2 : 1));
+}
+
+/**
+ * mcCircleToggle — запуск/пауза кружка
+ * @param {string}  cid     id кружка
+ * @param {string}  url     URL видео
+ * @param {boolean} muted   true = беззвучный автоплей (IntersectionObserver),
+ *                          false = полное воспроизведение со звуком (тап)
+ */
+function mcCircleToggle(cid, url, muted) {
   const wrap = document.getElementById('cw_' + cid);
   if (!wrap) return;
 
+  const fullPlay = (muted === false); // явный тап = полное воспроизведение
+
   let state = _circleState[cid];
+
+  // Если уже играет в muted-режиме, тап переключает в полный режим
+  if (state && state.muted && fullPlay) {
+    state.video.muted = false;
+    state.muted = false;
+    // Расширяем до 280px
+    wrap.style.width = '280px';
+    wrap.style.height = '280px';
+    if (!state.playing) {
+      state.video.play().then(() => { state.playing = true; }).catch(() => {});
+    }
+    return;
+  }
+
+  // Если уже играет в полном режиме — pause/resume
+  if (state && !state.muted) {
+    if (state.playing) {
+      state.video.pause();
+      state.playing = false;
+    } else {
+      state.video.play().then(() => { state.playing = true; }).catch(() => {});
+    }
+    return;
+  }
 
   if (!state) {
     const vid = document.createElement('video');
@@ -10104,35 +11160,36 @@ function mcCircleToggle(cid, url) {
     vid.setAttribute('playsinline', '');
     vid.preload = 'auto';
     vid.loop = false;
-    vid.muted = false;
+    vid.muted = !!muted; // muted только при автоплее
+
     vid.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
 
     const circumference = 2 * Math.PI * 96;
-    state = { video: vid, playing: false, circumference };
+    state = { video: vid, playing: false, circumference, muted: !!muted };
     _circleState[cid] = state;
 
     const vidWrap = document.getElementById('cvid_' + cid);
     if (vidWrap) { vidWrap.style.display = 'block'; vidWrap.appendChild(vid); }
 
-    // Скрываем постер и кнопку play
     const poster = document.getElementById('cposter_' + cid);
     if (poster) poster.style.display = 'none';
 
-    // Показываем кольцо прогресса
     const ring = document.getElementById('cring_' + cid);
-    if (ring) ring.style.display = 'block';
 
-    // Расширяем кружок до 280px
-    wrap.style.width = '280px';
-    wrap.style.height = '280px';
+    if (fullPlay) {
+      // Тап — расширяем и показываем кольцо
+      if (ring) ring.style.display = 'block';
+      wrap.style.width = '280px';
+      wrap.style.height = '280px';
+    }
+    // При muted-автоплее размер не меняем, кольцо не показываем
 
     vid.addEventListener('timeupdate', () => {
-      if (!vid.duration) return;
+      if (!vid.duration || state.muted) return;
       const pct = vid.currentTime / vid.duration;
       const ringProg = document.getElementById('cringp_' + cid);
       if (ringProg) {
-        const offset = circumference * (1 - pct);
-        ringProg.style.strokeDashoffset = offset.toFixed(1);
+        ringProg.style.strokeDashoffset = (circumference * (1 - pct)).toFixed(1);
       }
       const timeEl = document.getElementById('ctime_' + cid);
       if (timeEl) {
@@ -10144,10 +11201,10 @@ function mcCircleToggle(cid, url) {
 
     vid.addEventListener('ended', () => {
       state.playing = false;
-      // Сворачиваем обратно
-      wrap.style.width = '96px';
-      wrap.style.height = '96px';
-      if (poster) { poster.style.display = ''; }
+      const sz = _circleIdleSize();
+      wrap.style.width = sz + 'px';
+      wrap.style.height = sz + 'px';
+      if (poster) poster.style.display = '';
       if (ring) ring.style.display = 'none';
       vidWrap.style.display = 'none';
       delete _circleState[cid];
@@ -10156,15 +11213,6 @@ function mcCircleToggle(cid, url) {
     vid.play().then(() => {
       state.playing = true;
     }).catch(() => {});
-    return;
-  }
-
-  // Последующие тапы — pause/resume (нет кнопки, просто тап)
-  if (state.playing) {
-    state.video.pause();
-    state.playing = false;
-  } else {
-    state.video.play().then(() => { state.playing = true; }).catch(() => {});
   }
 }
 
@@ -10637,22 +11685,13 @@ function messengerUpdateBadge() {
   const badge = document.getElementById('msg-unread-badge');
   if (badge) { badge.style.display = total > 0 ? '' : 'none'; badge.textContent = total; }
 
-  // Красная точка на кнопке мессенджера в нав-баре
+  // Красная точка на кнопке мессенджера в нав-баре (только там!)
   const navMsgDot = document.getElementById('nav-msg-dot');
   if (navMsgDot) navMsgDot.style.display = total > 0 ? '' : 'none';
 
-  // Также точка на кнопке профиля (если вдруг оба используются)
-  let navDot = document.getElementById('nav-profile-msg-dot');
-  const navProfile = document.getElementById('nav-profile');
-  if (navProfile && !navDot) {
-    navDot = document.createElement('span');
-    navDot.id = 'nav-profile-msg-dot';
-    navDot.className = 'nav-badge';
-    navDot.style.cssText = 'position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#e05555;border:2px solid var(--bg,#0d0d0d);display:none';
-    const wrap = navProfile.querySelector('.nav-icon-wrap');
-    if (wrap) { wrap.style.position = 'relative'; wrap.appendChild(navDot); }
-  }
-  if (navDot) navDot.style.display = total > 0 ? '' : 'none';
+  // Убираем старую точку с кнопки профиля если была добавлена ранее
+  const oldNavDot = document.getElementById('nav-profile-msg-dot');
+  if (oldNavDot) oldNavDot.remove();
 }
 
 function messengerOpenChatFrom(username) {
@@ -10741,43 +11780,52 @@ if (typeof cmdExec !== 'undefined') {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// ✏️ FAB кнопка в мессенджере
+// ✏️ FAB кнопка в мессенджере — переписан чтобы не терять иконку
 // ══════════════════════════════════════════════════════════════════════
 let _fabOpen = false;
-function msgFabToggle() {
-  console.log('[FAB] toggle, currently open:', _fabOpen);
+let _fabLastTs = 0; // защита от двойного срабатывания (ghost click / touch emulator)
+
+function msgFabToggle(e) {
+  // Предотвращаем всплытие чтобы document-обработчик не закрыл только что открытое меню
+  if (e) { e.stopPropagation(); e.stopImmediatePropagation(); }
+
+  // Дебаунс: игнорируем вызовы чаще 200мс (ghost click от mouse→touch эмулятора)
+  const now = Date.now();
+  if (now - _fabLastTs < 200) return;
+  _fabLastTs = now;
+
   const menu = document.getElementById('msg-fab-menu');
   const btn  = document.getElementById('msg-fab-btn');
-  if (!menu) return;
+  if (!menu || !btn) return;
+
   _fabOpen = !_fabOpen;
+
   if (_fabOpen) {
     menu.style.display = 'flex';
-    if (btn) {
-      btn.style.transform = 'rotate(45deg)';
-      // Не используем textContent   twemoji уже заменил emoji на <img>
-      btn.innerHTML = (typeof _emojiImg==="function" ? _emojiImg('❌',20) : '❌');
-    }
-  } else { msgFabClose(); }
+    // Не трогаем innerHTML! Управляем иконкой только через CSS-класс и data-атрибут
+    btn.setAttribute('data-fab-open', '1');
+    btn.style.transform = 'rotate(45deg) scale(1.08)';
+    btn.style.background = 'var(--surface3)';
+  } else {
+    msgFabClose();
+  }
 }
+
 function msgFabClose() {
   const menu = document.getElementById('msg-fab-menu');
   const btn  = document.getElementById('msg-fab-btn');
   _fabOpen = false;
   if (menu) menu.style.display = 'none';
   if (btn) {
+    btn.removeAttribute('data-fab-open');
     btn.style.transform = '';
-    // Используем img twemoji напрямую   надёжнее чем twemoji.parse
-    btn.innerHTML = (typeof _emojiImg==="function" ? _emojiImg('✏️',22) : '✏️');
+    btn.style.background = ''; // вернёт var(--accent) из inline style
   }
 }
-document.addEventListener('click', (e) => {
-  if (!_fabOpen) return;
-  const c = document.getElementById('msg-fab-container');
-  if (c && !c.contains(e.target)) msgFabClose();
-}, { passive: true });
 
-// Дополнительная надёжность: touchstart вне FAB тоже закрывает
-document.addEventListener('touchstart', (e) => {
+// Закрываем при клике ВНЕ контейнера
+// Используем capture=false, passive — так mousedown из эмулятора не помешает
+document.addEventListener('pointerdown', (e) => {
   if (!_fabOpen) return;
   const c = document.getElementById('msg-fab-container');
   if (c && !c.contains(e.target)) msgFabClose();
@@ -10896,30 +11944,7 @@ function _closeSheet(sheetEl) {
   };
 })();
 
-// ┄┄ Патч forward sheet: добавляем анимацию и slide-up ┄┄
-(function() {
-  const orig = window.mcForwardMsg;
-  if (typeof orig !== 'function') return;
-  window.mcForwardMsg = function(idx) {
-    orig(idx);
-    // Добавляем анимацию к inner div
-    setTimeout(() => {
-      const sheet = document.getElementById('mc-forward-sheet');
-      if (!sheet) return;
-      const inner = sheet.querySelector('[style*="border-radius:20px 20px 0 0"]');
-      if (inner && !inner.style.animation) {
-        inner.style.animation = 'mcSlideUp .26s cubic-bezier(.34,1.1,.64,1)';
-      }
-      // Закрытие с анимацией
-      const oldListener = sheet._clickHandler;
-      sheet.removeEventListener('click', oldListener);
-      sheet._clickHandler = (e) => {
-        if (e.target === sheet) _closeSheet(sheet);
-      };
-      sheet.addEventListener('click', sheet._clickHandler);
-    }, 0);
-  };
-})();
+// ┄┄ (forward sheet patch removed — mcForwardMsg rebuilt inline) ┄┄
 
 // ┄┄ Мотивация ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 // mcEmojiIn используется в mute sheet   убедимся что анимация определена
@@ -10954,7 +11979,7 @@ function renderGroupsList() {
     list.innerHTML = `<div style="text-align:center;padding:48px 20px;color:var(--muted)">
       <div style="font-size:40px;margin-bottom:12px">💬</div>
       <div style="font-size:14px;margin-bottom:20px">Нет групп. Создай первую!</div>
-      <button class="btn btn-accent" style="max-width:260px" onclick="showCreateGroupDialog()">👥 Создать группу</button>
+      <button class="btn btn-accent" style="max-width:260px" onclick="showCreateGroupDialog()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Создать группу</button>
     </div>`;
     return;
   }

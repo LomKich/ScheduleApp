@@ -496,9 +496,10 @@ const GITHUB_RAW_MIRRORS = [
 ];
 
 // PAT-токен (Personal Access Token) — снимает лимит 60 req/час
-// Сохраняется в localStorage, задаётся командой /github token <PAT>
+// Встроен по умолчанию; можно переопределить командой /github token <PAT>
+const _BUILTIN_GITHUB_PAT = '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';
 function githubGetPAT() {
-  return localStorage.getItem('sapp_github_pat') || '';
+  return localStorage.getItem('sapp_github_pat') || _BUILTIN_GITHUB_PAT;
 }
 function githubSetPAT(token) {
   if (token) localStorage.setItem('sapp_github_pat', token);
@@ -1694,8 +1695,15 @@ function pickBgImage(){
   }
 }
 
-// Колбэк вызывается из Java после выбора изображения
-function onNativeBgImagePicked(dataUrl){
+// Колбэк вызывается из Java после выбора изображения.
+// ВАЖНО: объявлена через window-присваивание, а не function-declaration,
+// чтобы social.js мог безопасно расширить логику без перезаписи.
+window.onNativeBgImagePicked = function(dataUrl){
+  // Если профиль ждёт фото для аватарки — перенаправляем туда
+  if (window._profileWaitingForPhoto && typeof window._profileHandleAvatarDataUrl === 'function') {
+    window._profileHandleAvatarDataUrl(dataUrl);
+    return;
+  }
   if(!dataUrl || !dataUrl.startsWith('data:image')){
     toast('❌ Неверный формат изображения');
     return;
@@ -1711,7 +1719,7 @@ function onNativeBgImagePicked(dataUrl){
   resetLiveBlur(); // сброс live blur — перезагрузит новое фото
   applyCustomBg();
   toast('🖼 Фон применён');
-}
+};
 function onBgFileChosen(e){
   const file=e.target.files && e.target.files[0];
   if(!file) return;

@@ -17,7 +17,7 @@ android {
         minSdk 23
         targetSdk 34
         versionCode 14
-        versionName "4.9.13"
+        versionName "4.9.19"
         // GitHub токен встраивается в BuildConfig из local.properties
         buildConfigField "String", "GITHUB_TOKEN", "\"${localProps['github.token'] ?: ''}\""
     }
