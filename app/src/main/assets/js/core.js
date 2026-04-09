@@ -505,10 +505,14 @@ function githubSetPAT(token) {
   if (token) localStorage.setItem('sapp_github_pat', token);
   else localStorage.removeItem('sapp_github_pat');
 }
-function githubApiHeaders() {
+function githubApiHeaders(url) {
   const h = { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'ScheduleApp' };
+  // PAT отправляем ТОЛЬКО к официальному api.github.com.
+  // Сторонние зеркала (moeyy.xyz, kgithub.com) не поддерживают Authorization-заголовок
+  // и при его наличии возвращают ошибки или блокируют CORS-preflight.
+  const isOfficial = !url || url.includes('api.github.com');
   const pat = githubGetPAT();
-  if (pat) h['Authorization'] = 'Bearer ' + pat;
+  if (pat && isOfficial) h['Authorization'] = 'Bearer ' + pat;
   return h;
 }
 
@@ -518,11 +522,12 @@ const SCHEDULE_FILE_REGEX = /\.(doc|docx|xlsx|txt|pdf)$/i;
 // Получить список файлов из GitHub папки schedule/ (с перебором зеркал)
 async function githubListFiles() {
   const folder  = GITHUB_FALLBACK.scheduleFolder;
-  const headers = githubApiHeaders();
   let lastErr = null;
 
   for (const apiBase of GITHUB_API_MIRRORS) {
     const apiUrl = apiBase + folder;
+    // Заголовки формируем под каждый URL (только официальный хост получает PAT)
+    const headers = githubApiHeaders(apiUrl);
     try {
       let items;
       if (window.Android && window.Android.nativeFetch) {
