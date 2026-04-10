@@ -1101,6 +1101,7 @@ function loadLocal(){
     S.lastGroup=d.group||'';
     S.lastTeacher=d.teacher||'';
     S.mode=d.mode||'student';
+    S.collegeMode=d.collegeMode||'my';
     S.font=d.font||'Geologica';
     if(S.font&&S.font!=='Geologica'){document.documentElement.style.setProperty('--app-font',"'"+S.font+"'");}
     S.theme=d.theme||'orange';
@@ -1150,7 +1151,7 @@ function loadLocal(){
 function saveLocal(){
   // Основные настройки — без тяжёлого base64 фона
   stor.set('sched',JSON.stringify({
-    group:S.lastGroup,teacher:S.lastTeacher||'',mode:S.mode||'student',theme:S.theme,font:S.font||'Geologica',url:S.url,
+    group:S.lastGroup,teacher:S.lastTeacher||'',mode:S.mode||'student',collegeMode:S.collegeMode||'my',theme:S.theme,font:S.font||'Geologica',url:S.url,
     dns:S.dns,customDns:S.customDns,dpi:S.dpi,customProxy:S.customProxy,proxyProvider:S.proxyProvider,
     appIcon:S.appIcon,liquidGlass:S.liquidGlass,liquidGlassOpt:S.liquidGlassOpt,
     customBgBlurEnabled:S.customBgBlurEnabled,
@@ -2501,6 +2502,7 @@ function goHome(){
   document.body.classList.add('on-home-screen');
   updateNavActive('nav-home');
   updateLastGroupBtn();
+  applyCollegeMode();
   const fs=document.getElementById('file-section');
   const err=document.getElementById('home-error-hint');
   const noUrl=document.getElementById('no-url-hint');
@@ -2996,6 +2998,8 @@ function saveUrlAndLoad(){
   loadFiles();
 }
 async function loadFiles(){
+  // Если выбран СГЭУ — файлы не нужны, показываем карточку
+  if(S.collegeMode==='sseu'){applyCollegeMode();return;}
   appLog('info','loadFiles: start, url='+S.url?.slice(0,40));
   hideHomeHints();
 
@@ -4738,6 +4742,78 @@ function initModeUI(){
   requestAnimationFrame(()=>setMode(m));
 }
 
+// ── ПЕРЕКЛЮЧАТЕЛЬ УЧЕБНОГО ЗАВЕДЕНИЯ ─────────────────────────────────────────
+
+function setCollegeMode(mode){
+  S.collegeMode = mode;
+  saveLocal();
+  applyCollegeMode();
+  // Если переключились на свой колледж — подгружаем файлы
+  if(mode==='my') loadFiles();
+}
+
+function applyCollegeMode(){
+  const isSseu = S.collegeMode==='sseu';
+
+  // Кнопки в настройках
+  const btnMy   = document.getElementById('college-btn-my');
+  const btnSseu = document.getElementById('college-btn-sseu');
+  const desc    = document.getElementById('college-mode-desc');
+  if(btnMy && btnSseu){
+    if(isSseu){
+      btnSseu.style.borderColor='var(--accent)';
+      btnSseu.style.background='color-mix(in srgb,var(--accent) 15%,transparent)';
+      btnSseu.style.color='var(--accent)';
+      btnMy.style.borderColor='var(--surface3)';
+      btnMy.style.background='none';
+      btnMy.style.color='var(--muted)';
+      if(desc) desc.textContent='Онлайн-расписание СГЭУ (brso.sseu.ru) — открывается во встроенном браузере';
+    } else {
+      btnMy.style.borderColor='var(--accent)';
+      btnMy.style.background='color-mix(in srgb,var(--accent) 15%,transparent)';
+      btnMy.style.color='var(--accent)';
+      btnSseu.style.borderColor='var(--surface3)';
+      btnSseu.style.background='none';
+      btnSseu.style.color='var(--muted)';
+      if(desc) desc.textContent='Файлы расписания с Яндекс Диска / GitHub';
+    }
+  }
+
+  // Главный экран: показываем нужную карточку
+  const sseuCard   = document.getElementById('sseu-home-card');
+  const fileSection= document.getElementById('file-section');
+  const noUrlHint  = document.getElementById('no-url-hint');
+  const errHint    = document.getElementById('home-error-hint');
+  if(isSseu){
+    sseuCard?.classList.remove('hidden');
+    fileSection?.classList.add('hidden');
+    noUrlHint?.classList.add('hidden');
+    errHint?.classList.add('hidden');
+    setStatus('home-status','');setBar('home-bar',0);
+  } else {
+    sseuCard?.classList.add('hidden');
+  }
+}
+
+function openSseuSchedule(tab){
+  // tab: 'student' | 'teacher'
+  // у БРСО один URL, вкладки переключаются внутри
+  const url = 'https://brso.sseu.ru/schedule-b';
+  try{
+    if(window.Android && typeof window.Android.openInAppBrowser==='function'){
+      window.Android.openInAppBrowser(url);
+    } else if(window.electronAPI && typeof window.electronAPI.openInAppBrowser==='function'){
+      window.electronAPI.openInAppBrowser(url);
+    } else if(window.electronAPI && typeof window.electronAPI.openUrl==='function'){
+      window.electronAPI.openUrl(url);
+    } else {
+      window.open(url,'_blank');
+    }
+  }catch(e){
+    window.open(url,'_blank');
+  }
+}
+
 // goToGroups теперь встроена в оригинальную функцию выше
 
 // Учительский список (через кнопку на главной — в режиме учителей)
@@ -5866,6 +5942,8 @@ setTimeout(() => {
 setTimeout(() => { _navMovePill('nav-home'); }, 400);
 document.getElementById('url-input').value=S.url;
 
+// Применяем режим учебного заведения (до loadFiles — чтобы СГЭУ не запускал загрузку файлов)
+applyCollegeMode();
 loadFiles();
 showGreeting();
 
