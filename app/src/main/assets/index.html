@@ -207,6 +207,17 @@ body.custom-bg-active:not(.liveblur-ready) .hero-card{
 
 .section-label{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px;margin-top:2px}
 
+/* ── Новые стили карточек настроек ── */
+.settings-group-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin:20px 0 8px;padding-left:4px}
+.settings-group-label:first-child{margin-top:4px}
+.settings-card{background:var(--surface2);border-radius:16px;border:1.5px solid var(--surface3);overflow:hidden;margin-bottom:4px}
+.settings-card-row{display:flex;align-items:center;gap:12px;padding:13px 16px}
+.settings-card-divider{height:1px;background:rgba(255,255,255,.06);margin:0 16px}
+.settings-icon-wrap{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.settings-item-title{font-size:14px;font-weight:600;color:var(--text)}
+.settings-item-sub{font-size:11px;color:var(--muted);margin-top:1px;line-height:1.4}
+.settings-arrow{color:var(--muted);font-size:20px;font-weight:300;line-height:1}
+
 .inp{
   width:100%;background:var(--surface2);border:1.5px solid var(--surface3);
   border-radius:var(--rb);color:var(--text);font-family:inherit;
@@ -3368,117 +3379,179 @@ html.notch-off #s-login {
   </div>
   <div class="body">
 
-    <!-- Яндекс Диск -->
-    <div class="section-label">Яндекс Диск</div>
-    <input class="inp" id="url-input" type="url"
-           placeholder="https://disk.yandex.ru/d/..."
-           autocomplete="off" autocorrect="off" autocapitalize="off">
-    <div style="height:8px"></div>
-    <button class="btn btn-accent2" onclick="SFX.play('btnAccent');saveUrlAndLoad()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Обновить файлы</button>
-    <div style="height:6px"></div>
-    <div class="status" id="proxy-status" style="text-align:left;font-size:11px"></div>
-    <div class="sep"></div>
-
-    <!-- Тема оформления -->
-    <div class="section-label">Тема оформления</div>
-    <div id="theme-current-row" class="list-item" onclick="showScreen('s-themes')" style="margin-bottom:8px">
-      <div>
-        <div class="item-name" id="theme-current-name">Колледж</div>
-        <div class="item-sub" id="theme-current-sub">Нажми для выбора</div>
+    <!-- ── РАСПИСАНИЕ ──────────────────────────────────── -->
+    <div class="settings-group-label">📅 Расписание</div>
+    <div class="settings-card">
+      <div class="settings-card-row" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="settings-icon-wrap" style="background:#ff6b6b22">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          </div>
+          <div>
+            <div class="settings-item-title">Яндекс Диск</div>
+            <div class="settings-item-sub">Публичная ссылка на папку с расписанием</div>
+          </div>
+        </div>
+        <input class="inp" id="url-input" type="url" placeholder="https://disk.yandex.ru/d/..." autocomplete="off" autocorrect="off" autocapitalize="off" style="margin-bottom:0">
+        <button class="btn btn-accent2" onclick="SFX.play('btnAccent');saveUrlAndLoad()" style="margin-bottom:0">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Применить и обновить
+        </button>
+        <div class="status" id="proxy-status" style="text-align:left;font-size:11px;margin-top:-4px"></div>
       </div>
-      <span class="item-arrow">›</span>
     </div>
 
-    <!-- Liquid Glass режим -->
-    <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:0;padding:0;overflow:hidden;margin-bottom:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;">
-        <div>
-          <div style="font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px">
-            🫧 Liquid Glass
-            <span style="font-size:9px;font-weight:800;background:var(--accent);color:#000;padding:2px 6px;border-radius:4px;letter-spacing:.06em;opacity:.85">БЕТА</span>
+    <!-- ── ВНЕШНИЙ ВИД ──────────────────────────────────── -->
+    <div class="settings-group-label">🎨 Внешний вид</div>
+    <div class="settings-card">
+
+      <div class="settings-card-row" id="theme-current-row" onclick="showScreen('s-themes')" style="cursor:pointer">
+        <div class="settings-icon-wrap" style="background:#7c4dff22">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a67cff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="settings-item-title">Тема оформления</div>
+          <div class="settings-item-sub" id="theme-current-name">Колледж</div>
+        </div>
+        <span class="settings-arrow">›</span>
+      </div>
+
+      <div class="settings-card-divider"></div>
+
+      <div class="settings-card-row">
+        <div class="settings-icon-wrap" style="background:#00bcd422">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00bcd4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M8 12a4 4 0 0 1 8 0"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="settings-item-title" style="display:flex;align-items:center;gap:6px">Liquid Glass
+            <span style="font-size:9px;font-weight:800;background:var(--accent);color:#000;padding:1px 5px;border-radius:4px;letter-spacing:.06em">БЕТА</span>
           </div>
-          <div class="settings-row-sub" style="color:var(--accent);font-weight:600;margin-top:3px">⚠️ Экспериментально · очень сильно влияет на производительность</div>
+          <div class="settings-item-sub" style="color:var(--accent)">⚠️ Влияет на производительность</div>
         </div>
         <div id="glass-toggle" class="toggle-switch" onclick="toggleGlassMode()" style="flex-shrink:0"></div>
       </div>
-      <div id="glass-opt-row" style="border-top:1px solid rgba(255,255,255,.07);padding:12px 16px;display:none;align-items:center;justify-content:space-between;">
-        <div>
-          <div style="font-size:13px;font-weight:600">⚡ Оптимизация блюра</div>
-          <div class="settings-row-sub">Снижает радиус блюра (GPU-слои остаются), отключает анимации и псевдоэлементы. Работает и для кастомного фона, и для Liquid Glass. Значительно улучшает FPS</div>
+
+      <div id="glass-opt-row" style="display:none;padding:10px 16px 14px 56px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:13px;font-weight:600">⚡ Оптимизация блюра</div>
+            <div class="settings-item-sub">Снижает радиус — значительно улучшает FPS</div>
+          </div>
+          <div id="glass-opt-toggle" class="toggle-switch" onclick="toggleGlassOpt()" style="flex-shrink:0"></div>
         </div>
-        <div id="glass-opt-toggle" class="toggle-switch" onclick="toggleGlassOpt()" style="flex-shrink:0"></div>
       </div>
+
+      <div class="settings-card-divider"></div>
+
+      <div class="settings-card-row" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="settings-icon-wrap" style="background:#43a04722">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#43a047" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="settings-item-title">Фон приложения</div>
+            <div class="settings-item-sub">PNG / JPG любого размера</div>
+          </div>
+        </div>
+        <div id="custom-bg-preview" style="display:none;border-radius:10px;overflow:hidden;position:relative">
+          <img id="custom-bg-img-thumb" style="width:100%;height:70px;object-fit:cover;display:block" src="" alt="">
+          <div style="position:absolute;inset:0;background:linear-gradient(transparent,rgba(0,0,0,.5));display:flex;align-items:flex-end;padding:6px 10px">
+            <span style="font-size:11px;color:#fff;font-weight:600">Свой фон активен</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-surface" onclick="pickBgImage()" style="flex:1;margin-bottom:0;font-size:13px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Загрузить
+          </button>
+          <button id="remove-bg-btn" class="btn btn-danger" onclick="removeBgImage()" style="display:none;flex:1;margin-bottom:0;font-size:13px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Удалить
+          </button>
+        </div>
+        <input type="file" id="bg-file-input" accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.bmp,.heic,.heif,.avif" style="display:none" onchange="onBgFileChosen(event)">
+        <div id="bg-blur-row" style="display:none;border-top:1px solid rgba(255,255,255,.06);padding-top:10px;margin-top:-4px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:13px;font-weight:600">🌫 Блюр на элементах</div>
+              <div class="settings-item-sub">Размытый фон под кнопками</div>
+            </div>
+            <div id="bg-blur-toggle" class="toggle-switch" onclick="toggleBgBlur()" style="flex-shrink:0"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-card-divider"></div>
+
+      <div class="settings-card-row" onclick="toggleEmojiStyle()" style="cursor:pointer">
+        <div class="settings-icon-wrap" style="background:#ff980022">
+          <span style="font-size:16px;line-height:1">😊</span>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="settings-item-title">Стиль эмодзи</div>
+          <div class="settings-item-sub" id="emoji-style-sub">Системные (по умолчанию)</div>
+        </div>
+        <div id="emoji-style-toggle" class="toggle-switch"></div>
+      </div>
+
+      <div class="settings-card-divider"></div>
+
+      <div class="settings-card-row" onclick="toggleNotchMode()" style="cursor:pointer">
+        <div class="settings-icon-wrap" style="background:#78909c22">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#90a4ae" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="5" r="1"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="settings-item-title">Вырез камеры</div>
+          <div class="settings-item-sub" id="notch-mode-sub">Режим: <b id="notch-mode-label">авто</b></div>
+        </div>
+        <div id="notch-mode-toggle" class="toggle-switch"></div>
+      </div>
+
     </div>
 
-    <!-- Фон приложения -->
-    <div class="section-label">Фон приложения</div>
-    <div id="custom-bg-preview" style="display:none;border-radius:var(--rb);overflow:hidden;margin-bottom:8px;position:relative">
-      <img id="custom-bg-img-thumb" style="width:100%;height:80px;object-fit:cover;display:block" src="" alt="">
-      <div style="position:absolute;inset:0;background:linear-gradient(transparent,rgba(0,0,0,.5));display:flex;align-items:flex-end;padding:8px 12px">
-        <span style="font-size:11px;color:#fff;font-weight:600">Свой фон активен</span>
-      </div>
-    </div>
-    <button class="btn btn-surface" onclick="pickBgImage()" style="margin-bottom:6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Загрузить фон (PNG / JPG)</button>
-    <button id="remove-bg-btn" class="btn btn-danger" onclick="removeBgImage()" style="display:none;margin-bottom:6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:5px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Удалить фон</button>
-    <input type="file" id="bg-file-input" accept="image/*,image/png,image/jpeg,image/jpg,image/gif,image/webp,image/bmp,image/heic,image/heif,image/avif,.png,.jpg,.jpeg,.gif,.webp,.bmp,.heic,.heif,.avif" style="display:none" onchange="onBgFileChosen(event)">
-    <!-- Тоггл блюра для обычного режима (без liquid glass) -->
-    <div id="bg-blur-row" style="display:none;border-top:1px solid rgba(255,255,255,.07);padding:12px 16px;margin-top:4px;background:var(--surface);border-radius:var(--rb);align-items:center;justify-content:space-between;">
-      <div>
-        <div style="font-size:13px;font-weight:600">🌫 Блюр на элементах</div>
-        <div class="settings-row-sub">Размытый фон под кнопками (pre-blur, не влияет на FPS). Если лагает — выключи</div>
-      </div>
-      <div id="bg-blur-toggle" class="toggle-switch" onclick="toggleBgBlur()" style="flex-shrink:0"></div>
-    </div>
+    <!-- ── УВЕДОМЛЕНИЯ ──────────────────────────────────── -->
+    <div class="settings-group-label">🔔 Уведомления и звук</div>
+    <div class="settings-card">
 
-    <!-- Нативный интерфейс -->
-    <div class="section-label">Интерфейс</div>
-    <div class="settings-row" style="margin-bottom:8px" id="native-ui-row">
-      <div>
-        <div style="font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px">
-          🚀 Нативный интерфейс
-          <span style="font-size:9px;font-weight:800;background:var(--accent);color:#000;padding:2px 6px;border-radius:4px;letter-spacing:.06em;opacity:.85">NEW</span>
+      <div class="settings-card-row">
+        <div class="settings-icon-wrap" style="background:#7c4dff22">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
         </div>
-        <div class="settings-row-sub">Kotlin / Jetpack Compose — плавнее, быстрее, без провисаний</div>
+        <div style="flex:1;min-width:0">
+          <div class="settings-item-title">Push-уведомления</div>
+          <div class="settings-item-sub" id="push-notif-status">Проверяем...</div>
+        </div>
+        <button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:12px;flex-shrink:0;margin-bottom:0" onclick="pushRequestPermission()" id="push-notif-btn">Включить</button>
       </div>
-      <button class="btn btn-accent" style="width:auto;padding:8px 14px;font-size:12px;font-weight:700;flex-shrink:0"
-        onclick="switchToNativeUI()">Включить →</button>
-    </div>
-    <div class="sep"></div>
 
-    <!-- Уведомления -->
-    <div class="section-label">Уведомления и связь</div>
-    <div id="push-notif-row" style="background:var(--surface2);border-radius:14px;margin-bottom:8px;border:1.5px solid var(--surface3)">
-      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
-        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
-        </span>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">Уведомления</div>
-          <div style="font-size:12px;color:var(--muted)" id="push-notif-status">Проверяем...</div>
+      <div class="settings-card-divider"></div>
+
+      <div style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <div class="settings-icon-wrap" style="background:#43a04722">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#43a047"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="settings-item-title">Фоновое соединение</div>
+            <div class="settings-item-sub" id="bg-service-status">Проверяем...</div>
+          </div>
+          <div id="bg-service-toggle" onclick="toggleBackgroundService()" style="width:51px;height:31px;border-radius:16px;position:relative;cursor:pointer;transition:background .25s;flex-shrink:0">
+            <div id="bg-service-knob" style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.35);transition:left .25s"></div>
+          </div>
         </div>
-        <button class="btn btn-surface" style="width:auto;padding:6px 12px;font-size:12px;flex-shrink:0" onclick="pushRequestPermission()" id="push-notif-btn">Включить</button>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;padding-left:46px">Получайте сообщения даже когда приложение закрыто — как в Telegram.</div>
       </div>
-    </div>
-    <!-- Фоновое соединение -->
-    <div id="bg-service-row" style="background:var(--surface2);border-radius:14px;margin-bottom:8px;border:1.5px solid var(--surface3)">
-      <div style="padding:14px 16px;display:flex;align-items:center;gap:12px">
-        <span style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)"><path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/></svg>
-        </span>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700">Фоновое соединение</div>
-          <div style="font-size:12px;color:var(--muted)" id="bg-service-status">Проверяем...</div>
+
+      <div class="settings-card-divider"></div>
+
+      <div class="settings-card-row" onclick="toggleMute()" style="cursor:pointer">
+        <div class="settings-icon-wrap" style="background:#ffd60022">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffd600" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
         </div>
-        <div id="bg-service-toggle" onclick="toggleBackgroundService()"
-          style="width:51px;height:31px;border-radius:16px;position:relative;cursor:pointer;transition:background .25s;flex-shrink:0">
-          <div id="bg-service-knob"
-            style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;
-                   box-shadow:0 1px 4px rgba(0,0,0,.35);transition:left .25s"></div>
+        <div style="flex:1;min-width:0">
+          <div class="settings-item-title" id="mute-label">Звук включён</div>
+          <div class="settings-item-sub">Звуки интерфейса</div>
         </div>
+        <span class="settings-arrow">›</span>
       </div>
-      <div style="padding:0 16px 12px;font-size:11px;color:var(--muted);line-height:1.5">
-        Получайте сообщения даже когда приложение закрыто. Работает как в Telegram.
-      </div>
+
     </div>
     <script>
       (function() {
@@ -3501,53 +3574,29 @@ html.notch-off #s-login {
         };
       })();
     </script>
-    <div class="sep"></div>
 
-    <!-- Звук -->
-    <div class="section-label">Звук</div>
-    <div class="list-item" onclick="toggleMute()" style="margin-bottom:8px">
-      <div>
-        <div class="item-name" id="mute-label">🔇 Звук выключен</div>
-        <div class="item-sub">Звуки интерфейса</div>
-      </div>
-      <span class="item-arrow">›</span>
-    </div>
-    <div class="sep"></div>
-
-    <!-- Стиль интерфейса -->
-    <div class="section-label">Интерфейс</div>
-    <div class="settings-row" style="margin-bottom:8px" onclick="toggleEmojiStyle()">
-      <div>
-        <div style="font-size:14px;font-weight:600">😊 Стиль эмодзи</div>
-        <div class="settings-row-sub" id="emoji-style-sub">Системные эмодзи (по умолчанию)</div>
-      </div>
-      <div id="emoji-style-toggle" class="toggle-switch"></div>
-    </div>
-    <div class="settings-row" style="margin-bottom:8px" onclick="toggleNotchMode()">
-      <div>
-        <div style="font-size:14px;font-weight:600">📷 Вырез камеры</div>
-        <div class="settings-row-sub" id="notch-mode-sub">Отступ под вырез камеры: <b id="notch-mode-label">авто</b></div>
-      </div>
-      <div id="notch-mode-toggle" class="toggle-switch"></div>
-    </div>
-    <div class="sep"></div>
-
-    <!-- VIP Аккаунт -->
-    <div class="section-label">VIP Аккаунт</div>
-    <div id="settings-vip-row" style="background:var(--surface2);border-radius:14px;padding:14px 16px;margin-bottom:8px;border:1.5px solid var(--surface3)">
-      <div id="settings-vip-status" style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <span style="font-size:22px">👑</span>
-        <div>
-          <div style="font-size:14px;font-weight:700" id="settings-vip-label">VIP Статус</div>
-          <div style="font-size:12px;color:var(--muted)" id="settings-vip-sub">Фото-аватар · значки · фото-баннер</div>
+    <!-- ── VIP ──────────────────────────────────────────── -->
+    <div class="settings-group-label">👑 VIP Аккаунт</div>
+    <div id="settings-vip-row" style="border-radius:16px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,#1a1200 0%,#2a1a00 50%,#1a0e00 100%);border:1.5px solid #f5c51840;border-radius:16px;overflow:hidden;position:relative">
+        <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 80% 20%,rgba(245,197,24,0.08) 0%,transparent 60%);pointer-events:none"></div>
+        <div style="position:relative;padding:18px 16px 16px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#f5c51830,#e8772230);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid #f5c51840">
+              <span style="font-size:24px;line-height:1">👑</span>
+            </div>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#f5c518" id="settings-vip-label">VIP Статус</div>
+              <div style="font-size:12px;color:rgba(245,197,24,0.6);margin-top:1px" id="settings-vip-sub">Фото · Рамки · Значки · Баннеры</div>
+            </div>
+          </div>
+          <button class="btn" id="settings-vip-btn" onclick="showDonateSheet()"
+            style="background:linear-gradient(135deg,#f5c518,#e87722);color:#000;font-weight:800;font-size:14px;margin-bottom:0;border:none;display:flex;align-items:center;justify-content:center;gap:8px">
+            <span style="font-size:16px">💝</span> Поддержать и получить VIP
+          </button>
+          <div style="font-size:11px;color:rgba(245,197,24,0.4);text-align:center;margin-top:10px">Активируется после проверки платежа</div>
         </div>
       </div>
-      <button class="btn btn-accent" id="settings-vip-btn"
-        onclick="showDonateSheet()"
-        style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px">
-        <span style="font-size:16px">💝</span> Получить VIP
-      </button>
-      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">Поддержи проект — VIP активируется после проверки</div>
     </div>
     <script>
       (function() {
@@ -3558,73 +3607,104 @@ html.notch-off #s-login {
           const btn = document.getElementById('settings-vip-btn');
           if (!lbl) return;
           if (p && p.vip) {
-            lbl.textContent = '✅ VIP Активен';
-            lbl.style.color = '#4caf7d';
-            if (sub) sub.textContent = 'Все привилегии активны';
-            if (btn) { btn.textContent = '👑 VIP'; btn.disabled = true; btn.style.opacity = '0.5'; }
+            lbl.textContent = '✅ VIP Активен'; lbl.style.color = '#4caf7d';
+            if (sub) { sub.textContent = 'Все привилегии активны'; sub.style.color = 'rgba(76,175,125,0.7)'; }
+            if (btn) { btn.style.background = 'rgba(76,175,125,0.15)'; btn.style.color = '#4caf7d'; btn.innerHTML = '✅ VIP активен'; btn.disabled = true; }
           } else {
-            lbl.textContent = 'VIP Статус';
-            lbl.style.color = '';
-            if (sub) sub.textContent = 'Фото-аватар · значки · фото-баннер';
-            if (btn) { btn.innerHTML = '<span style="font-size:16px">💝</span> Получить VIP'; btn.disabled = false; btn.style.opacity = ''; }
+            lbl.textContent = 'VIP Статус'; lbl.style.color = '#f5c518';
+            if (sub) { sub.textContent = 'Фото · Рамки · Значки · Баннеры'; sub.style.color = ''; }
+            if (btn) { btn.style.background = ''; btn.style.color = ''; btn.innerHTML = '<span style="font-size:16px">💝</span> Поддержать и получить VIP'; btn.disabled = false; }
           }
         }
-        // Обновляем при открытии настроек
-        const _origSS = window.showScreen;
+        const _origSS2 = window.showScreen;
         window.showScreen = function(id, dir) {
-          if (_origSS) _origSS(id, dir);
+          if (_origSS2) _origSS2(id, dir);
           if (id === 's-settings') setTimeout(_updateVipRow, 50);
         };
         setTimeout(_updateVipRow, 500);
       })();
     </script>
-    <div class="sep"></div>
 
-    <!-- Приложение / OTA -->
-    <div class="section-label">Приложение</div>
-    <div class="list-item" style="cursor:default;margin-bottom:8px">
-      <div id="egg-tap-zone"
-        onclick="eggTap()"
-        ontouchstart="eggTap()"
-        style="cursor:pointer;-webkit-tap-highlight-color:transparent;padding:10px 0;flex:1;min-width:0;user-select:none">
-        <div class="item-name">Версия</div>
-        <div class="item-sub" id="app-version-str">— Android</div>
-        <script>(function(){var el=document.getElementById('app-version-str');if(!el)return;var v=(window.Android&&typeof window.Android.getAppVersion==='function')?window.Android.getAppVersion():null;el.textContent=(v||'?')+' — Android';})();</script>
+    <!-- ── ПРИЛОЖЕНИЕ ───────────────────────────────────── -->
+    <div class="settings-group-label">⚙️ Приложение</div>
+    <div class="settings-card">
+
+      <div class="settings-card-row">
+        <div class="settings-icon-wrap" style="background:#29b6f622">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div id="egg-tap-zone" onclick="eggTap()" ontouchstart="eggTap()" style="flex:1;min-width:0;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none">
+          <div class="settings-item-title">Версия приложения</div>
+          <div class="settings-item-sub" id="app-version-str">— Android</div>
+          <script>(function(){var el=document.getElementById('app-version-str');if(!el)return;var v=(window.Android&&typeof window.Android.getAppVersion==='function')?window.Android.getAppVersion():null;el.textContent=(v||'?')+' — Android';})();</script>
+        </div>
+        <button class="btn btn-surface3" style="width:auto;padding:7px 12px;font-size:12px;flex-shrink:0;margin-bottom:0" onclick="checkOtaUpdate()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Обновить
+        </button>
       </div>
-      <button class="btn btn-surface3" style="width:auto;padding:8px 14px;font-size:12px;flex-shrink:0" onclick="checkOtaUpdate()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Проверить</button>
-    </div>
-    <div style="height:12px"></div>
 
-    <!-- Бэкапы APK -->
-    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">💾 Резервные копии</div>
-    <div id="backup-info-section" style="background:var(--surface2);border-radius:14px;padding:12px 14px;margin-bottom:10px;font-size:13px;color:var(--text)">
-      <div id="backup-info-text" style="color:var(--muted);font-size:12px">Загрузка...</div>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-surface" style="flex:1;margin-bottom:0;font-size:13px" onclick="showBackupList()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Список</button>
-      <button class="btn btn-surface3" style="flex:1;margin-bottom:0;font-size:13px;color:#ff6b6b" onclick="confirmRestoreBackup()">↩ Восстановить</button>
-    </div>
-    <div style="height:24px"></div>
+      <div class="settings-card-divider"></div>
 
-    <!-- Опасная зона -->
-    <div style="font-size:11px;font-weight:700;color:#e05555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px">⚠️ Опасная зона</div>
-    <div style="background:var(--surface2);border-radius:14px;border:1.5px solid #e0555533;overflow:hidden;margin-bottom:32px">
-      <div id="danger-zone-collapsed" style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="document.getElementById('danger-zone-inner').style.display=document.getElementById('danger-zone-inner').style.display==='none'?'block':'none'">
-        <div style="font-size:13px;font-weight:600;color:var(--muted)">🗑 Удалить аккаунт</div>
+      <div class="settings-card-row" id="native-ui-row">
+        <div class="settings-icon-wrap" style="background:#7c4dff22">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a67cff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="settings-item-title" style="display:flex;align-items:center;gap:6px">Нативный интерфейс
+            <span style="font-size:9px;font-weight:800;background:var(--accent);color:#000;padding:1px 5px;border-radius:4px;letter-spacing:.06em">NEW</span>
+          </div>
+          <div class="settings-item-sub">Kotlin / Compose — плавнее, быстрее</div>
+        </div>
+        <button class="btn btn-accent" style="width:auto;padding:7px 12px;font-size:12px;font-weight:700;flex-shrink:0;margin-bottom:0" onclick="switchToNativeUI()">Включить →</button>
+      </div>
+
+      <div class="settings-card-divider"></div>
+
+      <div style="padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div class="settings-icon-wrap" style="background:#78909c22">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#90a4ae" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 15 21 19 3 19 3 15"/><path d="M17 8l-5-5-5 5"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="settings-item-title">Резервные копии APK</div>
+            <div class="settings-item-sub" id="backup-info-text">Загрузка...</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-surface" style="flex:1;margin-bottom:0;font-size:13px" onclick="showBackupList()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Список
+          </button>
+          <button class="btn btn-surface3" style="flex:1;margin-bottom:0;font-size:13px;color:#ff6b6b" onclick="confirmRestoreBackup()">↩ Восстановить</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── ОПАСНАЯ ЗОНА ──────────────────────────────────── -->
+    <div class="settings-group-label" style="color:#e05555">⚠️ Опасная зона</div>
+    <div style="background:var(--surface2);border-radius:14px;border:1.5px solid #e0555530;overflow:hidden;margin-bottom:40px">
+      <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer"
+           onclick="var iz=document.getElementById('danger-zone-inner');iz.style.display=iz.style.display==='none'?'block':'none'">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="settings-icon-wrap" style="background:#e0555522">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e05555" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          </div>
+          <div class="settings-item-title" style="color:#e05555">Удалить аккаунт</div>
+        </div>
         <span style="color:var(--muted);font-size:18px">›</span>
       </div>
       <div id="danger-zone-inner" style="display:none;padding:0 16px 16px">
         <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px;padding:10px;background:rgba(224,85,85,.08);border-radius:10px;border-left:3px solid #e05555">
-          Удаление аккаунта необратимо. Профиль, все сообщения и данные будут удалены с сервера. Восстановить аккаунт будет невозможно.
+          Удаление необратимо. Профиль, все сообщения и данные будут удалены с сервера.
         </div>
         <button class="btn" style="background:#e05555;color:#fff;font-size:13px" onclick="profileDeleteAccount()">
           🗑 Удалить аккаунт навсегда
         </button>
       </div>
     </div>
+
   </div>
 </div>
-
 
 <!-- ВЫБОР ТЕМЫ -->
 <div class="screen" id="s-themes">
