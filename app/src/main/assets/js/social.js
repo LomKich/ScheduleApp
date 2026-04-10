@@ -1347,7 +1347,7 @@ function profileInitEditScreen() {
         <div style="font-size:24px;margin-bottom:6px">${typeof _emojiImg==="function"?_emojiImg("👑",24):"👑"}</div>
         <div style="font-weight:800;margin-bottom:4px">VIP Аккаунт</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Фото-аватар · значки · фото-баннер</div>
-        <div style="font-size:11px;color:var(--muted)">Перейди в <b>Настройки</b> → Получить VIP</div>
+        <button onclick="SFX.play('btnAccent');navTo('s-settings','nav-profile')" style="background:linear-gradient(135deg,#f5c518,#e87722);border:none;border-radius:20px;padding:8px 20px;color:#000;font-size:13px;font-weight:800;cursor:pointer">✨ Получить VIP</button>
       </div>
     `;
     vipSec.appendChild(promo);
@@ -5599,6 +5599,213 @@ function _initTwemoji() {
 // 👑 VIP СИСТЕМА
 // Активация: /vip LOMKICH2025  (секретный код в CMD)
 // ══════════════════════════════════════════════════════════════════
+
+// ── VIP Анимация получения ────────────────────────────────────────
+function showVipAnimation() {
+  // Не показываем дважды
+  if (document.getElementById('vip-anim-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'vip-anim-overlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:99999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at center, rgba(30,20,0,0.97) 0%, rgba(0,0,0,0.98) 100%);
+    overflow:hidden;pointer-events:all;
+  `;
+
+  // Частицы / конфетти
+  const PARTICLES = 60;
+  const COLORS = ['#f5c518','#ffd700','#e87722','#fff8dc','#fffacd','#ffec6e','#ff9500','#ffffff'];
+  for (let i = 0; i < PARTICLES; i++) {
+    const p = document.createElement('div');
+    const size = 6 + Math.random() * 10;
+    const isCircle = Math.random() > 0.4;
+    p.style.cssText = `
+      position:absolute;
+      width:${size}px;height:${size}px;
+      background:${COLORS[Math.floor(Math.random()*COLORS.length)]};
+      border-radius:${isCircle ? '50%' : '2px'};
+      top:-20px;
+      left:${Math.random()*100}%;
+      opacity:0;
+      animation: vipParticleFall ${1.5+Math.random()*2.5}s ease-in ${Math.random()*1.2}s forwards;
+      transform: rotate(${Math.random()*360}deg);
+    `;
+    overlay.appendChild(p);
+  }
+
+  // Световые лучи
+  const rays = document.createElement('div');
+  rays.style.cssText = `
+    position:absolute;inset:0;
+    background:conic-gradient(from 0deg at 50% 40%,
+      transparent 0deg, rgba(245,197,24,0.08) 5deg, transparent 10deg,
+      transparent 30deg, rgba(245,197,24,0.06) 35deg, transparent 40deg,
+      transparent 60deg, rgba(245,197,24,0.09) 65deg, transparent 70deg,
+      transparent 90deg, rgba(245,197,24,0.07) 95deg, transparent 100deg,
+      transparent 120deg, rgba(245,197,24,0.08) 125deg, transparent 130deg,
+      transparent 180deg, rgba(245,197,24,0.06) 185deg, transparent 190deg,
+      transparent 240deg, rgba(245,197,24,0.09) 245deg, transparent 250deg,
+      transparent 300deg, rgba(245,197,24,0.07) 305deg, transparent 310deg);
+    animation: vipRaysRotate 8s linear infinite;
+  `;
+  overlay.appendChild(rays);
+
+  // Контент
+  const content = document.createElement('div');
+  content.style.cssText = `
+    position:relative;z-index:2;
+    display:flex;flex-direction:column;align-items:center;gap:18px;
+    animation: vipContentAppear 0.6s cubic-bezier(0.175,0.885,0.32,1.275) 0.15s both;
+  `;
+
+  // Корона с ореолом
+  const crownWrap = document.createElement('div');
+  crownWrap.style.cssText = `position:relative;display:flex;align-items:center;justify-content:center;`;
+
+  const halo = document.createElement('div');
+  halo.style.cssText = `
+    position:absolute;width:120px;height:120px;border-radius:50%;
+    background:radial-gradient(circle, rgba(245,197,24,0.35) 0%, rgba(245,197,24,0.1) 50%, transparent 70%);
+    animation: vipHaloPulse 1.5s ease-in-out infinite;
+  `;
+  crownWrap.appendChild(halo);
+
+  const ring = document.createElement('div');
+  ring.style.cssText = `
+    position:absolute;width:100px;height:100px;border-radius:50%;
+    border:2px solid rgba(245,197,24,0.5);
+    animation: vipRingExpand 2s ease-out 0.3s infinite;
+  `;
+  crownWrap.appendChild(ring);
+
+  const crown = document.createElement('div');
+  crown.style.cssText = `
+    font-size:72px;line-height:1;position:relative;z-index:1;
+    filter: drop-shadow(0 0 20px rgba(245,197,24,0.8)) drop-shadow(0 0 40px rgba(232,119,34,0.5));
+    animation: vipCrownBounce 0.8s cubic-bezier(0.175,0.885,0.32,1.275) 0.3s both;
+  `;
+  crown.textContent = '👑';
+  crownWrap.appendChild(crown);
+  content.appendChild(crownWrap);
+
+  // Заголовок
+  const title = document.createElement('div');
+  title.style.cssText = `
+    font-size:28px;font-weight:900;letter-spacing:2px;
+    background:linear-gradient(135deg,#f5c518 0%,#fff8a0 40%,#e87722 70%,#f5c518 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    background-size:200% auto;
+    animation: vipTitleShimmer 2s linear infinite, vipFadeSlideUp 0.5s ease 0.5s both;
+    text-align:center;
+  `;
+  title.textContent = 'VIP АКТИВИРОВАН';
+  content.appendChild(title);
+
+  // Разделитель
+  const div = document.createElement('div');
+  div.style.cssText = `
+    width:180px;height:1px;
+    background:linear-gradient(90deg,transparent,#f5c518,transparent);
+    animation: vipFadeSlideUp 0.5s ease 0.65s both;
+  `;
+  content.appendChild(div);
+
+  // Подпись
+  const sub = document.createElement('div');
+  sub.style.cssText = `
+    font-size:14px;color:rgba(255,248,220,0.85);text-align:center;
+    line-height:1.6;max-width:260px;
+    animation: vipFadeSlideUp 0.5s ease 0.75s both;
+  `;
+  sub.innerHTML = 'Добро пожаловать в элитный клуб!<br><span style="color:#f5c518;font-weight:700">Фото · Рамки · Значки · Баннеры</span>';
+  content.appendChild(sub);
+
+  // Кнопка закрытия
+  const btn = document.createElement('button');
+  btn.style.cssText = `
+    margin-top:12px;padding:12px 36px;
+    background:linear-gradient(135deg,#f5c518,#e87722);
+    border:none;border-radius:24px;color:#000;
+    font-size:15px;font-weight:800;cursor:pointer;
+    box-shadow:0 4px 20px rgba(245,197,24,0.4);
+    animation: vipFadeSlideUp 0.5s ease 0.9s both, vipBtnPulse 2s ease 1.4s infinite;
+    letter-spacing:0.5px;
+  `;
+  btn.textContent = 'Отлично! 🎉';
+  btn.onclick = () => closeVipAnim();
+  content.appendChild(btn);
+
+  overlay.appendChild(content);
+
+  // Стили анимаций
+  if (!document.getElementById('vip-anim-styles')) {
+    const style = document.createElement('style');
+    style.id = 'vip-anim-styles';
+    style.textContent = `
+      @keyframes vipParticleFall {
+        0%   { opacity:0; transform:translateY(0) rotate(0deg) scale(1); }
+        10%  { opacity:1; }
+        80%  { opacity:0.8; }
+        100% { opacity:0; transform:translateY(110vh) rotate(720deg) scale(0.3); }
+      }
+      @keyframes vipRaysRotate {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+      }
+      @keyframes vipContentAppear {
+        from { opacity:0; transform:scale(0.5) translateY(30px); }
+        to   { opacity:1; transform:scale(1) translateY(0); }
+      }
+      @keyframes vipCrownBounce {
+        0%   { opacity:0; transform:scale(0) rotate(-20deg); }
+        60%  { transform:scale(1.2) rotate(5deg); }
+        80%  { transform:scale(0.95) rotate(-2deg); }
+        100% { opacity:1; transform:scale(1) rotate(0deg); }
+      }
+      @keyframes vipHaloPulse {
+        0%,100% { transform:scale(1); opacity:0.8; }
+        50%     { transform:scale(1.2); opacity:1; }
+      }
+      @keyframes vipRingExpand {
+        0%   { transform:scale(1); opacity:0.7; }
+        100% { transform:scale(2.2); opacity:0; }
+      }
+      @keyframes vipTitleShimmer {
+        0%   { background-position:0% center; }
+        100% { background-position:200% center; }
+      }
+      @keyframes vipFadeSlideUp {
+        from { opacity:0; transform:translateY(14px); }
+        to   { opacity:1; transform:translateY(0); }
+      }
+      @keyframes vipBtnPulse {
+        0%,100% { box-shadow:0 4px 20px rgba(245,197,24,0.4); }
+        50%     { box-shadow:0 4px 32px rgba(245,197,24,0.75); }
+      }
+      @keyframes vipOverlayOut {
+        to { opacity:0; transform:scale(1.04); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(overlay);
+
+  // Закрытие по тапу на фон (не на кнопку)
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeVipAnim(); });
+
+  // Автозакрытие через 6 секунд
+  overlay._autoClose = setTimeout(() => closeVipAnim(), 6000);
+
+  function closeVipAnim() {
+    clearTimeout(overlay._autoClose);
+    overlay.style.animation = 'vipOverlayOut 0.4s ease forwards';
+    setTimeout(() => overlay.remove(), 400);
+  }
+}
+
 const VIP_CODES = ['LOMKICH2025','SAPP_VIP','SCHEDULEAPP_PRO'];
 const VIP_KEY = 'sapp_vip_v1';
 
@@ -5625,8 +5832,11 @@ async function vipSyncFromServer(username) {
     if (changed) {
       profileSave(p);
       // Обновляем localStorage VIP ключ
+      const hadVip = !!localStorage.getItem(VIP_KEY);
       if (row.vip) localStorage.setItem(VIP_KEY, '1');
       else         localStorage.removeItem(VIP_KEY);
+      // Анимация если VIP только что получен
+      if (row.vip && !hadVip) setTimeout(() => showVipAnimation(), 300);
       // Перерендериваем UI профиля если нужно
       if (typeof profileRenderScreen === 'function') profileRenderScreen();
     }
@@ -5643,6 +5853,8 @@ function vipActivate(code) {
         { vip: true }, { 'Content-Type':'application/json', 'Prefer':'return=minimal' }).catch(()=>{});
     }
   }
+  // Показываем красивую анимацию
+  setTimeout(() => showVipAnimation(), 100);
   return true;
 }
 
@@ -5993,7 +6205,6 @@ if (typeof cmdExec === 'function') {
       if (!arg) { cmdPrint('info','👑 Использование: /vip <КОД>  (секретный код VIP)'); return true; }
       if (vipActivate(arg)) {
         cmdPrint('ok','👑 VIP активирован! Теперь доступны: фото-аватар, рамки профиля, значки, кастомный баннер');
-        toast('👑 Добро пожаловать в VIP!');
         profileRenderScreen();
       } else {
         cmdPrint('err','❌ Неверный код VIP');
@@ -11768,7 +11979,6 @@ if (typeof cmdExec !== 'undefined') {
       // /vip КОД   активировать себе
       if (vipActivate(arg)) {
         cmdPrint('ok','👑 VIP активирован! Доступны: фото-аватар, рамки, значки, баннеры');
-        toast('👑 Добро пожаловать в VIP клуб!');
         setTimeout(profileRenderScreen, 200);
       } else {
         cmdPrint('err','❌ Неверный VIP-код. Попробуй /vip give @ник для выдачи другому.');

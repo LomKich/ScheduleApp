@@ -16,8 +16,8 @@ android {
         applicationId "com.schedule.app"
         minSdk 23
         targetSdk 34
-        versionCode 14
-        versionName "4.9.20"
+        versionCode APP_VERSION_CODE.toInteger()
+        versionName APP_VERSION
         // GitHub токен встраивается в BuildConfig из local.properties
         buildConfigField "String", "GITHUB_TOKEN", "\"${localProps['github.token'] ?: ''}\""
     }

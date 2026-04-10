@@ -49,7 +49,7 @@ jobs:
       - name: Read version
         id: get_version
         run: |
-          VERSION=$(grep "versionName" app/build.gradle | sed 's/.*"\(.*\)".*/\1/' | tr -d '[:space:]')
+          VERSION=$(grep "^APP_VERSION=" gradle.properties | cut -d'=' -f2 | tr -d '[:space:]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Generate patch-manifest.json
@@ -125,25 +125,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read version from build.gradle
+      - name: Read version from gradle.properties
         id: get_version
         shell: bash
         run: |
-          VERSION=$(grep "versionName" app/build.gradle | sed 's/.*"\(.*\)".*/\1/' | tr -d '[:space:]')
+          VERSION=$(grep "^APP_VERSION=" gradle.properties | cut -d'=' -f2 | tr -d '[:space:]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected version: $VERSION"
 
       - name: Sync version into package.json
         shell: bash
-        run: |
-          cd desktop
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
-            pkg.version = '${{ steps.get_version.outputs.version }}';
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-            console.log('package.json version set to', pkg.version);
-          "
+        run: node scripts/sync-version.js
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

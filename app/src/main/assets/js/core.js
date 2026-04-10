@@ -3008,80 +3008,54 @@ async function loadFiles(){
     setStatus('home-status','Загружаю файлы...');setBar('home-bar',30);
   }
 
-  // Режим источника: 'github' — только GitHub; 'yandex' — Яндекс → GitHub; по умолчанию github
-  const srcMode = localStorage.getItem('sapp_schedule_source') || 'github';
-
-  // ── Источник: GitHub (первичный или единственный) ────────────────
-  if (srcMode === 'github' || !S.url) {
-    try{
-      setStatus('home-status','📡 Загружаю с GitHub...');setBar('home-bar',40);
-      const ghFiles = await githubListFiles();
-      if(ghFiles.length === 0) throw new Error('Репозиторий пуст (нет .doc/.docx/.xlsx файлов)');
-      S.files = ghFiles;
-      setBar('home-bar',100);
-      setStatus('home-status',`GitHub: ${S.files.length} файлов`);
+  // ── Источник: Яндекс Диск (первичный, если задан URL) ───────────────
+  if (S.url) {
+    try {
+      setStatus('home-status','Загружаю с Яндекс Диска...');setBar('home-bar',40);
+      const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
+      S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&SCHEDULE_FILE_REGEX.test(i.name))
+        .map(i=>({name:i.name,path:i.path||('/'+i.name),size:i.size||0,resourceId:i.resource_id||''}));
+      setBar('home-bar',100);setStatus('home-status',`Яндекс: ${S.files.length} файлов`);
       setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
       saveLocal();
-      appLog('ok','loadFiles: ' + S.files.length + ' файлов с GitHub');
-      renderFileList(false, /*githubMode=*/true);
+      appLog('ok','loadFiles: '+S.files.length+' файлов с Яндекс Диска');
+      renderFileList(false);
       return;
-    }catch(ghErr){
-      appLog('err','loadFiles: GitHub failed: '+ghErr.message);
+    }catch(yadErr){
+      appLog('warn','loadFiles: Yandex failed ('+yadErr.message+'), пробую GitHub резерв...');
+    }
+  }
+
+  // ── Источник: GitHub (резерв или единственный при отсутствии URL) ──
+  try{
+    setStatus('home-status','📡 Загружаю с GitHub...');setBar('home-bar',60);
+    // Проверяем наличие токена — без него доступны только имена файлов
+    const pat = githubGetPAT();
+    if (!pat) {
+      toast('💡 GitHub-резерв: для скачивания файлов нужен токен.\nВведи в консоли: /github token <TOKEN>');
+    }
+    const ghFiles = await githubListFiles();
+    if(ghFiles.length === 0) throw new Error('Репозиторий пуст (нет .doc/.docx/.xlsx файлов)');
+    S.files = ghFiles;
+    setBar('home-bar',100);
+    const note = S.url ? ' (резерв)' : '';
+    setStatus('home-status',`GitHub: ${S.files.length} файлов${note}`);
+    setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
+    saveLocal();
+    appLog('ok','loadFiles: ' + S.files.length + ' файлов с GitHub' + note);
+    renderFileList(false, /*githubMode=*/true);
+    return;
+  }catch(ghErr){
+    appLog('err','loadFiles: GitHub failed: '+ghErr.message);
       if(hasCached){
         renderFileList(true);
-        toast('📡 GitHub недоступен — расписание из кэша');
+        toast('📡 Все источники недоступны — расписание из кэша');
         setBar('home-bar',0);setStatus('home-status','');
         return;
       }
-      if(!S.url){ showHomeState('error','GitHub недоступен: '+ghErr.message); setBar('home-bar',0);setStatus('home-status',''); return; }
-      // Если задан Яндекс URL — пробуем его как запасной
-      appLog('warn','loadFiles: GitHub fail, trying Yandex fallback...');
-    }
-  }
-
-  // ── Источник: Яндекс Диск ────────────────────────────────────────
-  if(!S.url){ showHomeState('no-url'); return; }
-  try{
-    setStatus('home-status','Загружаю с Яндекс Диска...');setBar('home-bar',50);
-    const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
-    S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&SCHEDULE_FILE_REGEX.test(i.name))
-      .map(i=>({name:i.name,path:i.path||('/'+i.name),size:i.size||0,resourceId:i.resource_id||''}));
-    setBar('home-bar',100);setStatus('home-status',`Яндекс: ${S.files.length} файлов`);
-    setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
-    saveLocal();
-    appLog('ok','loadFiles: '+S.files.length+' файлов с Яндекс Диска');
-    renderFileList(false);
-    return;
-  }catch(yadErr){
-    appLog('warn','loadFiles: Yandex failed ('+yadErr.message+')');
-  }
-
-  // ── Оба источника недоступны — пробуем GitHub как последний шанс ─
-  if(srcMode !== 'github'){
-    try{
-      setStatus('home-status','📡 Яндекс недоступен, пробую GitHub...');setBar('home-bar',70);
-      const ghFiles = await githubListFiles();
-      if(ghFiles.length === 0) throw new Error('GitHub: файлов нет');
-      S.files = ghFiles;
-      setBar('home-bar',100);
-      setStatus('home-status',`GitHub: ${S.files.length} файлов (резерв)`);
-      setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','📂 GitHub-резерв');},1200);
-      saveLocal();
-      appLog('ok','loadFiles: '+S.files.length+' файлов с GitHub (fallback)');
-      renderFileList(false, /*githubMode=*/true);
+      showHomeState('error','GitHub недоступен: '+ghErr.message);
+      setBar('home-bar',0);setStatus('home-status','');
       return;
-    }catch(ghErr){
-      appLog('err','loadFiles: GitHub fallback also failed: '+ghErr.message);
-    }
-  }
-
-  // ── Всё недоступно ───────────────────────────────────────────────
-  setBar('home-bar',0);setStatus('home-status','');
-  if(hasCached){
-    renderFileList(true);
-    toast('📡 Нет соединения — расписание из кэша');
-  }else{
-    showHomeState('error','Расписание недоступно. Проверь интернет или зайди позже.');
   }
 }
 function hideHomeHints(){
@@ -3395,7 +3369,7 @@ function renderSchedule(group,hdr,sched,filename){
 // ══ ПРИВЕТСТВИЕ ══
 const APP_VERSION = (window.Android && typeof window.Android.getAppVersion === 'function')
   ? window.Android.getAppVersion()
-  : '4.4.16';
+  : '4.9.20';
 function getGreeting(){
   const now=new Date();
   const special=getSpecialDateGreeting();
