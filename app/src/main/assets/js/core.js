@@ -527,7 +527,9 @@ async function githubListFiles() {
   for (const apiBase of GITHUB_API_MIRRORS) {
     const apiUrl = apiBase + folder;
     // Заголовки формируем под каждый URL (только официальный хост получает PAT)
-    const headers = githubApiHeaders(apiUrl);
+    // Зеркалам НЕ шлём кастомные заголовки — они не поддерживают CORS preflight
+    const isOfficial = apiUrl.includes('api.github.com');
+    const headers = isOfficial ? githubApiHeaders(apiUrl) : {};
     try {
       let items;
       if (window.Android && window.Android.nativeFetch) {
@@ -577,8 +579,12 @@ async function githubDownloadFile(rawUrl) {
   appLog('info', 'githubDownloadFile: ' + rawUrl);
 
   // Строим список зеркал из исходного rawUrl
-  const fileName = rawUrl.split('/').pop();
-  const mirrorUrls = GITHUB_RAW_MIRRORS.map(base => base + fileName);
+  // Сохраняем полный относительный путь (напр. 'schedule/Среда.doc'), а не только имя файла
+  const rawBase = GITHUB_RAW_MIRRORS[0];
+  const relativePath = rawUrl.startsWith(rawBase)
+    ? rawUrl.slice(rawBase.length)   // 'schedule/Среда.doc'
+    : rawUrl.split('/').pop();       // fallback: только имя файла
+  const mirrorUrls = GITHUB_RAW_MIRRORS.map(base => base + relativePath);
   // Если rawUrl уже зеркало — ставим его первым
   if (!mirrorUrls.includes(rawUrl)) mirrorUrls.unshift(rawUrl);
 
@@ -4722,9 +4728,9 @@ function setMode(mode){
   // Кнопки
   document.getElementById('mode-btn-student')?.classList.toggle('active', mode==='student');
   document.getElementById('mode-btn-teacher')?.classList.toggle('active', mode==='teacher');
-  // Заголовок hero
+  // Заголовок hero — показываем название колледжа
   const ht=document.getElementById('hero-title-text');
-  if(ht) ht.innerHTML = mode==='teacher' ? 'Расписание<br>Педагогам' : 'Расписание<br>Студентам';
+  if(ht) ht.textContent = (typeof S!=='undefined'&&S.collegeMode==='sseu') ? 'СГЭУ' : 'СаМеК';
   // Метки секций
   const fsLabel=document.getElementById('file-section-label');
   if(fsLabel) fsLabel.textContent = mode==='teacher' ? 'Педагогам' : 'Студентам';
@@ -4749,8 +4755,11 @@ function setCollegeMode(mode){
   S.collegeMode = mode;
   saveLocal();
   applyCollegeMode();
-  // Если переключились на свой колледж — подгружаем файлы
-  if(mode==='my') loadFiles();
+  // Обновляем заголовок hero под выбранный колледж
+  const ht=document.getElementById('hero-title-text');
+  if(ht) ht.textContent = mode==='sseu' ? 'СГЭУ' : 'СаМеК';
+  // Автоматически применяем и обновляем при смене колледжа
+  saveUrlAndLoad();
 }
 
 function applyCollegeMode(){
@@ -4834,10 +4843,6 @@ function sseuShowHomeFakeFile(){
   const list = document.getElementById('file-list');
   if(!list) return;
   list.innerHTML = '';
-  const label = document.createElement('div');
-  label.className = 'section-label';
-  label.textContent = S.mode==='teacher' ? 'Педагоги' : 'Студентам';
-  list.appendChild(label);
   const item = document.createElement('div');
   item.className = 'list-item';
   item.innerHTML = '<span class="item-name">🎓 СГЭУ — расписание онлайн</span><span class="item-arrow">›</span>';
