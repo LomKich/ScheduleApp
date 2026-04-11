@@ -3585,5 +3585,63 @@ public class MainActivity extends Activity {
             });
         }
 
+        // ─── СГЭУ / БРСО — нативный fetch (обход CORS) ──────────────────────────
+
+        /**
+         * Выполняет GET-запрос к brso.sseu.ru без CORS-ограничений.
+         * Вызывается из JS: Android.sseuFetch(url, callbackName)
+         * callbackName — глобальная JS-функция, которую вызовем с результатом.
+         */
+        @JavascriptInterface
+        public void sseuFetch(final String url, final String callbackName) {
+            new Thread(() -> {
+                String result = "null";
+                String error  = null;
+                try {
+                    java.net.URL jurl = new java.net.URL(url);
+                    java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) jurl.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setRequestProperty("Accept", "application/json, text/plain, */*");
+                    conn.setRequestProperty("User-Agent",
+                        "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
+                        "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                        "Chrome/120.0.0.0 Mobile Safari/537.36");
+                    conn.setRequestProperty("Referer", "https://brso.sseu.ru/");
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(20000);
+                    conn.connect();
+                    int code = conn.getResponseCode();
+                    if (code >= 200 && code < 300) {
+                        java.io.InputStream is = conn.getInputStream();
+                        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                        byte[] tmp = new byte[4096];
+                        int n;
+                        while ((n = is.read(tmp)) != -1) buf.write(tmp, 0, n);
+                        result = buf.toString("UTF-8");
+                    } else {
+                        error = "HTTP " + code;
+                    }
+                } catch (Exception e) {
+                    error = e.getMessage();
+                }
+                final String finalResult = result;
+                final String finalError  = error != null
+                    ? error.replace("\\", "\\\\").replace("\"", "\\\"")
+                    : null;
+                webView.post(() -> {
+                    if (finalError != null) {
+                        webView.evaluateJavascript(
+                            "if(typeof " + callbackName + "==='function')" +
+                            callbackName + "(null,\"" + finalError + "\")", null);
+                    } else {
+                        webView.evaluateJavascript(
+                            "if(typeof " + callbackName + "==='function')" +
+                            callbackName + "(" + finalResult + ",null)", null);
+                    }
+                });
+            }).start();
+        }
+
     }
 }

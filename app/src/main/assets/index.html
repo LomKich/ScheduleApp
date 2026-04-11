@@ -3239,36 +3239,6 @@ html.notch-off #s-login {
     <div class="status" id="home-status"></div>
     <div class="progress"><div class="progress-bar" id="home-bar"></div></div>
 
-    <!-- ── СГЭУ: карточка (видна только когда collegeMode=sseu) ── -->
-    <div id="sseu-home-card" class="hidden" style="padding:16px 18px 4px">
-      <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">🎓 СГЭУ — БРСО</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-        <button onclick="openSseuSchedule('student')"
-          style="padding:14px 10px;border-radius:14px;border:none;background:var(--surface2);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
-          <span style="font-size:26px">👥</span>
-          <span>Группы</span>
-          <span style="font-size:11px;color:var(--muted);font-weight:400">Студенческое расписание</span>
-        </button>
-        <button onclick="openSseuSchedule('teacher')"
-          style="padding:14px 10px;border-radius:14px;border:none;background:var(--surface2);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px">
-          <span style="font-size:26px">👨‍🏫</span>
-          <span>Педагоги</span>
-          <span style="font-size:11px;color:var(--muted);font-weight:400">Расписание преподавателей</span>
-        </button>
-      </div>
-      <div style="background:var(--surface2);border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:18px">🌐</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;color:var(--text);font-weight:600">brso.sseu.ru</div>
-          <div style="font-size:11px;color:var(--muted)">Самарский государственный эконом. ун-т</div>
-        </div>
-        <button onclick="openSseuSchedule('student')"
-          style="padding:6px 12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer">
-          Открыть
-        </button>
-      </div>
-    </div>
-
     <div id="file-section" class="hidden">
       <div class="section-label" id="file-section-label">Файлы</div>
       <div class="list" id="file-list"></div>

@@ -2998,8 +2998,7 @@ function saveUrlAndLoad(){
   loadFiles();
 }
 async function loadFiles(){
-  // Если выбран СГЭУ — файлы не нужны, показываем карточку
-  if(S.collegeMode==='sseu'){applyCollegeMode();return;}
+  if(S.collegeMode==='sseu'){sseuShowHomeFakeFile();return;}
   appLog('info','loadFiles: start, url='+S.url?.slice(0,40));
   hideHomeHints();
 
@@ -3174,6 +3173,7 @@ async function _refreshFileBufInBackground(key,fileRef){
 
 // ══ ГРУППЫ ══
 async function goToGroups(){
+  if(S.collegeMode==='sseu') return sseuGoToGroups();
   // Режим учителей — перенаправляем на список учителей
   if(typeof S!=='undefined'&&S.mode==='teacher'){
     return goToTeacherList();
@@ -3288,6 +3288,7 @@ function splitSubjectAndTeacher(subjectLine){
   return null;
 }
 async function loadSchedule(group){
+  if(S.collegeMode==='sseu') return sseuLoadGroupSchedule(group);
   if(!S.selectedFile){toast('Выбери файл');return;}
   showScreen('s-schedule');
   S.lastGroup=group;saveLocal();updateLastGroupBtn();
@@ -4767,7 +4768,7 @@ function applyCollegeMode(){
       btnMy.style.borderColor='var(--surface3)';
       btnMy.style.background='none';
       btnMy.style.color='var(--muted)';
-      if(desc) desc.textContent='Онлайн-расписание СГЭУ (brso.sseu.ru) — открывается во встроенном браузере';
+      if(desc) desc.textContent='Онлайн-расписание СГЭУ (brso.sseu.ru)';
     } else {
       btnMy.style.borderColor='var(--accent)';
       btnMy.style.background='color-mix(in srgb,var(--accent) 15%,transparent)';
@@ -4778,39 +4779,324 @@ function applyCollegeMode(){
       if(desc) desc.textContent='Файлы расписания с Яндекс Диска / GitHub';
     }
   }
+  // Старая карточка — всегда скрыта (заменена на file-section)
+  document.getElementById('sseu-home-card')?.classList.add('hidden');
+}
 
-  // Главный экран: показываем нужную карточку
-  const sseuCard   = document.getElementById('sseu-home-card');
-  const fileSection= document.getElementById('file-section');
-  const noUrlHint  = document.getElementById('no-url-hint');
-  const errHint    = document.getElementById('home-error-hint');
-  if(isSseu){
-    sseuCard?.classList.remove('hidden');
-    fileSection?.classList.add('hidden');
-    noUrlHint?.classList.add('hidden');
-    errHint?.classList.add('hidden');
-    setStatus('home-status','');setBar('home-bar',0);
-  } else {
-    sseuCard?.classList.add('hidden');
+// ── СГЭУ API ─────────────────────────────────────────────────────────────────
+
+const SSEU_API = 'https://brso.sseu.ru/api/v1/schedule-board';
+const SSEU_DAYS = {MONDAY:'Понедельник',TUESDAY:'Вторник',WEDNESDAY:'Среда',THURSDAY:'Четверг',FRIDAY:'Пятница',SATURDAY:'Суббота'};
+const SSEU_DAYS_ORDER = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+
+let _sseuGroupsCache = null;
+let _sseuTeachersCache = null;
+let _sseuGroupIdMap  = {}; // name → id
+let _sseuTeacherIdMap= {}; // name → id
+
+/** Promise-обёртка для HTTP-запросов к БРСО без CORS-ограничений */
+function sseuGet(path){
+  const url = SSEU_API + path;
+  return new Promise((resolve, reject) => {
+    // Android: нативный запрос через JavascriptInterface (без CORS)
+    if(window.Android && typeof window.Android.sseuFetch === 'function'){
+      const cb = '_sseuCb' + Date.now() + Math.random().toString(36).slice(2);
+      window[cb] = (data, err) => {
+        try{ delete window[cb]; }catch(e){}
+        if(err) reject(new Error(err));
+        else resolve(data);
+      };
+      window.Android.sseuFetch(url, cb);
+      return;
+    }
+    // Electron: nativeFetch через IPC (нет CORS у Electron)
+    if(window.electronAPI && typeof window.electronAPI.nativeFetch === 'function'){
+      window.electronAPI.nativeFetch(url, {
+        method:'GET', headers:{ Accept:'application/json', Referer:'https://brso.sseu.ru/' }
+      }).then(r => {
+        try{
+          const body = typeof r === 'string' ? r : (r.body || JSON.stringify(r));
+          resolve(JSON.parse(body));
+        }catch(e){ reject(e); }
+      }).catch(reject);
+      return;
+    }
+    // Браузер / веб: прямой fetch
+    fetch(url, { headers:{ Accept:'application/json' } })
+      .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(resolve).catch(reject);
+  });
+}
+
+/** Показывает «виртуальный файл» СГЭУ в file-section на главном экране */
+function sseuShowHomeFakeFile(){
+  hideHomeHints();
+  const list = document.getElementById('file-list');
+  if(!list) return;
+  list.innerHTML = '';
+  const label = document.createElement('div');
+  label.className = 'section-label';
+  label.textContent = S.mode==='teacher' ? 'Педагоги' : 'Студентам';
+  list.appendChild(label);
+  const item = document.createElement('div');
+  item.className = 'list-item';
+  item.innerHTML = '<span class="item-name">🎓 СГЭУ — расписание онлайн</span><span class="item-arrow">›</span>';
+  item.onclick = () => {
+    item.classList.add('selected');
+    if(S.mode==='teacher') goToTeacherList();
+    else goToGroups();
+  };
+  list.appendChild(item);
+  document.getElementById('file-section').classList.remove('hidden');
+  // Устанавливаем виртуальный selectedFile чтобы не ломать проверки
+  S.selectedFile = { name:'СГЭУ', _sseu:true, path:'sseu' };
+}
+
+/** Загружает и показывает список групп СГЭУ в s-groups */
+async function sseuGoToGroups(){
+  showScreen('s-groups');
+  document.getElementById('groups-title').textContent = 'Группы СГЭУ';
+  const sub = document.getElementById('groups-sub');
+  if(sub) sub.textContent = 'brso.sseu.ru';
+  document.getElementById('group-search').value = '';
+
+  if(_sseuGroupsCache){
+    allGroups = _sseuGroupsCache.map(g=>g.name).filter(Boolean).sort();
+    S._lastGroupsFile = 'sseu';
+    renderGroupList(allGroups);
+    setStatus('groups-status', allGroups.length + ' групп');
+    return;
+  }
+
+  const list = document.getElementById('group-list');
+  list.innerHTML = Array(6).fill(0).map(()=>
+    '<div style="height:48px;background:var(--surface2);border-radius:10px;margin-bottom:6px;animation:pulse 1.2s ease-in-out infinite"></div>'
+  ).join('');
+  setStatus('groups-status','Загружаю...'); setBar('groups-bar',30);
+
+  try{
+    const data = await sseuGet('/groups');
+    _sseuGroupsCache = data;
+    _sseuGroupIdMap  = {};
+    data.forEach(g => { if(g.name) _sseuGroupIdMap[g.name] = g.id; });
+    allGroups = data.map(g=>g.name).filter(Boolean).sort();
+    S._lastGroupsFile = 'sseu';
+    setBar('groups-bar',100);
+    setStatus('groups-status', allGroups.length + ' групп');
+    setTimeout(()=>setBar('groups-bar',0), 800);
+    renderGroupList(allGroups);
+  }catch(e){
+    setBar('groups-bar',0);
+    setStatus('groups-status','❌ '+e.message);
+    list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">❌ '+e.message+'</div>';
   }
 }
 
-function openSseuSchedule(tab){
-  // tab: 'student' | 'teacher'
-  // у БРСО один URL, вкладки переключаются внутри
-  const url = 'https://brso.sseu.ru/schedule-b';
+/** Загружает и показывает список педагогов СГЭУ в s-teachers */
+async function sseuGoToTeachers(){
+  showScreen('s-teachers');
+  document.getElementById('teachers-title').textContent = 'Педагоги СГЭУ';
+  const sub = document.getElementById('teachers-sub');
+  if(sub) sub.textContent = 'brso.sseu.ru';
+  document.getElementById('teacher-search').value = '';
+  document.getElementById('teacher-list').innerHTML = '';
+
+  if(_sseuTeachersCache){
+    allTeachers = _sseuTeachersCache.map(t=>t.name).filter(Boolean).sort();
+    renderTeacherList(allTeachers);
+    setStatus('teachers-status', allTeachers.length + ' педагогов');
+    return;
+  }
+
+  setStatus('teachers-status','Загружаю...'); setBar('teachers-bar',30);
   try{
-    if(window.Android && typeof window.Android.openInAppBrowser==='function'){
-      window.Android.openInAppBrowser(url);
-    } else if(window.electronAPI && typeof window.electronAPI.openInAppBrowser==='function'){
-      window.electronAPI.openInAppBrowser(url);
-    } else if(window.electronAPI && typeof window.electronAPI.openUrl==='function'){
-      window.electronAPI.openUrl(url);
-    } else {
-      window.open(url,'_blank');
-    }
+    const data = await sseuGet('/teachers');
+    _sseuTeachersCache = data;
+    _sseuTeacherIdMap  = {};
+    data.forEach(t => { if(t.name) _sseuTeacherIdMap[t.name] = t.id; });
+    allTeachers = data.map(t=>t.name).filter(Boolean).sort();
+    setBar('teachers-bar',100);
+    setStatus('teachers-status', allTeachers.length + ' педагогов');
+    setTimeout(()=>setBar('teachers-bar',0), 800);
+    renderTeacherList(allTeachers);
   }catch(e){
-    window.open(url,'_blank');
+    setBar('teachers-bar',0);
+    setStatus('teachers-status','❌ '+e.message);
+  }
+}
+
+/** Рендерит одну неделю из данных БРСО в контейнер (пара-карточки) */
+function sseuRenderWeek(weekData, container){
+  if(!weekData || !weekData.body || !weekData.headers) return;
+  const days = weekData.headers.filter(h => h.value !== 'name');
+  let anyLesson = false;
+
+  days.forEach(dayHeader => {
+    const dayKey  = dayHeader.value; // MONDAY, TUESDAY …
+    const dayName = SSEU_DAYS[dayKey] || dayKey;
+    // Дата из заголовка (напр. "Понедельник 06.04.2026г." → "06.04.2026")
+    const dateStr = (dayHeader.text || '').replace(/^[А-ЯЁа-яё\s]+/,'').replace('г.','').trim();
+
+    // Собираем непустые пары для этого дня
+    const lessons = [];
+    weekData.body.forEach(slot => {
+      const entries = slot[dayKey] || [];
+      entries.forEach(entry => {
+        if(entry.workPlan && entry.workPlan.discipline){
+          lessons.push({ time: slot.name, entry });
+        }
+      });
+    });
+    if(!lessons.length) return;
+    anyLesson = true;
+
+    // Заголовок дня
+    const dayEl = document.createElement('div');
+    dayEl.style.cssText = 'padding:12px 0 4px;font-size:13px;font-weight:700;color:var(--accent);' +
+      'border-bottom:1px solid var(--surface3);margin-bottom:6px;margin-top:8px;letter-spacing:.02em';
+    dayEl.textContent = dayName + (dateStr ? ', ' + dateStr : '');
+    container.appendChild(dayEl);
+
+    // Пара-карточки
+    lessons.forEach(({time, entry}) => {
+      const wp           = entry.workPlan;
+      const subjectName  = wp.discipline?.name  || '';
+      const typeName     = wp.lessonTypes?.name || '';
+      const teacherNames = (entry.subject || []).map(s=>s.name).filter(Boolean).join(', ');
+      const rooms        = (entry.subject || [])
+        .flatMap(s => (s.audiences||[]).map(a => a.name))
+        .filter(Boolean).join(', ');
+
+      const detailParts = [typeName, teacherNames, rooms ? 'ауд. '+rooms : ''].filter(Boolean);
+
+      const card = document.createElement('div');
+      card.className = 'pair-card has-subject';
+      card.innerHTML =
+        `<div class="pair-top">` +
+          `<div class="pair-num" style="font-size:11px;min-width:44px;line-height:1.4;padding-top:2px">${time}</div>` +
+          `<div class="pair-subject-wrap"><div class="pair-subject">${subjectName}</div></div>` +
+        `</div>` +
+        (detailParts.length
+          ? `<div class="pair-details" style="margin-top:3px;padding-left:52px;font-size:11px;line-height:1.6;color:var(--muted)">${detailParts.join(' · ')}</div>`
+          : '');
+      container.appendChild(card);
+    });
+  });
+
+  if(!anyLesson){
+    const empty = document.createElement('div');
+    empty.style.cssText = 'text-align:center;padding:16px;color:var(--muted);font-size:13px';
+    empty.textContent = 'Пар нет';
+    container.appendChild(empty);
+  }
+}
+
+/** Загружает расписание СГЭУ для группы */
+async function sseuLoadGroupSchedule(groupName){
+  const groupId = _sseuGroupIdMap[groupName];
+  if(!groupId){ toast('Группа не найдена в кэше, попробуй снова'); return; }
+
+  showScreen('s-schedule');
+  S.lastGroup = groupName; saveLocal(); updateLastGroupBtn();
+  document.getElementById('sched-group-name').textContent = groupName;
+  document.getElementById('sched-date').textContent = 'СГЭУ';
+  document.getElementById('sched-body').innerHTML =
+    `<div class="sched-loading">
+       <div class="sched-loading-circle"></div>
+       <div style="color:var(--muted);font-size:13px;font-weight:500">Загружаю расписание…</div>
+       <div class="sched-loading-dots">
+         <div class="sched-loading-dot"></div>
+         <div class="sched-loading-dot"></div>
+         <div class="sched-loading-dot"></div>
+       </div>
+     </div>`;
+
+  const today = new Date().toISOString().slice(0,10);
+  try{
+    const [cur, nxt] = await Promise.all([
+      sseuGet(`/by-group?groupId=${groupId}&scheduleWeek=CURRENT&date=${today}`),
+      sseuGet(`/by-group?groupId=${groupId}&scheduleWeek=NEXT&date=${today}`)
+    ]);
+
+    const body = document.getElementById('sched-body');
+    body.innerHTML = '';
+    body.style.padding = '12px 16px';
+
+    // Текущая неделя
+    const hCur = document.createElement('div');
+    hCur.style.cssText = 'font-size:15px;font-weight:700;color:var(--text);padding:4px 0 6px';
+    hCur.textContent = (cur.week==='EVEN' ? '📅 Чётная неделя' : '📅 Нечётная неделя') + ' (текущая)';
+    body.appendChild(hCur);
+    sseuRenderWeek(cur, body);
+
+    // Разделитель
+    const sep = document.createElement('div');
+    sep.style.cssText = 'height:2px;background:var(--surface3);border-radius:1px;margin:20px 0 10px';
+    body.appendChild(sep);
+
+    // Следующая неделя
+    const hNxt = document.createElement('div');
+    hNxt.style.cssText = 'font-size:15px;font-weight:700;color:var(--text);padding:4px 0 6px';
+    hNxt.textContent = (nxt.week==='EVEN' ? '📅 Чётная неделя' : '📅 Нечётная неделя') + ' (следующая)';
+    body.appendChild(hNxt);
+    sseuRenderWeek(nxt, body);
+
+  }catch(e){
+    document.getElementById('sched-body').innerHTML =
+      `<div style="text-align:center;padding:50px;color:var(--danger)">❌ ${e.message}</div>`;
+  }
+}
+
+/** Загружает расписание СГЭУ для педагога */
+async function sseuLoadTeacherSchedule(teacherName){
+  const teacherId = _sseuTeacherIdMap[teacherName];
+  if(!teacherId){ toast('Педагог не найден в кэше, попробуй снова'); return; }
+
+  showScreen('s-schedule');
+  S.lastTeacher = teacherName; saveLocal(); updateLastGroupBtn();
+  document.getElementById('sched-group-name').textContent = teacherName;
+  document.getElementById('sched-date').textContent = 'СГЭУ';
+  document.getElementById('sched-body').innerHTML =
+    `<div class="sched-loading">
+       <div class="sched-loading-circle"></div>
+       <div style="color:var(--muted);font-size:13px;font-weight:500">Загружаю расписание…</div>
+       <div class="sched-loading-dots">
+         <div class="sched-loading-dot"></div>
+         <div class="sched-loading-dot"></div>
+         <div class="sched-loading-dot"></div>
+       </div>
+     </div>`;
+
+  const today = new Date().toISOString().slice(0,10);
+  try{
+    const [cur, nxt] = await Promise.all([
+      sseuGet(`/by-teacher?teacherId=${teacherId}&scheduleWeek=CURRENT&date=${today}`),
+      sseuGet(`/by-teacher?teacherId=${teacherId}&scheduleWeek=NEXT&date=${today}`)
+    ]);
+
+    const body = document.getElementById('sched-body');
+    body.innerHTML = '';
+    body.style.padding = '12px 16px';
+
+    const hCur = document.createElement('div');
+    hCur.style.cssText = 'font-size:15px;font-weight:700;color:var(--text);padding:4px 0 6px';
+    hCur.textContent = (cur.week==='EVEN' ? '📅 Чётная неделя' : '📅 Нечётная неделя') + ' (текущая)';
+    body.appendChild(hCur);
+    sseuRenderWeek(cur, body);
+
+    const sep = document.createElement('div');
+    sep.style.cssText = 'height:2px;background:var(--surface3);border-radius:1px;margin:20px 0 10px';
+    body.appendChild(sep);
+
+    const hNxt = document.createElement('div');
+    hNxt.style.cssText = 'font-size:15px;font-weight:700;color:var(--text);padding:4px 0 6px';
+    hNxt.textContent = (nxt.week==='EVEN' ? '📅 Чётная неделя' : '📅 Нечётная неделя') + ' (следующая)';
+    body.appendChild(hNxt);
+    sseuRenderWeek(nxt, body);
+
+  }catch(e){
+    document.getElementById('sched-body').innerHTML =
+      `<div style="text-align:center;padding:50px;color:var(--danger)">❌ ${e.message}</div>`;
   }
 }
 
@@ -4818,6 +5104,7 @@ function openSseuSchedule(tab){
 
 // Учительский список (через кнопку на главной — в режиме учителей)
 async function goToTeacherList(){
+  if(S.collegeMode==='sseu') return sseuGoToTeachers();
   if(!S.selectedFile){toast('Сначала выбери файл');return;}
   showScreen('s-teachers');
   document.getElementById('teachers-title').textContent='Выбор учителя';
@@ -4835,6 +5122,7 @@ async function goToTeacherList(){
 
 // Поиск учителя (через кнопку в нижней навигации — всегда доступно)
 async function goToTeacherSearch(){
+  if(S.collegeMode==='sseu') return sseuGoToTeachers();
   if(!S.selectedFile){toast('Сначала загрузи файл расписания');return;}
   showScreen('s-teachers');
   updateNavActive('nav-home');
@@ -4875,6 +5163,7 @@ function filterTeachers(q){
 }
 
 async function loadTeacherSchedule(teacher){
+  if(S.collegeMode==='sseu') return sseuLoadTeacherSchedule(teacher);
   if(!S.selectedFile){toast('Выбери файл');return;}
   showScreen('s-schedule');
   S.lastTeacher=teacher;saveLocal();updateLastGroupBtn();
