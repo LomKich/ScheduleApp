@@ -524,12 +524,17 @@ async function githubListFiles() {
   const folder  = GITHUB_FALLBACK.scheduleFolder;
   let lastErr = null;
 
-  for (const apiBase of GITHUB_API_MIRRORS) {
+  // В браузере зеркала (moeyy.xyz, kgithub.com) не возвращают CORS-заголовки —
+  // браузер их блокирует. Используем только официальный api.github.com.
+  // На Android/Desktop перебираем все зеркала как раньше.
+  const isBrowser = !window.Android && !window.__desktopMode;
+  const mirrors = isBrowser
+    ? GITHUB_API_MIRRORS.filter(u => u.includes('api.github.com'))
+    : GITHUB_API_MIRRORS;
+
+  for (const apiBase of mirrors) {
     const apiUrl = apiBase + folder;
-    // Заголовки формируем под каждый URL (только официальный хост получает PAT)
-    // Зеркалам НЕ шлём кастомные заголовки — они не поддерживают CORS preflight
-    const isOfficial = apiUrl.includes('api.github.com');
-    const headers = isOfficial ? githubApiHeaders(apiUrl) : {};
+    const headers = githubApiHeaders(apiUrl);
     try {
       let items;
       if (window.Android && window.Android.nativeFetch) {
@@ -545,7 +550,17 @@ async function githubListFiles() {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         items = await r.json();
       } else {
-        const r = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(15000) });
+        // Браузер: пробуем напрямую, при неудаче — через CORS-прокси
+        let r;
+        try {
+          r = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(15000) });
+        } catch (netErr) {
+          // api.github.com заблокирован — пробуем через настроенный CORS-прокси
+          const proxy = getActiveProxy();
+          if (!proxy.url) throw netErr;
+          const proxyUrl = buildProxyUrl(proxy.url, proxy.format, apiUrl);
+          r = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+        }
         if (r.status === 403) throw new Error('Rate limit. Добавь PAT-токен: /github token <TOKEN>');
         if (!r.ok) throw new Error('HTTP ' + r.status);
         items = await r.json();
@@ -584,8 +599,14 @@ async function githubDownloadFile(rawUrl) {
   const relativePath = rawUrl.startsWith(rawBase)
     ? rawUrl.slice(rawBase.length)   // 'schedule/Среда.doc'
     : rawUrl.split('/').pop();       // fallback: только имя файла
-  const mirrorUrls = GITHUB_RAW_MIRRORS.map(base => base + relativePath);
-  // Если rawUrl уже зеркало — ставим его первым
+
+  // В браузере зеркала (ghproxy, ghfast и т.д.) не возвращают CORS-заголовки.
+  // Используем только raw.githubusercontent.com, при сетевой ошибке — CORS-прокси.
+  const isBrowser = !window.Android && !window.__desktopMode;
+  const mirrorUrls = isBrowser
+    ? [rawBase + relativePath]  // только официальный raw URL
+    : GITHUB_RAW_MIRRORS.map(base => base + relativePath);
+
   if (!mirrorUrls.includes(rawUrl)) mirrorUrls.unshift(rawUrl);
 
   let lastErr = null;
@@ -601,10 +622,20 @@ async function githubDownloadFile(rawUrl) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.arrayBuffer();
       } else {
-        // Браузер: прямой fetch (raw.githubusercontent.com поддерживает CORS)
-        const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.arrayBuffer();
+        // Браузер: пробуем напрямую, при сетевой ошибке (заблокирован) — через CORS-прокси
+        try {
+          const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.arrayBuffer();
+        } catch (netErr) {
+          const proxy = getActiveProxy();
+          if (!proxy.url) throw netErr;
+          appLog('warn', 'githubDownloadFile: прямой fetch не удался, пробую через прокси ' + proxy.provider);
+          const proxyUrl = buildProxyUrl(proxy.url, proxy.format, url);
+          const rp = await fetch(proxyUrl, { signal: AbortSignal.timeout(45000) });
+          if (!rp.ok) throw new Error('Прокси HTTP ' + rp.status);
+          return rp.arrayBuffer();
+        }
       }
     } catch(e) {
       appLog('warn', 'githubDownloadFile failed [' + url + ']: ' + e.message);
