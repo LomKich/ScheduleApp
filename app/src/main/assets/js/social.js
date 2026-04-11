@@ -774,22 +774,26 @@ function loginDoAuth() {
 // Восстановление профиля из строки Supabase presence
 function loginRestoreFromCloud(row) {
   const profile = {
-    name:       row.name        || row.username,
-    username:   row.username,
-    avatarType: row.avatar_type || 'emoji',
-    avatar:     row.avatar      || '😊',
-    avatarData: row.avatar_data || null,
-    bio:        row.bio         || '',
-    status:     row.status      || 'online',
-    color:      row.color       || PROFILE_COLORS[0],
-    vip:        row.vip         || false,
-    badge:      row.badge       || null,
-    frame:      row.frame       || null,
-    banner:     row.banner      || null,
-    createdAt:  row.created_at  || Date.now(),
-    uid:        row.uid         || Date.now().toString(36),
-    pwdHash:    row.pwd_hash    || null,
+    name:          row.name          || row.username,
+    username:      row.username,
+    avatarType:    row.avatar_type   || 'emoji',
+    avatar:        row.avatar        || '😊',
+    avatarData:    row.avatar_data   || null,
+    avatarVideoUrl:row.avatar_video_url || null,
+    bio:           row.bio           || '',
+    status:        row.status        || 'online',
+    color:         row.color         || PROFILE_COLORS[0],
+    vip:           row.vip           || false,
+    badge:         row.badge         || null,
+    frame:         row.frame         || null,
+    banner:        row.banner        || null,
+    createdAt:     row.created_at    || Date.now(),
+    uid:           row.uid           || Date.now().toString(36),
+    pwdHash:       row.pwd_hash      || null,
   };
+  if (row.avatar_history) {
+    try { profile.avatarHistory = JSON.parse(row.avatar_history); } catch(_) {}
+  }
   profileSave(profile);
   // Сохраняем в локальный список аккаунтов
   const accounts = accountsLoad();
@@ -896,6 +900,30 @@ function profileRenderScreen() {
       ${p.bio ? `<div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5">${escHtml(p.bio)}</div>` : ''}
       ${badgeObj ? `<div style="display:inline-block;margin-top:8px;font-size:12px;padding:4px 10px;border-radius:12px;font-weight:700;background:${badgeObj.color}22;color:${badgeObj.color};border:1px solid ${badgeObj.color}44">${_emojiImg(badgeObj.emoji,14)} ${badgeObj.label}</div>` : ''}
     </div>
+
+    <!-- История аватаров (Telegram-style) -->
+    ${(() => {
+      const hist = p.avatarHistory || [];
+      if (!hist.length) return '';
+      const thumbs = hist.slice(0, 15).map((entry, i) => {
+        let inner;
+        if (entry.type === 'photo') {
+          inner = `<img src="${entry.data}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;display:block">`;
+        } else if (entry.type === 'video') {
+          inner = `<video src="${entry.url}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;display:block" muted playsinline></video>`;
+        } else {
+          inner = `<div style="width:44px;height:44px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:22px">${entry.emoji}</div>`;
+        }
+        return `<div onclick="avatarHistoryOpen(${i})" style="flex-shrink:0;cursor:pointer;opacity:.85;-webkit-tap-highlight-color:transparent" ontouchstart="this.style.opacity='.6'" ontouchend="this.style.opacity='.85'">${inner}</div>`;
+      }).join('');
+      return `
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding:0 2px">История аватаров</div>
+        <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;-ms-overflow-style:none">
+          ${thumbs}
+        </div>
+      </div>`;
+    })()}
 
     <!-- Кнопки действий: Telegram-style   три кнопки в ряд -->
     <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -1688,12 +1716,7 @@ function _profilePickVideoAvatar() {
         if (url) {
           p.avatarVideoUrl = url;
           profileSave(p);
-          if (sbReady()) {
-            await _sbFetch('PATCH', `/rest/v1/users?username=eq.${encodeURIComponent(p.username)}`,
-              { avatar_type: 'video', avatar_video_url: url },
-              { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
-            ).catch(() => {});
-          }
+          await sbSaveUser(p); // включает историю + синхронизацию
           toast('✅ Видео-аватар виден всем!');
         } else {
           toast('✅ Видео-аватар установлен (локально)');
@@ -1732,6 +1755,7 @@ function _profileHandleAvatarDataUrl(dataUrl, skipCrop = false) {
       updateNavProfileIcon(p);
       profileRenderScreen();
       sbPresencePut(p);
+      sbSaveUser(p).catch(()=>{}); // синхронизируем в облако сразу
       const isGif = cropped.startsWith('data:image/gif');
       toast(isGif ? '✅ Анимированный аватар установлен' : '✅ Фото обновлено');
     }
@@ -1918,45 +1942,95 @@ async function profileSaveEdit() {
   });
 }
 
-async function profileDeleteAccount() {
+function profileDeleteAccount() {
   const p = profileLoad();
   if (!p) return;
-  // Двойное подтверждение
-  if (!confirm('Удалить аккаунт @' + p.username + '?\n\nЭто действие необратимо: профиль, все сообщения и данные будут удалены.')) return;
-  if (!confirm('Точно удалить аккаунт @' + p.username + '? Отмены нет.')) return;
 
+  // Кастомный двухшаговый диалог (window.confirm блокируется в WebView)
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box';
+  ov.innerHTML = `
+    <div style="background:var(--surface2);border-radius:20px;padding:28px 22px;width:100%;max-width:340px;border:1.5px solid var(--surface3)">
+      <div style="font-size:40px;text-align:center;margin-bottom:14px">🗑️</div>
+      <div style="font-size:18px;font-weight:800;text-align:center;margin-bottom:10px;color:var(--text)">Удалить аккаунт?</div>
+      <div style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:6px;line-height:1.5">
+        Аккаунт <b style="color:var(--text)">@${escHtml(p.username)}</b> будет удалён навсегда.<br>
+        Все сообщения и данные исчезнут для всех.
+      </div>
+      <div style="font-size:12px;color:var(--danger,#e05555);text-align:center;margin-bottom:22px">⚠️ Это действие необратимо</div>
+      <div style="display:flex;gap:10px">
+        <button id="_del-cancel" style="flex:1;padding:13px;background:var(--surface3);border:none;border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;color:var(--text);font-family:inherit">Отмена</button>
+        <button id="_del-confirm" style="flex:1;padding:13px;background:#e05555;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;color:#fff;font-family:inherit">Удалить</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#_del-cancel').onclick = () => ov.remove();
+  ov.querySelector('#_del-confirm').onclick = () => {
+    ov.remove();
+    // Второй шаг — финальное подтверждение
+    const ov2 = document.createElement('div');
+    ov2.style.cssText = ov.style.cssText;
+    ov2.innerHTML = `
+      <div style="background:var(--surface2);border-radius:20px;padding:28px 22px;width:100%;max-width:340px;border:1.5px solid rgba(224,85,85,.4)">
+        <div style="font-size:40px;text-align:center;margin-bottom:14px">⚠️</div>
+        <div style="font-size:17px;font-weight:800;text-align:center;margin-bottom:10px;color:#e05555">Вы уверены?</div>
+        <div style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:22px;line-height:1.5">
+          Последний шанс. После подтверждения восстановление невозможно.
+        </div>
+        <div style="display:flex;gap:10px">
+          <button id="_del2-cancel" style="flex:1;padding:13px;background:var(--surface3);border:none;border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;color:var(--text);font-family:inherit">Отмена</button>
+          <button id="_del2-confirm" style="flex:1;padding:13px;background:#e05555;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;color:#fff;font-family:inherit">Да, удалить всё</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov2);
+    ov2.querySelector('#_del2-cancel').onclick = () => ov2.remove();
+    ov2.querySelector('#_del2-confirm').onclick = () => {
+      ov2.remove();
+      _doDeleteAccount(p);
+    };
+  };
+}
+
+async function _doDeleteAccount(p) {
   toast('⏳ Удаляем аккаунт...');
   profileDisconnect();
 
-  // 1. Supabase: удаляем presence
   if (sbReady()) {
-    await sbDelete('presence', 'username=eq.' + encodeURIComponent(p.username));
-    // 2. Supabase: удаляем все сообщения где участвует этот юзер
-    await sbDelete('messages', 'from_user=eq.' + encodeURIComponent(p.username));
-    await sbDelete('messages', 'to_user=eq.'   + encodeURIComponent(p.username));
-    // 3. Supabase: удаляем из leaderboard
-    await sbDelete('leaderboard', 'username=eq.' + encodeURIComponent(p.username));
+    const u = encodeURIComponent(p.username);
+    await Promise.allSettled([
+      // Удаляем из всех таблиц
+      sbDelete('presence',    'username=eq.'  + u),
+      sbDelete('users',       'username=eq.'  + u),
+      sbDelete('leaderboard', 'username=eq.'  + u),
+      // Все сообщения где участвует этот юзер (с обеих сторон)
+      sbDelete('messages',    'from_user=eq.' + u),
+      sbDelete('messages',    'to_user=eq.'   + u),
+    ]);
   }
 
-  // 4. Локальное хранилище: удаляем профиль из accounts
+  // Чистим локальное хранилище полностью
   const accounts = accountsLoad();
   delete accounts[p.username];
   accountsSave(accounts);
 
-  // 5. Очищаем все личные данные
-  localStorage.removeItem(PROFILE_KEY);
-  localStorage.removeItem(FRIENDS_KEY);
-  localStorage.removeItem(_msgStoreKey());
-  localStorage.removeItem(_msgChatsKey());
-  // Also remove legacy shared keys in case they exist
-  localStorage.removeItem(MSG_STORE_KEY_BASE);
-  localStorage.removeItem(MSG_CHATS_KEY_BASE);
+  const keysToRemove = [
+    PROFILE_KEY, FRIENDS_KEY,
+    _msgStoreKey(), _msgChatsKey(),
+    MSG_STORE_KEY_BASE, MSG_CHATS_KEY_BASE,
+    PINNED_CHATS_KEY, DELETED_CHATS_KEY,
+    _SECRET_CHATS_KEY,
+  ];
+  keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch(_) {} });
+
+  // Чистим IndexedDB
+  try { await idbSet('profile_avatar:' + p.username, null); } catch(_) {}
+  try { await idbSet('profile_video:'  + p.username, null); } catch(_) {}
 
   updateNavProfileIcon(null);
   profileInitLoginScreen();
   showScreen('s-login');
   loginShowRegister();
-  toast('✅ Аккаунт удалён');
+  toast('✅ Аккаунт удалён навсегда');
 }
 
 function profileLogout() {
@@ -2467,22 +2541,28 @@ async function sbInitTables() {
 // ┄┄ Сохранение/загрузка полного профиля в таблице users ┄┄┄┄┄┄┄┄┄
 async function sbSaveUser(p) {
   if (!sbReady() || !p) return;
+  // Перед сохранением — пушим текущую аватарку в историю
+  const history = await sbPushAvatarHistory(p);
+  p.avatarHistory = history;
+  profileSave(p);
+
   const payload = {
-    username:    p.username,
-    name:        p.name,
-    pwd_hash:    p.pwdHash    || null,
-    avatar:      p.avatar     || '😊',
-    avatar_type:      p.avatarType     || 'emoji',
-    avatar_data:      p.avatarData     || null,
-    avatar_video_url: p.avatarVideoUrl || null,
-    bio:         p.bio        || '',
-    status:      p.status     || 'online',
-    color:       p.color      || '#e87722',
-    vip:         p.vip        || false,
-    badge:       p.badge      || null,
-    frame:       p.frame      || null,
-    banner:      p.banner     || null,
-    created_at:  p.createdAt  || Date.now(),
+    username:         p.username,
+    name:             p.name,
+    pwd_hash:         p.pwdHash         || null,
+    avatar:           p.avatar          || '😊',
+    avatar_type:      p.avatarType      || 'emoji',
+    avatar_data:      p.avatarData      || null,
+    avatar_video_url: p.avatarVideoUrl  || null,
+    bio:              p.bio             || '',
+    status:           p.status          || 'online',
+    color:            p.color           || '#e87722',
+    vip:              p.vip             || false,
+    badge:            p.badge           || null,
+    frame:            p.frame           || null,
+    banner:           p.banner          || null,
+    created_at:       p.createdAt       || Date.now(),
+    avatar_history:   history.length    ? JSON.stringify(history) : null,
   };
   try {
     await _sbFetch('POST', '/rest/v1/users', payload, {
@@ -2491,6 +2571,224 @@ async function sbSaveUser(p) {
     });
   } catch(e) {}
 }
+
+// ── Сжать изображение до 80×80 JPEG-thumbnail ───────────────────────────────
+async function _compressToThumb(dataUrl) {
+  if (!dataUrl) return null;
+  if (dataUrl.startsWith('data:image/gif') || dataUrl.startsWith('data:image/webp')) return dataUrl;
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 80;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 80, 80);
+      ctx.drawImage(img, 0, 0, 80, 80);
+      resolve(cv.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+// ── Добавить ТЕКУЩУЮ аватарку в историю перед сменой ────────────────────────
+// Возвращает обновлённый массив истории (до 20 записей).
+async function sbPushAvatarHistory(p) {
+  if (!sbReady() || !p) return p?.avatarHistory || [];
+  try {
+    const rows = await sbGet('users',
+      `select=avatar_type,avatar_data,avatar_video_url,avatar,avatar_history&username=eq.${encodeURIComponent(p.username)}&limit=1`);
+    if (!Array.isArray(rows) || rows.length === 0) return p.avatarHistory || [];
+    const row = rows[0];
+
+    let history = [];
+    if (row.avatar_history) { try { history = JSON.parse(row.avatar_history); } catch(_) {} }
+
+    const curType = row.avatar_type || 'emoji';
+    let entry = null;
+    if (curType === 'photo' && row.avatar_data) {
+      const thumb = await _compressToThumb(row.avatar_data);
+      if (thumb) entry = { type: 'photo', data: thumb, ts: Date.now() };
+    } else if (curType === 'video' && row.avatar_video_url) {
+      entry = { type: 'video', url: row.avatar_video_url, ts: Date.now() };
+    } else if (curType === 'emoji' && row.avatar) {
+      entry = { type: 'emoji', emoji: row.avatar, ts: Date.now() };
+    }
+
+    if (entry) {
+      const last = history[0];
+      const isDup = last && last.type === entry.type && (
+        entry.type === 'emoji'  ? last.emoji === entry.emoji  :
+        entry.type === 'video'  ? last.url   === entry.url    :
+        last.data === entry.data
+      );
+      if (!isDup) {
+        history.unshift(entry);
+        if (history.length > 20) history = history.slice(0, 20);
+      }
+    }
+    return history;
+  } catch(e) { return p.avatarHistory || []; }
+}
+
+// ── Синхронизация своего профиля из Supabase в активной сессии ──────────────
+// Вызывается каждые ~75 сек из _javaTick чтобы подхватить смену аватара
+// сделанную с другого устройства без перезахода.
+async function sbSyncOwnProfile() {
+  if (!sbReady()) return;
+  const p = profileLoad();
+  if (!p) return;
+  try {
+    const rows = await sbGet('users',
+      `select=avatar_type,avatar_data,avatar_video_url,avatar,avatar_history&username=eq.${encodeURIComponent(p.username)}&limit=1`);
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const row = rows[0];
+
+    const changed =
+      (row.avatar_type        || 'emoji') !== (p.avatarType    || 'emoji') ||
+      (row.avatar             || '😊')   !== (p.avatar         || '😊')   ||
+      (row.avatar_data        || null)    !== (p.avatarData     || null)    ||
+      (row.avatar_video_url   || null)    !== (p.avatarVideoUrl || null);
+
+    if (!changed) {
+      // Догружаем историю если локально ещё нет
+      if (row.avatar_history && !(p.avatarHistory?.length)) {
+        try { p.avatarHistory = JSON.parse(row.avatar_history); profileSave(p); } catch(_) {}
+      }
+      return;
+    }
+
+    p.avatarType     = row.avatar_type      || 'emoji';
+    p.avatar         = row.avatar           || '😊';
+    p.avatarData     = row.avatar_data      || null;
+    p.avatarVideoUrl = row.avatar_video_url || null;
+    if (row.avatar_history) { try { p.avatarHistory = JSON.parse(row.avatar_history); } catch(_) {} }
+    profileSave(p);
+    updateNavProfileIcon(p);
+    if (p.avatarData) idbSet('profile_avatar:' + p.username, p.avatarData).catch(()=>{});
+
+    // Обновляем экран профиля если открыт
+    const ps = document.getElementById('s-profile');
+    if (ps && (ps.classList.contains('active') || getComputedStyle(ps).display !== 'none')) {
+      profileRenderScreen();
+    }
+    toast('🔄 Аватар обновлён с другого устройства');
+  } catch(e) {}
+}
+
+// ── Синхронизация списка чатов из Supabase (для мульти-девайс) ──────────────
+// Тянет уникальных собеседников из таблицы messages и мёрджит с локальным
+// списком. Так новые чаты появляются на всех устройствах без перезахода.
+let _chatSyncLastTs = 0;
+async function sbSyncChatList() {
+  if (!sbReady()) return;
+  const p = profileLoad();
+  if (!p) return;
+  try {
+    // Берём сообщения новее последнего известного ts — сортируем по from/to чтобы найти новых собеседников
+    const since = _chatSyncLastTs;
+    const [sent, recv] = await Promise.all([
+      sbGet('messages', `select=to_user,ts&from_user=eq.${encodeURIComponent(p.username)}&ts=gt.${since}&order=ts.desc&limit=200`),
+      sbGet('messages', `select=from_user,ts&to_user=eq.${encodeURIComponent(p.username)}&ts=gt.${since}&order=ts.desc&limit=200`),
+    ]);
+    if (!Array.isArray(sent) && !Array.isArray(recv)) return;
+
+    const peers = new Set();
+    (sent  || []).forEach(r => { if (r.to_user)   peers.add(r.to_user);   if (r.ts > _chatSyncLastTs) _chatSyncLastTs = r.ts; });
+    (recv  || []).forEach(r => { if (r.from_user) peers.add(r.from_user); if (r.ts > _chatSyncLastTs) _chatSyncLastTs = r.ts; });
+    peers.delete(p.username);
+
+    if (peers.size === 0) return;
+
+    const local = chatsLoad();
+    const localSet = new Set(local);
+    let changed = false;
+    peers.forEach(u => {
+      if (!localSet.has(u) && !u.startsWith('grp_') && u !== 'PUBLIC_GROUP') {
+        local.push(u);
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      chatsSave(local);
+      // Обновляем список мессенджера если открыт
+      const mscrn = document.getElementById('s-messenger');
+      if (mscrn && (mscrn.classList.contains('active') || getComputedStyle(mscrn).display !== 'none')) {
+        if (typeof messengerRenderList === 'function') messengerRenderList();
+      }
+    }
+  } catch(e) {}
+}
+window.avatarHistoryOpen = function(idx) {
+  const p = profileLoad();
+  const history = p?.avatarHistory || [];
+  if (!history.length) return;
+
+  document.getElementById('avatar-history-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'avatar-history-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;touch-action:none';
+
+  const render = (i) => {
+    const entry = history[i];
+    if (!entry) return;
+    const date = new Date(entry.ts).toLocaleDateString('ru-RU', { day:'numeric', month:'long', year:'numeric' });
+    let mediaHtml;
+    if (entry.type === 'photo') {
+      mediaHtml = `<img src="${entry.data}" style="width:220px;height:220px;border-radius:50%;object-fit:cover;box-shadow:0 8px 40px rgba(0,0,0,.6)">`;
+    } else if (entry.type === 'video') {
+      mediaHtml = `<video src="${entry.url}" style="width:220px;height:220px;border-radius:50%;object-fit:cover;box-shadow:0 8px 40px rgba(0,0,0,.6)" autoplay loop muted playsinline></video>`;
+    } else {
+      mediaHtml = `<div style="width:220px;height:220px;border-radius:50%;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:110px">${entry.emoji}</div>`;
+    }
+    modal.innerHTML = `
+      <button onclick="document.getElementById('avatar-history-modal').remove()"
+        style="position:absolute;top:20px;right:20px;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:20px;width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent">✕</button>
+      <div style="text-align:center;padding:0 24px">
+        ${mediaHtml}
+        <div style="color:rgba(255,255,255,.7);font-size:15px;margin-top:20px">${date}</div>
+        <div style="color:rgba(255,255,255,.35);font-size:12px;margin-top:4px">${i + 1} / ${history.length}</div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:36px;padding:0 24px;width:100%;max-width:380px;box-sizing:border-box">
+        ${i < history.length - 1
+          ? `<button onclick="avatarHistoryOpen(${i+1})" style="flex:1;padding:13px 8px;background:rgba(255,255,255,.12);border:none;color:#fff;border-radius:14px;cursor:pointer;font-size:14px;-webkit-tap-highlight-color:transparent">← Старее</button>`
+          : '<div style="flex:1"></div>'}
+        <button onclick="avatarHistoryRestore(${i})" style="flex:2;padding:13px 8px;background:var(--accent,#e87722);border:none;color:#fff;border-radius:14px;cursor:pointer;font-size:14px;font-weight:700;-webkit-tap-highlight-color:transparent">Восстановить</button>
+        ${i > 0
+          ? `<button onclick="avatarHistoryOpen(${i-1})" style="flex:1;padding:13px 8px;background:rgba(255,255,255,.12);border:none;color:#fff;border-radius:14px;cursor:pointer;font-size:14px;-webkit-tap-highlight-color:transparent">Новее →</button>`
+          : '<div style="flex:1"></div>'}
+      </div>`;
+  };
+
+  render(idx);
+  document.body.appendChild(modal);
+};
+
+window.avatarHistoryRestore = async function(idx) {
+  const p = profileLoad();
+  const history = p?.avatarHistory || [];
+  const entry = history[idx];
+  if (!entry || !p) return;
+  document.getElementById('avatar-history-modal')?.remove();
+  toast('⏳ Восстанавливаем аватар...');
+
+  if (entry.type === 'photo') {
+    p.avatarType = 'photo'; p.avatarData = entry.data; p.avatarVideoUrl = null;
+  } else if (entry.type === 'video') {
+    p.avatarType = 'video'; p.avatarVideoUrl = entry.url; p.avatarData = null;
+  } else {
+    p.avatarType = 'emoji'; p.avatar = entry.emoji; p.avatarData = null; p.avatarVideoUrl = null;
+  }
+
+  profileSave(p);
+  updateNavProfileIcon(p);
+  profileRenderScreen();
+  sbPresencePut(p).catch(()=>{});
+  await sbSaveUser(p);
+  toast('✅ Аватар восстановлён');
+};
 
 async function sbLoadUser(username) {
   if (!sbReady()) return null;
@@ -2794,6 +3092,14 @@ window._javaTick = async function() {
     sbPresencePut(pr).catch(() => {});
     sbPollPresence().catch(() => {});
   }
+  // Каждые 2 тика (~5 сек): синхронизируем аватарку и список чатов из Supabase
+  if (_javaTickCount % 2 === 0) {
+    sbSyncOwnProfile().catch(() => {});
+  }
+  if (_javaTickCount % 2 === 1) {
+    sbSyncChatList().catch(() => {});
+  }
+
   // Каждые ~10 мин (300 тиков по 2с) удаляем старые медиа-сообщения (> 3 дней)
   if (_javaTickCount % 300 === 5) {
     _mcCleanupOldMedia().catch(() => {});
@@ -11064,15 +11370,9 @@ function peerProfileOpen(username) {
   // Настраиваем шапку: прозрачная,   слева и ◆ справа
   const hdr = document.querySelector('#s-peer-profile .hdr');
   if (hdr) {
-    hdr.style.cssText = 'position:absolute;top:0;left:0;right:0;z-index:10;background:transparent;border:none;box-shadow:none';
-    hdr.innerHTML = `
-      <button class="hdr-back" style="background:rgba(0,0,0,.35);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-size:22px;padding:0;color:#fff"
-        onclick="SFX.play('screenBack');showScreen('s-messenger-chat','back')">‹</button>
-      <div style="flex:1"></div>
-      <button onclick="peerShowMenu('${username}')"
-        style="background:rgba(0,0,0,.35);border:none;border-radius:50%;width:36px;height:36px;
-          display:flex;align-items:center;justify-content:center;cursor:pointer;
-          font-size:18px;color:#fff;backdrop-filter:blur(4px)">◆</button>`;
+    hdr.style.cssText = 'position:absolute;top:0;left:0;right:0;z-index:10;background:transparent;border:none;box-shadow:none;transition:background .25s,box-shadow .25s;padding:0 16px';
+    // Заполним после рендера — нужен _peerAvatarMiniHtml
+    hdr._username = username;
   }
 
   if (!peer) {
@@ -11098,24 +11398,29 @@ function peerProfileOpen(username) {
   const peerBannerStyle = peer.banner
     ? (peer.banner.startsWith('background:') ? peer.banner : `background:${peer.banner}`)
     : `background:linear-gradient(135deg,${peer.color||'var(--accent)'}66,${peer.color||'var(--accent)'}22)`;
-  const peerAvatarHtml = _renderAvatarHtml(peer, 96);
+  const peerAvatarHtml    = _renderAvatarHtml(peer, 96);
+  const peerAvatarMiniHtml = _renderAvatarHtml(peer, 36);
 
   if (body) body.innerHTML = `
-    <!-- Баннер + аватар (тот же стиль что и собственный профиль) -->
-    <div style="position:relative;margin:0 0 0">
-      <div style="${peerBannerStyle};height:140px;width:100%;background-size:cover;background-position:center"></div>
-      <div style="position:absolute;bottom:-50px;left:50%;transform:translateX(-50%)">
-        <div style="position:relative;display:inline-block">
-          <div style="width:96px;height:96px;border-radius:50%;border:3px solid ${peer.color||'var(--accent)'};background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden">
-            ${peerAvatarHtml}
-          </div>
-          ${peer.vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))">${_emojiImg("👑",22)}</div>` : ''}
+    <!-- ── Параллакс-баннер (sticky) ── -->
+    <div id="pp-banner" style="height:200px;position:relative;overflow:hidden;flex-shrink:0">
+      <div id="pp-banner-bg" style="${peerBannerStyle};position:absolute;inset:-30px 0 0;background-size:cover;background-position:center;will-change:transform"></div>
+    </div>
+
+    <!-- ── Аватар (анимируется при скролле в хедер) ── -->
+    <div id="pp-avatar-wrap" style="position:absolute;top:152px;left:50%;transform:translateX(-50%);z-index:8;will-change:transform,opacity;pointer-events:none">
+      <div style="position:relative;display:inline-block">
+        <div style="width:96px;height:96px;border-radius:50%;border:3px solid ${peer.color||'var(--accent)'};background:var(--surface2);display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.55)">
+          ${peerAvatarHtml}
         </div>
+        ${peer.vip ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);font-size:22px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.8))">${_emojiImg("👑",22)}</div>` : ''}
       </div>
     </div>
-    <div style="height:60px"></div>
 
-    <!-- Имя, статус, bio   центрировано как в своём профиле -->
+    <!-- ── Основной контент ── -->
+    <div style="padding-top:64px">
+
+    <!-- Имя, статус, bio -->
     <div style="text-align:center;padding:0 16px 16px">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:24px;font-weight:800;color:var(--text)">${escHtml(peer.name||username)}</span>
@@ -11177,7 +11482,72 @@ function peerProfileOpen(username) {
 
     ${noCopy ? `<div style="margin-bottom:8px;padding:10px 14px;background:rgba(224,85,85,.12);border-radius:12px;border:1px solid rgba(224,85,85,.3);font-size:12px;color:#e05555">🔒 Копирование сообщений запрещено</div>` : ''}
     <div style="height:24px"></div>
+    </div><!-- /content wrapper -->
   `;
+
+  // ── Заполняем хедер с мини-аватаром (изначально прозрачный) ──
+  if (hdr) {
+    hdr.style.cssText = 'position:absolute;top:0;left:0;right:0;z-index:10;background:transparent;border:none;box-shadow:none;transition:background .2s,box-shadow .2s;padding:0 16px;display:flex;align-items:center;gap:10px;height:56px;box-sizing:border-box;padding-top:var(--safe-top,0px)';
+    hdr.innerHTML = `
+      <button class="hdr-back" style="background:rgba(0,0,0,.38);border-radius:50%;width:36px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);font-size:22px;padding:0;color:#fff;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent"
+        onclick="SFX.play('screenBack');showScreen('s-messenger-chat','back')">‹</button>
+      <!-- Имя + мини-аватар появляются при скролле -->
+      <div id="pp-hdr-content" style="flex:1;display:flex;align-items:center;gap:10px;opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;overflow:hidden">
+        <div style="width:34px;height:34px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid ${peer.color||'var(--accent)'}">
+          ${peerAvatarMiniHtml}
+        </div>
+        <div style="overflow:hidden">
+          <div style="font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(peer.name||username)}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.65)">${isOnline?'в сети':'не в сети'}</div>
+        </div>
+      </div>
+      <button onclick="peerShowMenu('${username}')"
+        style="background:rgba(0,0,0,.38);border:none;border-radius:50%;width:36px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:#fff;backdrop-filter:blur(6px);-webkit-tap-highlight-color:transparent">◆</button>`;
+  }
+
+  // ── Параллакс + collapse-анимация на скролл ──
+  setTimeout(() => {
+    const scrollEl = document.getElementById('peer-profile-body');
+    if (!scrollEl) return;
+    scrollEl.scrollTop = 0;
+
+    const COLLAPSE = 170; // px прокрутки до полного схлопывания
+
+    scrollEl.onscroll = function() {
+      const sy   = this.scrollTop;
+      const t    = Math.min(1, sy / COLLAPSE);
+      const tHdr = Math.max(0, (t - 0.45) / 0.55); // хедер появляется с 45% прокрутки
+
+      // Параллакс баннера
+      const bg = document.getElementById('pp-banner-bg');
+      if (bg) bg.style.transform = `translateY(${sy * 0.35}px)`;
+
+      // Аватар: уменьшается и уходит вверх
+      const av = document.getElementById('pp-avatar-wrap');
+      if (av) {
+        const scale   = Math.max(0.25, 1 - t * 0.75);
+        const moveUp  = t * 80;
+        av.style.transform = `translateX(-50%) translateY(-${moveUp}px) scale(${scale})`;
+        av.style.opacity   = Math.max(0, 1 - t * 1.6).toString();
+      }
+
+      // Хедер: от прозрачного к непрозрачному
+      const hdrEl = document.querySelector('#s-peer-profile .hdr');
+      if (hdrEl) {
+        const alpha = Math.min(0.97, t * 1.2);
+        hdrEl.style.background   = alpha > 0.9 ? 'var(--surface)' : `rgba(12,12,14,${alpha})`;
+        hdrEl.style.backdropFilter = alpha > 0.3 ? `blur(${Math.round(alpha * 16)}px)` : 'none';
+        hdrEl.style.boxShadow     = alpha > 0.85 ? '0 1px 0 rgba(255,255,255,.06)' : 'none';
+      }
+
+      // Контент хедера (имя + мини-аватар)
+      const hc = document.getElementById('pp-hdr-content');
+      if (hc) {
+        hc.style.opacity   = tHdr.toFixed(3);
+        hc.style.transform = `translateY(${(1 - tHdr) * 10}px)`;
+      }
+    };
+  }, 60);
 
   showScreen('s-peer-profile');
 }
