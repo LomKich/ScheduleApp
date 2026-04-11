@@ -95,30 +95,6 @@ jobs:
           echo "   JS файлы: $(ls "$DIST/js" | wc -l) шт."
           echo "   Размер:   $(du -sh "$DIST" | cut -f1)"
 
-      # ─── 3. Синхронизируем файлы расписания в scheduletxt ────────
-      # Если в репо есть папка schedule/ с .docx файлами —
-      # автоматически заливаем их как резерв на GitHub
-      - name: Sync schedule files to scheduletxt
-        if: hashFiles('schedule/*.docx', 'schedule/*.doc') != ''
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: |
-          echo "📅 Синхронизируем файлы расписания..."
-          git clone https://x-access-token:${GH_PAT}@github.com/LomKich/scheduletxt.git /tmp/scheduletxt
-          cp schedule/*.docx /tmp/scheduletxt/ 2>/dev/null || true
-          cp schedule/*.doc  /tmp/scheduletxt/ 2>/dev/null || true
-          cd /tmp/scheduletxt
-          git config user.name  "ScheduleApp CI"
-          git config user.email "ci@scheduleapp.local"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "   ℹ️  Изменений нет, пропускаем"
-          else
-            git commit -m "🔄 Авто-синхронизация расписания [skip ci]"
-            git push
-            echo "   ✅ Файлы расписания обновлены в scheduletxt"
-          fi
-
       # ─── 4. Загружаем артефакт для GitHub Pages ───────────────────
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
