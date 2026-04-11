@@ -3182,7 +3182,11 @@ async function getFileBuf(){
 
   // Попытка 3: GitHub raw по имени файла
   try{
-    const rawUrl=GITHUB_FALLBACK.rawBase+encodeURIComponent(S.selectedFile.name);
+    // Используем _githubRaw если есть (содержит полный путь с папкой schedule/)
+    // иначе строим из path файла
+    const f = S.selectedFile;
+    const rawUrl = f._githubRaw ||
+      (GITHUB_FALLBACK.rawBase + (f.path ? f.path.replace(/^\//, '').split('/').map(encodeURIComponent).join('/') : encodeURIComponent(f.name)));
     appLog('info','getFileBuf: trying GitHub raw: '+rawUrl);
     const buf=await githubDownloadFile(rawUrl);
     FILE_CACHE[key]=buf;
