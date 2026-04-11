@@ -3053,8 +3053,12 @@ async function loadFiles(){
     try {
       setStatus('home-status','Загружаю с Яндекс Диска...');setBar('home-bar',40);
       const data=await yadGet('/v1/disk/public/resources',{public_key:S.url,limit:100});
+      // Яндекс вернул ошибку в теле (прокси мог вернуть 200 но с error JSON)
+      if(data.error) throw new Error('Яндекс API: ' + (data.description || data.error));
       S.files=(data._embedded?.items||[]).filter(i=>i.type==='file'&&SCHEDULE_FILE_REGEX.test(i.name))
         .map(i=>({name:i.name,path:i.path||('/'+i.name),size:i.size||0,resourceId:i.resource_id||''}));
+      // Если файлов 0 — скорее всего ошибка, пробуем GitHub
+      if(S.files.length===0) throw new Error('Яндекс вернул 0 файлов — пробую GitHub');
       setBar('home-bar',100);setStatus('home-status',`Яндекс: ${S.files.length} файлов`);
       setTimeout(()=>{setBar('home-bar',0);setStatus('home-status','');},1200);
       saveLocal();
