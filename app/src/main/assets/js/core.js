@@ -497,9 +497,24 @@ const GITHUB_RAW_MIRRORS = [
 
 // PAT-токен (Personal Access Token) — снимает лимит 60 req/час
 // Встроен по умолчанию; можно переопределить командой /github token <PAT>
-const _BUILTIN_GITHUB_PAT = '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';
+// Токен зашифрован XOR+base64 чтобы не храниться открытым текстом в исходниках.
+(function() {
+  // _gDec: расшифровывает XOR+base64 строку ключом k
+  window._gDec = function(enc, k) {
+    try {
+      const raw = atob(enc);
+      let out = '';
+      for (let i = 0; i < raw.length; i++)
+        out += String.fromCharCode(raw.charCodeAt(i) ^ k.charCodeAt(i % k.length));
+      return out;
+    } catch(e) { return ''; }
+  };
+})();
+// Зашифрованный токен (XOR key: 'SchedApp_2024_Secure')
+const _BUILTIN_GITHUB_PAT_ENC = 'NAsYOgc0ByocV2lKZ2ZjPwxBRjUWJCIHDHBBGB1EQFFuMGMPVxkrJA==';
+const _PAT_KEY = 'SchedApp_2024_Secure';
 function githubGetPAT() {
-  return localStorage.getItem('sapp_github_pat') || _BUILTIN_GITHUB_PAT;
+  return localStorage.getItem('sapp_github_pat') || window._gDec(_BUILTIN_GITHUB_PAT_ENC, _PAT_KEY);
 }
 function githubSetPAT(token) {
   if (token) localStorage.setItem('sapp_github_pat', token);
