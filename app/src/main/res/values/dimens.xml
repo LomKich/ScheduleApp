@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ── Отступы ── -->
+    <dimen name="spacing_xs">4dp</dimen>
+    <dimen name="spacing_sm">8dp</dimen>
+    <dimen name="spacing_md">12dp</dimen>
+    <dimen name="spacing_lg">16dp</dimen>
+    <dimen name="spacing_xl">20dp</dimen>
+    <dimen name="spacing_xxl">24dp</dimen>
+    <dimen name="spacing_xxxl">32dp</dimen>
+
+    <!-- ── Скругления ── -->
+    <dimen name="corner_xs">4dp</dimen>
+    <dimen name="corner_sm">8dp</dimen>
+    <dimen name="corner_md">12dp</dimen>
+    <dimen name="corner_lg">16dp</dimen>
+    <dimen name="corner_xl">20dp</dimen>
+    <dimen name="corner_pill">50dp</dimen>
+
+    <!-- ── Высота элементов ── -->
+    <dimen name="list_item_height">64dp</dimen>
+    <dimen name="toolbar_height">56dp</dimen>
+    <dimen name="bottom_nav_height">60dp</dimen>
+    <dimen name="filter_pill_height">36dp</dimen>
+    <dimen name="play_button_height">40dp</dimen>
+
+    <!-- ── Иконки ── -->
+    <dimen name="icon_sm">18dp</dimen>
+    <dimen name="icon_md">22dp</dimen>
+    <dimen name="icon_lg">28dp</dimen>
+    <dimen name="icon_circle_btn">40dp</dimen>
+
+    <!-- ── Обложки треков / альбомов ── -->
+    <dimen name="cover_list">48dp</dimen>
+    <dimen name="cover_grid_sm">100dp</dimen>
+    <dimen name="cover_grid_md">140dp</dimen>
+    <dimen name="cover_player">240dp</dimen>
+
+    <!-- ── Elevation ── -->
+    <dimen name="elevation_card">0dp</dimen>
+    <dimen name="elevation_dialog">8dp</dimen>
+    <dimen name="elevation_fab">4dp</dimen>
+
+    <!-- ── Текст ── -->
+    <dimen name="text_xs">11sp</dimen>
+    <dimen name="text_sm">12sp</dimen>
+    <dimen name="text_md">14sp</dimen>
+    <dimen name="text_lg">16sp</dimen>
+    <dimen name="text_xl">20sp</dimen>
+    <dimen name="text_xxl">24sp</dimen>
+    <dimen name="text_display">28sp</dimen>
+
+</resources>

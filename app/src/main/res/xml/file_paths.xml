@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Папка внутри getFilesDir()/apk/ — сюда кладём скачанный APK -->
-    <files-path name="apk_updates" path="apk/" />
+    <!-- Для установки OTA APK-обновлений -->
+    <cache-path name="apk_cache" path="." />
+    <files-path name="apk_files" path="." />
+    <external-cache-path name="external_cache" path="." />
 </paths>

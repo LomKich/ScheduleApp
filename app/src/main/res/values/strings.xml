@@ -1,4 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Расписание</string>
-    <string name="vpn_channel_name">VPN Обход</string>
+    <string name="app_name">Schedule</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Отмена</string>
+    <string name="settings">Настройки</string>
+    <string name="close">Закрыть</string>
 </resources>

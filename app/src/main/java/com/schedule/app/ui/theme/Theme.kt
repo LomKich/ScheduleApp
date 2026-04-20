@@ -1,78 +1,121 @@
 package com.schedule.app.ui.theme
 
+import android.app.Activity
+import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
-// ── Состояние темы (mutable, живёт в CompositionLocal) ───────────────────────
-class ThemeState(initial: AppColors.ThemeDef = AppColors.themes.first()) {
-    var current by mutableStateOf(initial)
-    val bg       get() = current.bg
-    val surface  get() = current.surface
-    val surface2 get() = current.surface2
-    val surface3 get() = current.surface3
-    val accent   get() = current.accent
-    val accent2  get() = current.accent2
-    val text     get() = current.text
-    val muted    get() = current.muted
-    val btnText  get() = current.btnText
-    val danger   get() = AppColors.Danger
-    val success  get() = AppColors.Success
-    val border   get() = Color(0x0FFFFFFF)
-}
+// ─────────────────────────────────────────────────────────────────
+//  Тёмная схема  —  Echo Nightly style
+// ─────────────────────────────────────────────────────────────────
+private val DarkColorScheme = darkColorScheme(
+    // Основной акцент
+    primary              = AccentPrimary,
+    onPrimary            = AccentOnPrimary,
+    primaryContainer     = AccentPrimaryContainer,
+    onPrimaryContainer   = AccentOnPrimary,
 
-val LocalTheme = staticCompositionLocalOf { ThemeState() }
+    // Вторичный акцент
+    secondary            = AccentSecondary,
+    onSecondary          = White,
+    secondaryContainer   = AccentSecondaryContainer,
+    onSecondaryContainer = White,
 
-// ── Шрифты — Google Fonts (нужны в build.gradle: implementation "androidx.compose.ui:ui-text-google-fonts") ──
-// Пока используем системные шрифты как fallback. Для реальных шрифтов — добавь зависимость.
-fun fontFamilyForId(id: String): androidx.compose.ui.text.font.FontFamily {
-    return when (id) {
-        "jetbrains_mono", "fira_code" -> androidx.compose.ui.text.font.FontFamily.Monospace
-        "caveat", "neucha", "lobster" -> androidx.compose.ui.text.font.FontFamily.Cursive
-        "pt_serif", "lora", "merriweather", "cormorant" -> androidx.compose.ui.text.font.FontFamily.Serif
-        else -> androidx.compose.ui.text.font.FontFamily.Default
-    }
-}
+    // Третичный (пинк для shuffle / live badge)
+    tertiary             = AccentPink,
+    onTertiary           = White,
+    tertiaryContainer    = Color(0xFF5A1A3A),
+    onTertiaryContainer  = White,
 
+    // Фон и поверхности
+    background           = BgPrimary,
+    onBackground         = TextPrimary,
+    surface              = BgSurface,
+    onSurface            = TextPrimary,
+    surfaceVariant       = BgCard,
+    onSurfaceVariant     = TextSecondary,
+
+    // Контейнеры поверхностей (Material3 tokens)
+    surfaceContainer             = BgCard,
+    surfaceContainerLow          = BgSurface,
+    surfaceContainerHigh         = BgCardElevated,
+    surfaceContainerHighest      = BgDialog,
+
+    // Обводки
+    outline              = Outline,
+    outlineVariant       = Divider,
+
+    // Ошибки
+    error                = ErrorColor,
+    onError              = White,
+    errorContainer       = ErrorContainerColor,
+    onErrorContainer     = ErrorColor,
+
+    // Инвертированные (для snackbar и т.п.)
+    inverseSurface       = White,
+    inverseOnSurface     = BgPrimary,
+    inversePrimary       = AccentPrimaryDim,
+
+    // Tonal surface
+    surfaceTint          = AccentPrimary,
+    scrim                = Color(0xCC000000),
+)
+
+// ─────────────────────────────────────────────────────────────────
+//  Светлая схема  —  fallback (если система требует)
+// ─────────────────────────────────────────────────────────────────
+private val LightColorScheme = lightColorScheme(
+    primary              = AccentPrimary,
+    onPrimary            = White,
+    primaryContainer     = Color(0xFFDDDDFF),
+    onPrimaryContainer   = Color(0xFF0A0A50),
+    secondary            = AccentSecondary,
+    onSecondary          = White,
+    background           = Color(0xFFF5F5F5),
+    onBackground         = Color(0xFF111111),
+    surface              = White,
+    onSurface            = Color(0xFF111111),
+    error                = ErrorColor,
+    onError              = White,
+)
+
+// ─────────────────────────────────────────────────────────────────
+//  Точка входа — оборачивай любой Compose-контент
+// ─────────────────────────────────────────────────────────────────
 @Composable
-fun AppTheme(
-    themeState: ThemeState = remember { ThemeState() },
-    fontId: String = "default",
-    content: @Composable () -> Unit,
+fun ScheduleTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
 ) {
-    val t = themeState
-    val colorScheme = darkColorScheme(
-        background       = t.bg,
-        surface          = t.surface,
-        surfaceVariant   = t.surface2,
-        primary          = t.accent,
-        secondary        = t.accent2,
-        onBackground     = t.text,
-        onSurface        = t.text,
-        onPrimary        = t.btnText,
-        error            = t.danger,
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+
+    // Синхронизируем статус-бар и навигационную панель с темой
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            window.statusBarColor  = BgPrimary.toArgb()
+            window.navigationBarColor = BgPrimary.toArgb()
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars     = false
+                isAppearanceLightNavigationBars = false
+            }
+        }
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography  = ScheduleTypography,
+        content     = content
     )
-    val fontFamily = fontFamilyForId(fontId)
-    val typography = androidx.compose.material3.Typography().run {
-        copy(
-            bodyLarge  = bodyLarge.copy(fontFamily = fontFamily),
-            bodyMedium = bodyMedium.copy(fontFamily = fontFamily),
-            bodySmall  = bodySmall.copy(fontFamily = fontFamily),
-            titleLarge = titleLarge.copy(fontFamily = fontFamily),
-            titleMedium= titleMedium.copy(fontFamily = fontFamily),
-            titleSmall = titleSmall.copy(fontFamily = fontFamily),
-            labelLarge = labelLarge.copy(fontFamily = fontFamily),
-            labelMedium= labelMedium.copy(fontFamily = fontFamily),
-        )
-    }
-    CompositionLocalProvider(LocalTheme provides themeState) {
-        MaterialTheme(colorScheme = colorScheme, typography = typography, content = content)
-    }
 }
+
+// Вспомогательный extension — короткий доступ к цветам из любого Composable
+import androidx.compose.ui.graphics.Color as Color

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Фон кнопки воспроизведения с градиентом (акцент Echo Nightly) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#FF6B6BF5"
+        android:endColor="#FF9060E8"
+        android:angle="135"
+        android:type="linear" />
+    <corners android:radius="24dp" />
+</shape>

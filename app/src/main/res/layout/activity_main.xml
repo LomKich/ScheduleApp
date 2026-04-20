@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    MainActivity layout — WebView занимает весь экран.
+    Фон #0D0D0D чтобы не было белой вспышки при загрузке.
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary"
+    android:fitsSystemWindows="false">
+
+    <!-- WebView — основной интерфейс приложения -->
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/bg_primary"
+        android:scrollbars="none"
+        android:overScrollMode="never" />
+
+    <!-- Прогресс при первом запуске / загрузке -->
+    <ProgressBar
+        android:id="@+id/loadingIndicator"
+        style="?attr/progressBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:indeterminateTint="@color/accent_primary"
+        android:visibility="gone" />
+
+</FrameLayout>
