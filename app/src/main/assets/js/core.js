@@ -4493,6 +4493,23 @@ function cmdExec(raw){
           const ip = localStorage.getItem('jarvis_pc_ip') || 'не задан';
           cmdPrint('info', '📡 IP Джарвиса: ' + ip);
           cmdPrint('out', '  Изменить: протокол astra ip 192.168.x.x');
+        } else if (sub === 'mode' && subArg) {
+          const validModes = ['supabase', 'local', 'auto'];
+          const m = subArg.toLowerCase();
+          if (!validModes.includes(m)) { cmdPrint('err', 'Режимы: supabase | local | auto'); break; }
+          localStorage.setItem('jarvis_mode', m);
+          const modeDesc = { supabase: '🌍 Supabase (глобально, любая сеть)', local: '📡 Local (только та же сеть, быстро)', auto: '🌐 Auto (Supabase → Local резерв)' };
+          cmdPrint('ok', '✅ Режим: ' + modeDesc[m]);
+        } else if (sub === 'mode') {
+          const cur = localStorage.getItem('jarvis_mode') || 'auto';
+          cmdPrint('info', '🔧 Текущий режим: ' + cur);
+          cmdPrint('out', '  supabase — работает из любой точки мира');
+          cmdPrint('out', '  local    — только в одной сети с ПК (быстрее)');
+          cmdPrint('out', '  auto     — Supabase, резерв на local');
+        } else if (sub === 'session') {
+          cmdPrint('info', '🔑 Session ID: ' + (localStorage.getItem('jarvis_session_id') || 'не создана'));
+          cmdPrint('out', '  reset — сбросить сессию');
+          if (subArg === 'reset') { localStorage.removeItem('jarvis_session_id'); cmdPrint('ok', 'Сессия сброшена'); }
         } else {
           cmdPrint('ok', '🔐 Доступ разрешён. Открываю канал связи...');
           setTimeout(() => { cmdClose(); astraOpen(); }, 600);
@@ -7841,15 +7858,41 @@ function funShowExcuse() {
 })();
 
 
+
 // ═══════════════════════════════════════════════════════════
-//  ПРОТОКОЛ АСТРА — Чат с J.A.R.V.I.S
+//  ПРОТОКОЛ АСТРА — Глобальный чат с J.A.R.V.I.S
+//  Транспорт: Supabase Relay (работает из любой точки мира)
+//  Резерв:    Локальный HTTP (та же сеть)
 //  Активация: CMD → "протокол astra"
-//  Настройка IP: CMD → "протокол astra ip 192.168.x.x"
+//  Настройка: CMD → "протокол astra mode supabase|local|auto"
+//             CMD → "протокол astra ip 192.168.x.x" (для local)
 // ═══════════════════════════════════════════════════════════
 
 const ASTRA_DEFAULT_PORT = 8080;
-let _astraHistory = [];      // история сообщений для контекста
-let _astraTyping  = false;   // флаг — Джарвис печатает
+const ASTRA_RELAY_TABLE  = 'jarvis_relay';
+const ASTRA_POLL_MS      = 1500;   // интервал опроса ответа
+const ASTRA_TIMEOUT_MS   = 45000;  // максимум ждём ответа
+
+let _astraHistory  = [];
+let _astraTyping   = false;
+let _astraSessionId = null;    // уникальный ID сессии
+
+// ── Получить / создать session ID ────────────────────────────
+function _astraSession() {
+  if (!_astraSessionId) {
+    _astraSessionId = localStorage.getItem('jarvis_session_id');
+    if (!_astraSessionId) {
+      _astraSessionId = 'astra_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+      localStorage.setItem('jarvis_session_id', _astraSessionId);
+    }
+  }
+  return _astraSessionId;
+}
+
+// ── Режим: supabase | local | auto ──────────────────────────
+function _astraMode() {
+  return localStorage.getItem('jarvis_mode') || 'auto';
+}
 
 // ── Открыть чат ──────────────────────────────────────────────
 function astraOpen() {
@@ -7858,8 +7901,6 @@ function astraOpen() {
   ov.classList.add('astra-show');
   _astraUpdateStatus();
   _astraShowIpBanner();
-
-  // Приветствие при первом открытии
   const msgs = document.getElementById('astra-messages');
   if (msgs && msgs.children.length === 0) {
     _astraAddMsg('jarvis', 'Протокол Астра активирован. Добрый день, сэр. Чем могу помочь?');
@@ -7872,59 +7913,60 @@ function astraClose() {
   document.getElementById('astra-overlay')?.classList.remove('astra-show');
 }
 
-// ── Показать баннер с IP ─────────────────────────────────────
+// ── Баннер состояния ─────────────────────────────────────────
 function _astraShowIpBanner() {
   const banner = document.getElementById('astra-ip-banner');
   if (!banner) return;
-  const ip = localStorage.getItem('jarvis_pc_ip');
-  if (!ip) {
+  const mode = _astraMode();
+  const ip   = localStorage.getItem('jarvis_pc_ip');
+  if (mode === 'local' && !ip) {
     banner.style.display = 'block';
-    banner.innerHTML = '⚠️ IP ПК не задан. Открой CMD и введи: <b>протокол astra ip 192.168.x.x</b>';
+    banner.innerHTML = '⚠️ Режим LOCAL, но IP не задан. Введи в CMD: <b>протокол astra ip 192.168.x.x</b>';
+  } else if (mode === 'supabase' || mode === 'auto') {
+    banner.style.display = 'block';
+    const modeLabel = mode === 'supabase' ? '🌍 Supabase (глобально)' : '🌐 Auto (Supabase → Local)';
+    banner.innerHTML = modeLabel + ' · сессия: <b>' + _astraSession().slice(-8) + '</b>';
+    setTimeout(() => { banner.style.display = 'none'; }, 4000);
   } else {
-    banner.style.display = 'block';
-    banner.innerHTML = '📡 Подключение к Джарвису: <b>' + ip + ':' + ASTRA_DEFAULT_PORT + '</b>';
-    setTimeout(() => { banner.style.display = 'none'; }, 3000);
+    banner.style.display = 'none';
   }
 }
 
-// ── Обновить статус в шапке ───────────────────────────────────
+// ── Статус в шапке ───────────────────────────────────────────
 function _astraUpdateStatus(text) {
   const el = document.getElementById('astra-status');
   if (!el) return;
   if (text) { el.textContent = text; return; }
-  const ip = localStorage.getItem('jarvis_pc_ip');
-  el.textContent = ip ? ('Канал: ' + ip + ':' + ASTRA_DEFAULT_PORT) : 'IP ПК не задан';
+  const mode = _astraMode();
+  const modeMap = { supabase: '🌍 Supabase', local: '📡 Local', auto: '🌐 Auto' };
+  el.textContent = (modeMap[mode] || 'Auto') + ' · Джарвис';
 }
 
-// ── Добавить сообщение в чат ─────────────────────────────────
+// ── Сообщение в чате ─────────────────────────────────────────
 function _astraAddMsg(from, text) {
   const container = document.getElementById('astra-messages');
   if (!container) return;
-
-  const wrap = document.createElement('div');
+  const wrap   = document.createElement('div');
   wrap.className = 'astra-msg ' + from;
-
   const avatar = document.createElement('div');
   avatar.className = 'astra-avatar';
   avatar.textContent = from === 'jarvis' ? '🤖' : '👤';
-
   const bubble = document.createElement('div');
   bubble.className = 'astra-bubble';
   bubble.textContent = text;
-
   wrap.appendChild(avatar);
   wrap.appendChild(bubble);
   container.appendChild(wrap);
   container.scrollTop = container.scrollHeight;
 }
 
-// ── Показать / убрать индикатор печати ──────────────────────
+// ── Индикатор печати ─────────────────────────────────────────
 function _astraShowTyping(show) {
   const container = document.getElementById('astra-messages');
   if (!container) return;
   const existing = document.getElementById('astra-typing-indicator');
   if (show && !existing) {
-    const wrap = document.createElement('div');
+    const wrap   = document.createElement('div');
     wrap.className = 'astra-msg jarvis';
     wrap.id = 'astra-typing-indicator';
     const avatar = document.createElement('div');
@@ -7946,74 +7988,167 @@ function _astraShowTyping(show) {
   }
 }
 
-// ── Отправить сообщение ──────────────────────────────────────
+// ── Воспроизвести аудио из base64 WAV ────────────────────────
+function _astraPlayAudio(b64) {
+  if (!b64) return;
+  try {
+    const binary = atob(b64);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'audio/wav' });
+    const url  = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play().catch(() => {});
+    audio.onended = () => URL.revokeObjectURL(url);
+  } catch (_) {}
+}
+
+// ════════════════════════════════════════════════════════════
+//  ТРАНСПОРТ 1: Supabase Relay (глобальный)
+// ════════════════════════════════════════════════════════════
+
+// Вставить сообщение пользователя в таблицу jarvis_relay
+async function _astraRelayInsert(msgText) {
+  const sid = _astraSession();
+  const url = `${sbUrl()}/rest/v1/${ASTRA_RELAY_TABLE}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      apikey: sbKey(),
+      Authorization: `Bearer ${sbKey()}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify({
+      session_id: sid,
+      role: 'user',
+      content: msgText,
+      status: 'pending',
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!r.ok) throw new Error('Supabase insert: ' + r.status);
+  const rows = await r.json();
+  return rows[0]?.id;   // UUID вставленной строки
+}
+
+// Опрашивать таблицу пока не появится ответ jarvis
+async function _astraRelayPoll(insertedId) {
+  const sid      = _astraSession();
+  const deadline = Date.now() + ASTRA_TIMEOUT_MS;
+  const url      = `${sbUrl()}/rest/v1/${ASTRA_RELAY_TABLE}` +
+    `?session_id=eq.${encodeURIComponent(sid)}&role=eq.jarvis&reply_to=eq.${insertedId}&order=created_at.desc&limit=1`;
+
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, ASTRA_POLL_MS));
+    const r = await fetch(url, {
+      headers: { apikey: sbKey(), Authorization: `Bearer ${sbKey()}` },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!r.ok) continue;
+    const rows = await r.json();
+    if (rows.length > 0 && rows[0].status === 'done') return rows[0];
+  }
+  throw new Error('timeout');
+}
+
+async function _astraSendViaSupabase(text) {
+  _astraUpdateStatus('📤 Отправка через Supabase...');
+  const id  = await _astraRelayInsert(text);
+  _astraUpdateStatus('⏳ Ждём ответа Джарвиса...');
+  const row = await _astraRelayPoll(id);
+  return { response: row.content, audio_b64: row.audio_b64 };
+}
+
+// ════════════════════════════════════════════════════════════
+//  ТРАНСПОРТ 2: Локальный HTTP (та же сеть)
+// ════════════════════════════════════════════════════════════
+
+async function _astraSendViaLocal(text) {
+  const ip  = localStorage.getItem('jarvis_pc_ip');
+  if (!ip)  throw new Error('no_ip');
+  const url = `http://${ip}:${ASTRA_DEFAULT_PORT}/text`;
+  _astraUpdateStatus('📡 Локальное подключение...');
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return await r.json();
+}
+
+// ════════════════════════════════════════════════════════════
+//  ГЛАВНАЯ ФУНКЦИЯ ОТПРАВКИ
+// ════════════════════════════════════════════════════════════
+
 async function astraSend() {
   const input = document.getElementById('astra-input');
   if (!input) return;
   const text = input.value.trim();
   if (!text || _astraTyping) return;
 
-  const ip = localStorage.getItem('jarvis_pc_ip');
-  if (!ip) {
-    _astraAddMsg('jarvis', '⚠️ IP ПК не задан. Открой CMD и введи: протокол astra ip 192.168.x.x');
-    return;
-  }
-
   input.value = '';
   _astraAddMsg('user', text);
   _astraHistory.push({ role: 'user', content: text });
-
   _astraTyping = true;
   _astraShowTyping(true);
-  _astraUpdateStatus('Джарвис думает...');
   document.getElementById('astra-send').style.opacity = '0.4';
 
-  const url = 'http://' + ip + ':' + ASTRA_DEFAULT_PORT + '/text';
+  let data = null;
+  let usedTransport = '';
 
   try {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-      signal: AbortSignal.timeout(30000)
-    });
+    const mode = _astraMode();
 
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    if (mode === 'local') {
+      // Только локальный
+      data = await _astraSendViaLocal(text);
+      usedTransport = 'local';
 
-    const data = await resp.json();
-    const reply = data.response || data.text || '...';
+    } else if (mode === 'supabase') {
+      // Только Supabase
+      data = await _astraSendViaSupabase(text);
+      usedTransport = 'supabase';
 
-    _astraShowTyping(false);
-    _astraAddMsg('jarvis', reply);
-    _astraHistory.push({ role: 'assistant', content: reply });
-
-    // Если сервер вернул аудио — воспроизводим
-    if (data.audio_b64) {
+    } else {
+      // Auto: сначала Supabase, при ошибке — локальный
       try {
-        const binary = atob(data.audio_b64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const blob = new Blob([bytes], { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(blob);
-        const audio = new Audio(audioUrl);
-        audio.play().catch(() => {});
-        audio.onended = () => URL.revokeObjectURL(audioUrl);
-      } catch (_) {}
+        data = await _astraSendViaSupabase(text);
+        usedTransport = 'supabase';
+      } catch (sbErr) {
+        const ip = localStorage.getItem('jarvis_pc_ip');
+        if (ip) {
+          _astraAddMsg('jarvis', '⚡ Supabase недоступен, переключаюсь на локальный канал...');
+          data = await _astraSendViaLocal(text);
+          usedTransport = 'local';
+        } else {
+          throw sbErr;
+        }
+      }
     }
 
-    _astraUpdateStatus('Канал активен · ' + ip);
+    _astraShowTyping(false);
+    const reply = data.response || data.text || '...';
+    _astraAddMsg('jarvis', reply);
+    _astraHistory.push({ role: 'assistant', content: reply });
+    if (data.audio_b64) _astraPlayAudio(data.audio_b64);
+
+    const icon = usedTransport === 'supabase' ? '🌍' : '📡';
+    _astraUpdateStatus(icon + ' Канал активен · ' + usedTransport);
 
   } catch (err) {
     _astraShowTyping(false);
-    let errMsg;
-    if (err.name === 'TimeoutError') {
-      errMsg = '⏱ Нет ответа от Джарвиса (таймаут 30с). Проверь:\n• jarvis.py запущен на ПК?\n• ПК в той же Wi-Fi сети?';
-    } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-      errMsg = '📡 Нет связи с ПК (' + ip + ':' + ASTRA_DEFAULT_PORT + ').\n• Запусти jarvis.py\n• Проверь IP в CMD: протокол astra ip';
+    let msg;
+    if (err.message === 'no_ip') {
+      msg = '⚠️ IP ПК не задан.\nВведи в CMD: протокол astra ip 192.168.x.x\nИли переключись: протокол astra mode supabase';
+    } else if (err.message === 'timeout') {
+      msg = '⏱ Джарвис не ответил за ' + (ASTRA_TIMEOUT_MS/1000) + 'с.\n• jarvis.py запущен и подключён к Supabase?\n• Проверь консоль ПК';
     } else {
-      errMsg = '❌ Ошибка: ' + err.message;
+      msg = '❌ Ошибка: ' + err.message;
     }
-    _astraAddMsg('jarvis', errMsg);
+    _astraAddMsg('jarvis', msg);
     _astraUpdateStatus('⚠️ Связь потеряна');
   } finally {
     _astraTyping = false;
@@ -8021,21 +8156,15 @@ async function astraSend() {
     document.getElementById('astra-input')?.focus();
   }
 
-  // Ограничение истории
-  if (_astraHistory.length > 30) {
-    _astraHistory = _astraHistory.slice(-20);
-  }
+  if (_astraHistory.length > 30) _astraHistory = _astraHistory.slice(-20);
 }
 
-// ── Закрытие по кнопке «Назад» ───────────────────────────────
+// ── Обработка кнопки «Назад» Android ────────────────────────
 (function _astraBackHandler() {
-  const origBack = window.onBackPressed;
+  const orig = window.onBackPressed;
   window.onBackPressed = function() {
     const ov = document.getElementById('astra-overlay');
-    if (ov && ov.classList.contains('astra-show')) {
-      astraClose();
-      return true;
-    }
-    return origBack ? origBack() : false;
+    if (ov?.classList.contains('astra-show')) { astraClose(); return true; }
+    return orig ? orig() : false;
   };
 })();
