@@ -276,8 +276,14 @@ contextBridge.exposeInMainWorld('Android', AndroidBridge);
 // Also expose as 'AndroidBridge' alias just in case
 contextBridge.exposeInMainWorld('AndroidBridge', AndroidBridge);
 
-// Patch safe-area env vars for desktop (no notch)
+// Expose platform name so the web UI can show correct OS label in settings
 contextBridge.exposeInMainWorld('__desktopMode', true);
+contextBridge.exposeInMainWorld('__platformName', (function() {
+  const p = process.platform;
+  if (p === 'darwin') return 'macOS';
+  if (p === 'win32')  return 'Windows';
+  return 'Linux';
+})());
 
 // ── DOM ready: inject desktop CSS tweaks ─────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
