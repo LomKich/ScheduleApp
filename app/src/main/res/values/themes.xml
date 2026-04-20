@@ -1,212 +1,71 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Тема приложения — только AppCompat, без com.google.android.material.
+    Весь Material3 UI живёт в Compose (Theme.kt / Color.kt).
+    XML-тема нужна только для: статус-бар, навбар, фон окна, нативные диалоги.
+-->
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <!--
-        ╔══════════════════════════════════════════════════════════╗
-        ║  Theme.Schedule  —  Echo Nightly Dark Style              ║
-        ║  Тёмный фон #0D0D0D, акцент индиго-фиолетовый #6B6BF5   ║
-        ╚══════════════════════════════════════════════════════════╝
-    -->
-    <style name="Theme.Schedule" parent="Theme.Material3.Dark.NoActionBar">
+    <!-- ══════════════════════════════════════════════════════
+         Theme.Schedule  —  основная тема
+         ══════════════════════════════════════════════════════ -->
+    <style name="Theme.Schedule" parent="Theme.AppCompat.DayNight.NoActionBar">
 
-        <!-- ── Основные цвета Material 3 ── -->
-        <item name="colorPrimary">@color/accent_primary</item>
-        <item name="colorOnPrimary">@color/accent_on_primary</item>
-        <item name="colorPrimaryContainer">@color/accent_primary_container</item>
-        <item name="colorOnPrimaryContainer">@color/accent_on_primary</item>
-
-        <item name="colorSecondary">@color/accent_secondary</item>
-        <item name="colorOnSecondary">@color/white</item>
-        <item name="colorSecondaryContainer">@color/accent_secondary_container</item>
-        <item name="colorOnSecondaryContainer">@color/white</item>
-
-        <item name="colorTertiary">@color/accent_pink</item>
-        <item name="colorOnTertiary">@color/white</item>
-
-        <!-- ── Поверхности ── -->
-        <item name="colorSurface">@color/bg_surface</item>
-        <item name="colorOnSurface">@color/text_primary</item>
-        <item name="colorSurfaceVariant">@color/bg_card</item>
-        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
-        <item name="colorSurfaceContainer">@color/bg_card</item>
-        <item name="colorSurfaceContainerHigh">@color/bg_card_elevated</item>
-        <item name="colorSurfaceContainerHighest">@color/bg_dialog</item>
-
-        <!-- ── Фон ── -->
-        <item name="android:colorBackground">@color/bg_primary</item>
-        <item name="colorBackground">@color/bg_primary</item>
-
-        <!-- ── Обводки / разделители ── -->
-        <item name="colorOutline">@color/outline</item>
-        <item name="colorOutlineVariant">@color/divider</item>
-
-        <!-- ── Ошибки ── -->
-        <item name="colorError">@color/error</item>
-        <item name="colorErrorContainer">@color/error_container</item>
-
-        <!-- ── Статус-бар: тёмный, иконки светлые ── -->
+        <!-- Статус-бар и навигационная панель -->
         <item name="android:statusBarColor">@color/status_bar</item>
-        <item name="android:windowLightStatusBar">false</item>
-
-        <!-- ── Навигационная панель ── -->
         <item name="android:navigationBarColor">@color/nav_bar</item>
-        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
 
-        <!-- ── Окно ── -->
+        <!-- Фон окна — тёмный, без белой вспышки при запуске -->
         <item name="android:windowBackground">@color/bg_primary</item>
+        <item name="android:colorBackground">@color/bg_primary</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
 
-        <!-- ── Текст ── -->
+        <!-- Акцент для нативных View (ProgressBar, Switch, CheckBox) -->
+        <item name="colorAccent">@color/accent_primary</item>
+        <item name="colorPrimary">@color/accent_primary</item>
+        <item name="colorPrimaryDark">@color/bg_surface</item>
+
+        <!-- Текст -->
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
         <item name="android:textColorHint">@color/text_hint</item>
 
-        <!-- ── Switch (Toggle) — фиолетовый when on ── -->
-        <item name="switchStyle">@style/Widget.Schedule.Switch</item>
-
-        <!-- ── Диалоги ── -->
-        <item name="materialAlertDialogTheme">@style/Theme.Schedule.Dialog</item>
+        <!-- Нативный диалог -->
+        <item name="android:alertDialogTheme">@style/Theme.Schedule.Dialog</item>
         <item name="alertDialogTheme">@style/Theme.Schedule.Dialog</item>
-
-        <!-- ── Кнопки ── -->
-        <item name="materialButtonStyle">@style/Widget.Schedule.Button</item>
-
-        <!-- ── Карточки ── -->
-        <item name="materialCardViewStyle">@style/Widget.Schedule.Card</item>
-
-        <!-- ── Анимация переходов ── -->
-        <item name="android:windowActivityTransitions">true</item>
-        <item name="android:windowEnterTransition">@android:transition/fade</item>
-        <item name="android:windowExitTransition">@android:transition/fade</item>
 
     </style>
 
-    <!-- ══════════════════════════════════════════════════════════
-         CircleRecord — полностью прозрачное окно поверх всего
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Theme.CircleRecord" parent="Theme.Material3.Dark.NoActionBar">
+    <!-- ══════════════════════════════════════════════════════
+         Theme.CircleRecord  —  прозрачное окно для Camera2
+         ══════════════════════════════════════════════════════ -->
+    <style name="Theme.CircleRecord" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowNoTitle">true</item>
-        <item name="android:windowFullscreen">false</item>
         <item name="android:backgroundDimEnabled">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
     </style>
 
-    <!-- ══════════════════════════════════════════════════════════
-         Switch  —  индиго трек, белый thumb
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Widget.Schedule.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
-        <item name="trackTint">@color/switch_track_selector</item>
-        <item name="thumbTint">@color/switch_thumb_selector</item>
-    </style>
-
-    <!-- ══════════════════════════════════════════════════════════
-         Dialog  —  тёмный фон, скруглённые углы
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Theme.Schedule.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+    <!-- ══════════════════════════════════════════════════════
+         Dialog  —  тёмный AppCompat-диалог
+         ══════════════════════════════════════════════════════ -->
+    <style name="Theme.Schedule.Dialog" parent="Theme.AppCompat.DayNight.Dialog.Alert">
         <item name="android:background">@color/bg_dialog</item>
-        <item name="colorSurface">@color/bg_dialog</item>
-        <item name="colorOnSurface">@color/text_primary</item>
-        <item name="colorPrimary">@color/accent_primary</item>
-        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Schedule.Dialog</item>
-        <item name="materialAlertDialogBodyTextStyle">@style/TextAppearance.Schedule.DialogBody</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="colorAccent">@color/accent_primary</item>
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.Schedule.DialogButton</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.Schedule.DialogButton</item>
     </style>
 
-    <style name="ShapeAppearance.Schedule.Dialog" parent="ShapeAppearance.Material3.Corner.ExtraLarge">
-        <item name="cornerSize">20dp</item>
-    </style>
-
-    <style name="TextAppearance.Schedule.DialogBody" parent="TextAppearance.Material3.BodyMedium">
-        <item name="android:textColor">@color/text_secondary</item>
-    </style>
-
-    <!-- ══════════════════════════════════════════════════════════
-         Button  —  заполненный индиго с белым текстом
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Widget.Schedule.Button" parent="Widget.Material3.Button">
-        <item name="android:backgroundTint">@color/accent_primary</item>
-        <item name="android:textColor">@color/white</item>
-        <item name="cornerRadius">24dp</item>
-        <item name="android:letterSpacing">0.01</item>
-    </style>
-
-    <!-- ══════════════════════════════════════════════════════════
-         Card  —  тёмная поверхность, скруглённые углы 16dp
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Widget.Schedule.Card" parent="Widget.Material3.CardView.Elevated">
-        <item name="cardBackgroundColor">@color/bg_card</item>
-        <item name="cardElevation">0dp</item>
-        <item name="cardCornerRadius">16dp</item>
-        <item name="strokeColor">@color/divider</item>
-        <item name="strokeWidth">0dp</item>
-    </style>
-
-    <!-- ══════════════════════════════════════════════════════════
-         BottomSheet  —  для системных диалогов снизу
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Theme.Schedule.BottomSheet" parent="Theme.Material3.Dark.BottomSheetDialog">
-        <item name="bottomSheetStyle">@style/Widget.Schedule.BottomSheet</item>
-        <item name="colorSurface">@color/bg_card</item>
-    </style>
-
-    <style name="Widget.Schedule.BottomSheet" parent="Widget.Material3.BottomSheet.Modal">
-        <item name="backgroundTint">@color/bg_card</item>
-        <item name="shapeAppearance">@style/ShapeAppearance.Schedule.BottomSheet</item>
-    </style>
-
-    <style name="ShapeAppearance.Schedule.BottomSheet" parent="">
-        <item name="cornerFamily">rounded</item>
-        <item name="cornerSizeTopLeft">20dp</item>
-        <item name="cornerSizeTopRight">20dp</item>
-        <item name="cornerSizeBottomLeft">0dp</item>
-        <item name="cornerSizeBottomRight">0dp</item>
-    </style>
-
-    <!-- ══════════════════════════════════════════════════════════
-         Splash / Launch  —  чёрный фон без мигания
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Theme.Schedule.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/bg_primary</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="postSplashScreenTheme">@style/Theme.Schedule</item>
-    </style>
-
-    <!-- ══════════════════════════════════════════════════════════
-         TextInputLayout  —  поле ввода в тёмном стиле
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Widget.Schedule.TextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
-        <item name="boxStrokeColor">@color/outline</item>
-        <item name="boxBackgroundColor">@color/bg_card</item>
-        <item name="hintTextColor">@color/text_accent</item>
-        <item name="android:textColorHint">@color/text_hint</item>
-        <item name="boxCornerRadiusTopStart">12dp</item>
-        <item name="boxCornerRadiusTopEnd">12dp</item>
-        <item name="boxCornerRadiusBottomStart">12dp</item>
-        <item name="boxCornerRadiusBottomEnd">12dp</item>
-    </style>
-
-    <!-- ══════════════════════════════════════════════════════════
-         Chip  —  тег в стиле Echo Nightly
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Widget.Schedule.Chip" parent="Widget.Material3.Chip.Filter">
-        <item name="chipBackgroundColor">@color/bg_card</item>
-        <item name="chipStrokeColor">@color/outline</item>
-        <item name="chipStrokeWidth">1dp</item>
-        <item name="chipCornerRadius">20dp</item>
-        <item name="android:textColor">@color/text_primary</item>
-        <item name="checkedIconTint">@color/accent_primary</item>
-        <item name="chipSelectedBackgroundColor">@color/accent_primary_container</item>
-    </style>
-
-    <!-- ══════════════════════════════════════════════════════════
-         Preference  —  экраны настроек (как в скринах)
-         ══════════════════════════════════════════════════════════ -->
-    <style name="Theme.Schedule.Preferences" parent="Theme.Schedule">
-        <item name="preferenceTheme">@style/PreferenceThemeOverlay.v14.Material</item>
-        <item name="android:listDivider">@color/divider</item>
+    <style name="Widget.Schedule.DialogButton" parent="Widget.AppCompat.Button.ButtonBar.AlertDialog">
+        <item name="android:textColor">@color/accent_primary</item>
+        <item name="android:textAllCaps">false</item>
     </style>
 
 </resources>
