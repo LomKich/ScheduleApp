@@ -1,10 +1,14 @@
 package com.schedule.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -252,7 +256,7 @@ fun SectionHeader(
         )
         if (onMore != null) {
             Icon(
-                imageVector        = androidx.compose.material.icons.Icons.Default.ChevronRight,
+                imageVector        = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "More",
                 tint               = TextSecondary,
                 modifier           = Modifier
@@ -284,7 +288,7 @@ fun EchoTopBar(
             if (onBack != null) {
                 IconButton(onClick = onBack) {
                     Icon(
-                        imageVector        = androidx.compose.material.icons.Icons.Default.ArrowBack,
+                        imageVector        = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
                         tint               = TextPrimary
                     )
@@ -293,8 +297,8 @@ fun EchoTopBar(
         },
         actions = actions,
         colors  = TopAppBarDefaults.topAppBarColors(
-            containerColor        = BgSurface,
-            titleContentColor     = TextPrimary,
+            containerColor             = BgSurface,
+            titleContentColor          = TextPrimary,
             navigationIconContentColor = TextPrimary,
             actionIconContentColor     = TextPrimary
         )

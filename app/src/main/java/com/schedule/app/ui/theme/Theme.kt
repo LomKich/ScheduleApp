@@ -7,7 +7,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -87,7 +90,31 @@ private val LightColorScheme = lightColorScheme(
 )
 
 // ─────────────────────────────────────────────────────────────────
-//  Точка входа — оборачивай любой Compose-контент
+//  ThemeState  —  снимок текущей темы, доступный через LocalTheme
+// ─────────────────────────────────────────────────────────────────
+data class ThemeState(
+    val isDark: Boolean = true
+)
+
+// CompositionLocal — позволяет любому Composable читать val theme = LocalTheme.current
+val LocalTheme = compositionLocalOf { ThemeState() }
+
+// ─────────────────────────────────────────────────────────────────
+//  AppTheme  —  публичная точка входа (оборачивает ScheduleTheme)
+//  Предоставляет LocalTheme в дерево и синхронизирует системные бары
+// ─────────────────────────────────────────────────────────────────
+@Composable
+fun AppTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    CompositionLocalProvider(LocalTheme provides ThemeState(isDark = darkTheme)) {
+        ScheduleTheme(darkTheme = darkTheme, content = content)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  ScheduleTheme  —  внутренняя реализация (Material3 + системные бары)
 // ─────────────────────────────────────────────────────────────────
 @Composable
 fun ScheduleTheme(
@@ -101,7 +128,7 @@ fun ScheduleTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor  = BgPrimary.toArgb()
+            window.statusBarColor     = BgPrimary.toArgb()
             window.navigationBarColor = BgPrimary.toArgb()
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars     = false
@@ -116,6 +143,3 @@ fun ScheduleTheme(
         content     = content
     )
 }
-
-// Вспомогательный extension — короткий доступ к цветам из любого Composable
-import androidx.compose.ui.graphics.Color as Color
