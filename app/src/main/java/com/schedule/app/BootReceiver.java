@@ -31,5 +31,23 @@ public class BootReceiver extends BroadcastReceiver {
         } else {
             Log.i("BootReceiver", "Boot complete — BgService отключён, пропускаю");
         }
+
+        // ── Джарвис: голосовой режим (Протокол Астра) ─────────────────────────
+        SharedPreferences jarvisPrefs = context.getSharedPreferences(
+                "jarvis_relay_prefs", Context.MODE_PRIVATE);
+        boolean jarvisActive = jarvisPrefs.getBoolean("jarvis_voice_active", false);
+
+        if (jarvisActive) {
+            Log.i("BootReceiver", "Boot complete — перезапускаю JarvisVoiceService");
+            Intent jarvisIntent = new Intent(context,
+                    com.schedule.app.jarvis.JarvisVoiceService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(jarvisIntent);
+            } else {
+                context.startService(jarvisIntent);
+            }
+        } else {
+            Log.i("BootReceiver", "Boot complete — Джарвис не активирован, пропускаю");
+        }
     }
 }

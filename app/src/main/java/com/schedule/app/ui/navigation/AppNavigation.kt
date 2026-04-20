@@ -32,6 +32,7 @@ sealed class Screen {
     object Friends     : Screen()
     object Leaderboard : Screen()
     object Messenger   : Screen()
+    object JarvisChat  : Screen()
     object OnlineUsers : Screen()
     object GroupChats  : Screen()
     data class Chat(val withUsername: String)       : Screen()
@@ -346,18 +347,37 @@ fun AppScreen(
                 Screen.Messenger -> {
                     LaunchedEffect(Unit) { vm.startMessengerPoller() }
                     MessengerScreen(
-                    chats        = vm.messengerChats,
+                    chats        = vm.messengerChatsWithJarvis(),
                     isLoading    = vm.messengerLoading,
                     searchQuery  = vm.messengerSearch,
                     onSearchChange = { vm.messengerSearch = it },
                     onChatClick  = { username ->
-                        vm.openChat(username)
-                        navigate(Screen.Chat(username))
+                        if (username == "__jarvis__") {
+                            navigate(Screen.JarvisChat)
+                        } else {
+                            vm.openChat(username)
+                            navigate(Screen.Chat(username))
+                        }
                     },
                     onNewChat    = { vm.loadOnlineUsers(); navigate(Screen.OnlineUsers) },
                     onNewGroup   = { vm.loadGroupChats(); navigate(Screen.GroupChats) },
                     onRefresh    = { vm.startMessengerPoller() },
                     onBack       = { goBack(Screen.Home) },
+                    )
+                }
+
+                Screen.JarvisChat -> {
+                    JarvisChatScreen(
+                        messages       = vm.jarvisMessages,
+                        isSending      = vm.jarvisSending,
+                        isOnline       = vm.jarvisOnline,
+                        voiceActive    = vm.jarvisVoiceActive,
+                        onSend         = vm::sendJarvisMessage,
+                        onToggleVoice  = {
+                            if (vm.jarvisVoiceActive) vm.deactivateJarvisVoice()
+                            else vm.activateJarvisProtocol()
+                        },
+                        onBack         = { goBack(Screen.Messenger) },
                     )
                 }
 

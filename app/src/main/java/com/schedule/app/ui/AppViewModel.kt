@@ -10,6 +10,10 @@ import androidx.lifecycle.viewModelScope
 import com.schedule.app.AppLogger
 import com.schedule.app.BuildConfig
 import com.schedule.app.SupabaseClient
+import com.schedule.app.jarvis.JarvisAudioPlayer
+import com.schedule.app.jarvis.JarvisChatBridge
+import com.schedule.app.jarvis.JarvisRelayClient
+import com.schedule.app.jarvis.JarvisVoiceService
 import com.schedule.app.ui.screens.*
 import com.schedule.app.ui.theme.AppColors
 import com.schedule.app.ui.theme.ThemeState
@@ -42,6 +46,153 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("sapp_prefs", Context.MODE_PRIVATE)
     private val log   = AppLogger.get(app)
     val sb: SupabaseClient = SupabaseClient.get(app, log)
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ДЖАРВИС — Протокол Астра
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** Мост чата (relay ↔ пузыри в UI). */
+    val jarvisBridge = JarvisChatBridge(app, viewModelScope)
+
+    /** Сообщения в чате с Джарвисом (отдельно от обычных messages). */
+    var jarvisMessages by mutableStateOf<List<ChatMessage>>(emptyList())
+
+    /** Статус Джарвиса: true = ПК онлайн. */
+    var jarvisOnline by mutableStateOf(false)
+        private set
+
+    /** true если Протокол Астра активирован (голосовой сервис запущен). */
+    var jarvisVoiceActive by mutableStateOf(false)
+
+    /** true когда ждём ответа от Джарвиса. */
+    var jarvisSending by mutableStateOf(false)
+
+    init {
+        // Читаем сохранённый статус активации
+        jarvisVoiceActive = app.getSharedPreferences("jarvis_relay_prefs", Context.MODE_PRIVATE)
+            .getBoolean(JarvisRelayClient.KEY_ACTIVE, false)
+
+        // Запускаем поллер истории чата
+        jarvisBridge.startHistoryPoller { newMsgs ->
+            newMsgs.forEach { msg ->
+                val cm = ChatMessage(
+                    id       = msg.id,
+                    chatKey  = "jarvis_relay",
+                    fromUser = if (msg.fromJarvis) "__jarvis__" else (userProfile?.username ?: "me"),
+                    toUser   = if (msg.fromJarvis) (userProfile?.username ?: "me") else "__jarvis__",
+                    text     = msg.text,
+                    ts       = msg.ts,
+                )
+                // Добавляем только если такого id ещё нет
+                if (jarvisMessages.none { it.id == cm.id }) {
+                    jarvisMessages = (jarvisMessages + cm).takeLast(200)
+                }
+            }
+        }
+
+        // Периодически проверяем онлайн-статус ПК
+        viewModelScope.launch(Dispatchers.IO) {
+            while (true) {
+                jarvisOnline = JarvisRelayClient.isJarvisOnline()
+                delay(30_000)
+            }
+        }
+    }
+
+    /**
+     * Активирует «Протокол Астра»:
+     *  - запускает JarvisVoiceService (всегда-слушающий wake-word)
+     *  - сохраняет флаг для автозапуска после перезагрузки
+     *  - Джарвис появляется в списке чатов и больше не исчезает
+     */
+    fun activateJarvisProtocol() {
+        val ctx = getApplication<Application>()
+        ctx.getSharedPreferences("jarvis_relay_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(JarvisRelayClient.KEY_ACTIVE, true)
+            .apply()
+        jarvisVoiceActive = true
+        JarvisVoiceService.start(ctx)
+        showToast("⚡ Протокол Астра активирован. Скажи «Джарвис».")
+    }
+
+    /**
+     * Деактивирует голосовой режим (голосовой сервис останавливается,
+     * но чат Джарвиса в списке остаётся).
+     */
+    fun deactivateJarvisVoice() {
+        val ctx = getApplication<Application>()
+        ctx.getSharedPreferences("jarvis_relay_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(JarvisRelayClient.KEY_ACTIVE, false)
+            .apply()
+        jarvisVoiceActive = false
+        JarvisVoiceService.stop(ctx)
+        showToast("Голосовой режим Джарвиса выключен.")
+    }
+
+    /**
+     * Отправить текстовое сообщение Джарвису из чата.
+     * Работает так же как голос — через Supabase relay.
+     */
+    fun sendJarvisMessage(text: String) {
+        if (text.isBlank() || jarvisSending) return
+        val myUser = userProfile?.username ?: "me"
+        val ts = System.currentTimeMillis()
+
+        // Добавляем пузырь пользователя немедленно (оптимистично)
+        val userMsg = ChatMessage("local_$ts", "jarvis_relay", myUser, "__jarvis__", text, ts)
+        jarvisMessages = (jarvisMessages + userMsg).takeLast(200)
+        jarvisSending = true
+
+        jarvisBridge.sendMessage(
+            text      = text,
+            playAudio = true,
+            onReply   = { replyText, _ ->
+                val replyTs = System.currentTimeMillis()
+                val botMsg = ChatMessage(
+                    id       = "relay_$replyTs",
+                    chatKey  = "jarvis_relay",
+                    fromUser = "__jarvis__",
+                    toUser   = myUser,
+                    text     = replyText,
+                    ts       = replyTs,
+                )
+                jarvisMessages = (jarvisMessages + botMsg).takeLast(200)
+                jarvisSending = false
+            },
+            onError = { err ->
+                val errTs = System.currentTimeMillis()
+                val errMsg = ChatMessage(
+                    id       = "err_$errTs",
+                    chatKey  = "jarvis_relay",
+                    fromUser = "__jarvis__",
+                    toUser   = myUser,
+                    text     = "⚠️ Нет связи с ПК: $err",
+                    ts       = errTs,
+                )
+                jarvisMessages = (jarvisMessages + errMsg).takeLast(200)
+                jarvisSending = false
+            }
+        )
+    }
+
+    /**
+     * Возвращает список чатов с Джарвисом, закреплённым сверху.
+     * Используй вместо messengerChats напрямую.
+     */
+    fun messengerChatsWithJarvis(): List<ChatPreview> {
+        val lastJarvisMsg = jarvisMessages.lastOrNull()
+        val jarvisPreview = jarvisBridge.buildJarvisPreview(
+            lastMessage = lastJarvisMsg?.text ?: "Скажи «Джарвис» или напиши сюда",
+            lastTs      = lastJarvisMsg?.ts ?: 0L,
+            isOnline    = jarvisOnline,
+        )
+        // Убираем дубликат __jarvis__ из обычного списка (если вдруг попал)
+        val withoutJarvis = messengerChats.filter { it.id != JarvisChatBridge.JARVIS_ID }
+        return listOf(jarvisPreview) + withoutJarvis
+    }
+
 
     // ── Тема ──────────────────────────────────────────────────────────────────
     val themeState = ThemeState(

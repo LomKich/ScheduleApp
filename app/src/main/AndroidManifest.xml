@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Для OTA: запуск системного установщика APK -->\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <!-- Фоновый сервис: тип dataSync (требуется Android 14+) -->\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />\n    <!-- Исключение из оптимизации батареи (пользователь подтверждает вручную) -->\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
@@ -317,6 +318,13 @@
             android:exported="false"
             android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Джарвис: всегда-слушающий голосовой сервис (Протокол Астра) -->
+        <service
+            android:name=".jarvis.JarvisVoiceService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- Кружок: нативный Camera2 рекордер -->
         <activity
