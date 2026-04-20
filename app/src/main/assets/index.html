@@ -3647,8 +3647,34 @@ html.notch-off #s-login {
         </div>
         <div id="egg-tap-zone" onclick="eggTap()" ontouchstart="eggTap()" style="flex:1;min-width:0;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none">
           <div class="settings-item-title">Версия приложения</div>
-          <div class="settings-item-sub" id="app-version-str">— Android</div>
-          <script>(function(){var el=document.getElementById('app-version-str');if(!el)return;var v=(window.Android&&typeof window.Android.getAppVersion==='function')?window.Android.getAppVersion():null;el.textContent=(v||'?')+' — Android';})();</script>
+          <div class="settings-item-sub" id="app-version-str">—</div>
+          <script>(function(){
+            var el = document.getElementById('app-version-str');
+            if (!el) return;
+            // Определяем платформу
+            var platform;
+            if (window.Android && typeof window.Android.getAppVersion === 'function') {
+              platform = 'Android';
+            } else if (window.__desktopMode) {
+              platform = window.__platformName || 'Desktop';
+            } else {
+              // Веб-браузер: определяем по userAgent
+              var ua = navigator.userAgent || '';
+              if (/iPhone|iPad|iPod/.test(ua))      platform = 'iOS (веб)';
+              else if (/Android/.test(ua))           platform = 'Android (веб)';
+              else if (/Macintosh|Mac OS X/.test(ua)) platform = 'macOS (веб)';
+              else if (/Windows/.test(ua))           platform = 'Windows (веб)';
+              else if (/Linux/.test(ua))             platform = 'Linux (веб)';
+              else                                   platform = 'Веб';
+            }
+            // Версия
+            var v = null;
+            if (window.Android && typeof window.Android.getAppVersion === 'function')
+              v = window.Android.getAppVersion();
+            else if (window.__desktopMode && typeof window.Android !== 'undefined' && typeof window.Android.getAppVersion === 'function')
+              v = window.Android.getAppVersion();
+            el.textContent = (v || '?') + ' — ' + platform;
+          })();</script>
         </div>
         <button class="btn btn-surface3" style="width:auto;padding:7px 12px;font-size:12px;flex-shrink:0;margin-bottom:0" onclick="checkOtaUpdate()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Обновить
