@@ -471,6 +471,8 @@ const GITHUB_FALLBACK = {
   branch:  'main',
   apiBase: 'https://api.github.com/repos/LomKich/scheduletxt/contents/',
   rawBase: 'https://raw.githubusercontent.com/LomKich/scheduletxt/main/',
+  // jsDelivr CDN — раздаёт файлы из GitHub с CORS-заголовками, работает в браузере напрямую
+  jsdelivrBase: 'https://cdn.jsdelivr.net/gh/LomKich/scheduletxt@main/',
   // Папки внутри репозитория
   scheduleFolder: 'schedule',
   avatarsFolder:  'avatars',
@@ -637,7 +639,14 @@ async function githubDownloadFile(rawUrl) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.arrayBuffer();
       } else {
-        // Браузер: пробуем напрямую, при сетевой ошибке (заблокирован) — через CORS-прокси
+        // Браузер: 1) jsDelivr CDN (CORS-friendly, работает без прокси в т.ч. из РФ)
+        //          2) прямой raw.githubusercontent.com
+        //          3) CORS-прокси (резерв)
+        try {
+          return await jsDelivrDownload(url);
+        } catch (jdErr) {
+          appLog('warn', 'githubDownloadFile: jsDelivr failed (' + jdErr.message + '), пробую напрямую...');
+        }
         try {
           const r = await fetch(url, { signal: AbortSignal.timeout(30000) });
           if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -1438,6 +1447,34 @@ async function yadDownloadAllOrigins(rawUrl) {
   if (typeof contents === 'string' && contents.startsWith('data:'))
     return base64ToArrayBuffer(contents.split(',')[1]);
   return new TextEncoder().encode(contents).buffer;
+}
+
+// ══ jsDelivr CDN — прямая загрузка из GitHub без CORS-ограничений ══
+// Конвертирует raw.githubusercontent.com URL → cdn.jsdelivr.net URL
+function rawUrlToJsdelivr(rawUrl) {
+  const { owner, repo, branch, rawBase, jsdelivrBase } = GITHUB_FALLBACK;
+  if (rawUrl && rawUrl.startsWith(rawBase)) {
+    return jsdelivrBase + rawUrl.slice(rawBase.length);
+  }
+  // Если URL из зеркала-прокси — вытаскиваем путь вручную
+  const repoPath = `/${owner}/${repo}/${branch}/`;
+  const idx = rawUrl ? rawUrl.indexOf(repoPath) : -1;
+  if (idx !== -1) {
+    return jsdelivrBase + rawUrl.slice(idx + repoPath.length);
+  }
+  return null;
+}
+
+// Скачивает файл через jsDelivr CDN (поддерживает CORS, не требует прокси)
+async function jsDelivrDownload(rawUrl) {
+  const jdUrl = rawUrlToJsdelivr(rawUrl);
+  if (!jdUrl) throw new Error('Не удалось построить jsDelivr URL из: ' + rawUrl);
+  appLog('info', 'jsDelivrDownload: ' + jdUrl);
+  const r = await fetch(jdUrl, { signal: AbortSignal.timeout(25000) });
+  if (!r.ok) throw new Error('jsDelivr HTTP ' + r.status);
+  const ct = r.headers.get('content-type') || '';
+  if (ct.includes('text/html')) throw new Error('jsDelivr вернул HTML — файл не найден');
+  return r.arrayBuffer();
 }
 
 function base64ToArrayBuffer(b64) {
@@ -3200,21 +3237,33 @@ async function getFileBuf(){
   }
 
   // Попытка 3: GitHub raw по имени файла
+  const f = S.selectedFile;
+  const ghRawUrl = f._githubRaw ||
+    (GITHUB_FALLBACK.rawBase + (f.path ? f.path.replace(/^\//, '').split('/').map(encodeURIComponent).join('/') : encodeURIComponent(f.name)));
   try{
-    // Используем _githubRaw если есть (содержит полный путь с папкой schedule/)
-    // иначе строим из path файла
-    const f = S.selectedFile;
-    const rawUrl = f._githubRaw ||
-      (GITHUB_FALLBACK.rawBase + (f.path ? f.path.replace(/^\//, '').split('/').map(encodeURIComponent).join('/') : encodeURIComponent(f.name)));
-    appLog('info','getFileBuf: trying GitHub raw: '+rawUrl);
-    const buf=await githubDownloadFile(rawUrl);
+    appLog('info','getFileBuf: trying GitHub raw: '+ghRawUrl);
+    const buf=await githubDownloadFile(ghRawUrl);
     FILE_CACHE[key]=buf;
     idbSet('file:'+key,buf).catch(()=>{});
     toast('📂 Файл загружен из GitHub-резерва');
     return buf;
   }catch(ghErr){
-    appLog('err','getFileBuf: GitHub fallback also failed: '+ghErr.message);
-    throw new Error('Не удалось загрузить файл ни с Яндекс Диска, ни из GitHub-резерва');
+    appLog('warn','getFileBuf: GitHub fallback also failed: '+ghErr.message);
+  }
+
+  // Попытка 4: jsDelivr CDN
+  // jsDelivr раздаёт файлы из GitHub с корректными CORS-заголовками —
+  // работает в любом браузере напрямую, без прокси и без ограничений.
+  try{
+    appLog('info','getFileBuf: trying jsDelivr CDN...');
+    const buf = await jsDelivrDownload(ghRawUrl);
+    FILE_CACHE[key]=buf;
+    idbSet('file:'+key,buf).catch(()=>{});
+    toast('📦 Файл загружен через jsDelivr CDN');
+    return buf;
+  }catch(jdErr){
+    appLog('err','getFileBuf: jsDelivr also failed: '+jdErr.message);
+    throw new Error('Не удалось загрузить файл: ни Яндекс Диск, ни GitHub, ни jsDelivr CDN не ответили');
   }
 }
 
@@ -3227,8 +3276,18 @@ async function _refreshFileBufInBackground(key,fileRef){
     const buf=await yadDownload(dl.href,fileRef.name);
     FILE_CACHE[key]=buf;
     await idbSet('file:'+key,buf);
-    appLog('ok','Файл обновлён в фоне: '+key);
-  }catch(e){ /* тихо */ }
+    appLog('ok','Файл обновлён в фоне (Яндекс): '+key);
+  }catch(e){
+    // Яндекс не ответил — тихо пробуем jsDelivr
+    try{
+      const rawUrl = fileRef._githubRaw ||
+        (GITHUB_FALLBACK.rawBase + (fileRef.path ? fileRef.path.replace(/^\//, '').split('/').map(encodeURIComponent).join('/') : encodeURIComponent(fileRef.name)));
+      const buf = await jsDelivrDownload(rawUrl);
+      FILE_CACHE[key]=buf;
+      await idbSet('file:'+key,buf);
+      appLog('ok','Файл обновлён в фоне (jsDelivr): '+key);
+    }catch(e2){ /* тихо */ }
+  }
 }
 
 // ══ ГРУППЫ ══
