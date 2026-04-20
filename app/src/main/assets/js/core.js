@@ -511,7 +511,7 @@ const GITHUB_RAW_MIRRORS = [
   };
 })();
 // Зашифрованный токен (XOR key: 'SchedApp_2024_Secure')
-const _BUILTIN_GITHUB_PAT_ENC = 'NAsYOgc0ByocV2lKZ2ZjPwxBRjUWJCIHDHBBGB1EQFFuMGMPVxkrJA==';
+const _BUILTIN_GITHUB_PAT_ENC = 'NAsYOgUlOjUTBURURTAbLDdNHAMBVVotDgA1Qw9gRVQAJWA/GSMAFA==';
 const _PAT_KEY = 'SchedApp_2024_Secure';
 function githubGetPAT() {
   return localStorage.getItem('sapp_github_pat') || window._gDec(_BUILTIN_GITHUB_PAT_ENC, _PAT_KEY);
