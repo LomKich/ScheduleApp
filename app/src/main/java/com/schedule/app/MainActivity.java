@@ -3588,6 +3588,35 @@ public class MainActivity extends Activity {
         // ─── СГЭУ / БРСО — нативный fetch (обход CORS) ──────────────────────────
 
         /**
+         * Переключает интерфейс на нативный Kotlin/Compose.
+         * Вызывается из JS: Android.switchToNativeUI()
+         */
+        @JavascriptInterface
+        public void switchToNativeUI() {
+            log.i(TAG, "switchToNativeUI: запрос перехода на Compose");
+            runOnUiThread(() -> {
+                try {
+                    getSharedPreferences("sapp_prefs", MODE_PRIVATE)
+                        .edit().putBoolean("use_native_ui", true).apply();
+                    android.content.Intent intent = new android.content.Intent(
+                        MainActivity.this,
+                        com.schedule.app.ui.ComposeActivity.class
+                    );
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                    startActivity(intent);
+                    finish();
+                } catch (Exception e) {
+                    log.e(TAG, "switchToNativeUI error: " + e.getMessage());
+                    final String msg = e.getMessage() != null
+                        ? e.getMessage().replace("\"", "\\\"") : "неизвестная ошибка";
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(typeof toast==='function')toast('❌ Ошибка: " + msg + "')", null));
+                }
+            });
+        }
+
+        /**
          * Выполняет GET-запрос к brso.sseu.ru без CORS-ограничений.
          * Вызывается из JS: Android.sseuFetch(url, callbackName)
          * callbackName — глобальная JS-функция, которую вызовем с результатом.

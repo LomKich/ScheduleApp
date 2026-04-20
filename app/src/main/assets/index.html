@@ -3207,6 +3207,126 @@ html.notch-off #s-login {
   animation: ptr-spin .7s linear infinite;
   opacity: 1 !important;
 }
+/* ══ ПРОТОКОЛ АСТРА — Чат с JARVIS ══ */
+#astra-overlay{
+  position:fixed;inset:0;z-index:9999;display:none;
+  flex-direction:column;
+  background:#05080f;
+  font-family:'Fira Code',monospace,sans-serif;
+}
+#astra-overlay.astra-show{display:flex}
+.astra-header{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 16px 10px;
+  background:linear-gradient(135deg,#080e1a,#0a1528);
+  border-bottom:1px solid #1a3a6a;
+  flex-shrink:0;
+}
+.astra-logo{
+  width:36px;height:36px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#1a3a6c,#07111f);
+  border:1.5px solid #2a7fff;
+  box-shadow:0 0 12px #2a7fff66;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;position:relative;
+  animation:astraPulse 2.5s ease-in-out infinite;
+}
+@keyframes astraPulse{
+  0%,100%{box-shadow:0 0 8px #2a7fff44}
+  50%{box-shadow:0 0 20px #2a7fff99}
+}
+.astra-header-info{flex:1}
+.astra-title{font-size:13px;font-weight:700;color:#7ecfff;letter-spacing:.1em}
+.astra-status{font-size:11px;color:#3a7aaa;margin-top:1px}
+.astra-close{
+  width:32px;height:32px;border-radius:50%;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  color:#aaa;font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent;
+}
+.astra-messages{
+  flex:1;overflow-y:auto;padding:16px;
+  display:flex;flex-direction:column;gap:12px;
+}
+.astra-msg{
+  display:flex;gap:8px;align-items:flex-end;
+  animation:astraFadeIn .25s ease;
+}
+@keyframes astraFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.astra-msg.user{flex-direction:row-reverse}
+.astra-avatar{
+  width:28px;height:28px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;
+}
+.astra-msg.jarvis .astra-avatar{
+  background:radial-gradient(circle,#0f2040,#070d1a);
+  border:1px solid #2a5aaa;box-shadow:0 0 8px #2a5aaa55;
+}
+.astra-msg.user .astra-avatar{
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+}
+.astra-bubble{
+  max-width:78%;padding:10px 14px;border-radius:18px;
+  font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;
+}
+.astra-msg.jarvis .astra-bubble{
+  background:linear-gradient(135deg,#0d1f3a,#0a1628);
+  border:1px solid #1a3a6a;color:#b0d4ff;
+  border-radius:4px 18px 18px 18px;
+}
+.astra-msg.user .astra-bubble{
+  background:linear-gradient(135deg,#1a3a8a,#0f2660);
+  border:1px solid #2a50aa;color:#d8e8ff;
+  border-radius:18px 4px 18px 18px;text-align:right;
+}
+.astra-typing{
+  display:flex;gap:5px;align-items:center;
+  padding:10px 14px;border-radius:4px 18px 18px 18px;
+  background:linear-gradient(135deg,#0d1f3a,#0a1628);
+  border:1px solid #1a3a6a;
+}
+.astra-dot{
+  width:6px;height:6px;border-radius:50%;background:#2a7fff;
+  animation:astraDot 1.2s ease-in-out infinite;
+}
+.astra-dot:nth-child(2){animation-delay:.2s}
+.astra-dot:nth-child(3){animation-delay:.4s}
+@keyframes astraDot{0%,80%,100%{opacity:.3;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.astra-input-row{
+  display:flex;gap:8px;padding:10px 14px 12px;
+  background:#080e1a;border-top:1px solid #1a3a6a;flex-shrink:0;
+}
+#astra-input{
+  flex:1;background:#0d1a2e;border:1px solid #1a3a6a;border-radius:22px;
+  padding:10px 16px;color:#c8e0ff;font-size:14px;font-family:inherit;
+  outline:none;caret-color:#2a7fff;
+  transition:border-color .2s;
+}
+#astra-input:focus{border-color:#2a7fff;box-shadow:0 0 0 2px #2a7fff22}
+#astra-input::placeholder{color:#2a4a7a}
+#astra-send{
+  width:42px;height:42px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,#1a4aaa,#0f2880);
+  border:1px solid #2a5acc;color:#fff;font-size:18px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:transform .1s,box-shadow .2s;
+  box-shadow:0 0 10px #2a5acc55;
+}
+#astra-send:active{transform:scale(.92)}
+.astra-ip-banner{
+  margin:8px 16px;padding:8px 12px;border-radius:10px;
+  background:#0a1520;border:1px solid #2a4a6a;
+  font-size:11px;color:#4a7aaa;text-align:center;
+}
+.astra-scan-line{
+  position:absolute;top:0;left:0;right:0;
+  height:2px;background:linear-gradient(90deg,transparent,#2a7fff88,transparent);
+  animation:astraScan 3s linear infinite;pointer-events:none;
+}
+@keyframes astraScan{0%{top:-2px}100%{top:100%}}
 </style>
 <body>
 <div id="bg-layer"></div>
@@ -3647,8 +3767,34 @@ html.notch-off #s-login {
         </div>
         <div id="egg-tap-zone" onclick="eggTap()" ontouchstart="eggTap()" style="flex:1;min-width:0;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none">
           <div class="settings-item-title">Версия приложения</div>
-          <div class="settings-item-sub" id="app-version-str">— Android</div>
-          <script>(function(){var el=document.getElementById('app-version-str');if(!el)return;var v=(window.Android&&typeof window.Android.getAppVersion==='function')?window.Android.getAppVersion():null;el.textContent=(v||'?')+' — Android';})();</script>
+          <div class="settings-item-sub" id="app-version-str">—</div>
+          <script>(function(){
+            var el = document.getElementById('app-version-str');
+            if (!el) return;
+            // Определяем платформу
+            var platform;
+            if (window.Android && typeof window.Android.getAppVersion === 'function') {
+              platform = 'Android';
+            } else if (window.__desktopMode) {
+              platform = window.__platformName || 'Desktop';
+            } else {
+              // Веб-браузер: определяем по userAgent
+              var ua = navigator.userAgent || '';
+              if (/iPhone|iPad|iPod/.test(ua))      platform = 'iOS (веб)';
+              else if (/Android/.test(ua))           platform = 'Android (веб)';
+              else if (/Macintosh|Mac OS X/.test(ua)) platform = 'macOS (веб)';
+              else if (/Windows/.test(ua))           platform = 'Windows (веб)';
+              else if (/Linux/.test(ua))             platform = 'Linux (веб)';
+              else                                   platform = 'Веб';
+            }
+            // Версия
+            var v = null;
+            if (window.Android && typeof window.Android.getAppVersion === 'function')
+              v = window.Android.getAppVersion();
+            else if (window.__desktopMode && typeof window.Android !== 'undefined' && typeof window.Android.getAppVersion === 'function')
+              v = window.Android.getAppVersion();
+            el.textContent = (v || '?') + ' — ' + platform;
+          })();</script>
         </div>
         <button class="btn btn-surface3" style="width:auto;padding:7px 12px;font-size:12px;flex-shrink:0;margin-bottom:0" onclick="checkOtaUpdate()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Обновить
@@ -4469,6 +4615,25 @@ html.notch-off #s-login {
     <span class="cmd-prompt-sym">C:\&gt;</span>
     <input class="cmd-input" id="cmd-input" autocomplete="off" autocorrect="off" spellcheck="false"
       placeholder="введи команду..." onkeydown="cmdKey(event)">
+  </div>
+</div>
+
+<!-- ══ ПРОТОКОЛ АСТРА — Секретный чат с J.A.R.V.I.S ══ -->
+<div id="astra-overlay">
+  <div class="astra-header">
+    <div class="astra-logo">🤖<div class="astra-scan-line"></div></div>
+    <div class="astra-header-info">
+      <div class="astra-title">J.A.R.V.I.S · ПРОТОКОЛ АСТРА</div>
+      <div class="astra-status" id="astra-status">Инициализация связи...</div>
+    </div>
+    <div class="astra-close" onclick="astraClose()">×</div>
+  </div>
+  <div id="astra-ip-banner" class="astra-ip-banner" style="display:none"></div>
+  <div class="astra-messages" id="astra-messages"></div>
+  <div class="astra-input-row">
+    <input id="astra-input" placeholder="Обращайтесь к Джарвису..." autocomplete="off"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();astraSend()}" />
+    <div id="astra-send" onclick="astraSend()">➤</div>
   </div>
 </div>
 

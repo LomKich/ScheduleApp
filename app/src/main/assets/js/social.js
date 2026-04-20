@@ -8148,11 +8148,11 @@ function messengerRenderMessages(animateLast) {
                <div style="font-size:13px;font-weight:600;color:${tgText};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${safeName||'Файл'}</div>
                <div style="font-size:11px;color:${tgMuted};margin-top:2px">${_fmtSize(msg.fileSize)||'файл'}</div>
              </div>
-             <a href="${safeUrl}" target="_blank" download="${safeName}"
-               style="width:38px;height:38px;min-width:38px;border-radius:50%;background:${tgPlayBg};display:flex;align-items:center;justify-content:center;text-decoration:none;flex-shrink:0;-webkit-tap-highlight-color:transparent"
+             <button onclick="mcDownloadFile('${safeUrl}','${safeName}',this)"
+               style="width:38px;height:38px;min-width:38px;border-radius:50%;background:${tgPlayBg};border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent"
                ontouchstart="this.style.opacity='.7'" ontouchend="this.style.opacity=''">
                <svg width="16" height="16" viewBox="0 0 24 24" fill="${tgPlayClr}"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-14 9v2h14v-2H5z"/></svg>
-             </a>
+             </button>
            </div>`
 
      : (replyQuote + escHtml(msg.text));
@@ -9424,6 +9424,9 @@ const MC_STICKER_PACKS = [
 ];
 
 let _mcStickerPanelOpen = false;
+// Флаг: игнорировать событие focus на mc-input пока мы сами управляем фокусом.
+// Без него: open → inp.blur() → focus-listener видит panelOpen=true → сразу закрывает.
+let _mcStickerIgnoreFocus = false;
 
 function mcToggleStickerPanel() {
   const panel = document.getElementById('mc-sticker-panel');
@@ -9432,9 +9435,12 @@ function mcToggleStickerPanel() {
   _mcStickerPanelOpen = !_mcStickerPanelOpen;
 
   if (_mcStickerPanelOpen) {
-    // Скрываем клавиатуру
+    // Скрываем клавиатуру, но запрещаем focus-listener реагировать на это blur/focus
+    _mcStickerIgnoreFocus = true;
     const inp = document.getElementById('mc-input');
     if (inp) inp.blur();
+    // Сбрасываем флаг после завершения цикла событий
+    setTimeout(() => { _mcStickerIgnoreFocus = false; }, 300);
     panel.style.display = '';
     panel.style.maxHeight = '0';
     panel.style.overflowY = 'auto';
@@ -9470,6 +9476,8 @@ function mcToggleStickerPanel() {
 document.addEventListener('DOMContentLoaded', () => {
   const inp = document.getElementById('mc-input');
   if (inp) inp.addEventListener('focus', () => {
+    // Игнорируем focus, вызванный самим mcToggleStickerPanel (blur при открытии)
+    if (_mcStickerIgnoreFocus) return;
     if (_mcStickerPanelOpen) mcToggleStickerPanel();
   // Загружаем информацию о бэкапах при открытии настроек
   setTimeout(_loadBackupInfo, 100);
@@ -10084,7 +10092,61 @@ async function _mcCacheCleanup() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// ── Скачивание файла в браузере/веб (обход ограничений cross-origin download) ─
+// Браузер игнорирует атрибут download="" для cross-origin URL.
+// Решение: сначала fetch → blob, потом createObjectURL → click по временной ссылке.
+async function mcDownloadFile(url, fileName, btn) {
+  // Android: нативный даунлоад через браузер/менеджер
+  if (window.Android?.openUrl) { window.Android.openUrl(url); return; }
+  if (!url) return;
+  const origInner = btn ? btn.innerHTML : '';
+  if (btn) btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="28" stroke-dashoffset="10"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur=".8s" repeatCount="indefinite"/></circle></svg>';
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(120000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName || url.split('/').pop() || 'file';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+  } catch(e) {
+    // Фоллбэк: открыть в новой вкладке
+    window.open(url, '_blank', 'noopener');
+    toast('⚠️ Открываю в браузере: ' + (e.message || ''));
+  } finally {
+    if (btn) btn.innerHTML = origInner;
+  }
+}
+
 // ┄┄ Загрузка файла на catbox.moe через Java-бридж ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+
+// Браузерный фоллбэк: напрямую через fetch + FormData (без Android-бриджа)
+async function _catboxUploadBrowser(base64, fileName, mimeType, onProgress) {
+  // base64 → Blob
+  const binary = atob(base64);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+
+  const form = new FormData();
+  form.append('reqtype', 'fileupload');
+  form.append('fileToUpload', blob, fileName);
+
+  onProgress && onProgress(10);
+  // catbox.moe поддерживает CORS для анонимных загрузок
+  const r = await fetch('https://catbox.moe/user/api.php', {
+    method: 'POST',
+    body: form,
+    signal: AbortSignal.timeout(120000),
+  });
+  if (!r.ok) throw new Error('Catbox HTTP ' + r.status);
+  const url = (await r.text()).trim();
+  if (!url.startsWith('https://')) throw new Error('Catbox error: ' + url);
+  onProgress && onProgress(100);
+  return url;
+}
 // base64   без data:  префикса. Возвращает Promise<string> с URL или бросает ошибку.
 // ┄┄ Telegram-style upload progress toast ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 const _uploadIcons = {
@@ -10266,7 +10328,10 @@ let _pendingUploadBlob = null;
 let _pendingUploadMime = null;
 
 async function _catboxUpload(base64, fileName, mimeType, onProgress) {
-  if (!window.Android?.nativeUploadFile) throw new Error('nativeUploadFile недоступен');
+  // Браузер / Desktop без Android-бриджа → используем браузерный fetch
+  if (!window.Android?.nativeUploadFile) {
+    return _catboxUploadBrowser(base64, fileName, mimeType, onProgress);
+  }
 
   // Если есть асинхронная версия   используем её (не блокирует UI)
   if (typeof window.Android.nativeUploadFileAsync === 'function') {
